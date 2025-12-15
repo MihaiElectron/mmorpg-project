@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: mmorpg-postgres
+    environment:
+      POSTGRES_USER: semoa
+      POSTGRES_PASSWORD: ssap
+      POSTGRES_DB: mmorpgdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  redis:
+    image: redis:7
+    container_name: mmorpg-redis
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: mmorpg-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672" # interface web RabbitMQ
+
+volumes:
+  postgres_data:
+
