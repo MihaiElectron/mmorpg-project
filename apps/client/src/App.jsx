@@ -1,3 +1,5 @@
+// Composant racine de l'UI côté client. Point idéal pour composer les pages,
+// gérer le routing et brancher la logique front (MMO, sockets, etc.).
 import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
