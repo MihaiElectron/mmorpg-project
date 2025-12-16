@@ -56,7 +56,7 @@
 
 ```
 mmorpg-project/
-│
+│   
 ├── apps/
 │   ├── client/                  # Application React + Vite
 │   │   ├── src/
@@ -71,9 +71,9 @@ mmorpg-project/
 │   │
 │   ├── api-gateway/             # Gateway principal NestJS
 │   │   ├── src/
-│   │   │   ├── auth/
-│   │   │   ├── gateway/
-│   │   │   └── common/
+│   │   │   ├── auth/            - gestion Passport + JWT
+│   │   │   ├── gateway/         - contrôleurs principaux (routes REST, WebSocket)
+│   │   │   └── common/          - utils, guards, interceptors
 │   │   ├── package.json
 │   │   └── nest-cli.json
 │   │
@@ -144,7 +144,7 @@ mmorpg-project/
 ### 1. Cloner le projet
 
 ```bash
-git clone https://github.com/votre-username/mmorpg-project.git
+git clone https://github.com/mihaielectron/mmorpg-project.git
 cd mmorpg-project
 ```
 
@@ -196,7 +196,7 @@ npm run seed
 
 ```env
 # Database
-DATABASE_URL="postgresql://postgres:password@localhost:5432/mmorpg_db"
+DATABASE_URL="postgresql://postgres:password@localhost:5432/mmorpgdb"
 
 # Redis
 REDIS_HOST=localhost
