@@ -1,0 +1,12 @@
+// ============================================================================
+// Fichier : _grid.scss
+// Description : Système de grille global pour la mise en page.
+// ============================================================================
+
+.app-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-height: 100vh;
+}
+
+

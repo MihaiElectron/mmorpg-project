@@ -1,0 +1,12 @@
+// ============================================================================
+// Fichier : _header.scss
+// Description : Header principal de l'interface de jeu.\n// ============================================================================
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+}
+
+

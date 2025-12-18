@@ -1,0 +1,11 @@
+// ============================================================================
+// Fichier : _index.scss (utilities)
+// Description : Export des classes utilitaires globales.
+// ============================================================================
+
+@forward './spacing';
+@forward './text';
+@forward './display';
+@forward './colors';
+
+

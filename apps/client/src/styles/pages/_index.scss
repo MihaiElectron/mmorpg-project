@@ -1,0 +1,14 @@
+// ============================================================================
+// Fichier : _index.scss (pages)
+// Description : Export des styles spécifiques à chaque page.
+// ============================================================================
+
+@forward './home';
+@forward './login';
+@forward './register';
+@forward './character-creation';
+@forward './game';
+@forward './profile';
+@forward './leaderboard';
+
+

@@ -1,0 +1,17 @@
+// ============================================================================
+// Fichier : main.scss
+// Description : Point d'entrée principal des styles globaux du client MMORPG.
+// Architecture : 7-1 (abstracts, base, layout, components, pages, themes, vendors, utilities)
+// Remarque : N'importer ici que les index de chaque couche.
+// ============================================================================
+
+
+@use './abstracts/index' as *;
+@use './vendors/index' as *;
+@use './base/index' as *;
+@use './layout/index' as *;
+@use './components/index' as *;
+@use './pages/index' as *;
+@use './themes/index' as *;
+@use './utilities/index' as *;
+
