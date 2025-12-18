@@ -318,6 +318,12 @@ npm create vite@latest client -- --template react
 # Installer les dépendances
 npm install
 
+## Validation des DTOs
+
+Pour activer la validation automatique des données reçues par l’API, il faut installer deux dépendances :
+
+npm install class-validator class-transformer
+
 # Installer Three.js pour le rendu 3D
 npm install three @react-three/fiber @react-three/drei
 

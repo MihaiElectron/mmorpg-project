@@ -1,61 +1,81 @@
-import React, { useState } from 'react';
+/**
+ * LoginPage :
+ * - Contient deux formulaires/boutons :
+ *   1. "Créer son compte" → appelle /auth/register
+ *   2. "Se connecter" → appelle /auth/login
+ * - Après succès, redirige vers /world.
+ */
 
+/**
+ * LoginPage :
+ * - Un seul formulaire avec deux inputs (username, password).
+ * - Deux boutons : "Créer son compte" et "Se connecter".
+ * - Chaque bouton déclenche une fonction différente selon son type.
+ * - Affiche "Bienvenue" par défaut.
+ * - Remplace par un message d’erreur en fondu pendant 2s si register/login échoue.
+ */
 
-const LoginPage = () => {
-  const [characterName, setCharacterName] = useState('');
-  const [password, setPassword] = useState('');
+import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { registerUser, loginUser } from '../api/auth';
 
-  const handleLogin = (e) => {
+function LoginPage() {
+  const navigate = useNavigate();
+  const [message, setMessage] = useState('Bienvenue'); // message affiché
+  const [fade, setFade] = useState(false); // contrôle du fondu
+
+  async function handleSubmit(e, action) {
     e.preventDefault();
-    console.log('Login:', { characterName, password });
-    // TODO: appel API auth
-  };
+    const username = e.target.username.value;
+    const password = e.target.password.value;
 
-  const handleCreateAccount = () => {
-    console.log('Créer compte');
-    // TODO: navigation vers RegisterPage
-  };
+    try {
+      if (action === 'register') {
+        await registerUser(username, password);
+      } else {
+        await loginUser(username, password);
+      }
+      navigate('/world');
+    } catch (err) {
+      // Affiche le message d’erreur
+      setMessage(err.message);
+      setFade(true);
+
+      // Après 2s, revient à "Bienvenue"
+      setTimeout(() => {
+        setMessage('Bienvenue');
+        setFade(false);
+      }, 2000);
+    }
+  }
 
   return (
     <div className="login">
       <div className="login__container">
-        <form className="login__form" onSubmit={handleLogin}>
-          <h1 className="login__title">Connexion MMORPG</h1>
+        <h2 className={`login__title ${fade ? 'fade' : ''}`}>{message}</h2>
+        <form className="login__form">
+          <input className="login__input" name="username" placeholder="Nom d’utilisateur" />
+          <input className="login__input" name="password" type="password" placeholder="Mot de passe" />
 
-          <div className="login__field">
-            <input
-              type="text"
-              placeholder="Nom du personnage"
-              value={characterName}
-              onChange={(e) => setCharacterName(e.target.value)}
-              className="login__input"
-            />
-          </div>
+          <button
+            className="login__button login__button--primary"
+            type="submit"
+            onClick={(e) => handleSubmit(e, 'register')}
+          >
+            Créer son compte
+          </button>
 
-          <div className="login__field">
-            <input
-              type="password"
-              placeholder="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="login__input"
-            />
-          </div>
-
-          <button type="submit" className="login__button login__button--primary">
+          <button
+            className="login__button login__button--secondary"
+            type="submit"
+            onClick={(e) => handleSubmit(e, 'login')}
+          >
             Se connecter
           </button>
         </form>
-
-        <button
-          className="login__button login__button--secondary"
-          onClick={handleCreateAccount}
-        >
-          Créer son compte
-        </button>
       </div>
     </div>
   );
-};
+}
 
 export default LoginPage;
