@@ -1,16 +1,25 @@
+/**
+ * Rôle :
+ * - Définir les routes principales de l'application avec react-router-dom.
+ * - /login → LoginPage
+ * - /world → WorldPage
+ */
+
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
 import './styles/main.scss'; // import global
+import { BrowserRouter, Routes, Route } from 'react-router-dom'; // ⚠️ IMPORT OBLIGATOIRE
+import LoginPage from './pages/LoginPage';
+import WorldPage from './pages/WorldPage';
 
 function App() {
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/world" element={<WorldPage />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 
-export default App
+export default App;

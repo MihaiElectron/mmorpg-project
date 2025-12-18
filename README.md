@@ -316,6 +316,7 @@ cd apps/client
 npm create vite@latest client -- --template react
 
 # Installer les dépendances
+
 npm install
 
 ## Validation des DTOs
@@ -323,6 +324,14 @@ npm install
 Pour activer la validation automatique des données reçues par l’API, il faut installer deux dépendances :
 
 npm install class-validator class-transformer
+
+# Configuration de TypeORM avec NestJS
+
+## 1. Installation des dépendances
+
+Installez TypeORM, le module NestJS associé et le driver de votre base de données (exemple PostgreSQL) :
+
+npm install @nestjs/typeorm typeorm pg
 
 # Installer Three.js pour le rendu 3D
 npm install three @react-three/fiber @react-three/drei
