@@ -41,11 +41,12 @@ function LoginPage() {
       }
       navigate('/world'); // redirection après succès
     } catch (err) {
-      // Affiche le message d’erreur en fondu
-      setMessage(err.message || 'Erreur');
+      // 🔥 Avec fetch, le message du backend est dans err.message
+      const backendMessage = err.message || 'Erreur';
+    
+      setMessage(backendMessage);
       setFade(true);
-
-      // Après 2s, revient à "Bienvenue"
+    
       setTimeout(() => {
         setMessage('Bienvenue');
         setFade(false);

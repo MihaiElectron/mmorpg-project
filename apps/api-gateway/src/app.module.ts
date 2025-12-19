@@ -12,6 +12,7 @@
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -22,6 +23,10 @@ import { User } from './users/user.entity';
 
 @Module({
   imports: [
+    // Charge .env et rend ConfigService disponible partout
+    ConfigModule.forRoot({
+      isGlobal: true, // important pour éviter de devoir l'importer partout
+    }),
     // Configuration de la connexion à la base via TypeORM
     TypeOrmModule.forRoot({
       type: 'postgres',          // ou 'mysql', 'sqlite' selon ta base

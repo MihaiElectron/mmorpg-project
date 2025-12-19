@@ -5,30 +5,34 @@
  */
 
 export async function registerUser(username, password) {
-    const res = await fetch('http://localhost:3000/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-  
-    if (!res.ok) {
-      throw new Error('Nom déjà pris ou erreur serveur');
-    }
-  
-    return res.json();
+  const res = await fetch('http://localhost:3000/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const data = await res.json(); // récupère le message du backend
+
+  if (!res.ok) {
+    // renvoie le vrai message du backend
+    throw new Error(data.message || 'Erreur');
   }
-  
-  export async function loginUser(username, password) {
-    const res = await fetch('http://localhost:3000/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-  
-    if (!res.ok) {
-      throw new Error('Identifiants invalides');
-    }
-  
-    return res.json(); // renvoie { access_token }
+
+  return data;
+}
+
+export async function loginUser(username, password) {
+  const res = await fetch('http://localhost:3000/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const data = await res.json(); // récupère le message du backend
+
+  if (!res.ok) {
+    throw new Error(data.message || 'Erreur');
   }
-  
+
+  return data; // renvoie { access_token }
+}

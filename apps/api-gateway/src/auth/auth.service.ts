@@ -1,52 +1,96 @@
 /**
- * Service d'authentification :
- * - Gère la création d'utilisateurs avec hash du mot de passe (bcrypt).
- * - Gère le login en vérifiant le mot de passe et en générant un token JWT.
- * - Les méthodes register et login doivent correspondre exactement à ce que le controller appelle.
+ * AuthService
+ * -----------
+ * Service responsable de :
+ * - L'inscription (register)
+ * - La connexion (login)
+ * - La validation d'utilisateur pour JwtStrategy
+ *
+ * Utilise des exceptions NestJS pour renvoyer des erreurs HTTP propres :
+ * - ConflictException (409) si username déjà pris
+ * - UnauthorizedException (401) si mot de passe incorrect
+ * - NotFoundException (404) si utilisateur introuvable
  */
 
-import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { Injectable, ConflictException, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-
-interface User {
-  id: number;
-  username: string;
-  password: string; // stocké sous forme hashée
-}
+import { JwtService } from '@nestjs/jwt';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class AuthService {
-  private users: User[] = []; // ⚠️ à remplacer par une vraie base de données
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
 
-  constructor(private readonly jwtService: JwtService) {}
+    private readonly jwtService: JwtService,
+  ) {}
 
-  // Création d'un utilisateur avec hash du mot de passe
+  /**
+   * register()
+   * ----------
+   * Crée un nouvel utilisateur.
+   * - Vérifie que le username n'est pas déjà utilisé.
+   * - Hash le mot de passe.
+   * - Sauvegarde l'utilisateur.
+   */
   async register(username: string, password: string) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user: User = { id: Date.now(), username, password: hashedPassword };
-    this.users.push(user);
+    const exists = await this.userRepository.findOne({ where: { username } });
 
-    // On ne renvoie pas le mot de passe hashé au client
-    return { id: user.id, username: user.username };
+    if (exists) {
+      throw new ConflictException('Ce nom d’utilisateur est déjà utilisé');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = this.userRepository.create({
+      username,
+      password: hashedPassword,
+      isActive: true,
+    });
+
+    return this.userRepository.save(user);
   }
 
-  // Vérification des credentials et génération du token JWT
+  /**
+   * login()
+   * -------
+   * Vérifie les identifiants et génère un token JWT.
+   */
   async login(username: string, password: string) {
-    const user = this.users.find((u) => u.username === username);
+    const user = await this.userRepository.findOne({ where: { username } });
+
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException('Utilisateur introuvable');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new Error('Invalid credentials');
+    if (!user.isActive) {
+      throw new UnauthorizedException('Ce compte est désactivé');
     }
 
-    // Payload = données signées dans le token
-    const payload = { sub: user.id, username: user.username };
-    const token = this.jwtService.sign(payload);
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      throw new UnauthorizedException('Mot de passe incorrect');
+    }
 
-    return { access_token: token };
+    const payload = {
+      sub: user.id,
+      username: user.username,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+    };
+  }
+
+  /**
+   * validateUser()
+   * --------------
+   * Utilisé par JwtStrategy pour valider un utilisateur via son ID.
+   */
+  async validateUser(userId: number) {
+    return this.userRepository.findOne({ where: { id: userId } });
   }
 }

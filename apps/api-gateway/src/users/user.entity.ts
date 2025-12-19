@@ -1,18 +1,26 @@
 /**
- * Entité User
- * ----------------------------
- * Représente la table "users" dans la base de données.
- * Chaque instance correspond à un utilisateur persistant.
+ * User Entity
+ * -----------
+ * Représente un utilisateur dans la base de données.
  *
- * Colonnes :
- * - id        : identifiant unique auto-généré
- * - username  : nom d'utilisateur (unique)
- * - password  : mot de passe (stocké hashé)
+ * Champs :
+ * - id : identifiant unique
+ * - username : nom d'utilisateur unique
+ * - password : mot de passe hashé
+ * - isActive : indique si le compte est actif (true par défaut)
+ * - createdAt : date de création automatique
+ * - updatedAt : date de mise à jour automatique
  */
 
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
-@Entity('users')
+@Entity()
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -22,4 +30,13 @@ export class User {
 
   @Column()
   password: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
 }

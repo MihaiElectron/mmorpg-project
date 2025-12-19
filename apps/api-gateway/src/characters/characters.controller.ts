@@ -1,20 +1,20 @@
 // characters.controller.ts
 // Rôle : définit les endpoints REST pour la ressource "characters".
-// Chaque fonction correspond à une opération CRUD exposée via HTTP.
+// Toutes les routes sont protégées par JWT grâce à @UseGuards(JwtAuthGuard).
 
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { CharactersService } from './characters.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { UpdateCharacterDto } from './dto/update-character.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('characters')
+@UseGuards(JwtAuthGuard) // Toutes les routes nécessitent un token JWT
 @Controller('characters')
 export class CharactersController {
   constructor(private readonly charactersService: CharactersService) {}
 
-  // create() : endpoint POST /characters
-  // Permet de créer un nouveau personnage en recevant un DTO.
   @Post()
   @ApiBody({ type: CreateCharacterDto })
   @ApiResponse({ status: 201, description: 'Personnage créé avec succès.' })
@@ -22,8 +22,6 @@ export class CharactersController {
     return this.charactersService.create(createCharacterDto);
   }
 
-  // findAll() : endpoint GET /characters
-  // Retourne la liste de tous les personnages.
   @Get()
   @ApiResponse({ status: 200, description: 'Liste de tous les personnages.' })
   findAll() {
