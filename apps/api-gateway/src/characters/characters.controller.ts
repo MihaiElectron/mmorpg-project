@@ -18,7 +18,7 @@
  *
  * Remarques :
  * - L’endpoint /equip délègue la logique à CharactersService.equipItem().
- * - EquipItemDto doit être importé pour valider le payload.
+ * - EquipItemDto valide le payload envoyé par le frontend.
  * -----------------------------------------------------------------------------
  */
 
@@ -31,62 +31,96 @@ import {
   Param,
   Delete,
   UseGuards,
+  Req,
 } from '@nestjs/common';
-import { ApiTags, ApiBody, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBody,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import type { Request } from 'express';
+
+
 import { CharactersService } from './characters.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { UpdateCharacterDto } from './dto/update-character.dto';
-import { EquipItemDto } from './dto/equip-item.dto'; // ✅ Import manquant corrigé
+import { EquipItemDto } from './dto/equip-item.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@ApiBearerAuth()
 @ApiTags('characters')
 @UseGuards(JwtAuthGuard)
 @Controller('characters')
 export class CharactersController {
   constructor(private readonly charactersService: CharactersService) {}
 
+  /**
+   * POST /characters
+   * Crée un nouveau personnage pour l'utilisateur authentifié.
+   * - Récupère l'userId depuis le token JWT (payload.sub)
+   * - L'injecte dans le DTO avant de déléguer au service.
+   */
   @Post()
   @ApiBody({ type: CreateCharacterDto })
   @ApiResponse({ status: 201, description: 'Personnage créé avec succès.' })
-  create(@Body() createCharacterDto: CreateCharacterDto) {
-    return this.charactersService.create(createCharacterDto);
+  create(@Req() req: Request, @Body() dto: CreateCharacterDto) {
+    // req.user est ajouté par JwtStrategy via Passport.
+    // On caste en any car Express ne connaît pas la propriété "user" par défaut.
+    const user = (req as any).user;
+    dto.userId = user.sub;
+
+    return this.charactersService.create(dto);
   }
 
+  /**
+   * GET /characters
+   * Retourne la liste de tous les personnages (avec leur équipement).
+   */
   @Get()
-  @ApiResponse({ status: 200, description: 'Liste de tous les personnages.' })
   findAll() {
     return this.charactersService.findAll();
   }
 
+  /**
+   * GET /characters/:id
+   * Récupère un personnage spécifique par son ID.
+   */
   @Get(':id')
-  @ApiResponse({ status: 200, description: 'Retourne un personnage par ID.' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
   findOne(@Param('id') id: string) {
     return this.charactersService.findOne(+id);
   }
 
+  /**
+   * PATCH /characters/:id
+   * Met à jour les informations d'un personnage.
+   */
   @Patch(':id')
-  @ApiBody({ type: UpdateCharacterDto })
-  @ApiResponse({ status: 200, description: 'Personnage mis à jour.' })
-  update(
-    @Param('id') id: string,
-    @Body() updateCharacterDto: UpdateCharacterDto,
-  ) {
-    return this.charactersService.update(+id, updateCharacterDto);
+  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
+  update(@Param('id') id: string, @Body() dto: UpdateCharacterDto) {
+    return this.charactersService.update(+id, dto);
   }
 
+  /**
+   * DELETE /characters/:id
+   * Supprime un personnage.
+   */
   @Delete(':id')
-  @ApiResponse({ status: 200, description: 'Personnage supprimé.' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
   remove(@Param('id') id: string) {
     return this.charactersService.remove(+id);
   }
 
+  /**
+   * POST /characters/:id/equip
+   * Équipe un item dans un slot d'un personnage.
+   */
   @Post(':id/equip')
+  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
   @ApiBody({ type: EquipItemDto })
-  @ApiResponse({ status: 200, description: 'Équipement mis à jour.' })
-  equipItem(
-    @Param('id') characterId: number,
-    @Body() dto: EquipItemDto,
-  ) {
-    return this.charactersService.equipItem(characterId, dto); // ✅ Correction du service
+  equipItem(@Param('id') id: string, @Body() dto: EquipItemDto) {
+    return this.charactersService.equipItem(+id, dto);
   }
 }

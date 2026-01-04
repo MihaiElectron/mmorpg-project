@@ -40,13 +40,13 @@ import {
     @PrimaryGeneratedColumn()
     id: number;
   
-    @Column()
+    @Column({ unique: true })
     userId: number;
   
     @Column()
     gender: string;
   
-    @Column()
+    @Column({ unique: true })
     name: string;
   
     @Column({ nullable: true })

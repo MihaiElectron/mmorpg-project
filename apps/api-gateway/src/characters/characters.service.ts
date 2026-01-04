@@ -2,142 +2,137 @@
  * CharactersService
  * -----------------------------------------------------------------------------
  * Rôle :
- * - Contient la logique métier liée aux personnages (CRUD + équipement).
- * - Interagit avec la base de données via les repositories Character et
- *   CharacterEquipment.
+ * - Gère toute la logique métier liée aux personnages.
+ * - Création, lecture, mise à jour, suppression.
+ * - Vérifie les règles métier (unicité du nom, un seul personnage par joueur, etc.).
+ * - Interagit avec la base via TypeORM.
  *
  * Emplacement :
  * mmorpg-project/apps/api-gateway/src/characters/characters.service.ts
- *
- * Méthodes :
- * - create()     → créer un personnage
- * - findAll()    → lister tous les personnages
- * - findOne()    → récupérer un personnage par ID
- * - update()     → mettre à jour un personnage
- * - remove()     → supprimer un personnage
- * - equipItem()  → équiper un item dans un slot donné
- *
- * Notes :
- * - Les repositories sont injectés via TypeORM.
- * - equipItem() gère la création ou mise à jour du slot d’équipement.
  * -----------------------------------------------------------------------------
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Character } from './entities/character.entity';
-import { CharacterEquipment } from './entities/character-equipment.entity';
-
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { UpdateCharacterDto } from './dto/update-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
-import { EquipmentSlot } from './enums/equipment-slot.enum';
 
 @Injectable()
 export class CharactersService {
   constructor(
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
-
-    @InjectRepository(CharacterEquipment)
-    private readonly equipmentRepository: Repository<CharacterEquipment>,
   ) {}
 
-  // ---------------------------------------------------------------------------
-  // CRUD
-  // ---------------------------------------------------------------------------
+  /**
+   * create()
+   * -----------------------------------------------------------------------------
+   * Crée un personnage pour un joueur.
+   * Règles métier :
+   * - Un joueur ne peut avoir qu'un seul personnage.
+   * - Le nom du personnage doit être unique.
+   */
+  async create(dto: CreateCharacterDto): Promise<Character> {
+    // Vérifie si le joueur a déjà un personnage
+    const existingForUser = await this.characterRepository.findOne({
+      where: { userId: dto.userId },
+    });
 
-  async create(dto: CreateCharacterDto) {
+    if (existingForUser) {
+      throw new ConflictException(
+        'Ce joueur possède déjà un personnage.',
+      );
+    }
+
+    // Vérifie si le nom est déjà pris
+    const existingName = await this.characterRepository.findOne({
+      where: { name: dto.name },
+    });
+
+    if (existingName) {
+      throw new ConflictException(
+        'Ce nom de personnage est déjà utilisé.',
+      );
+    }
+
+    // Création du personnage
     const character = this.characterRepository.create(dto);
     return this.characterRepository.save(character);
   }
 
-  async findAll() {
+  /**
+   * findAll()
+   * -----------------------------------------------------------------------------
+   * Retourne tous les personnages.
+   */
+  async findAll(): Promise<Character[]> {
     return this.characterRepository.find({
       relations: ['equipment'],
     });
   }
 
-  async findOne(id: number) {
+  /**
+   * findOne()
+   * -----------------------------------------------------------------------------
+   * Retourne un personnage par son ID.
+   */
+  async findOne(id: number): Promise<Character> {
     const character = await this.characterRepository.findOne({
       where: { id },
       relations: ['equipment'],
     });
 
     if (!character) {
-      throw new NotFoundException(`Personnage #${id} introuvable`);
+      throw new NotFoundException('Personnage introuvable.');
     }
 
     return character;
   }
 
-  async update(id: number, dto: UpdateCharacterDto) {
+  /**
+   * update()
+   * -----------------------------------------------------------------------------
+   * Met à jour un personnage.
+   */
+  async update(id: number, dto: UpdateCharacterDto): Promise<Character> {
     const character = await this.findOne(id);
+
     Object.assign(character, dto);
+
     return this.characterRepository.save(character);
   }
 
-  async remove(id: number) {
+  /**
+   * remove()
+   * -----------------------------------------------------------------------------
+   * Supprime un personnage.
+   */
+  async remove(id: number): Promise<void> {
     const character = await this.findOne(id);
-    return this.characterRepository.remove(character);
+    await this.characterRepository.remove(character);
   }
 
-  // ---------------------------------------------------------------------------
-  // Équipement
-  // ---------------------------------------------------------------------------
-
   /**
-   * Équipe un item dans un slot donné pour un personnage.
-   * Étapes :
-   * 1. Vérifier que le personnage existe
-   * 2. Valider le slot via l'enum EQUIPMENT_SLOT
-   * 3. Charger ou créer le slot d'équipement
-   * 4. Assigner l'item
-   * 5. Sauvegarder
-   * 6. Retourner le personnage mis à jour
+   * equipItem()
+   * -----------------------------------------------------------------------------
+   * Équipe un item dans un slot.
+   * (La logique dépend de ton CharacterEquipment)
    */
-  async equipItem(characterId: number, dto: EquipItemDto) {
-    const { slot, itemId } = dto;
+  async equipItem(id: number, dto: EquipItemDto) {
+    const character = await this.findOne(id);
 
-    // 1. Vérifier que le personnage existe
-    const character = await this.characterRepository.findOne({
-      where: { id: characterId },
-      relations: ['equipment'],
-    });
+    // TODO : logique d'équipement selon ton système
+    // Exemple :
+    // character.equipment[dto.slot] = dto.itemId;
 
-    if (!character) {
-      throw new NotFoundException(`Personnage #${characterId} introuvable`);
-    }
-
-    // 2. Valider le slot
-    const validSlots = Object.values(EquipmentSlot);
-    if (!validSlots.includes(slot)) {
-      throw new Error(`Slot d'équipement invalide : ${slot}`);
-    }
-
-    // 3. Trouver ou créer le slot d'équipement
-    let equipmentSlot = character.equipment.find((e) => e.slot === slot);
-
-    if (!equipmentSlot) {
-      equipmentSlot = this.equipmentRepository.create({
-        character,
-        slot,
-        itemId: null,
-      });
-    }
-
-    // 4. Assigner l'item
-    equipmentSlot.itemId = itemId;
-
-    // 5. Sauvegarder
-    await this.equipmentRepository.save(equipmentSlot);
-
-    // 6. Retourner le personnage mis à jour
-    return this.characterRepository.findOne({
-      where: { id: characterId },
-      relations: ['equipment'],
-    });
+    return this.characterRepository.save(character);
   }
 }

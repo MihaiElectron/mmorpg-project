@@ -17,7 +17,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 import { AuthModule } from './auth/auth.module';
-import { GatewayModule } from './gateway/gateway.module';
 import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
 
@@ -42,7 +41,6 @@ import { CharactersModule } from './characters/characters.module';
     }),
 
     AuthModule,
-    GatewayModule,
     CommonModule,
     CharactersModule,
   ],
