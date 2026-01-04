@@ -5,14 +5,24 @@
  * Affiche un bouton "Se déconnecter" qui renvoie vers /login.
  */
 
+import { useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
+import { useCharacterStore } from "../store/character.store";
 
 function WorldPage() {
   const navigate = useNavigate();
+  const setCharacter = useCharacterStore((s) => s.setCharacter);
+
+  useEffect(() => {
+    // TEMPORAIRE : charge un personnage pour tester la layer
+    setCharacter({
+      id: 1,
+      name: "Mihai le Conquérant",
+    });
+  }, []);
 
   function handleLogout() {
-    // Ici tu peux aussi vider localStorage si tu stockes un token
-    navigate('/login');
+    navigate('/');
   }
 
   return (
@@ -24,3 +34,4 @@ function WorldPage() {
 }
 
 export default WorldPage;
+
