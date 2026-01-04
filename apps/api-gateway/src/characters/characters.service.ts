@@ -1,24 +1,25 @@
 /**
  * CharactersService
  * -----------------------------------------------------------------------------
- * Role:
- * - Contains the business logic related to characters (CRUD + equipment).
- * - Interacts with the database through Character and CharacterEquipment repositories.
+ * Rôle :
+ * - Contient la logique métier liée aux personnages (CRUD + équipement).
+ * - Interagit avec la base de données via les repositories Character et
+ *   CharacterEquipment.
  *
- * Location:
+ * Emplacement :
  * mmorpg-project/apps/api-gateway/src/characters/characters.service.ts
  *
- * Methods:
- * - create()     → create a new character
- * - findAll()    → list all characters
- * - findOne()    → get a character by ID
- * - update()     → update a character
- * - remove()     → delete a character
- * - equipItem()  → equip an item in a specific slot (implementation pending)
+ * Méthodes :
+ * - create()     → créer un personnage
+ * - findAll()    → lister tous les personnages
+ * - findOne()    → récupérer un personnage par ID
+ * - update()     → mettre à jour un personnage
+ * - remove()     → supprimer un personnage
+ * - equipItem()  → équiper un item dans un slot donné
  *
- * Notes:
- * - The repositories are now injected via TypeORM.
- * - equipItem() will be implemented once item logic and validations are defined.
+ * Notes :
+ * - Les repositories sont injectés via TypeORM.
+ * - equipItem() gère la création ou mise à jour du slot d’équipement.
  * -----------------------------------------------------------------------------
  */
 
@@ -32,6 +33,7 @@ import { CharacterEquipment } from './entities/character-equipment.entity';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { UpdateCharacterDto } from './dto/update-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
+import { EquipmentSlot } from './enums/equipment-slot.enum';
 
 @Injectable()
 export class CharactersService {
@@ -65,7 +67,7 @@ export class CharactersService {
     });
 
     if (!character) {
-      throw new NotFoundException(`Character #${id} not found`);
+      throw new NotFoundException(`Personnage #${id} introuvable`);
     }
 
     return character;
@@ -83,17 +85,59 @@ export class CharactersService {
   }
 
   // ---------------------------------------------------------------------------
-  // Equipment (implementation later)
+  // Équipement
   // ---------------------------------------------------------------------------
 
   /**
-   * Equip an item in a specific slot for a character.
-   * Implementation will be added once:
-   * - item system is defined
-   * - slot compatibility rules are defined
-   * - item repository is available
+   * Équipe un item dans un slot donné pour un personnage.
+   * Étapes :
+   * 1. Vérifier que le personnage existe
+   * 2. Valider le slot via l'enum EQUIPMENT_SLOT
+   * 3. Charger ou créer le slot d'équipement
+   * 4. Assigner l'item
+   * 5. Sauvegarder
+   * 6. Retourner le personnage mis à jour
    */
   async equipItem(characterId: number, dto: EquipItemDto) {
-    return `Equip item ${dto.itemId} in slot ${dto.slot} for character #${characterId}`;
+    const { slot, itemId } = dto;
+
+    // 1. Vérifier que le personnage existe
+    const character = await this.characterRepository.findOne({
+      where: { id: characterId },
+      relations: ['equipment'],
+    });
+
+    if (!character) {
+      throw new NotFoundException(`Personnage #${characterId} introuvable`);
+    }
+
+    // 2. Valider le slot
+    const validSlots = Object.values(EquipmentSlot);
+    if (!validSlots.includes(slot)) {
+      throw new Error(`Slot d'équipement invalide : ${slot}`);
+    }
+
+    // 3. Trouver ou créer le slot d'équipement
+    let equipmentSlot = character.equipment.find((e) => e.slot === slot);
+
+    if (!equipmentSlot) {
+      equipmentSlot = this.equipmentRepository.create({
+        character,
+        slot,
+        itemId: null,
+      });
+    }
+
+    // 4. Assigner l'item
+    equipmentSlot.itemId = itemId;
+
+    // 5. Sauvegarder
+    await this.equipmentRepository.save(equipmentSlot);
+
+    // 6. Retourner le personnage mis à jour
+    return this.characterRepository.findOne({
+      where: { id: characterId },
+      relations: ['equipment'],
+    });
   }
 }

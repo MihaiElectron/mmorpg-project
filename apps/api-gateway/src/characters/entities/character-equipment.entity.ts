@@ -39,10 +39,16 @@ export class CharacterEquipment {
   })
   slot: EquipmentSlot;
 
-  @Column({ nullable: true })
-  itemId: number;
+  @Column({
+    type: 'int',
+    nullable: true,
+  })
+  itemId: number | null;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   createdAt: Date;
 
   @Column({
