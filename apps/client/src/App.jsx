@@ -6,17 +6,26 @@
  */
 
 import React from 'react';
-import './styles/main.scss'; // import global
-import { BrowserRouter, Routes, Route } from 'react-router-dom'; // ⚠️ IMPORT OBLIGATOIRE
+import './styles/main.scss';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
 import LoginPage from './pages/LoginPage';
 import WorldPage from './pages/WorldPage';
+import GameLayout from './layouts/GameLayout';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/world" element={<WorldPage />} />
+
+        {/* Pages sans layer */}
+        <Route path="/" element={<LoginPage />} />
+
+        {/* Pages AVEC layer */}
+        <Route path="/world" element={<GameLayout />}>
+          <Route index element={<WorldPage />} />
+        </Route>
+
       </Routes>
     </BrowserRouter>
   );

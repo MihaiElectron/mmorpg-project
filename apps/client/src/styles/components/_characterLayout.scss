@@ -1,0 +1,70 @@
+@use '../abstracts/variables' as *;
+
+.character-layout {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+  
+    width: 30%;
+    height: 70%;
+  
+    background: $color-forest-dark;
+    border-top-left-radius: 0x;
+    border-top-right-radius: 12px;
+  
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  
+    // Transition pour l'ouverture/fermeture
+    transition: transform 0.3s ease;
+  
+    // État fermé → descendu hors écran
+    &.is-closed {
+      transform: translateY(100%);
+    }
+  
+    // État ouvert → visible
+    &.is-open {
+      transform: translateY(0);
+    }
+  
+    &__tab {
+      position: absolute;
+      top: -30px;
+      left: -1px;
+  
+      width: 80px;
+      height: 30px;
+  
+      background: $color-forest-dark;
+      color: white;
+      border: none;
+  
+      border-top-left-radius: 12px;
+      border-top-right-radius: 0px;
+  
+      cursor: pointer;
+      font-size: 0.9rem;
+  
+      display: flex;
+      align-items: center;
+      justify-content: center;
+  
+      transition: background 0.2s ease;
+  
+      &:hover {
+        background: #444;
+      }
+    }
+  
+    &__content {
+      width: 100%;
+      height: 100%;
+      padding: 12px;
+      overflow: hidden;
+    }
+  }
+  
