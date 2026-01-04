@@ -1,11 +1,10 @@
 /**
- * CharactersService
+ * CharactersService (sécurisé)
  * -----------------------------------------------------------------------------
  * Rôle :
- * - Gère toute la logique métier liée aux personnages.
- * - Création, lecture, mise à jour, suppression.
- * - Vérifie les règles métier (unicité du nom, un seul personnage par joueur, etc.).
- * - Interagit avec la base via TypeORM.
+ * - Gère la logique métier liée aux personnages, en respectant la sécurité MMO.
+ * - Toutes les opérations sensibles sont liées à un userId (joueur authentifié).
+ * - Garantit qu'un joueur ne peut agir QUE sur ses propres personnages.
  *
  * Emplacement :
  * mmorpg-project/apps/api-gateway/src/characters/characters.service.ts
@@ -18,7 +17,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+  import { Repository } from 'typeorm';
 
 import { Character } from './entities/character.entity';
 import { CreateCharacterDto } from './dto/create-character.dto';
@@ -35,15 +34,19 @@ export class CharactersService {
   /**
    * create()
    * -----------------------------------------------------------------------------
-   * Crée un personnage pour un joueur.
+   * Crée un personnage pour un joueur donné.
+   *
    * Règles métier :
    * - Un joueur ne peut avoir qu'un seul personnage.
    * - Le nom du personnage doit être unique.
+   *
+   * Sécurité :
+   * - Le userId vient du JWT (controller) et NON du client.
    */
-  async create(dto: CreateCharacterDto): Promise<Character> {
+  async create(dto: CreateCharacterDto, userId: number): Promise<Character> {
     // Vérifie si le joueur a déjà un personnage
     const existingForUser = await this.characterRepository.findOne({
-      where: { userId: dto.userId },
+      where: { userId },
     });
 
     if (existingForUser) {
@@ -64,29 +67,39 @@ export class CharactersService {
     }
 
     // Création du personnage
-    const character = this.characterRepository.create(dto);
+    const character = this.characterRepository.create({
+      ...dto,
+      userId, // toujours injecté côté backend
+    });
+
     return this.characterRepository.save(character);
   }
 
   /**
-   * findAll()
+   * findByUserId()
    * -----------------------------------------------------------------------------
-   * Retourne tous les personnages.
+   * Retourne tous les personnages appartenant à un joueur.
+   * (Dans ton cas : généralement 0 ou 1, vu la règle métier.)
    */
-  async findAll(): Promise<Character[]> {
+  async findByUserId(userId: number): Promise<Character[]> {
     return this.characterRepository.find({
+      where: { userId },
       relations: ['equipment'],
     });
   }
 
   /**
-   * findOne()
+   * findOneForUser()
    * -----------------------------------------------------------------------------
-   * Retourne un personnage par son ID.
+   * Retourne un personnage par id, mais UNIQUEMENT s'il appartient au joueur.
+   *
+   * Sécurité :
+   * - Si le personnage n'existe pas ou n'appartient pas à ce joueur,
+   *   on renvoie un 404 générique (ne révèle pas l'existence chez un autre).
    */
-  async findOne(id: number): Promise<Character> {
+  async findOneForUser(id: number, userId: number): Promise<Character> {
     const character = await this.characterRepository.findOne({
-      where: { id },
+      where: { id, userId },
       relations: ['equipment'],
     });
 
@@ -98,12 +111,19 @@ export class CharactersService {
   }
 
   /**
-   * update()
+   * updateForUser()
    * -----------------------------------------------------------------------------
-   * Met à jour un personnage.
+   * Met à jour un personnage appartenant au joueur.
+   *
+   * Sécurité :
+   * - Vérifie d'abord que le personnage appartient bien au userId.
    */
-  async update(id: number, dto: UpdateCharacterDto): Promise<Character> {
-    const character = await this.findOne(id);
+  async updateForUser(
+    id: number,
+    dto: UpdateCharacterDto,
+    userId: number,
+  ): Promise<Character> {
+    const character = await this.findOneForUser(id, userId);
 
     Object.assign(character, dto);
 
@@ -111,28 +131,65 @@ export class CharactersService {
   }
 
   /**
-   * remove()
+   * removeForUser()
    * -----------------------------------------------------------------------------
-   * Supprime un personnage.
+   * Supprime un personnage appartenant au joueur.
+   *
+   * Sécurité :
+   * - Impossible de supprimer le personnage d'un autre joueur.
    */
-  async remove(id: number): Promise<void> {
-    const character = await this.findOne(id);
+  async removeForUser(id: number, userId: number): Promise<void> {
+    const character = await this.findOneForUser(id, userId);
     await this.characterRepository.remove(character);
   }
 
   /**
-   * equipItem()
+   * equipItemForUser()
    * -----------------------------------------------------------------------------
-   * Équipe un item dans un slot.
-   * (La logique dépend de ton CharacterEquipment)
+   * Équipe un item sur un personnage appartenant au joueur.
+   *
+   * Sécurité :
+   * - Vérifie que le personnage appartient bien au userId.
+   * - Évite qu'un joueur équipe un item sur un personnage d'un autre compte.
+   *
+   * TODO :
+   * - Implémenter la logique d'équipement en fonction de ta structure "equipment".
    */
-  async equipItem(id: number, dto: EquipItemDto) {
-    const character = await this.findOne(id);
+  async equipItemForUser(
+    id: number,
+    dto: EquipItemDto,
+    userId: number,
+  ): Promise<Character> {
+    const character = await this.findOneForUser(id, userId);
 
-    // TODO : logique d'équipement selon ton système
-    // Exemple :
+    // TODO : logique d'équipement selon ton système de slots / equipment.
+    // Exemple (purement illustratif) :
+    //
+    // if (!character.equipment) {
+    //   character.equipment = {};
+    // }
     // character.equipment[dto.slot] = dto.itemId;
 
     return this.characterRepository.save(character);
   }
+
+  /**
+   * [Optionnel] Méthodes génériques internes
+   * -----------------------------------------------------------------------------
+   * Si tu veux encore garder une version "non sécurisée" pour un usage interne
+   * (scripts admin, outils internes), tu peux conserver findOne() en privé.
+   */
+
+  // private async findOne(id: number): Promise<Character> {
+  //   const character = await this.characterRepository.findOne({
+  //     where: { id },
+  //     relations: ['equipment'],
+  //   });
+  //
+  //   if (!character) {
+  //     throw new NotFoundException('Personnage introuvable.');
+  //   }
+  //
+  //   return character;
+  // }
 }

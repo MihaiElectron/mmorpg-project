@@ -1,24 +1,10 @@
 /**
- * CharactersController
+ * CharactersController (sécurisé)
  * -----------------------------------------------------------------------------
  * Rôle :
- * - Expose les endpoints REST liés aux personnages (CRUD + équipement).
- * - Toutes les routes sont protégées par JWT via JwtAuthGuard.
- *
- * Emplacement :
- * mmorpg-project/apps/api-gateway/src/characters/characters.controller.ts
- *
- * Endpoints :
- * - POST /characters           → créer un personnage
- * - GET /characters            → lister tous les personnages
- * - GET /characters/:id        → récupérer un personnage
- * - PATCH /characters/:id      → mettre à jour un personnage
- * - DELETE /characters/:id     → supprimer un personnage
- * - POST /characters/:id/equip → équiper un item dans un slot
- *
- * Remarques :
- * - L’endpoint /equip délègue la logique à CharactersService.equipItem().
- * - EquipItemDto valide le payload envoyé par le frontend.
+ * - Toutes les actions sont limitées au joueur authentifié.
+ * - Un joueur ne peut voir / modifier / équiper que SES personnages.
+ * - Le userId est extrait automatiquement via @CurrentUser().
  * -----------------------------------------------------------------------------
  */
 
@@ -31,7 +17,6 @@ import {
   Param,
   Delete,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -40,14 +25,13 @@ import {
   ApiParam,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
-
 
 import { CharactersService } from './characters.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { UpdateCharacterDto } from './dto/update-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 @ApiBearerAuth()
 @ApiTags('characters')
@@ -58,69 +42,62 @@ export class CharactersController {
 
   /**
    * POST /characters
-   * Crée un nouveau personnage pour l'utilisateur authentifié.
-   * - Récupère l'userId depuis le token JWT (payload.sub)
-   * - L'injecte dans le DTO avant de déléguer au service.
+   * Crée un personnage pour l'utilisateur connecté.
    */
   @Post()
   @ApiBody({ type: CreateCharacterDto })
   @ApiResponse({ status: 201, description: 'Personnage créé avec succès.' })
-  create(@Req() req: Request, @Body() dto: CreateCharacterDto) {
-    // req.user est ajouté par JwtStrategy via Passport.
-    // On caste en any car Express ne connaît pas la propriété "user" par défaut.
-    const user = (req as any).user;
-    dto.userId = user.sub;
-
-    return this.charactersService.create(dto);
+  create(@CurrentUser() user, @Body() dto: CreateCharacterDto) {
+    return this.charactersService.create(dto, user.userId);
   }
 
   /**
    * GET /characters
-   * Retourne la liste de tous les personnages (avec leur équipement).
+   * Retourne uniquement les personnages du joueur connecté.
    */
   @Get()
-  findAll() {
-    return this.charactersService.findAll();
+  findAll(@CurrentUser() user) {
+    return this.charactersService.findByUserId(user.userId);
   }
 
   /**
    * GET /characters/:id
-   * Récupère un personnage spécifique par son ID.
+   * Retourne un personnage appartenant au joueur.
    */
   @Get(':id')
-  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
-  findOne(@Param('id') id: string) {
-    return this.charactersService.findOne(+id);
+  @ApiParam({ name: 'id', type: Number })
+  findOne(@Param('id') id: string, @CurrentUser() user) {
+    return this.charactersService.findOneForUser(+id, user.userId);
   }
 
   /**
    * PATCH /characters/:id
-   * Met à jour les informations d'un personnage.
+   * Met à jour un personnage appartenant au joueur.
    */
   @Patch(':id')
-  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
-  update(@Param('id') id: string, @Body() dto: UpdateCharacterDto) {
-    return this.charactersService.update(+id, dto);
+  @ApiParam({ name: 'id', type: Number })
+  update(@Param('id') id: string, @Body() dto: UpdateCharacterDto, @CurrentUser() user) {
+    return this.charactersService.updateForUser(+id, dto, user.userId);
   }
 
   /**
    * DELETE /characters/:id
-   * Supprime un personnage.
+   * Supprime un personnage appartenant au joueur.
    */
   @Delete(':id')
-  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
-  remove(@Param('id') id: string) {
-    return this.charactersService.remove(+id);
+  @ApiParam({ name: 'id', type: Number })
+  remove(@Param('id') id: string, @CurrentUser() user) {
+    return this.charactersService.removeForUser(+id, user.userId);
   }
 
   /**
    * POST /characters/:id/equip
-   * Équipe un item dans un slot d'un personnage.
+   * Équipe un item sur un personnage appartenant au joueur.
    */
   @Post(':id/equip')
-  @ApiParam({ name: 'id', type: Number, description: 'ID du personnage' })
+  @ApiParam({ name: 'id', type: Number })
   @ApiBody({ type: EquipItemDto })
-  equipItem(@Param('id') id: string, @Body() dto: EquipItemDto) {
-    return this.charactersService.equipItem(+id, dto);
+  equipItem(@Param('id') id: string, @Body() dto: EquipItemDto, @CurrentUser() user) {
+    return this.charactersService.equipItemForUser(+id, dto, user.userId);
   }
 }
