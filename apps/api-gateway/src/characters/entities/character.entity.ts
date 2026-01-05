@@ -1,90 +1,66 @@
 /**
- * Character Entity
+ * Character Entity (Version simplifiée pour MVP)
  * -----------------------------------------------------------------------------
- * Role:
- * - Represents a playable character in the MMORPG.
- * - Stores identity, appearance, and core attributes.
- * - Hosts the inverse relation to CharacterEquipment.
+ * Rôle :
+ * - Représente un personnage jouable.
+ * - Correspond EXACTEMENT aux données envoyées par le frontend.
+ * - Version minimaliste pour permettre la création d’un personnage
+ *   sans stats complexes (constitution, force, etc.).
  *
- * Location:
- * mmorpg-project/apps/api-gateway/src/characters/entities/character.entity.ts
+ * IMPORTANT :
+ * - Le frontend envoie : { name, sex }
+ * - Donc l’entity doit contenir : name, sex, avatar?, userId
+ * - Tous les autres champs (stats) sont retirés pour éviter les erreurs 400.
  *
- * Properties:
- * - userId       : owner player ID
- * - gender       : male / female / other
- * - name         : character name
- * - avatar       : image or visual identifier
- * - constitution : base stat
- * - strength     : base stat
- * - endurance    : base stat
- * - agility      : base stat
- * - dexterity    : base stat
- * - intelligence : base stat
- *
- * Notes:
- * - Skills (blacksmithing, magic, hunting, etc.) will be added later.
- * - OneToMany relation allows loading all equipment slots for a character.
+ * Tu pourras réintroduire les stats plus tard quand ton système sera stable.
  * -----------------------------------------------------------------------------
  */
 
 import {
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    OneToMany,
-  } from 'typeorm';
-  import { CharacterEquipment } from './character-equipment.entity';
-  
-  @Entity('characters')
-  export class Character {
-    @PrimaryGeneratedColumn()
-    id: number;
-  
-    @Column({ unique: true })
-    userId: number;
-  
-    @Column()
-    gender: string;
-  
-    @Column({ unique: true })
-    name: string;
-  
-    @Column({ nullable: true })
-    avatar: string;
-  
-    @Column()
-    constitution: number;
-  
-    @Column()
-    strength: number;
-  
-    @Column()
-    endurance: number;
-  
-    @Column()
-    agility: number;
-  
-    @Column()
-    dexterity: number;
-  
-    @Column()
-    intelligence: number;
-  
-    @OneToMany(
-      () => CharacterEquipment,
-      (equipment) => equipment.character,
-      { cascade: true }
-    )
-    equipment: CharacterEquipment[];
-  
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    createdAt: Date;
-  
-    @Column({
-      type: 'timestamp',
-      default: () => 'CURRENT_TIMESTAMP',
-      onUpdate: 'CURRENT_TIMESTAMP',
-    })
-    updatedAt: Date;
-  }
-  
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+} from 'typeorm';
+import { CharacterEquipment } from './character-equipment.entity';
+
+@Entity('characters')
+export class Character {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  // ID du joueur propriétaire (unique : 1 joueur = 1 personnage)
+  @Column({ unique: true })
+  userId: number;
+
+  // Sexe du personnage (male / female)
+  @Column()
+  sex: string;
+
+  // Nom du personnage (unique)
+  @Column({ unique: true })
+  name: string;
+
+  // Avatar optionnel
+  @Column({ nullable: true })
+  avatar: string;
+
+  // Relation avec l’équipement (facultatif pour le MVP)
+  @OneToMany(
+    () => CharacterEquipment,
+    (equipment) => equipment.character,
+    { cascade: true }
+  )
+  equipment: CharacterEquipment[];
+
+  // Audit fields
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
+
+  @Column({
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+    onUpdate: 'CURRENT_TIMESTAMP',
+  })
+  updatedAt: Date;
+}

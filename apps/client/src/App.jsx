@@ -10,6 +10,7 @@ import './styles/main.scss';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
+import CreateCharacterPage from "./pages/CreateCharacterPage";
 import WorldPage from './pages/WorldPage';
 import GameLayout from './layouts/GameLayout';
 
@@ -17,6 +18,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+
+        <Route path="/create-character" element={<CreateCharacterPage />} />
 
         {/* Pages sans layer */}
         <Route path="/" element={<LoginPage />} />

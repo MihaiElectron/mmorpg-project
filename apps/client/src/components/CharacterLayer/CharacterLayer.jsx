@@ -26,7 +26,7 @@ export default function CharacterLayer() {
 
   return (
     <div className="character-layer">
-    <div className="character-layer__character"></div>
+    <div className={`character-layer__character character--${character.sex}`}></div>
 
     <div className="character-layer__slot slot--left-earring"></div>
     <div className="character-layer__slot slot--right-earring"></div>

@@ -9,17 +9,25 @@
     border-radius: 6px;
     height: 70%;
     position: relative;
-  }
+}
   
-  /* Personnage au centre, grande zone */
+  /* Personnage au centre */
   .character-layer__character {
-    grid-column: 2 / 5;   // 3 colonnes
-    grid-row: 1 / 6;      // toute la hauteur
-  
-    background: url('../../assets/images/characters/femme-souvetements.png')
-      no-repeat center center;
+    grid-column: 2 / 5;
+    grid-row: 1 / 6;
     background-size: contain;
-  }
+    background-repeat: no-repeat;
+    background-position: center center;
+
+}
+
+.character--male {
+    background-image: url('../../assets/images/characters/homme-souvetements.png');
+}
+
+.character--female {
+    background-image: url('../../assets/images/characters/femme-souvetements.png');
+}
   
   /* Style générique des slots */
   .character-layer__slot {
@@ -29,29 +37,28 @@
   }
   
   /* Ligne du haut (4 slots) */
-.slot--left-earring     { grid-column: 1; grid-row: 1; }
-.slot--right-earring    { grid-column: 2; grid-row: 1; }
-.slot--headgear         { grid-column: 4; grid-row: 1; }
-.slot--ranged-weapon    { grid-column: 5; grid-row: 1; }
-
-/* Deuxième ligne (2 slots) */
-.slot--necklace         { grid-column: 1; grid-row: 2; }
-.slot--chest-armor      { grid-column: 5; grid-row: 2; }
-
-/* Troisième ligne (4 slots) */
-.slot--left-bracelet    { grid-column: 1; grid-row: 3; }
-.slot--main-weapon      { grid-column: 2; grid-row: 3; }
-.slot--off-hand         { grid-column: 4; grid-row: 3; }
-.slot--gloves           { grid-column: 5; grid-row: 3; }
-
-/* Quatrième ligne (2 slots) */
-.slot--right-bracelet   { grid-column: 1; grid-row: 4; }
-.slot--leg-armor        { grid-column: 5; grid-row: 4; }
-
-/* Ligne du bas (4 slots) */
-.slot--left-ring        { grid-column: 1; grid-row: 5; }
-.slot--right-ring       { grid-column: 2; grid-row: 5; }
-.slot--boots            { grid-column: 4; grid-row: 5; }
-.slot--bag              { grid-column: 5; grid-row: 5; }
-
+  .slot--left-earring     { grid-column: 1; grid-row: 1; }
+  .slot--right-earring    { grid-column: 2; grid-row: 1; }
+  .slot--headgear         { grid-column: 4; grid-row: 1; }
+  .slot--ranged-weapon    { grid-column: 5; grid-row: 1; }
+  
+  /* Deuxième ligne (2 slots) */
+  .slot--necklace         { grid-column: 1; grid-row: 2; }
+  .slot--chest-armor      { grid-column: 5; grid-row: 2; }
+  
+  /* Troisième ligne (4 slots) */
+  .slot--left-bracelet    { grid-column: 1; grid-row: 3; }
+  .slot--main-weapon      { grid-column: 2; grid-row: 3; }
+  .slot--off-hand         { grid-column: 4; grid-row: 3; }
+  .slot--gloves           { grid-column: 5; grid-row: 3; }
+  
+  /* Quatrième ligne (2 slots) */
+  .slot--right-bracelet   { grid-column: 1; grid-row: 4; }
+  .slot--leg-armor        { grid-column: 5; grid-row: 4; }
+  
+  /* Ligne du bas (4 slots) */
+  .slot--left-ring        { grid-column: 1; grid-row: 5; }
+  .slot--right-ring       { grid-column: 2; grid-row: 5; }
+  .slot--boots            { grid-column: 4; grid-row: 5; }
+  .slot--bag              { grid-column: 5; grid-row: 5; }
   

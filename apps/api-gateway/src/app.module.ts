@@ -20,6 +20,15 @@ import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
 
+// 🔥 Log clair pour vérifier la connexion DB
+console.log('>>> Connecting to PostgreSQL with config:', {
+  host: 'localhost',
+  port: 5432,
+  username: 'semoa',
+  password: 'ssap',
+  database: 'mmorpgdb',
+});
+
 @Module({
   imports: [
     ConfigModule.forRoot({

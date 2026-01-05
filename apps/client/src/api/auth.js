@@ -1,9 +1,51 @@
 /**
- * Fonctions utilitaires pour appeler l’API backend.
- * - registerUser : crée un nouvel utilisateur via POST /auth/register
- * - loginUser : connecte un utilisateur via POST /auth/login
+ * handleResponse
+ * --------------
+ * Fonction utilitaire centralisée pour gérer toutes les réponses HTTP.
+ *
+ * Rôle :
+ * - Vérifier si la réponse est OK (status 2xx)
+ * - Tenter de parser le JSON uniquement si possible
+ * - Extraire un message d'erreur cohérent, même si le backend renvoie :
+ *      - un message simple
+ *      - un tableau d'erreurs (ValidationPipe NestJS)
+ *      - un body non-JSON (erreurs réseau, HTML, etc.)
+ * - Lever une exception propre avec un message lisible par le frontend
  */
+async function handleResponse(res, defaultMessage) {
+  // Si la requête a réussi → on renvoie directement le JSON
+  if (res.ok) {
+    return res.json();
+  }
 
+  // Message par défaut si rien d'autre n'est disponible
+  let errorMessage = defaultMessage;
+
+  try {
+    // Tentative de parsing JSON (peut échouer si le backend renvoie autre chose)
+    const data = await res.json();
+
+    // Cas NestJS : message = tableau d'erreurs
+    if (Array.isArray(data.message)) {
+      errorMessage = data.message.join(', ');
+    } else {
+      errorMessage = data.message || errorMessage;
+    }
+  } catch {
+    // Si le body n'est pas du JSON valide → fallback sur statusText
+    errorMessage = res.statusText || errorMessage;
+  }
+
+  // On lève une erreur propre, capturable dans le frontend
+  throw new Error(errorMessage);
+}
+
+/**
+ * registerUser
+ * ------------
+ * Appelle POST /auth/register pour créer un nouvel utilisateur.
+ * Utilise handleResponse pour une gestion d'erreur uniforme.
+ */
 export async function registerUser(username, password) {
   const res = await fetch('http://localhost:3000/auth/register', {
     method: 'POST',
@@ -11,16 +53,15 @@ export async function registerUser(username, password) {
     body: JSON.stringify({ username, password }),
   });
 
-  const data = await res.json(); // récupère le message du backend
-
-  if (!res.ok) {
-    // renvoie le vrai message du backend
-    throw new Error(data.message || 'Erreur');
-  }
-
-  return data;
+  return handleResponse(res, "Erreur lors de l'inscription");
 }
 
+/**
+ * loginUser
+ * ---------
+ * Appelle POST /auth/login pour connecter un utilisateur.
+ * Retourne { access_token } si succès.
+ */
 export async function loginUser(username, password) {
   const res = await fetch('http://localhost:3000/auth/login', {
     method: 'POST',
@@ -28,11 +69,5 @@ export async function loginUser(username, password) {
     body: JSON.stringify({ username, password }),
   });
 
-  const data = await res.json(); // récupère le message du backend
-
-  if (!res.ok) {
-    throw new Error(data.message || 'Erreur');
-  }
-
-  return data; // renvoie { access_token }
+  return handleResponse(res, "Erreur lors de la connexion");
 }

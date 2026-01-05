@@ -1,10 +1,10 @@
 /**
- * CharactersController (sécurisé)
+ * CharactersController — Version MVP propre et extensible
  * -----------------------------------------------------------------------------
- * Rôle :
- * - Toutes les actions sont limitées au joueur authentifié.
- * - Un joueur ne peut voir / modifier / équiper que SES personnages.
- * - Le userId est extrait automatiquement via @CurrentUser().
+ * Routes :
+ * - POST /characters        → créer un personnage
+ * - GET /characters/me      → récupérer le personnage du joueur
+ * - DELETE /characters/:id  → supprimer le personnage
  * -----------------------------------------------------------------------------
  */
 
@@ -13,23 +13,25 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   UseGuards,
+  NotFoundException,
+  ParseIntPipe,
 } from '@nestjs/common';
+
 import {
   ApiTags,
-  ApiBody,
-  ApiResponse,
-  ApiParam,
   ApiBearerAuth,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 
 import { CharactersService } from './characters.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
-import { UpdateCharacterDto } from './dto/update-character.dto';
-import { EquipItemDto } from './dto/equip-item.dto';
+
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
@@ -38,66 +40,54 @@ import { CurrentUser } from '../auth/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('characters')
 export class CharactersController {
-  constructor(private readonly charactersService: CharactersService) {}
+  constructor(private readonly service: CharactersService) {}
+
+  /**
+   * GET /characters/me
+   * -------------------
+   * Retourne le personnage unique de l'utilisateur connecté.
+   * Renvoie 404 si aucun personnage n'existe encore.
+   */
+  @Get('me')
+  @ApiOkResponse({ description: 'Personnage trouvé' })
+  @ApiNotFoundResponse({ description: 'Aucun personnage trouvé pour cet utilisateur' })
+  async getMine(@CurrentUser() user) {
+    const character = await this.service.findOneByUserId(user.userId);
+
+    if (!character) {
+      throw new NotFoundException('Aucun personnage trouvé pour cet utilisateur');
+    }
+
+    return character;
+  }
 
   /**
    * POST /characters
+   * ----------------
    * Crée un personnage pour l'utilisateur connecté.
+   * Renvoie 400 si les données sont invalides.
    */
   @Post()
-  @ApiBody({ type: CreateCharacterDto })
-  @ApiResponse({ status: 201, description: 'Personnage créé avec succès.' })
+  @ApiCreatedResponse({ description: 'Personnage créé' })
+  @ApiBadRequestResponse({ description: 'Données invalides' })
   create(@CurrentUser() user, @Body() dto: CreateCharacterDto) {
-    return this.charactersService.create(dto, user.userId);
-  }
-
-  /**
-   * GET /characters
-   * Retourne uniquement les personnages du joueur connecté.
-   */
-  @Get()
-  findAll(@CurrentUser() user) {
-    return this.charactersService.findByUserId(user.userId);
-  }
-
-  /**
-   * GET /characters/:id
-   * Retourne un personnage appartenant au joueur.
-   */
-  @Get(':id')
-  @ApiParam({ name: 'id', type: Number })
-  findOne(@Param('id') id: string, @CurrentUser() user) {
-    return this.charactersService.findOneForUser(+id, user.userId);
-  }
-
-  /**
-   * PATCH /characters/:id
-   * Met à jour un personnage appartenant au joueur.
-   */
-  @Patch(':id')
-  @ApiParam({ name: 'id', type: Number })
-  update(@Param('id') id: string, @Body() dto: UpdateCharacterDto, @CurrentUser() user) {
-    return this.charactersService.updateForUser(+id, dto, user.userId);
+    return this.service.create(dto, user.userId);
   }
 
   /**
    * DELETE /characters/:id
-   * Supprime un personnage appartenant au joueur.
+   * -----------------------
+   * Supprime le personnage si :
+   * - il appartient à l'utilisateur
+   * - il existe
    */
   @Delete(':id')
-  @ApiParam({ name: 'id', type: Number })
-  remove(@Param('id') id: string, @CurrentUser() user) {
-    return this.charactersService.removeForUser(+id, user.userId);
-  }
-
-  /**
-   * POST /characters/:id/equip
-   * Équipe un item sur un personnage appartenant au joueur.
-   */
-  @Post(':id/equip')
-  @ApiParam({ name: 'id', type: Number })
-  @ApiBody({ type: EquipItemDto })
-  equipItem(@Param('id') id: string, @Body() dto: EquipItemDto, @CurrentUser() user) {
-    return this.charactersService.equipItemForUser(+id, dto, user.userId);
+  @ApiOkResponse({ description: 'Personnage supprimé' })
+  @ApiNotFoundResponse({ description: 'Personnage introuvable ou non autorisé' })
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user,
+  ) {
+    return this.service.removeForUser(id, user.userId);
   }
 }
