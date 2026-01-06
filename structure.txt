@@ -1,0 +1,231 @@
+.
+├── apps
+│   ├── api-gateway
+│   │   ├── dist
+│   │   │   ├── app.controller.d.ts
+│   │   │   ├── app.controller.js
+│   │   │   ├── app.controller.js.map
+│   │   │   ├── app.module.d.ts
+│   │   │   ├── app.module.js
+│   │   │   ├── app.module.js.map
+│   │   │   ├── app.service.d.ts
+│   │   │   ├── app.service.js
+│   │   │   ├── app.service.js.map
+│   │   │   ├── auth
+│   │   │   │   ├── auth.controller.d.ts
+│   │   │   │   ├── auth.controller.js
+│   │   │   │   ├── auth.controller.js.map
+│   │   │   │   ├── auth.module.d.ts
+│   │   │   │   ├── auth.module.js
+│   │   │   │   ├── auth.module.js.map
+│   │   │   │   ├── auth.service.d.ts
+│   │   │   │   ├── auth.service.js
+│   │   │   │   ├── auth.service.js.map
+│   │   │   │   ├── current-user.decorator.d.ts
+│   │   │   │   ├── current-user.decorator.js
+│   │   │   │   ├── current-user.decorator.js.map
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── login-user.dto.d.ts
+│   │   │   │   │   ├── login-user.dto.js
+│   │   │   │   │   ├── login-user.dto.js.map
+│   │   │   │   │   ├── register-user.dto.d.ts
+│   │   │   │   │   ├── register-user.dto.js
+│   │   │   │   │   └── register-user.dto.js.map
+│   │   │   │   ├── jwt-auth.guard.d.ts
+│   │   │   │   ├── jwt-auth.guard.js
+│   │   │   │   ├── jwt-auth.guard.js.map
+│   │   │   │   ├── jwt.strategy.d.ts
+│   │   │   │   ├── jwt.strategy.js
+│   │   │   │   └── jwt.strategy.js.map
+│   │   │   ├── characters
+│   │   │   │   ├── characters.controller.d.ts
+│   │   │   │   ├── characters.controller.js
+│   │   │   │   ├── characters.controller.js.map
+│   │   │   │   ├── characters.module.d.ts
+│   │   │   │   ├── characters.module.js
+│   │   │   │   ├── characters.module.js.map
+│   │   │   │   ├── characters.service.d.ts
+│   │   │   │   ├── characters.service.js
+│   │   │   │   ├── characters.service.js.map
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── create-character.dto.d.ts
+│   │   │   │   │   ├── create-character.dto.js
+│   │   │   │   │   ├── create-character.dto.js.map
+│   │   │   │   │   ├── equip-item.dto.d.ts
+│   │   │   │   │   ├── equip-item.dto.js
+│   │   │   │   │   ├── equip-item.dto.js.map
+│   │   │   │   │   ├── update-character.dto.d.ts
+│   │   │   │   │   ├── update-character.dto.js
+│   │   │   │   │   └── update-character.dto.js.map
+│   │   │   │   ├── entities
+│   │   │   │   │   ├── character.entity.d.ts
+│   │   │   │   │   ├── character.entity.js
+│   │   │   │   │   ├── character.entity.js.map
+│   │   │   │   │   ├── character-equipment.entity.d.ts
+│   │   │   │   │   ├── character-equipment.entity.js
+│   │   │   │   │   └── character-equipment.entity.js.map
+│   │   │   │   └── enums
+│   │   │   │       ├── equipment-slot.enum.d.ts
+│   │   │   │       ├── equipment-slot.enum.js
+│   │   │   │       └── equipment-slot.enum.js.map
+│   │   │   ├── common
+│   │   │   │   ├── common.module.d.ts
+│   │   │   │   ├── common.module.js
+│   │   │   │   └── common.module.js.map
+│   │   │   ├── main.d.ts
+│   │   │   ├── main.js
+│   │   │   ├── main.js.map
+│   │   │   ├── tsconfig.build.tsbuildinfo
+│   │   │   └── users
+│   │   │       ├── user.entity.d.ts
+│   │   │       ├── user.entity.js
+│   │   │       ├── user.entity.js.map
+│   │   │       ├── user.module.d.ts
+│   │   │       ├── user.module.js
+│   │   │       ├── user.module.js.map
+│   │   │       ├── users.service.d.ts
+│   │   │       ├── users.service.js
+│   │   │       └── users.service.js.map
+│   │   ├── eslint.config.mjs
+│   │   ├── nest-cli.json
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── app.controller.spec.ts
+│   │   │   ├── app.controller.ts
+│   │   │   ├── app.module.ts
+│   │   │   ├── app.service.ts
+│   │   │   ├── auth
+│   │   │   │   ├── auth.controller.spec.ts
+│   │   │   │   ├── auth.controller.ts
+│   │   │   │   ├── auth.module.ts
+│   │   │   │   ├── auth.service.spec.ts
+│   │   │   │   ├── auth.service.ts
+│   │   │   │   ├── current-user.decorator.ts
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── login-user.dto.ts
+│   │   │   │   │   └── register-user.dto.ts
+│   │   │   │   ├── jwt-auth.guard.ts
+│   │   │   │   └── jwt.strategy.ts
+│   │   │   ├── characters
+│   │   │   │   ├── characters.controller.spec.ts
+│   │   │   │   ├── characters.controller.ts
+│   │   │   │   ├── characters.module.ts
+│   │   │   │   ├── characters.service.spec.ts
+│   │   │   │   ├── characters.service.ts
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── create-character.dto.ts
+│   │   │   │   │   ├── equip-item.dto.ts
+│   │   │   │   │   └── update-character.dto.ts
+│   │   │   │   ├── entities
+│   │   │   │   │   ├── character.entity.ts
+│   │   │   │   │   └── character-equipment.entity.ts
+│   │   │   │   └── enums
+│   │   │   │       └── equipment-slot.enum.ts
+│   │   │   ├── common
+│   │   │   │   └── common.module.ts
+│   │   │   ├── main.ts
+│   │   │   └── users
+│   │   │       ├── user.entity.ts
+│   │   │       ├── user.module.ts
+│   │   │       └── users.service.ts
+│   │   ├── tsconfig.build.json
+│   │   └── tsconfig.json
+│   └── client
+│       ├── eslint.config.js
+│       ├── index.html
+│       ├── package.json
+│       ├── public
+│       │   └── vite.svg
+│       ├── README.md
+│       ├── src
+│       │   ├── api
+│       │   │   └── auth.js
+│       │   ├── App.jsx
+│       │   ├── assets
+│       │   │   ├── images
+│       │   │   │   ├── backgrounds
+│       │   │   │   │   └── login-personnages-conversation.webp
+│       │   │   │   └── characters
+│       │   │   │       ├── femme-souvetements.png
+│       │   │   │       └── homme-souvetements.png
+│       │   │   └── react.svg
+│       │   ├── components
+│       │   │   ├── CharacterLayer
+│       │   │   │   └── CharacterLayer.jsx
+│       │   │   └── CharacterLayout
+│       │   │       └── CharacterLayout.jsx
+│       │   ├── index.css
+│       │   ├── layouts
+│       │   │   └── GameLayout.jsx
+│       │   ├── main.jsx
+│       │   ├── pages
+│       │   │   ├── CreateCharacterPage.jsx
+│       │   │   ├── LoginPage.jsx
+│       │   │   └── WorldPage.jsx
+│       │   ├── store
+│       │   │   ├── character.store.js
+│       │   │   └── items.store.ts
+│       │   ├── styles
+│       │   │   ├── abstracts
+│       │   │   │   ├── _functions.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _mixins.scss
+│       │   │   │   ├── _placeholders.scss
+│       │   │   │   └── _variables.scss
+│       │   │   ├── base
+│       │   │   │   ├── _animations.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _reset.scss
+│       │   │   │   └── _typography.scss
+│       │   │   ├── components
+│       │   │   │   ├── _characterLayer.scss
+│       │   │   │   ├── _characterLayout.scss
+│       │   │   │   └── _index.scss
+│       │   │   ├── layout
+│       │   │   │   ├── _footer.scss
+│       │   │   │   ├── _grid.scss
+│       │   │   │   ├── _header.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _sidebar.scss
+│       │   │   ├── main.scss
+│       │   │   ├── pages
+│       │   │   │   ├── _character-creation.scss
+│       │   │   │   ├── _game.scss
+│       │   │   │   ├── _home.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _leaderboard.scss
+│       │   │   │   ├── _login.scss
+│       │   │   │   ├── _profile.scss
+│       │   │   │   ├── _register.scss
+│       │   │   │   └── _world.scss
+│       │   │   ├── themes
+│       │   │   │   ├── _dark.scss
+│       │   │   │   ├── _default.scss
+│       │   │   │   ├── _fantasy.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _light.scss
+│       │   │   ├── utilities
+│       │   │   │   ├── _colors.scss
+│       │   │   │   ├── _display.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _spacing.scss
+│       │   │   │   └── _text.scss
+│       │   │   └── vendors
+│       │   │       ├── _index.scss
+│       │   │       └── _normalize.scss
+│       │   └── types
+│       │       └── item.types.ts
+│       └── vite.config.js
+├── docker
+│   └── docker-compose.yml
+├── package.json
+├── package-lock.json
+├── packages
+│   └── shared
+│       ├── index.js
+│       └── package.json
+├── README.md
+└── structure.txt
+
+48 directories, 181 files

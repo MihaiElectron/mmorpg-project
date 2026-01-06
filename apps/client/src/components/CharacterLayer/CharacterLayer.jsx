@@ -26,30 +26,28 @@ export default function CharacterLayer() {
 
   return (
     <div className="character-layer">
-    <div className={`character-layer__character character--${character.sex}`}></div>
+      <div className={`character-layer__character character--${character.sex}`}></div>
 
-    <div className="character-layer__slot slot--left-earring"></div>
-    <div className="character-layer__slot slot--right-earring"></div>
-    <div className="character-layer__slot slot--headgear"></div>
-    <div className="character-layer__slot slot--ranged-weapon"></div>
+      <div className="character-layer__slot slot--left-earring"></div>
+      <div className="character-layer__slot slot--right-earring"></div>
+      <div className="character-layer__slot slot--headgear"></div>
+      <div className="character-layer__slot slot--ranged-weapon"></div>
 
-    <div className="character-layer__slot slot--necklace"></div>
-    <div className="character-layer__slot slot--chest-armor"></div>
+      <div className="character-layer__slot slot--necklace"></div>
+      <div className="character-layer__slot slot--chest-armor"></div>
 
-    <div className="character-layer__slot slot--left-bracelet"></div>
-    <div className="character-layer__slot slot--main-weapon"></div>
-    <div className="character-layer__slot slot--off-hand"></div>
-    <div className="character-layer__slot slot--gloves"></div>
+      <div className="character-layer__slot slot--left-bracelet"></div>
+      <div className="character-layer__slot slot--right-weapon"></div>
+      <div className="character-layer__slot slot--lzft-hand"></div>
+      <div className="character-layer__slot slot--gloves"></div>
 
-    <div className="character-layer__slot slot--right-bracelet"></div>
-    <div className="character-layer__slot slot--leg-armor"></div>
+      <div className="character-layer__slot slot--right-bracelet"></div>
+      <div className="character-layer__slot slot--leg-armor"></div>
 
-    <div className="character-layer__slot slot--left-ring"></div>
-    <div className="character-layer__slot slot--right-ring"></div>
-    <div className="character-layer__slot slot--boots"></div>
-    <div className="character-layer__slot slot--bag"></div>
+      <div className="character-layer__slot slot--left-ring"></div>
+      <div className="character-layer__slot slot--right-ring"></div>
+      <div className="character-layer__slot slot--boots"></div>
+      <div className="character-layer__slot slot--bag"></div>
     </div>
-
-
   );
 }

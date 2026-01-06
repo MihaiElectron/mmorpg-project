@@ -7,26 +7,29 @@
     padding: 12px 18px;
     border: 1px solid #444;
     border-radius: 6px;
+  
     height: 70%;
     position: relative;
-}
+  }
   
   /* Personnage au centre */
   .character-layer__character {
     grid-column: 2 / 5;
     grid-row: 1 / 6;
+  
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center center;
-
+    
+  }
+  
+  /* IMPORTANT : chemins absolus → fonctionne en dev + prod */
+  .character--male {
+    background-image: url('/src/assets/images/characters/homme-souvetements.png');
 }
-
-.character--male {
-    background-image: url('../../assets/images/characters/homme-souvetements.png');
-}
-
-.character--female {
-    background-image: url('../../assets/images/characters/femme-souvetements.png');
+  
+  .character--female {
+    background-image: url('/src/assets/images/characters/femme-souvetements.png');
 }
   
   /* Style générique des slots */
@@ -48,8 +51,8 @@
   
   /* Troisième ligne (4 slots) */
   .slot--left-bracelet    { grid-column: 1; grid-row: 3; }
-  .slot--main-weapon      { grid-column: 2; grid-row: 3; }
-  .slot--off-hand         { grid-column: 4; grid-row: 3; }
+  .slot--right-hand     { grid-column: 2; grid-row: 3; }
+  .slot--left-hand         { grid-column: 4; grid-row: 3; }
   .slot--gloves           { grid-column: 5; grid-row: 3; }
   
   /* Quatrième ligne (2 slots) */
