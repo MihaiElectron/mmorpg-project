@@ -28,11 +28,15 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
+  ApiOperation,
+  ApiBody 
 } from '@nestjs/swagger';
 
 import { CharactersService } from './characters.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
+import { UnequipItemDto } from './dto/unequip-item.dto';
+
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -130,4 +134,21 @@ export class CharactersController {
       data: slot,
     };
   }
+
+  @Post('unequip')
+  @ApiOperation({ summary: 'Déséquiper un item' })
+  @ApiBody({ type: UnequipItemDto })
+  async unequipItem(
+    @CurrentUser() user,
+    @Body() dto: UnequipItemDto,
+  ) {
+    const slot = await this.service.unequipItemForUser(user.userId, dto.slot);
+  
+    return {
+      message: 'Item déséquipé avec succès.',
+      data: slot,
+    };
+  }
+  
 }
+

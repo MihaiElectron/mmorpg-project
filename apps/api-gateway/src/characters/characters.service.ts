@@ -25,6 +25,7 @@ import { CreateCharacterDto } from './dto/create-character.dto';
 
 import { CharacterEquipment } from './entities/character-equipment.entity';
 import { EquipItemDto } from './dto/equip-item.dto';
+import { EquipmentSlot } from './enums/equipment-slot.enum';
 
 @Injectable()
 export class CharactersService {
@@ -136,6 +137,7 @@ export class CharactersService {
     if (!character) throw new NotFoundException('Personnage introuvable.');
     await this.repo.remove(character);
   }
+
   /**
    * equipItemForUser()
    * ----------------------------------------------------------------------------
@@ -163,22 +165,19 @@ export class CharactersService {
    * ----------------------------------------------------------------------------
    */
   async equipItemForUser(userId: number, dto: EquipItemDto): Promise<CharacterEquipment> {
-    // Vérifier que le joueur possède un personnage
     const character = await this.findOneByUserId(userId);
     if (!character) {
       throw new NotFoundException('Aucun personnage trouvé pour ce joueur.');
     }
 
-    // Chercher si un slot existe déjà pour ce personnage
     let slot = await this.equipmentRepo.findOne({
       where: {
         character: { id: character.id },
-        slot: dto.slot,
+        slot: dto.slot as EquipmentSlot,
       },
       relations: ['character'],
     });
 
-    // Si le slot n’existe pas, on le crée
     if (!slot) {
       slot = this.equipmentRepo.create({
         character,
@@ -186,12 +185,51 @@ export class CharactersService {
         itemId: dto.itemId,
       });
     } else {
-      // Sinon on met simplement à jour l’item
       slot.itemId = dto.itemId;
     }
 
     return this.equipmentRepo.save(slot);
   }
 
+  /**
+   * unequipItemForUser()
+   * ----------------------------------------------------------------------------
+   * Déséquipe un item d’un slot donné pour le personnage du joueur.
+   *
+   * MVP :
+   * - Vérifie que le joueur possède un personnage.
+   * - Vérifie que le slot existe.
+   * - Met itemId à null (déséquipement).
+   *
+   * Paramètres :
+   * - userId : identifiant du joueur
+   * - slot   : slot à déséquiper
+   *
+   * Retour :
+   * - Le slot mis à jour.
+   * ----------------------------------------------------------------------------
+   */
+  async unequipItemForUser(userId: number, slotName: string): Promise<CharacterEquipment> {
+    const character = await this.findOneByUserId(userId);
+    if (!character) {
+      throw new NotFoundException('Aucun personnage trouvé pour ce joueur.');
+    }
 
+    const slot = await this.equipmentRepo.findOne({
+      where: {
+        character: { id: character.id },
+        slot: slotName as EquipmentSlot, // ← FIX
+      },
+      relations: ['character'],
+    });
+    
+
+    if (!slot) {
+      throw new NotFoundException(`Aucun équipement trouvé pour le slot : ${slotName}`);
+    }
+
+    slot.itemId = null;
+
+    return this.equipmentRepo.save(slot);
+  }
 }
