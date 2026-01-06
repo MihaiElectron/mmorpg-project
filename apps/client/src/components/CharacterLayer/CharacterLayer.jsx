@@ -37,8 +37,8 @@ export default function CharacterLayer() {
       <div className="character-layer__slot slot--chest-armor"></div>
 
       <div className="character-layer__slot slot--left-bracelet"></div>
-      <div className="character-layer__slot slot--right-weapon"></div>
-      <div className="character-layer__slot slot--lzft-hand"></div>
+      <div className="character-layer__slot slot--right-hand"></div>
+      <div className="character-layer__slot slot--left-hand"></div>
       <div className="character-layer__slot slot--gloves"></div>
 
       <div className="character-layer__slot slot--right-bracelet"></div>

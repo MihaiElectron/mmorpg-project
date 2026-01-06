@@ -31,6 +31,7 @@ export default function CharacterLayout() {
         Perso
       </button>
 
+
       <div className="character-layout__content">
         <CharacterLayer />
       </div>

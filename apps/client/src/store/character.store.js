@@ -11,6 +11,7 @@
  * - toggleOpen()       : ouvre/ferme le panneau
  * - loadCharacter()    : récupère le personnage depuis l'API
  * - equipItem()        : équipe un item dans un slot (MVP)
+ * - unequipItem()      : déséquipe un item dans un slot (MVP)
  * -----------------------------------------------------------------------------
  */
 
@@ -32,8 +33,12 @@ export const useCharacterStore = create((set, get) => ({
   // ---------------------------------------------------------------------------
   loadCharacter: async () => {
     try {
+      const token = localStorage.getItem("token");
+
       const res = await fetch("http://localhost:3000/characters/me", {
-        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!res.ok) {
@@ -53,11 +58,13 @@ export const useCharacterStore = create((set, get) => ({
   // ---------------------------------------------------------------------------
   equipItem: async (slot, itemId) => {
     try {
+      const token = localStorage.getItem("token");
+
       const res = await fetch("http://localhost:3000/characters/equip", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ slot, itemId }),
       });
@@ -67,7 +74,6 @@ export const useCharacterStore = create((set, get) => ({
         return;
       }
 
-      // L'API renvoie { message, data }
       const result = await res.json();
       console.log("Item équipé:", result);
 
@@ -77,4 +83,42 @@ export const useCharacterStore = create((set, get) => ({
       console.error("Erreur equipItem:", err);
     }
   },
+
+  // ---------------------------------------------------------------------------
+  // Déséquipe un item dans un slot (MVP)
+  // ---------------------------------------------------------------------------
+  unequipItem: async (slot) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch("http://localhost:3000/characters/unequip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ slot }),
+      });
+
+      if (!res.ok) {
+        console.error("Erreur API unequipItem:", await res.text());
+        return;
+      }
+
+      const result = await res.json();
+      console.log("Item déséquipé:", result);
+
+      // Recharge le personnage pour mettre à jour l'équipement
+      await get().loadCharacter();
+    } catch (err) {
+      console.error("Erreur unequipItem:", err);
+    }
+  },
 }));
+
+// -----------------------------------------------------------------------------
+// Expose le store dans la console du navigateur (DEV ONLY)
+// -----------------------------------------------------------------------------
+if (typeof window !== "undefined") {
+  window.useCharacterStore = useCharacterStore;
+}
