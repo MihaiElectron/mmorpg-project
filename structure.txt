@@ -54,6 +54,9 @@
 │   │   │   │   │   ├── equip-item.dto.d.ts
 │   │   │   │   │   ├── equip-item.dto.js
 │   │   │   │   │   ├── equip-item.dto.js.map
+│   │   │   │   │   ├── unequip-item.dto.d.ts
+│   │   │   │   │   ├── unequip-item.dto.js
+│   │   │   │   │   ├── unequip-item.dto.js.map
 │   │   │   │   │   ├── update-character.dto.d.ts
 │   │   │   │   │   ├── update-character.dto.js
 │   │   │   │   │   └── update-character.dto.js.map
@@ -63,7 +66,10 @@
 │   │   │   │   │   ├── character.entity.js.map
 │   │   │   │   │   ├── character-equipment.entity.d.ts
 │   │   │   │   │   ├── character-equipment.entity.js
-│   │   │   │   │   └── character-equipment.entity.js.map
+│   │   │   │   │   ├── character-equipment.entity.js.map
+│   │   │   │   │   ├── inventory.entity.d.ts
+│   │   │   │   │   ├── inventory.entity.js
+│   │   │   │   │   └── inventory.entity.js.map
 │   │   │   │   └── enums
 │   │   │   │       ├── equipment-slot.enum.d.ts
 │   │   │   │       ├── equipment-slot.enum.js
@@ -72,6 +78,10 @@
 │   │   │   │   ├── common.module.d.ts
 │   │   │   │   ├── common.module.js
 │   │   │   │   └── common.module.js.map
+│   │   │   ├── inventory
+│   │   │   │   ├── inventory.entity.d.ts
+│   │   │   │   ├── inventory.entity.js
+│   │   │   │   └── inventory.entity.js.map
 │   │   │   ├── main.d.ts
 │   │   │   ├── main.js
 │   │   │   ├── main.js.map
@@ -116,10 +126,12 @@
 │   │   │   │   ├── dto
 │   │   │   │   │   ├── create-character.dto.ts
 │   │   │   │   │   ├── equip-item.dto.ts
+│   │   │   │   │   ├── unequip-item.dto.ts
 │   │   │   │   │   └── update-character.dto.ts
 │   │   │   │   ├── entities
 │   │   │   │   │   ├── character.entity.ts
-│   │   │   │   │   └── character-equipment.entity.ts
+│   │   │   │   │   ├── character-equipment.entity.ts
+│   │   │   │   │   └── inventory.entity.ts
 │   │   │   │   └── enums
 │   │   │   │       └── equipment-slot.enum.ts
 │   │   │   ├── common
@@ -226,6 +238,7 @@
 │       ├── index.js
 │       └── package.json
 ├── README.md
+├── script_copilot.txt
 └── structure.txt
 
-48 directories, 181 files
+49 directories, 193 files

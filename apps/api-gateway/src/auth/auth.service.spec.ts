@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 interface User {
-  id: number;
+  id: string;
   username: string;
   password: string; // hashé
 }
@@ -18,7 +18,8 @@ export class AuthService {
 
   async register(username: string, password: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user: User = { id: Date.now(), username, password: hashedPassword };
+    // Generate a simple UUID-like string for testing
+    const user: User = { id: `test-${Date.now()}`, username, password: hashedPassword };
     this.users.push(user);
     return { message: 'User created', user: { id: user.id, username: user.username } };
   }

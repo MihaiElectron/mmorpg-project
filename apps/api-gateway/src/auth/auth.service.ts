@@ -90,7 +90,7 @@ export class AuthService {
    * --------------
    * Utilisé par JwtStrategy pour valider un utilisateur via son ID.
    */
-  async validateUser(userId: number) {
+  async validateUser(userId: string) {
     return this.userRepository.findOne({ where: { id: userId } });
   }
 }

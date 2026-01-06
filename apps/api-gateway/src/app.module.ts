@@ -46,7 +46,7 @@ console.log('>>> Connecting to PostgreSQL with config:', {
       // 🔥 Charge automatiquement TOUTES les entités du projet
       entities: [__dirname + '/**/*.entity.{ts,js}'],
 
-      synchronize: true, // OK en dev
+      synchronize: false, // OK en dev
     }),
 
     AuthModule,

@@ -23,6 +23,8 @@ import {
   OneToMany,
 } from 'typeorm';
 import { CharacterEquipment } from './character-equipment.entity';
+import { Inventory } from './inventory.entity';
+
 
 @Entity('characters')
 export class Character {
@@ -31,7 +33,7 @@ export class Character {
 
   // ID du joueur propriétaire (unique : 1 joueur = 1 personnage)
   @Column({ unique: true })
-  userId: number;
+  userId: string;
 
   // Sexe du personnage (male / female)
   @Column()
@@ -63,4 +65,8 @@ export class Character {
     onUpdate: 'CURRENT_TIMESTAMP',
   })
   updatedAt: Date;
+
+  @OneToMany(() => Inventory, inventory => inventory.character)
+  inventory: Inventory[];
+  
 }

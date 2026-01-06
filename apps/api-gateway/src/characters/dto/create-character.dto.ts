@@ -31,5 +31,5 @@ export class CreateCharacterDto {
   avatar?: string;
 
   @IsOptional()
-  userId?: number;
+  userId?: string;
 }

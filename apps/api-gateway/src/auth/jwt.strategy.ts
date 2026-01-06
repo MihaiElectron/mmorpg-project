@@ -1,26 +1,24 @@
 /**
  * JwtStrategy
  * -----------------------------------------------------------------------------
- * Rôle :
- * - Valider les tokens JWT envoyés dans l'en-tête Authorization: Bearer <token>.
- * - Vérifier la signature et l'expiration du token.
- * - Extraire le payload signé lors du login : { sub: userId, username }.
- * - Injecter ce payload dans req.user pour les contrôleurs protégés.
+ * Rôle général :
+ * - Extraire et valider les tokens JWT envoyés par les clients.
+ * - Vérifier la signature, l’intégrité et l’expiration du token.
+ * - Récupérer le payload signé lors de l’authentification (sub, username).
+ * - Injecter ces informations dans req.user pour les routes protégées.
  *
- * Notes importantes :
- * - Cette stratégie NE charge PAS l'utilisateur en base.
- *   → On retourne directement le payload du token.
- *   → Cela garantit que req.user.sub est toujours disponible.
- *
- * - Le CharactersController dépend de req.user.sub pour injecter userId
- *   lors de la création d'un personnage.
+ * Notes :
+ * - Cette stratégie ne charge pas l'utilisateur en base.
+ *   Elle se contente de valider le token et de renvoyer son contenu.
+ * - Les contrôleurs peuvent ensuite utiliser req.user.userId pour
+ *   associer des ressources à l'utilisateur authentifié.
  *
  * Emplacement :
- * mmorpg-project/apps/api-gateway/src/auth/jwt.strategy.ts
+ * apps/api-gateway/src/auth/jwt.strategy.ts
  * -----------------------------------------------------------------------------
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -29,28 +27,34 @@ import { ConfigService } from '@nestjs/config';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly configService: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Récupère le token
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Extraction du token
       ignoreExpiration: false,                                  // Refuse les tokens expirés
-      secretOrKey: configService.get<string>('JWT_SECRET'),     // Clé venant du .env
+      secretOrKey: configService.get<string>('JWT_SECRET'),     // Clé secrète JWT
     });
   }
 
   /**
    * validate()
    * ----------
-   * Appelé automatiquement si le token est valide.
-   *
-   * payload = {
-   *   sub: userId,
-   *   username: string
-   * }
+   * Appelée automatiquement lorsque le token est valide.
+   * Le payload correspond aux données signées lors du login :
+   *   {
+   *     sub: userId,
+   *     username: string
+   *   }
    *
    * Le retour de cette méthode sera injecté dans req.user.
-   * → CharactersController peut alors faire : dto.userId = req.user.sub
    */
   async validate(payload: any) {
+    const userId = String(payload.sub);
+
+    // Vérification minimale : un token doit contenir un identifiant utilisateur
+    if (!userId) {
+      throw new UnauthorizedException('Token invalide : identifiant utilisateur manquant.');
+    }
+
     return {
-      userId: payload.sub,
+      userId,
       username: payload.username,
     };
   }

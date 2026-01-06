@@ -29,29 +29,6 @@ import { EquipmentSlot } from './enums/equipment-slot.enum';
 
 @Injectable()
 export class CharactersService {
-  /**
-   * Constructeur du service
-   * ----------------------------------------------------------------------------
-   * Injection des repositories nécessaires :
-   *
-   * - repo :
-   *     Repository principal pour gérer les entités Character.
-   *     Utilisé pour :
-   *       • créer un personnage
-   *       • vérifier l’unicité du nom
-   *       • vérifier qu’un joueur n’a qu’un seul personnage
-   *       • récupérer un personnage
-   *       • supprimer un personnage
-   *
-   * - equipmentRepo :
-   *     Repository pour gérer les entrées de la table character_equipment.
-   *     Ajouté à l’Étape 2.
-   *     Utilisé plus tard pour :
-   *       • créer un slot d’équipement
-   *       • mettre à jour un slot existant
-   *       • charger l’équipement d’un personnage
-   * ----------------------------------------------------------------------------
-   */
   constructor(
     @InjectRepository(Character)
     private readonly repo: Repository<Character>,
@@ -64,20 +41,9 @@ export class CharactersService {
    * create()
    * ----------------------------------------------------------------------------
    * Crée un nouveau personnage pour un joueur.
-   *
-   * Règles :
-   * - Un joueur ne peut posséder qu’un seul personnage.
-   * - Le nom du personnage doit être unique.
-   *
-   * Paramètres :
-   * - dto    : données envoyées par le frontend (name, sex)
-   * - userId : identifiant du joueur
-   *
-   * Retour :
-   * - Le personnage nouvellement créé.
    * ----------------------------------------------------------------------------
    */
-  async create(dto: CreateCharacterDto, userId: number): Promise<Character> {
+  async create(dto: CreateCharacterDto, userId: string): Promise<Character> {
     const existing = await this.repo.findOne({ where: { userId } });
     if (existing) {
       throw new ConflictException('Ce joueur possède déjà un personnage.');
@@ -96,22 +62,12 @@ export class CharactersService {
    * findOneByUserId()
    * ----------------------------------------------------------------------------
    * Récupère le personnage associé à un joueur.
-   *
-   * Notes :
-   * - Charge également la relation "equipment" (Étape 3).
-   * - Retourne null si aucun personnage n’existe pour ce joueur.
-   *
-   * Paramètres :
-   * - userId : identifiant du joueur
-   *
-   * Retour :
-   * - Le personnage complet (avec équipement), ou null.
    * ----------------------------------------------------------------------------
    */
-  async findOneByUserId(userId: number): Promise<Character | null> {
+  async findOneByUserId(userId: string): Promise<Character | null> {
     return this.repo.findOne({
       where: { userId },
-      relations: ['equipment'], // Étape 3 : chargement des slots d’équipement
+      relations: ['equipment'], // tu peux ajouter 'inventory' plus tard
     });
   }
 
@@ -119,20 +75,9 @@ export class CharactersService {
    * removeForUser()
    * ----------------------------------------------------------------------------
    * Supprime le personnage d’un joueur.
-   *
-   * Règles :
-   * - Le personnage doit appartenir au joueur.
-   * - Si aucun personnage ne correspond, une erreur 404 est renvoyée.
-   *
-   * Paramètres :
-   * - id     : identifiant du personnage
-   * - userId : identifiant du joueur
-   *
-   * Retour :
-   * - void (le personnage est supprimé)
    * ----------------------------------------------------------------------------
    */
-  async removeForUser(id: number, userId: number): Promise<void> {
+  async removeForUser(id: number, userId: string): Promise<void> {
     const character = await this.repo.findOne({ where: { id, userId } });
     if (!character) throw new NotFoundException('Personnage introuvable.');
     await this.repo.remove(character);
@@ -141,30 +86,10 @@ export class CharactersService {
   /**
    * equipItemForUser()
    * ----------------------------------------------------------------------------
-   * Équipe un item dans un slot donné pour le personnage du joueur.
-   *
-   * MVP :
-   * - Vérifie que le joueur possède un personnage.
-   * - Cherche le slot existant ou le crée s’il n’existe pas.
-   * - Met à jour l’itemId dans ce slot.
-   *
-   * Ce que cette version NE FAIT PAS encore :
-   * - Vérifier que l’item existe réellement.
-   * - Vérifier que l’item appartient au joueur.
-   * - Vérifier la compatibilité item/slot.
-   * - Gérer le déséquipement.
-   *
-   * Ces règles seront ajoutées dans les étapes suivantes.
-   *
-   * Paramètres :
-   * - userId : identifiant du joueur
-   * - dto    : { slot, itemId }
-   *
-   * Retour :
-   * - Le slot mis à jour ou créé.
+   * Équipe un item dans un slot donné.
    * ----------------------------------------------------------------------------
    */
-  async equipItemForUser(userId: number, dto: EquipItemDto): Promise<CharacterEquipment> {
+  async equipItemForUser(userId: string, dto: EquipItemDto): Promise<CharacterEquipment> {
     const character = await this.findOneByUserId(userId);
     if (!character) {
       throw new NotFoundException('Aucun personnage trouvé pour ce joueur.');
@@ -194,22 +119,10 @@ export class CharactersService {
   /**
    * unequipItemForUser()
    * ----------------------------------------------------------------------------
-   * Déséquipe un item d’un slot donné pour le personnage du joueur.
-   *
-   * MVP :
-   * - Vérifie que le joueur possède un personnage.
-   * - Vérifie que le slot existe.
-   * - Met itemId à null (déséquipement).
-   *
-   * Paramètres :
-   * - userId : identifiant du joueur
-   * - slot   : slot à déséquiper
-   *
-   * Retour :
-   * - Le slot mis à jour.
+   * Déséquipe un item d’un slot donné.
    * ----------------------------------------------------------------------------
    */
-  async unequipItemForUser(userId: number, slotName: string): Promise<CharacterEquipment> {
+  async unequipItemForUser(userId: string, slotName: string): Promise<CharacterEquipment> {
     const character = await this.findOneByUserId(userId);
     if (!character) {
       throw new NotFoundException('Aucun personnage trouvé pour ce joueur.');
@@ -218,11 +131,10 @@ export class CharactersService {
     const slot = await this.equipmentRepo.findOne({
       where: {
         character: { id: character.id },
-        slot: slotName as EquipmentSlot, // ← FIX
+        slot: slotName as EquipmentSlot,
       },
       relations: ['character'],
     });
-    
 
     if (!slot) {
       throw new NotFoundException(`Aucun équipement trouvé pour le slot : ${slotName}`);
