@@ -1,15 +1,14 @@
 .character-layer {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(5, 1fr);
-    gap: 4px;
-  
-    padding: 12px 18px;
-    border: 1px solid #444;
+    grid-template-columns: repeat(5, 60px);
+    grid-template-rows: repeat(5, 60px);
+    column-gap: 6px; 
+    row-gap: 6px;
+    justify-content: center;
     border-radius: 6px;
-  
-    height: 70%;
     position: relative;
+    height: 100%;
+    width: 100%;
   }
   
   /* Personnage au centre */
@@ -37,6 +36,7 @@
     border: 1px solid #666;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
+    width: 100%;
   }
   
   /* Ligne du haut (4 slots) */

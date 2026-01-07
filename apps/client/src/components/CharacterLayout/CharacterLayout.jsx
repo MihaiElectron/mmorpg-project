@@ -35,6 +35,21 @@ export default function CharacterLayout() {
       <div className="character-layout__content">
         <CharacterLayer />
       </div>
+
+      <div className="inventory-section">
+          <div className="inventory-grid">
+            <div className="inventory-slot">Slot 1</div>
+            <div className="inventory-slot">Slot 2</div>
+            <div className="inventory-slot">Slot 3</div>
+            <div className="inventory-slot">Slot 4</div>
+            <div className="inventory-slot">Slot 5</div>
+            <div className="inventory-slot">Slot 6</div>
+          </div>
+        </div>
+
+      <button onClick={() => useCharacterStore.getState().equipItem("LEFT_EARRING", 101)}>
+        Test Equip
+      </button>
     </div>
   );
 }
