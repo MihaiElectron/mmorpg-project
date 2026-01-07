@@ -18,7 +18,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToOne, // ajout nécessaire
 } from 'typeorm';
+
+import { Character } from '../characters/entities/character.entity'; // ajout nécessaire
 
 @Entity('users')
 export class User {
@@ -39,5 +42,8 @@ export class User {
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
-}
 
+  // Relation One-to-One avec Character
+  @OneToOne(() => Character, character => character.user)
+  character: Character;
+}

@@ -1,101 +1,6 @@
 .
 ├── apps
 │   ├── api-gateway
-│   │   ├── dist
-│   │   │   ├── app.controller.d.ts
-│   │   │   ├── app.controller.js
-│   │   │   ├── app.controller.js.map
-│   │   │   ├── app.module.d.ts
-│   │   │   ├── app.module.js
-│   │   │   ├── app.module.js.map
-│   │   │   ├── app.service.d.ts
-│   │   │   ├── app.service.js
-│   │   │   ├── app.service.js.map
-│   │   │   ├── auth
-│   │   │   │   ├── auth.controller.d.ts
-│   │   │   │   ├── auth.controller.js
-│   │   │   │   ├── auth.controller.js.map
-│   │   │   │   ├── auth.module.d.ts
-│   │   │   │   ├── auth.module.js
-│   │   │   │   ├── auth.module.js.map
-│   │   │   │   ├── auth.service.d.ts
-│   │   │   │   ├── auth.service.js
-│   │   │   │   ├── auth.service.js.map
-│   │   │   │   ├── current-user.decorator.d.ts
-│   │   │   │   ├── current-user.decorator.js
-│   │   │   │   ├── current-user.decorator.js.map
-│   │   │   │   ├── dto
-│   │   │   │   │   ├── login-user.dto.d.ts
-│   │   │   │   │   ├── login-user.dto.js
-│   │   │   │   │   ├── login-user.dto.js.map
-│   │   │   │   │   ├── register-user.dto.d.ts
-│   │   │   │   │   ├── register-user.dto.js
-│   │   │   │   │   └── register-user.dto.js.map
-│   │   │   │   ├── jwt-auth.guard.d.ts
-│   │   │   │   ├── jwt-auth.guard.js
-│   │   │   │   ├── jwt-auth.guard.js.map
-│   │   │   │   ├── jwt.strategy.d.ts
-│   │   │   │   ├── jwt.strategy.js
-│   │   │   │   └── jwt.strategy.js.map
-│   │   │   ├── characters
-│   │   │   │   ├── characters.controller.d.ts
-│   │   │   │   ├── characters.controller.js
-│   │   │   │   ├── characters.controller.js.map
-│   │   │   │   ├── characters.module.d.ts
-│   │   │   │   ├── characters.module.js
-│   │   │   │   ├── characters.module.js.map
-│   │   │   │   ├── characters.service.d.ts
-│   │   │   │   ├── characters.service.js
-│   │   │   │   ├── characters.service.js.map
-│   │   │   │   ├── dto
-│   │   │   │   │   ├── create-character.dto.d.ts
-│   │   │   │   │   ├── create-character.dto.js
-│   │   │   │   │   ├── create-character.dto.js.map
-│   │   │   │   │   ├── equip-item.dto.d.ts
-│   │   │   │   │   ├── equip-item.dto.js
-│   │   │   │   │   ├── equip-item.dto.js.map
-│   │   │   │   │   ├── unequip-item.dto.d.ts
-│   │   │   │   │   ├── unequip-item.dto.js
-│   │   │   │   │   ├── unequip-item.dto.js.map
-│   │   │   │   │   ├── update-character.dto.d.ts
-│   │   │   │   │   ├── update-character.dto.js
-│   │   │   │   │   └── update-character.dto.js.map
-│   │   │   │   ├── entities
-│   │   │   │   │   ├── character.entity.d.ts
-│   │   │   │   │   ├── character.entity.js
-│   │   │   │   │   ├── character.entity.js.map
-│   │   │   │   │   ├── character-equipment.entity.d.ts
-│   │   │   │   │   ├── character-equipment.entity.js
-│   │   │   │   │   ├── character-equipment.entity.js.map
-│   │   │   │   │   ├── inventory.entity.d.ts
-│   │   │   │   │   ├── inventory.entity.js
-│   │   │   │   │   └── inventory.entity.js.map
-│   │   │   │   └── enums
-│   │   │   │       ├── equipment-slot.enum.d.ts
-│   │   │   │       ├── equipment-slot.enum.js
-│   │   │   │       └── equipment-slot.enum.js.map
-│   │   │   ├── common
-│   │   │   │   ├── common.module.d.ts
-│   │   │   │   ├── common.module.js
-│   │   │   │   └── common.module.js.map
-│   │   │   ├── inventory
-│   │   │   │   ├── inventory.entity.d.ts
-│   │   │   │   ├── inventory.entity.js
-│   │   │   │   └── inventory.entity.js.map
-│   │   │   ├── main.d.ts
-│   │   │   ├── main.js
-│   │   │   ├── main.js.map
-│   │   │   ├── tsconfig.build.tsbuildinfo
-│   │   │   └── users
-│   │   │       ├── user.entity.d.ts
-│   │   │       ├── user.entity.js
-│   │   │       ├── user.entity.js.map
-│   │   │       ├── user.module.d.ts
-│   │   │       ├── user.module.js
-│   │   │       ├── user.module.js.map
-│   │   │       ├── users.service.d.ts
-│   │   │       ├── users.service.js
-│   │   │       └── users.service.js.map
 │   │   ├── eslint.config.mjs
 │   │   ├── nest-cli.json
 │   │   ├── package.json
@@ -141,6 +46,18 @@
 │   │   │       ├── user.entity.ts
 │   │   │       ├── user.module.ts
 │   │   │       └── users.service.ts
+│   │   ├── tools
+│   │   │   └── cli
+│   │   │       ├── index.ts
+│   │   │       ├── templates
+│   │   │       │   ├── controller.ts
+│   │   │       │   ├── dtos.ts
+│   │   │       │   ├── entity.ts
+│   │   │       │   ├── module.ts
+│   │   │       │   ├── seed.ts
+│   │   │       │   └── service.ts
+│   │   │       └── utils
+│   │   │           └── format.ts
 │   │   ├── tsconfig.build.json
 │   │   └── tsconfig.json
 │   └── client
@@ -193,7 +110,8 @@
 │       │   │   ├── components
 │       │   │   │   ├── _characterLayer.scss
 │       │   │   │   ├── _characterLayout.scss
-│       │   │   │   └── _index.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _inventory.scss
 │       │   │   ├── layout
 │       │   │   │   ├── _footer.scss
 │       │   │   │   ├── _grid.scss
@@ -230,6 +148,7 @@
 │       │       └── item.types.ts
 │       └── vite.config.js
 ├── docker
+│   ├── backup.sql
 │   └── docker-compose.yml
 ├── package.json
 ├── package-lock.json
@@ -239,6 +158,7 @@
 │       └── package.json
 ├── README.md
 ├── script_copilot.txt
-└── structure.txt
+├── structure.txt
+└── tools
 
-49 directories, 193 files
+44 directories, 118 files

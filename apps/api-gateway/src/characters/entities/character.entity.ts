@@ -20,11 +20,13 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  OneToOne,
+  JoinColumn,
   OneToMany,
 } from 'typeorm';
+import { User } from '../../users/user.entity';
 import { CharacterEquipment } from './character-equipment.entity';
 import { Inventory } from './inventory.entity';
-
 
 @Entity('characters')
 export class Character {
@@ -34,6 +36,11 @@ export class Character {
   // ID du joueur propriétaire (unique : 1 joueur = 1 personnage)
   @Column({ unique: true })
   userId: string;
+
+  // Relation One-to-One avec User (1 user = 1 personnage)
+  @OneToOne(() => User, user => user.character, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   // Sexe du personnage (male / female)
   @Column()
@@ -68,5 +75,4 @@ export class Character {
 
   @OneToMany(() => Inventory, inventory => inventory.character)
   inventory: Inventory[];
-  
 }
