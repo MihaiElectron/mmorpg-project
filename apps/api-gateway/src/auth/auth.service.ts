@@ -12,19 +12,25 @@
  * - NotFoundException (404) si utilisateur introuvable
  */
 
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '../users/user.entity';
+import { UserService } from '../users/user.service';
+import { User } from '../users/entities/user.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class AuthService {
   constructor(
+    private readonly userService: UserService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-
     private readonly jwtService: JwtService,
   ) {}
 
@@ -91,6 +97,10 @@ export class AuthService {
    * Utilisé par JwtStrategy pour valider un utilisateur via son ID.
    */
   async validateUser(userId: string) {
-    return this.userRepository.findOne({ where: { id: userId } });
+    try {
+      return await this.userService.findOne(userId);
+    } catch (error) {
+      return null;
+    }
   }
 }

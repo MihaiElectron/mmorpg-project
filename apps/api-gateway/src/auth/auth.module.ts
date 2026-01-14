@@ -19,11 +19,13 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { UserModule } from '../users/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
@@ -32,6 +34,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
     // Permet d'injecter UserRepository dans AuthService
     UserModule,
+
+    // Import direct de User pour le repository dans AuthService
+    TypeOrmModule.forFeature([User]),
 
     // Gestion des stratégies d'authentification (JWT, etc.)
     PassportModule,

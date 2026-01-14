@@ -249,8 +249,8 @@ cd apps/api-gateway
 # Créer un nouveau projet NestJS
 npx @nestjs/cli new api-gateway
 
-# Installer les dépendances
-npm install @nestjs/swagger @nestjs/jwt @nestjs/passport passport passport-jwt
+# Installer Socket.io ?
+npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
 
 # Démarrer en mode dev
 npm run start:dev
@@ -260,21 +260,6 @@ npm run build
 
 # Lancer les tests
 npm run test
-```
-
-#### Game Server (NestJS)
-
-```bash
-cd apps/game-server
-
-# Créer le projet
-npx @nestjs/cli new game-server
-
-# Installer Socket.io
-npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
-
-# Démarrer
-npm run start:dev
 ```
 
 #### Auth Service (NestJS)
@@ -288,9 +273,6 @@ npx @nestjs/cli new auth-service
 # Installer les dépendances d'authentification
 npm install @nestjs/jwt @nestjs/passport passport passport-local passport-jwt bcrypt
 
-# Démarrer
-npm run start:dev
-```
 
 #### Economy Service (NestJS)
 

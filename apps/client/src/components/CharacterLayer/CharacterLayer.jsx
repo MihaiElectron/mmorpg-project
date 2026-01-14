@@ -24,30 +24,56 @@ export default function CharacterLayer() {
 
   if (!character) return null;
 
+  // Liste de tous les slots disponibles dans le layer
+  const slots = [
+    "left-earring",
+    "right-earring",
+    "headgear",
+    "ranged-weapon",
+    "necklace",
+    "chest-armor",
+    "left-bracelet",
+    "right-hand",
+    "left-hand",
+    "gloves",
+    "right-bracelet",
+    "leg-armor",
+    "left-ring",
+    "right-ring",
+    "boots",
+    "bag",
+  ];
+
+  // Crée un mapping slot → item équipé (ou null)
+  const equipmentMap = {};
+  slots.forEach((slot) => {
+    // Vérifie si l'équipement existe dans ce slot
+    const equipped = character.equipment?.find((eq) => eq.slot === slot);
+    equipmentMap[slot] = equipped?.item || null;
+  });
+
   return (
     <div className="character-layer">
+      {/* Portrait du personnage */}
       <div className={`character-layer__character character--${character.sex}`}></div>
 
-      <div className="character-layer__slot slot--left-earring"></div>
-      <div className="character-layer__slot slot--right-earring"></div>
-      <div className="character-layer__slot slot--headgear"></div>
-      <div className="character-layer__slot slot--ranged-weapon"></div>
+      {/* Boucle sur tous les slots pour afficher l’équipement */}
+      {slots.map((slot) => {
+        const item = equipmentMap[slot];
 
-      <div className="character-layer__slot slot--necklace"></div>
-      <div className="character-layer__slot slot--chest-armor"></div>
-
-      <div className="character-layer__slot slot--left-bracelet"></div>
-      <div className="character-layer__slot slot--right-hand"></div>
-      <div className="character-layer__slot slot--left-hand"></div>
-      <div className="character-layer__slot slot--gloves"></div>
-
-      <div className="character-layer__slot slot--right-bracelet"></div>
-      <div className="character-layer__slot slot--leg-armor"></div>
-
-      <div className="character-layer__slot slot--left-ring"></div>
-      <div className="character-layer__slot slot--right-ring"></div>
-      <div className="character-layer__slot slot--boots"></div>
-      <div className="character-layer__slot slot--bag"></div>
+        return (
+          <div key={slot} className={`character-layer__slot slot--${slot}`}>
+            {/* Affiche l'image de l'item seulement si elle existe */}
+            {item?.image ? (
+              <img
+                src={item.image}
+                alt={item.name || "equipment"}
+                className="character-layer__item-image"
+              />
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

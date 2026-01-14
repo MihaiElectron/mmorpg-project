@@ -1,43 +1,44 @@
+import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+
 /**
- * EquipItemDto
- * -----------------------------------------------------------------------------
- * Rôle :
- * - Représente les données envoyées lorsqu’un joueur équipe un item dans un slot.
- * - Utilisé par l’endpoint POST /characters/equip (MVP).
- *
- * Emplacement :
- * apps/api-gateway/src/characters/dto/equip-item.dto.ts
- *
- * Champs :
- * - slot   : type d’emplacement (enum EquipmentSlot)
- * - itemId : identifiant de l’item à équiper
- *
- * Remarques :
- * - Swagger nécessite @ApiProperty pour afficher correctement les champs.
- * - La validation est assurée par class-validator.
- * - itemId est un simple identifiant numérique ; la logique métier
- *   (vérification de l’inventaire, compatibilité du slot, etc.)
- *   sera gérée dans le service.
- * -----------------------------------------------------------------------------
+ * Enum des slots possibles pour l'équipement
+ * Les valeurs correspondent exactement aux classes CSS / frontend
  */
+export enum EquipmentSlot {
+  LEFT_EARRING = 'left-earring',
+  RIGHT_EARRING = 'right-earring',
+  HEADGEAR = 'headgear',
+  RANGED_WEAPON = 'ranged-weapon',
 
-import { IsEnum, IsNumber } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { EquipmentSlot } from '../enums/equipment-slot.enum';
+  NECKLACE = 'necklace',
+  CHEST_ARMOR = 'chest-armor',
 
+  LEFT_BRACELET = 'left-bracelet',
+  RIGHT_BRACELET = 'right-bracelet',
+
+  RIGHT_HAND = 'right-hand',
+  LEFT_HAND = 'left-hand',
+
+  GLOVES = 'gloves',
+  LEG_ARMOR = 'leg-armor',
+
+  LEFT_RING = 'left-ring',
+  RIGHT_RING = 'right-ring',
+
+  BOOTS = 'boots',
+  BAG = 'bag',
+}
+
+/**
+ * DTO pour équiper un item
+ * - `slot` est optionnel pour les earrings (backend choisit automatiquement)
+ * - Doit être un UUID valide pour `itemId`
+ */
 export class EquipItemDto {
-  @ApiProperty({
-    enum: EquipmentSlot,
-    description: 'Slot dans lequel équiper l’item (HEAD, CHEST, LEGS, etc.)',
-  })
-  @IsEnum(EquipmentSlot)
-  slot: EquipmentSlot;
+  @IsUUID()
+  itemId: string;
 
-  @ApiProperty({
-    type: Number,
-    description: 'Identifiant de l’item à équiper',
-    example: 101,
-  })
-  @IsNumber()
-  itemId: number;
+  @IsOptional()
+  @IsEnum(EquipmentSlot)
+  slot?: EquipmentSlot;
 }

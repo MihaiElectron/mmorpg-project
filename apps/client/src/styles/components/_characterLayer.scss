@@ -38,6 +38,13 @@
     background: rgba(255, 255, 255, 0.05);
     width: 100%;
   }
+
+  .character-layer__item-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
   
   /* Ligne du haut (4 slots) */
   .slot--left-earring     { grid-column: 1; grid-row: 1; }

@@ -1,60 +1,53 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  JoinColumn,
+  Unique,
+} from 'typeorm';
+import { Character } from './character.entity';
+import { Item } from '../../items/entities/item.entity';
+
 /**
  * CharacterEquipment Entity
- * -----------------------------------------------------------------------------
- * Rôle :
- * - Représente un emplacement d’équipement occupé par un item pour un personnage.
- * - Chaque ligne correspond à un slot (HEADGEAR, MAIN_WEAPON, etc.) et l’item
- *   actuellement équipé dans ce slot.
- *
- * Emplacement :
- * mmorpg-project/apps/api-gateway/src/characters/entities/character-equipment.entity.ts
- *
- * Relations :
- * - ManyToOne → Character : un personnage possède plusieurs slots d’équipement.
- *
- * Remarques :
- * - La relation inverse (character.equipment) doit être ajoutée dans
- *   character.entity.ts pour que TypeORM puisse la résoudre.
- * - itemId est nullable car un slot peut être vide.
- * -----------------------------------------------------------------------------
+ * -------------------------
+ * Table de liaison entre Character et Item pour gérer l'équipement.
+ * - Un personnage peut avoir un seul item par slot (unique constraint)
+ * - Relation N-1 avec Character
+ * - Relation N-1 avec Item
  */
-
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
-import { Character } from './character.entity';
-import { EquipmentSlot } from '../enums/equipment-slot.enum';
-
-@Entity('character_equipment')
+@Entity()
+@Unique(['characterId', 'slot'])
 export class CharacterEquipment {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @ManyToOne(() => Character, (character) => character.equipment, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'characterId' })
   character: Character;
 
-  @Column({
-    type: 'enum',
-    enum: EquipmentSlot,
-  })
-  slot: EquipmentSlot;
+  @Column()
+  characterId: string;
 
-  @Column({
-    type: 'int',
-    nullable: true,
-  })
-  itemId: number | null;
+  @ManyToOne(() => Item, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'itemId' })
+  item: Item;
 
-  @Column({
-    type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
+  @Column()
+  itemId: string;
+
+  @Column()
+  slot: string; // 'head', 'chest', 'legs', 'weapon', 'shield', etc.
+
+  @CreateDateColumn()
   createdAt: Date;
 
-  @Column({
-    type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
-    onUpdate: 'CURRENT_TIMESTAMP',
-  })
+  @UpdateDateColumn()
   updatedAt: Date;
 }
+

@@ -56,33 +56,34 @@ export const useCharacterStore = create((set, get) => ({
   // ---------------------------------------------------------------------------
   // Équipe un item dans un slot (MVP)
   // ---------------------------------------------------------------------------
-  equipItem: async (slot, itemId) => {
+  equipItem: async (itemId, slot) => {
     try {
       const token = localStorage.getItem("token");
-
-      const res = await fetch("http://localhost:3000/characters/equip", {
+      const characterId = window.useCharacterStore.getState().character.id; // récupère l'ID du personnage courant
+  
+      const res = await fetch(`http://localhost:3000/characters/${characterId}/equip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ slot, itemId }),
+        body: JSON.stringify({ itemId, slot }), // slot peut être undefined
       });
-
+  
       if (!res.ok) {
         console.error("Erreur API equipItem:", await res.text());
         return;
       }
-
+  
       const result = await res.json();
       console.log("Item équipé:", result);
-
+  
       // Recharge le personnage pour mettre à jour l'équipement
-      await get().loadCharacter();
+      await window.useCharacterStore.getState().loadCharacter();
     } catch (err) {
       console.error("Erreur equipItem:", err);
     }
-  },
+  },  
 
   // ---------------------------------------------------------------------------
   // Déséquipe un item dans un slot (MVP)
@@ -90,8 +91,9 @@ export const useCharacterStore = create((set, get) => ({
   unequipItem: async (slot) => {
     try {
       const token = localStorage.getItem("token");
-
-      const res = await fetch("http://localhost:3000/characters/unequip", {
+      const characterId = get().character.id; // ID du personnage courant
+  
+      const res = await fetch(`http://localhost:3000/characters/${characterId}/unequip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,15 +101,15 @@ export const useCharacterStore = create((set, get) => ({
         },
         body: JSON.stringify({ slot }),
       });
-
+  
       if (!res.ok) {
         console.error("Erreur API unequipItem:", await res.text());
         return;
       }
-
+  
       const result = await res.json();
       console.log("Item déséquipé:", result);
-
+  
       // Recharge le personnage pour mettre à jour l'équipement
       await get().loadCharacter();
     } catch (err) {

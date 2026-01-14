@@ -47,7 +47,7 @@ export default function CharacterLayout() {
           </div>
         </div>
 
-      <button onClick={() => useCharacterStore.getState().equipItem("LEFT_EARRING", 101)}>
+      <button onClick={() => useCharacterStore.getState().equipItem("LEFT_EARRING", "4717fc33-f625-4296-bcd9-dcdf6baf6b3a")}>
         Test Equip
       </button>
     </div>

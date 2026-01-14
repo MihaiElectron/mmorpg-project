@@ -1,78 +1,72 @@
-/**
- * Character Entity (Version simplifiée pour MVP)
- * -----------------------------------------------------------------------------
- * Rôle :
- * - Représente un personnage jouable.
- * - Correspond EXACTEMENT aux données envoyées par le frontend.
- * - Version minimaliste pour permettre la création d’un personnage
- *   sans stats complexes (constitution, force, etc.).
- *
- * IMPORTANT :
- * - Le frontend envoie : { name, sex }
- * - Donc l’entity doit contenir : name, sex, avatar?, userId
- * - Tous les autres champs (stats) sont retirés pour éviter les erreurs 400.
- *
- * Tu pourras réintroduire les stats plus tard quand ton système sera stable.
- * -----------------------------------------------------------------------------
- */
-
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
-  OneToOne,
-  JoinColumn,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
   OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  JoinColumn,
 } from 'typeorm';
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { CharacterEquipment } from './character-equipment.entity';
-import { Inventory } from './inventory.entity';
 
-@Entity('characters')
+/**
+ * Character Entity
+ * ----------------
+ * Représente un personnage de jeu appartenant à un utilisateur.
+ * - Relation N-1 avec User (un utilisateur peut avoir plusieurs personnages)
+ * - Relation 1-N avec CharacterEquipment (un personnage peut avoir plusieurs équipements)
+ */
+@Entity()
 export class Character {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  // ID du joueur propriétaire (unique : 1 joueur = 1 personnage)
-  @Column({ unique: true })
-  userId: string;
+  @Column()
+  name: string;
+  
 
-  // Relation One-to-One avec User (1 user = 1 personnage)
-  @OneToOne(() => User, user => user.character, { onDelete: 'CASCADE' })
+  @Column({ default: 1 })
+  level: number;
+
+  @Column({ default: 100 })
+  health: number;
+
+  @Column({ default: 100 })
+  maxHealth: number;
+
+  @Column({ default: 0 })
+  experience: number;
+
+  @Column({ default: 0 })
+  attack: number; // Attaque de base
+
+  @Column({ default: 0 })
+  defense: number; // Défense de base
+
+  @ManyToOne(() => User, (user) => user.characters, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  // Sexe du personnage (male / female)
   @Column()
+  userId: string;
+
+  @Column({ nullable: false })
   sex: string;
 
-  // Nom du personnage (unique)
-  @Column({ unique: true })
-  name: string;
 
-  // Avatar optionnel
-  @Column({ nullable: true })
-  avatar: string;
-
-  // Relation avec l’équipement (facultatif pour le MVP)
   @OneToMany(
     () => CharacterEquipment,
-    (equipment) => equipment.character,
-    { cascade: true }
+    (characterEquipment) => characterEquipment.character,
+    { cascade: true },
   )
   equipment: CharacterEquipment[];
 
-  // Audit fields
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @Column({
-    type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
-    onUpdate: 'CURRENT_TIMESTAMP',
-  })
+  @UpdateDateColumn()
   updatedAt: Date;
-
-  @OneToMany(() => Inventory, inventory => inventory.character)
-  inventory: Inventory[];
 }
+
