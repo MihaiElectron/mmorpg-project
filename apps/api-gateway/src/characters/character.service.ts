@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
+import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item } from '../items/entities/item.entity';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto, EquipmentSlot } from './dto/equip-item.dto';
@@ -21,6 +22,8 @@ export class CharacterService {
     private readonly equipmentRepository: Repository<CharacterEquipment>,
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
+    @InjectRepository(Inventory)
+    private readonly inventoryRepository: Repository<Inventory>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -42,7 +45,12 @@ export class CharacterService {
   async findAllByUser(userId: string): Promise<Character[]> {
     return this.characterRepository.find({
       where: { userId },
-      relations: ['equipment', 'equipment.item'],
+      relations: [
+        'equipment',
+        'equipment.item',
+        'inventory',
+        'inventory.item',
+      ],
     });
   }
 
@@ -52,197 +60,139 @@ export class CharacterService {
   async findFirstByUser(userId: string): Promise<Character> {
     const character = await this.characterRepository.findOne({
       where: { userId },
-      relations: ['equipment', 'equipment.item'],
+      relations: [
+        'equipment',
+        'equipment.item',
+        'inventory',
+        'inventory.item',
+      ],
       order: { createdAt: 'ASC' },
     });
 
-    if (!character) {
-      throw new NotFoundException(`No character found for user ${userId}`);
-    }
-
+    if (!character) throw new NotFoundException(`No character found for user ${userId}`);
     return character;
   }
 
   /**
-   * Récupère un personnage par son ID (vérifie que l'utilisateur en est propriétaire)
+   * Récupère un personnage par son ID (vérifie la propriété)
    */
   async findOne(id: string, userId: string): Promise<Character> {
     const character = await this.characterRepository.findOne({
       where: { id, userId },
-      relations: ['equipment', 'equipment.item'],
+      relations: [
+        'equipment',
+        'equipment.item',
+        'inventory',
+        'inventory.item',
+      ],
     });
-
-    if (!character) {
-      throw new NotFoundException(`Character ${id} not found`);
-    }
-
+    if (!character) throw new NotFoundException(`Character ${id} not found`);
     return character;
   }
 
   /**
    * Équipe un item sur un personnage
-   * - Vérifie que le personnage appartient à l'utilisateur
-   * - Vérifie que l'item existe
-   * - Vérifie que le slot de l'item correspond au slot demandé
-   * - Remplace l'item existant dans ce slot s'il y en a un
-   * - Pour les earrings : choisit LEFT si libre, sinon RIGHT, sinon remplace LEFT
    */
   async equipItem(
     characterId: string,
     userId: string,
     dto: EquipItemDto,
   ): Promise<Character> {
-    // Vérifier que le personnage appartient à l'utilisateur
     const character = await this.findOne(characterId, userId);
 
-    // Vérifier que l'item existe
-    const item = await this.itemRepository.findOne({
-      where: { id: dto.itemId },
-    });
+    const item = await this.itemRepository.findOne({ where: { id: dto.itemId } });
+    if (!item) throw new NotFoundException(`Item ${dto.itemId} not found`);
 
-    if (!item) {
-      throw new NotFoundException(`Item ${dto.itemId} not found`);
-    }
-
-    // Déterminer le slot final à utiliser
     let finalSlot: EquipmentSlot;
-
     if (dto.slot) {
-      // Si le slot est fourni par le frontend, on le respecte
       finalSlot = dto.slot;
-      if (item.slot && item.slot !== finalSlot) {
-        throw new BadRequestException(
-          `Item slot (${item.slot}) does not match requested slot (${finalSlot})`,
-        );
-      }
+      if (item.slot && item.slot !== finalSlot)
+        throw new BadRequestException(`Item slot (${item.slot}) does not match requested slot (${finalSlot})`);
     } else {
-      // Si slot non fourni et item est earring, choisir automatiquement
       if (
         item.slot === EquipmentSlot.LEFT_EARRING ||
         item.slot === EquipmentSlot.RIGHT_EARRING
       ) {
-        const left = await this.equipmentRepository.findOne({
-          where: { characterId, slot: EquipmentSlot.LEFT_EARRING },
-        });
-
-        if (!left) {
-          finalSlot = EquipmentSlot.LEFT_EARRING;
-        } else {
-          const right = await this.equipmentRepository.findOne({
-            where: { characterId, slot: EquipmentSlot.RIGHT_EARRING },
-          });
-
-          if (!right) {
-            finalSlot = EquipmentSlot.RIGHT_EARRING;
-          } else {
-            // Les deux slots sont occupés → remplacer le LEFT_EARRING
-            finalSlot = EquipmentSlot.LEFT_EARRING;
-          }
-        }
+        const left = await this.equipmentRepository.findOne({ where: { characterId, slot: EquipmentSlot.LEFT_EARRING } });
+        const right = await this.equipmentRepository.findOne({ where: { characterId, slot: EquipmentSlot.RIGHT_EARRING } });
+        finalSlot = !left ? EquipmentSlot.LEFT_EARRING : !right ? EquipmentSlot.RIGHT_EARRING : EquipmentSlot.LEFT_EARRING;
       } else {
-        // Pour les autres items, on prend le slot de l'item si défini
-        if (!item.slot) {
-          throw new BadRequestException('Slot is required for this item');
-        }
+        if (!item.slot) throw new BadRequestException('Slot is required for this item');
         finalSlot = item.slot;
       }
     }
 
-    // Tout ce qui touche à la DB doit être dans la transaction
     return await this.dataSource.transaction(async (manager) => {
-      // Supprimer l'équipement existant dans ce slot s'il y en a un
-      await manager.delete(CharacterEquipment, {
-        characterId,
-        slot: finalSlot,
-      });
+      await manager.delete(CharacterEquipment, { characterId, slot: finalSlot });
 
-      // Créer le nouvel équipement
-      const equipment = manager.create(CharacterEquipment, {
-        characterId,
-        itemId: item.id,
-        slot: finalSlot,
-      });
-
+      const equipment = manager.create(CharacterEquipment, { characterId, itemId: item.id, slot: finalSlot });
       await manager.save(CharacterEquipment, equipment);
 
-      // Recalculer les stats du personnage
-      await this.recalculateStats(characterId, manager);
-
-      // Retourner le personnage mis à jour
-      const updatedCharacter = await manager.findOne(Character, {
-        where: { id: characterId },
-        relations: ['equipment', 'equipment.item'],
+      // Mettre à jour Inventory.equipped
+      const inventoryEntry = await manager.findOne(Inventory, {
+        where: { character: { id: characterId }, item: { id: item.id } },
       });
-
-      if (!updatedCharacter) {
-        throw new NotFoundException(`Character ${characterId} not found`);
+      if (inventoryEntry) {
+        inventoryEntry.equipped = true;
+        await manager.save(Inventory, inventoryEntry);
       }
 
+      await this.recalculateStats(characterId, manager);
+
+      const updatedCharacter = await manager.findOne(Character, {
+        where: { id: characterId },
+        relations: ['equipment', 'equipment.item', 'inventory', 'inventory.item'],
+      });
+      if (!updatedCharacter) throw new NotFoundException(`Character ${characterId} not found`);
       return updatedCharacter;
     });
   }
 
   /**
-   * Déséquipe un item d'un personnage
+   * Déséquipe un item
+   * - Corrige filtrage sur Inventory via queryBuilder
    */
   async unequipItem(
     characterId: string,
     userId: string,
     dto: UnequipItemDto,
   ): Promise<Character> {
-    // Vérifier que le personnage appartient à l'utilisateur
-    const character = await this.findOne(characterId, userId);
+    await this.findOne(characterId, userId);
 
     return await this.dataSource.transaction(async (manager) => {
-      // Supprimer l'équipement dans ce slot
-      const result = await manager.delete(CharacterEquipment, {
-        characterId,
-        slot: dto.slot,
-      });
+      // Supprimer de CharacterEquipment
+      await manager.delete(CharacterEquipment, { characterId, slot: dto.slot });
 
-      if (result.affected === 0) {
-        throw new NotFoundException(
-          `No equipment found in slot ${dto.slot} for character ${characterId}`,
-        );
+      // Mettre à jour Inventory.equipped via queryBuilder
+      const inventoryEntry = await manager
+        .createQueryBuilder(Inventory, 'inv')
+        .leftJoinAndSelect('inv.item', 'item')
+        .leftJoinAndSelect('inv.character', 'character')
+        .where('character.id = :characterId', { characterId })
+        .andWhere('item.slot = :slot', { slot: dto.slot })
+        .getOne();
+
+      if (inventoryEntry) {
+        inventoryEntry.equipped = false;
+        await manager.save(Inventory, inventoryEntry);
       }
 
-      // Recalculer les stats du personnage
       await this.recalculateStats(characterId, manager);
 
-      // Retourner le personnage mis à jour
       const updatedCharacter = await manager.findOne(Character, {
         where: { id: characterId },
-        relations: ['equipment', 'equipment.item'],
+        relations: ['equipment', 'equipment.item', 'inventory', 'inventory.item'],
       });
-
-      if (!updatedCharacter) {
-        throw new NotFoundException(`Character ${characterId} not found`);
-      }
-
+      if (!updatedCharacter) throw new NotFoundException(`Character ${characterId} not found`);
       return updatedCharacter;
     });
   }
 
   /**
-   * Recalcule les stats du personnage en fonction de son équipement
-   * Note: Les stats totales sont calculées à la volée lors de la récupération
-   * du personnage, cette méthode peut être étendue pour stocker les stats calculées
+   * Recalcule les stats du personnage (placeholder)
    */
-  private async recalculateStats(
-    characterId: string,
-    manager: EntityManager,
-  ): Promise<void> {
-    const character = await manager.findOne(Character, {
-      where: { id: characterId },
-      relations: ['equipment', 'equipment.item'],
-    });
-
-    if (!character) {
-      return;
-    }
-
-    // Les stats sont calculées à la volée lors de la récupération
-    // Cette méthode peut être étendue pour stocker des stats calculées si nécessaire
+  private async recalculateStats(characterId: string, manager: EntityManager): Promise<void> {
+    // Placeholder → peut être étendu pour calculer les stats totales en fonction des équipements
   }
 
   /**

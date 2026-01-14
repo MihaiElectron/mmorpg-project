@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { CharacterEquipment } from '../../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../../characters/dto/equip-item.dto';
+import { Inventory } from '../../inventory/entities/inventory.entity';
 
 /**
  * Entity représentant un item du jeu
@@ -55,6 +56,10 @@ export class Item {
     (characterEquipment) => characterEquipment.item,
   )
   characterEquipment: CharacterEquipment[];
+
+  @OneToMany(() => Inventory, (inventory) => inventory.item)
+  inventory: Inventory[];
+
 
   @CreateDateColumn()
   createdAt: Date;

@@ -3,7 +3,7 @@
  * ----------------------------
  * Point d'entrée principal du backend NestJS.
  * Configure :
- * - Les modules métier (auth, gateway, common, characters)
+ * - Les modules métier (auth, gateway, common, characters, inventory)
  * - La connexion TypeORM à PostgreSQL
  *
  * ⚠ synchronize: true → OK en dev, à désactiver en production.
@@ -19,6 +19,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
+import { InventoryModule } from './inventory/inventory.module'; // <-- nouveau
 
 // 🔥 Log clair pour vérifier la connexion DB
 console.log('>>> Connecting to PostgreSQL with config:', {
@@ -31,10 +32,16 @@ console.log('>>> Connecting to PostgreSQL with config:', {
 
 @Module({
   imports: [
+    // -------------------------------------------------------------------------
+    // Config global
+    // -------------------------------------------------------------------------
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
+    // -------------------------------------------------------------------------
+    // TypeORM : connexion PostgreSQL + auto-charge toutes les entités
+    // -------------------------------------------------------------------------
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
@@ -46,12 +53,16 @@ console.log('>>> Connecting to PostgreSQL with config:', {
       // 🔥 Charge automatiquement TOUTES les entités du projet
       entities: [__dirname + '/**/*.entity.{ts,js}'],
 
-      synchronize: true,
+      synchronize: true, // ⚠ auto-create/update tables pour dev
     }),
 
+    // -------------------------------------------------------------------------
+    // Modules métier
+    // -------------------------------------------------------------------------
     AuthModule,
     CommonModule,
     CharactersModule,
+    InventoryModule, // <-- intégré pour que TypeORM crée la table Inventory
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { CharacterEquipment } from './character-equipment.entity';
+import { Inventory } from '../../inventory/entities/inventory.entity';
 
 /**
  * Character Entity
@@ -62,6 +63,9 @@ export class Character {
     { cascade: true },
   )
   equipment: CharacterEquipment[];
+
+  @OneToMany(() => Inventory, (inventory) => inventory.character)
+  inventory: Inventory[];
 
   @CreateDateColumn()
   createdAt: Date;
