@@ -51,11 +51,17 @@ export const useCharacterStore = create((set, get) => ({
       });
 
       if (!res.ok) {
-        console.warn("Impossible de charger le personnage");
-        return;
+        const error = new Error("Personnage non trouvé (404)");
+        error.status = 404;
+        throw error;
       }
 
       const data = await res.json();
+
+      // Debug: voir ce que l'API retourne
+      console.log("API response data:", JSON.stringify(data, null, 2));
+      console.log("inventory count:", data.inventory?.length);
+      console.log("first inventory item:", data.inventory?.[0]);
 
       // ---------------------------------------------------------------------
       // Construction equipment map pour CharacterLayer
@@ -95,14 +101,20 @@ export const useCharacterStore = create((set, get) => ({
   },
 
   // ---------------------------------------------------------------------------
-  // Équipe un item depuis l’inventaire
+  // Équipe un item depuis l'inventaire
+  // inventory[] contient des objets { id, quantity, equipped, item }
+  // On reçoit soit l'ID de l'item, soit l'ID de l'inventory entry
   // ---------------------------------------------------------------------------
-  equipItem: async (itemId) => {
+  equipItem: async (inventoryIdOrItemId) => {
     try {
       const token = localStorage.getItem("token");
       const characterId = get().character.id;
-      const item = get().inventory.find((i) => i.id === itemId);
-      if (!item) return console.warn("Item introuvable dans l’inventaire");
+      // Cherche par inventory.id OU par item.id pour compatibilité
+      const inv = get().inventory.find(
+        (i) => i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId
+      );
+      if (!inv) return console.warn("Item introuvable dans l'inventaire");
+      const itemId = inv.item.id;
 
       const res = await fetch(
         `http://localhost:3000/characters/${characterId}/equip`,

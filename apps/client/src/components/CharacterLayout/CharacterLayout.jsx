@@ -59,16 +59,19 @@ export default function CharacterLayout() {
 
       {/* ---------------------------------------------------------------------
           Section inventaire : 18 slots dynamiques
+          - L'inventory est un tableau d'objets { id, quantity, equipped, item }
+          - On affiche l'item.item (l'objet Item complet)
           --------------------------------------------------------------------- */}
       <div className="character-layout__inventory">
         <div className="inventory-grid">
           {inventorySlots.map((slotIndex) => {
-            const item = inventory[slotIndex]; // récupère l’item dans le slot ou undefined
+            const inv = inventory[slotIndex]; // objet inventory ou undefined
+            const item = inv?.item; // l'item réel (null si slot vide)
             return (
               <div
                 key={slotIndex}
                 className="inventory-slot"
-                onClick={() => handleEquip(item)} // clique pour équiper
+                onClick={() => item && handleEquip(inv.id)} // clique pour équiper
               >
                 {item?.image ? (
                   <img
@@ -78,6 +81,10 @@ export default function CharacterLayout() {
                   />
                 ) : (
                   <span className="empty-slot">Vide</span>
+                )}
+                {/* Affiche la quantity si > 1 */}
+                {item && inv?.quantity > 1 && (
+                  <span className="inventory-quantity">{inv.quantity}</span>
                 )}
               </div>
             );
