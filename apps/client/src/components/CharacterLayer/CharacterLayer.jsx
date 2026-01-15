@@ -3,17 +3,17 @@
  * ---------------------------------------------------------------------------
  * Rôle :
  * - Affiche les informations du personnage (nom, stats, portrait, etc.).
+ * - Affiche les slots d'équipement avec double-clic pour déséquiper.
  * - Ce composant est inclus DANS CharacterLayout.
  *
  * Emplacement :
  * apps/client/src/components/CharacterLayer/CharacterLayer.jsx
  *
  * Dépendances :
- * - Zustand (useCharacterStore) pour récupérer le personnage courant.
+ * - Zustand (useCharacterStore) pour récupérer le personnage et l'équipement.
  *
- * Remarques :
- * - Ne gère PAS l’ouverture/fermeture du layout.
- * - Ne gère PAS la position : c’est le rôle de CharacterLayout.
+ * Fonctionnalités :
+ * - Double-clic sur un slot équipé retourne l'item dans l'inventaire
  * ---------------------------------------------------------------------------
  */
 
@@ -21,6 +21,8 @@ import { useCharacterStore } from "../../store/character.store";
 
 export default function CharacterLayer() {
   const character = useCharacterStore((s) => s.character);
+  const unequipItem = useCharacterStore((s) => s.unequipItem);
+  const equipment = useCharacterStore((s) => s.equipment);
 
   if (!character) return null;
 
@@ -44,25 +46,35 @@ export default function CharacterLayer() {
     "bag",
   ];
 
-  // Crée un mapping slot → item équipé (ou null)
+  // Crée un mapping slot → item équipé (ou null) depuis le store
   const equipmentMap = {};
   slots.forEach((slot) => {
-    // Vérifie si l'équipement existe dans ce slot
-    const equipped = character.equipment?.find((eq) => eq.slot === slot);
-    equipmentMap[slot] = equipped?.item || null;
+    equipmentMap[slot] = equipment[slot] || null;
   });
+
+  // Handler double-clic pour déséquiper
+  const handleUnequip = (slot) => {
+    if (equipmentMap[slot]) {
+      unequipItem(slot);
+    }
+  };
 
   return (
     <div className="character-layer">
       {/* Portrait du personnage */}
       <div className={`character-layer__character character--${character.sex}`}></div>
 
-      {/* Boucle sur tous les slots pour afficher l’équipement */}
+      {/* Boucle sur tous les slots pour afficher l'équipement */}
       {slots.map((slot) => {
         const item = equipmentMap[slot];
 
         return (
-          <div key={slot} className={`character-layer__slot slot--${slot}`}>
+          <div
+            key={slot}
+            className={`character-layer__slot slot--${slot}`}
+            onDoubleClick={() => handleUnequip(slot)}
+            title={item ? `Double-clic pour déséquiper ${item.name}` : "Slot vide"}
+          >
             {/* Affiche l'image de l'item seulement si elle existe */}
             {item?.image ? (
               <img

@@ -11,6 +11,10 @@
  *
  * Dépendances :
  * - useCharacterStore : Zustand pour personnage, équipement et inventaire
+ *
+ * Fonctionnalités :
+ * - Double-clic sur un item de l'inventaire l'équipe dans le slot approprié
+ * - Double-clic sur un slot équipé le retourne dans l'inventaire
  * -----------------------------------------------------------------------------
  */
 
@@ -29,18 +33,19 @@ export default function CharacterLayout() {
   // ---------------------------------------------------------------------------
   const inventory = useCharacterStore((s) => s.inventory);
   const equipment = useCharacterStore((s) => s.equipment);
+  const equipItem = useCharacterStore((s) => s.equipItem);
 
   // ---------------------------------------------------------------------------
-  // Slots d’inventaire : 18 cases
+  // Slots d'inventaire : 18 cases
   // ---------------------------------------------------------------------------
   const inventorySlots = Array.from({ length: 18 }, (_, i) => i);
 
   // ---------------------------------------------------------------------------
-  // Fonction pour équiper un item depuis l’inventaire dans son slot
+  // Fonction pour équiper un item depuis l'inventaire dans son slot
   // ---------------------------------------------------------------------------
-  const handleEquip = async (item) => {
-    if (!item) return;
-    await useCharacterStore.getState().equipItem(item.id);
+  const handleEquip = async (inv) => {
+    if (!inv?.item) return;
+    await equipItem(inv.item.id);
   };
 
   return (
@@ -60,7 +65,7 @@ export default function CharacterLayout() {
       {/* ---------------------------------------------------------------------
           Section inventaire : 18 slots dynamiques
           - L'inventory est un tableau d'objets { id, quantity, equipped, item }
-          - On affiche l'item.item (l'objet Item complet)
+          - Double-clic sur un item l'équipe dans le slot approprié
           --------------------------------------------------------------------- */}
       <div className="character-layout__inventory">
         <div className="inventory-grid">
@@ -71,7 +76,8 @@ export default function CharacterLayout() {
               <div
                 key={slotIndex}
                 className="inventory-slot"
-                onClick={() => item && handleEquip(inv.id)} // clique pour équiper
+                onDoubleClick={() => handleEquip(inv)}
+                title={item ? `Double-clic pour équiper ${item.name}` : "Slot vide"}
               >
                 {item?.image ? (
                   <img

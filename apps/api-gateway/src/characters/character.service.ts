@@ -123,12 +123,33 @@ export class CharacterService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
+      // 1. Récupérer l'item actuellement équipé dans CE slot (s'il existe)
+      const currentlyEquipped = await manager
+        .createQueryBuilder(CharacterEquipment, 'eq')
+        .leftJoinAndSelect('eq.item', 'item')
+        .where('eq.characterId = :characterId', { characterId })
+        .andWhere('eq.slot = :slot', { slot: finalSlot })
+        .getOne();
+
+      // 2. Supprimer l'ancien équipement
       await manager.delete(CharacterEquipment, { characterId, slot: finalSlot });
 
+      // 3. Mettre à jour inventory.equipped = false pour l'ANCIEN item équipé (s'il y en avait un)
+      if (currentlyEquipped) {
+        const oldInventoryEntry = await manager.findOne(Inventory, {
+          where: { character: { id: characterId }, item: { id: currentlyEquipped.item.id } },
+        });
+        if (oldInventoryEntry) {
+          oldInventoryEntry.equipped = false;
+          await manager.save(Inventory, oldInventoryEntry);
+        }
+      }
+
+      // 4. Créer le nouvel équipement
       const equipment = manager.create(CharacterEquipment, { characterId, itemId: item.id, slot: finalSlot });
       await manager.save(CharacterEquipment, equipment);
 
-      // Mettre à jour Inventory.equipped
+      // 5. Mettre à jour inventory.equipped = true pour le NOUVEL item
       const inventoryEntry = await manager.findOne(Inventory, {
         where: { character: { id: characterId }, item: { id: item.id } },
       });
@@ -150,7 +171,8 @@ export class CharacterService {
 
   /**
    * Déséquipe un item
-   * - Corrige filtrage sur Inventory via queryBuilder
+   * - D'abord récupère l'item équipé via character_equipment
+   * - Puis met à jour inventory.equipped = false pour CET item
    */
   async unequipItem(
     characterId: string,
@@ -160,21 +182,39 @@ export class CharacterService {
     await this.findOne(characterId, userId);
 
     return await this.dataSource.transaction(async (manager) => {
-      // Supprimer de CharacterEquipment
+      // 1. Récupérer l'item équipé dans CE slot
+      const equippedItem = await manager
+        .createQueryBuilder(CharacterEquipment, 'eq')
+        .leftJoinAndSelect('eq.item', 'item')
+        .where('eq.characterId = :characterId', { characterId })
+        .andWhere('eq.slot = :slot', { slot: dto.slot })
+        .getOne();
+
+      if (!equippedItem) {
+        throw new NotFoundException(`No item equipped in slot ${dto.slot}`);
+      }
+
+      console.log('Equipped item found:', equippedItem.item.id, equippedItem.item.name);
+
+      // 2. Supprimer de CharacterEquipment
       await manager.delete(CharacterEquipment, { characterId, slot: dto.slot });
 
-      // Mettre à jour Inventory.equipped via queryBuilder
+      // 3. Mettre à jour inventory.equipped = false pour CET item (via itemId)
+      // Utiliser queryBuilder pour être sûr de la jointure
       const inventoryEntry = await manager
         .createQueryBuilder(Inventory, 'inv')
-        .leftJoinAndSelect('inv.item', 'item')
         .leftJoinAndSelect('inv.character', 'character')
+        .leftJoinAndSelect('inv.item', 'item')
         .where('character.id = :characterId', { characterId })
-        .andWhere('item.slot = :slot', { slot: dto.slot })
+        .andWhere('item.id = :itemId', { itemId: equippedItem.item.id })
         .getOne();
+
+      console.log('Inventory entry found:', inventoryEntry);
 
       if (inventoryEntry) {
         inventoryEntry.equipped = false;
         await manager.save(Inventory, inventoryEntry);
+        console.log('Inventory entry updated: equipped = false');
       }
 
       await this.recalculateStats(characterId, manager);
