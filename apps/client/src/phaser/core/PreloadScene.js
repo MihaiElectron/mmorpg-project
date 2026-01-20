@@ -1,17 +1,5 @@
 /**
  * PreloadScene (MMORPG)
- * -------------------------------------------------------
- * Cette scène charge tous les assets nécessaires au monde :
- * - Map Tiled (.json)
- * - Tileset (.png)
- * - Sprites du joueur (plus tard)
- * - UI (plus tard)
- *
- * NOTE IMPORTANTE :
- * Les chemins doivent correspondre EXACTEMENT à ton arborescence.
- * Exemple :
- * src/assets/maps/world.json
- * src/assets/maps/tiles.png
  */
 
 import Phaser from "phaser";
@@ -22,11 +10,8 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   preload() {
-    /**
-     * -------------------------------------------------------
-     * 1. BARRE DE CHARGEMENT
-     * -------------------------------------------------------
-     */
+    console.log("PreloadScene: preload()");
+
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
@@ -43,46 +28,23 @@ export default class PreloadScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     /**
-     * -------------------------------------------------------
-     * 2. CHARGEMENT DES ASSETS TILED
-     * -------------------------------------------------------
-     * ⚠️ À ADAPTER selon ton arborescence réelle.
-     *
-     * Exemple recommandé :
-     * src/assets/maps/world.json
-     * src/assets/maps/tiles.png
+     * SPRITE DU JOUEUR
+     * La key DOIT être "player_idle_32"
      */
-
-    // Map JSON
-    this.load.tilemapTiledJSON("world", "assets/maps/world.json");
-
-    // Tileset PNG
-    this.load.image("tiles", "assets/maps/tiles.png");
+    this.load.image("player_idle_32", "assets/player/player_idle_32px.png");
 
     /**
-     * -------------------------------------------------------
-     * 3. SPRITES DU JOUEUR (placeholder)
-     * -------------------------------------------------------
-     * Tu ajouteras ton spritesheet ici plus tard.
+     * SPRITE FIRE CAMP
      */
-    // this.load.spritesheet("player", "assets/player/player.png", {
-    //   frameWidth: 32,
-    //   frameHeight: 32,
-    // });
+    this.load.image("fire_camp", "assets/sprites/fire_camp.png");
 
-    /**
-     * -------------------------------------------------------
-     * 4. FIN DU PRELOAD
-     * -------------------------------------------------------
-     */
     this.load.on("complete", () => {
+      console.log("PreloadScene: complete → start WorldScene");
       this.time.delayedCall(200, () => {
         this.scene.start("WorldScene");
       });
     });
   }
 
-  create() {
-    // Rien ici : tout se passe dans preload()
-  }
+  create() {}
 }

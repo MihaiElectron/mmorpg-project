@@ -1,95 +1,84 @@
-/**
- * PlayerController (MMORPG)
- * -------------------------------------------------------
- * Rôle :
- * - Gérer les inputs du joueur
- * - Appeler les méthodes du Player (move, stop)
- * - Préparer les animations (plus tard)
- * - Préparer les inputs avancés (dash, skills, inventaire)
- *
- * NOTE :
- * - Le PlayerController ne déplace PAS directement le sprite.
- * - Il délègue au Player (Player.move / Player.stop).
- */
-
-import Player from "./Player.js";
-
 export default class PlayerController {
   constructor(scene, player) {
     this.scene = scene;
     this.player = player;
 
-    // Vitesse configurable (peut être modifiée par équipements, buffs…)
-    this.speed = player.speed || 200;
+    this.cursors = scene.input.keyboard.createCursorKeys();
 
-    // Inputs clavier
-    this.cursors = this.scene.input.keyboard.createCursorKeys();
-
-    // Touches supplémentaires (ZQSD, espace, shift…)
-    this.extraKeys = this.scene.input.keyboard.addKeys({
-      upZ: Phaser.Input.Keyboard.KeyCodes.Z,
-      leftQ: Phaser.Input.Keyboard.KeyCodes.Q,
-      downS: Phaser.Input.Keyboard.KeyCodes.S,
-      rightD: Phaser.Input.Keyboard.KeyCodes.D,
-      space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-      shift: Phaser.Input.Keyboard.KeyCodes.SHIFT
-    });
-
-    this.setupInput();
+    // Déplacement souris
+    this.mouseActive = false;
+    this.target = null;
+    this.arrivalThreshold = 4;
   }
 
-  /**
-   * -------------------------------------------------------
-   * SETUP INPUTS
-   * -------------------------------------------------------
-   * Ici tu pourras ajouter :
-   * - raccourcis inventaire
-   * - raccourcis compétences
-   * - dash (shift)
-   * - interaction (E)
-   */
-  setupInput() {
-    // Exemple futur :
-    // this.extraKeys.space.on("down", () => this.player.jump());
+  // Début du déplacement souris
+  startMouseMove(x, y) {
+    this.mouseActive = true;
+    this.target = { x, y };
   }
 
-  /**
-   * -------------------------------------------------------
-   * UPDATE (boucle principale)
-   * -------------------------------------------------------
-   * Gère :
-   * - déplacements
-   * - diagonales
-   * - orientation
-   * - animations (plus tard)
-   */
+  // Mise à jour de la destination tant que clic maintenu
+  updateMouseTarget(x, y) {
+    if (this.mouseActive) {
+      this.target = { x, y };
+    }
+  }
+
+  // Arrêt du déplacement souris
+  stopMouseMove() {
+    this.mouseActive = false;
+    this.target = null;
+  }
+
   update() {
-    const { left, right, up, down } = this.cursors;
-    const { upZ, leftQ, downS, rightD } = this.extraKeys;
+    const speed = this.player.speed;
+    let vx = 0;
+    let vy = 0;
 
-    let moving = false;
+    /**
+     * -------------------------------------------------------
+     * 1. CLAVIER (prioritaire)
+     * -------------------------------------------------------
+     */
+    if (this.cursors.left.isDown) vx = -speed;
+    if (this.cursors.right.isDown) vx = speed;
+    if (this.cursors.up.isDown) vy = -speed;
+    if (this.cursors.down.isDown) vy = speed;
 
-    // Déplacements horizontaux
-    if (left.isDown || leftQ.isDown) {
-      this.player.move("left");
-      moving = true;
-    } else if (right.isDown || rightD.isDown) {
-      this.player.move("right");
-      moving = true;
+    if (vx !== 0 || vy !== 0) {
+      this.mouseActive = false;
+      this.target = null;
+      this.player.setVelocity(vx, vy);
+      return;
     }
 
-    // Déplacements verticaux
-    if (up.isDown || upZ.isDown) {
-      this.player.move("up");
-      moving = true;
-    } else if (down.isDown || downS.isDown) {
-      this.player.move("down");
-      moving = true;
+    /**
+     * -------------------------------------------------------
+     * 2. DÉPLACEMENT SOURIS (maintien du clic)
+     * -------------------------------------------------------
+     */
+    if (this.mouseActive && this.target) {
+      const dx = this.target.x - this.player.x;
+      const dy = this.target.y - this.player.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < this.arrivalThreshold) {
+        this.player.setVelocity(0);
+        return;
+      }
+
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      this.player.setVelocity(nx * speed, ny * speed);
+      return;
     }
 
-    // Aucun input → stop
-    if (!moving) {
-      this.player.stop();
-    }
+    /**
+     * -------------------------------------------------------
+     * 3. AUCUN INPUT
+     * -------------------------------------------------------
+     */
+    this.player.setVelocity(0);
   }
 }

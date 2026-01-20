@@ -20,9 +20,11 @@ import WorldScene from "../core/WorldScene";
 const phaserConfig = {
   type: Phaser.AUTO,
 
-  // ⚠️ Dimensions temporaires : seront remplacées par "fullscreen responsive"
-  width: 800,
-  height: 600,
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
+  
 
   parent: "game-container",
 

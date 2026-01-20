@@ -2,12 +2,6 @@
  * WorldPage
  * ----------------------------
  * Page principale après login/register.
- *
- * Fonctionnalités :
- * - Vérifie la présence du token (protection de route).
- * - Charge le personnage unique du joueur depuis le backend.
- * - Monte Phaser dans un container React.
- * - Détruit Phaser proprement au unmount.
  */
 
 import { useEffect, useRef } from "react";
@@ -15,26 +9,24 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useCharacterStore } from "../store/character.store";
 import Phaser from "phaser";
 
+import PreloadScene from "../phaser/core/PreloadScene.js";
+import WorldScene from "../phaser/core/WorldScene.js";
+
 function WorldPage() {
   const navigate = useNavigate();
 
-  // Store Zustand
   const character = useCharacterStore((s) => s.character);
   const loadCharacter = useCharacterStore((s) => s.loadCharacter);
   const clearCharacter = useCharacterStore((s) => s.clearCharacter);
 
-  // 🔹 Référence vers l’instance Phaser (important)
   const phaserGameRef = useRef(null);
 
-  // Auth
   const token = localStorage.getItem("token");
   if (!token) {
     return <Navigate to="/" />;
   }
 
-  /**
-   * Chargement du personnage
-   */
+  // Chargement du personnage
   useEffect(() => {
     if (!token) return;
 
@@ -46,60 +38,51 @@ function WorldPage() {
     });
   }, [token, loadCharacter, navigate]);
 
-  /**
-   * 🔹 INITIALISATION PHASER
-   * -----------------------
-   * - Phaser démarre UNIQUEMENT si :
-   *   - un personnage est chargé
-   *   - Phaser n’est pas déjà monté
-   */
   useEffect(() => {
+    // Si pas de token → pas de jeu
+    if (!token) return;
+  
+    // Si pas de personnage → attendre
     if (!character) return;
+  
+    // Si Phaser existe déjà → ne pas recréer
     if (phaserGameRef.current) return;
-
-    // Configuration minimale Phaser
+  
     const config = {
       type: Phaser.AUTO,
-      parent: "game-container", // ⚠️ div React
-      width: 800,
-      height: 600,
-      backgroundColor: "#1e1e1e",
-      scene: {
-        preload() {
-          console.log("Phaser preload");
-        },
-        create() {
-          this.add.text(20, 20, "Phaser est prêt 🚀", {
-            fontSize: "20px",
-            color: "#ffffff",
-          });
+      parent: "game-container",
+  
+      scale: {
+        mode: Phaser.Scale.EXPAND,
+        autoCenter: Phaser.Scale.NO_CENTER,
+      },
+  
+      physics: {
+        default: "arcade",
+        arcade: {
+          debug: false,
+          gravity: { y: 0 },
         },
       },
+  
+      scene: [PreloadScene, WorldScene],
     };
-
-    // Création du jeu
+  
     phaserGameRef.current = new Phaser.Game(config);
-
-    // 🔥 Cleanup OBLIGATOIRE
+  
     return () => {
       if (phaserGameRef.current) {
         phaserGameRef.current.destroy(true);
         phaserGameRef.current = null;
       }
     };
-  }, [character]);
-
-  /**
-   * Déconnexion
-   */
+  }, [token]); // ← IMPORTANT : token + character
+  
   function handleLogout() {
     localStorage.removeItem("token");
     navigate("/");
   }
 
-  /**
-   * Suppression du personnage
-   */
   async function handleDeleteCharacter() {
     if (!character) return;
 
@@ -140,18 +123,7 @@ function WorldPage() {
 
   return (
     <div className="world">
-      <h1>Bienvenue dans le Monde</h1>
-
-      {/* 🔹 CONTAINER PHASER */}
-      <div
-        id="game-container"
-        style={{
-          width: "800px",
-          height: "600px",
-          border: "2px solid #444",
-          marginBottom: "1rem",
-        }}
-      />
+      <div id="game-container" className="world__phaser"></div>
 
       {character && (
         <div className="world__delete">

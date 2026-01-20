@@ -18,8 +18,8 @@
 import Phaser from "phaser";
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
-  constructor(scene, x, y, texture) {
-    super(scene, x, y, texture, 0);
+  constructor(scene, x, y, texture = "player_idle_32px") {
+    super(scene, x, y, texture);
 
     // Ajout du sprite dans la scène + activation physique
     scene.add.existing(this);
