@@ -2,69 +2,87 @@
  * WorldPage
  * ----------------------------
  * Page principale après login/register.
- *
- * Fonctionnalités :
- * - Vérifie la présence du token (protection de route).
- * - Charge le personnage unique du joueur depuis le backend.
- * - Si aucun personnage n'existe → redirection vers la création.
- * - Affiche un bouton pour supprimer le personnage.
- * - Affiche un bouton pour se déconnecter.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useCharacterStore } from "../store/character.store";
+import Phaser from "phaser";
+
+import PreloadScene from "../phaser/core/PreloadScene.js";
+import WorldScene from "../phaser/core/WorldScene.js";
 
 function WorldPage() {
   const navigate = useNavigate();
 
-  // Accès au store Zustand
   const character = useCharacterStore((s) => s.character);
   const loadCharacter = useCharacterStore((s) => s.loadCharacter);
   const clearCharacter = useCharacterStore((s) => s.clearCharacter);
 
-  // Vérification d'authentification : si pas de token → retour à l'accueil
+  const phaserGameRef = useRef(null);
+
   const token = localStorage.getItem("token");
   if (!token) {
     return <Navigate to="/" />;
   }
 
-  /**
-   * Chargement du personnage du joueur
-   * ----------------------------------
-   * Utilise loadCharacter() du store qui charge :
-   * - Le personnage
-   * - L'inventaire (avec items)
-   * - L'équipement
-   */
+  // Chargement du personnage
   useEffect(() => {
     if (!token) return;
 
     loadCharacter().catch((error) => {
       console.error("Erreur lors du chargement:", error);
-      // Si 404, loadCharacter aura déjà redirigé
-      // Sinon on tente une redirection aussi
       if (!error.message?.includes("404")) {
         navigate("/create-character");
       }
     });
   }, [token, loadCharacter, navigate]);
 
-  /**
-   * Déconnexion : supprime le token et renvoie à l'accueil
-   */
+  useEffect(() => {
+    // Si pas de token → pas de jeu
+    if (!token) return;
+  
+    // Si pas de personnage → attendre
+    if (!character) return;
+  
+    // Si Phaser existe déjà → ne pas recréer
+    if (phaserGameRef.current) return;
+  
+    const config = {
+      type: Phaser.AUTO,
+      parent: "game-container",
+  
+      scale: {
+        mode: Phaser.Scale.EXPAND,
+        autoCenter: Phaser.Scale.NO_CENTER,
+      },
+  
+      physics: {
+        default: "arcade",
+        arcade: {
+          debug: false,
+          gravity: { y: 0 },
+        },
+      },
+  
+      scene: [PreloadScene, WorldScene],
+    };
+  
+    phaserGameRef.current = new Phaser.Game(config);
+  
+    return () => {
+      if (phaserGameRef.current) {
+        phaserGameRef.current.destroy(true);
+        phaserGameRef.current = null;
+      }
+    };
+  }, [token]); // ← IMPORTANT : token + character
+  
   function handleLogout() {
     localStorage.removeItem("token");
     navigate("/");
   }
 
-  /**
-   * Suppression du personnage
-   * -------------------------
-   * - Appelle DELETE /characters/:id
-   * - Vide le store Zustand
-   * - Redirige vers la création de personnage
-   */
   async function handleDeleteCharacter() {
     if (!character) return;
 
@@ -78,14 +96,20 @@ function WorldPage() {
         {
           method: "DELETE",
           headers: {
-            "Authorization": `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
       if (!res.ok) {
-        const msg = await res.json().catch(() => ({ message: "Erreur lors de la suppression" }));
-        alert(Array.isArray(msg.message) ? msg.message.join(", ") : msg.message);
+        const msg = await res
+          .json()
+          .catch(() => ({ message: "Erreur lors de la suppression" }));
+        alert(
+          Array.isArray(msg.message)
+            ? msg.message.join(", ")
+            : msg.message
+        );
         return;
       }
 
@@ -93,15 +117,14 @@ function WorldPage() {
       navigate("/create-character");
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
-      alert(error.message || "Une erreur est survenue lors de la suppression");
+      alert(error.message || "Une erreur est survenue");
     }
   }
 
   return (
     <div className="world">
-      <h1>Bienvenue dans le Monde</h1>
+      <div id="game-container" className="world__phaser"></div>
 
-      {/* Bouton supprimer le personnage (uniquement si un personnage est chargé) */}
       {character && (
         <div className="world__delete">
           <button onClick={handleDeleteCharacter}>
@@ -110,7 +133,6 @@ function WorldPage() {
         </div>
       )}
 
-      {/* Bouton déconnexion en dessous */}
       <div className="world__logout">
         <button onClick={handleLogout}>Se déconnecter</button>
       </div>
