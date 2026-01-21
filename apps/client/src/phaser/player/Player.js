@@ -26,7 +26,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     // Paramètres du joueur
-    this.speed = 200; // Valeur par défaut (modifiable)
+    this.speed = 100; // Valeur par défaut (modifiable)
     this.direction = "down"; // Orientation initiale
 
     this.setupPhysics();

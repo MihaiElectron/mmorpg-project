@@ -74,6 +74,14 @@
             />
 
             <button
+              className="login__button login__button--secondary"
+              type="submit"
+              onClick={(e) => handleSubmit(e, 'login')}
+            >
+              Se connecter
+            </button>
+
+            <button
               className="login__button login__button--primary"
               type="submit"
               onClick={(e) => handleSubmit(e, 'register')}
@@ -81,13 +89,6 @@
               Créer son compte
             </button>
 
-            <button
-              className="login__button login__button--secondary"
-              type="submit"
-              onClick={(e) => handleSubmit(e, 'login')}
-            >
-              Se connecter
-            </button>
           </form>
         </div>
       </div>

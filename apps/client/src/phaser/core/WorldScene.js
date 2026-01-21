@@ -13,6 +13,7 @@ export default class WorldScene extends Phaser.Scene {
     this.player = null;
     this.controller = null;
     this.fireCamp = null;
+    this.equipment = {}; // Stockage local de l'équipement
   }
 
   create() {
@@ -42,9 +43,20 @@ export default class WorldScene extends Phaser.Scene {
      * -------------------------------------------------------
      */
     this.fireCamp = this.physics.add.staticImage(600, 300, "fire_camp");
-    this.fireCamp.refreshBody();
 
+    // On réduit la hitbox (exemple : 40x20)
+    this.fireCamp.body.setSize(40, 20);
+    
+    // On repositionne la hitbox si nécessaire (exemple : centrée)
+    this.fireCamp.body.setOffset(
+        (this.fireCamp.width - 40) / 2,
+        (this.fireCamp.height - 20) / 2
+    );
+    
+    this.fireCamp.refreshBody();
+    
     this.physics.add.collider(this.player, this.fireCamp);
+    
 
     /**
      * -------------------------------------------------------
@@ -82,11 +94,64 @@ export default class WorldScene extends Phaser.Scene {
      */
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setZoom(1.5);
+
+    /**
+     * -------------------------------------------------------
+     * 6. ÉQUIPEMENT INITIAL
+     * -------------------------------------------------------
+     */
+    // Écouter les événements d'équipement depuis React
+    this.game.events.on('equipment-changed', this.updateEquipment, this);
   }
 
   update() {
     if (this.controller) {
       this.controller.update();
     }
+  }
+
+  /**
+   * -------------------------------------------------------
+   * MISE À JOUR ÉQUIPEMENT
+   * -------------------------------------------------------
+   * Appelé depuis React quand l'équipement change
+   */
+  updateEquipment(equipment) {
+    console.log('WorldScene: updateEquipment called with equipment:', equipment);
+    this.equipment = equipment;
+
+    if (!this.player) {
+      console.warn('WorldScene: player not ready yet');
+      return;
+    }
+
+    // Pour l'instant : juste un log pour montrer que ça marche
+    // Plus tard : changer la texture ou ajouter des sprites overlays
+
+    const equippedItems = Object.values(equipment).filter(item => item !== null);
+    console.log(`WorldScene: Player has ${equippedItems.length} equipped items`);
+
+    // Exemple : afficher un message temporaire pour tester
+    if (equippedItems.length > 0) {
+      console.log('WorldScene: Player is equipped! Items:', equippedItems.map(item => item.name));
+    } else {
+      console.log('WorldScene: Player has no equipment');
+    }
+
+    // TODO: Ici on pourra changer la texture ou ajouter des sprites overlays
+    // Pour l'instant, la texture reste la même
+  }
+
+  /**
+   * -------------------------------------------------------
+   * NETTOYAGE
+   * -------------------------------------------------------
+   */
+  destroy() {
+    // Nettoyer les événements
+    if (this.game && this.game.events) {
+      this.game.events.off('equipment-changed', this.updateEquipment, this);
+    }
+    super.destroy();
   }
 }
