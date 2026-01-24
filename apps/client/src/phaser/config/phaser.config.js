@@ -13,6 +13,7 @@
  * - Si plus tard tu fais un mode plateforme, tu pourras l’activer ici.
  */
 
+import Phaser from "phaser";
 import BootScene from "../core/BootScene";
 import PreloadScene from "../core/PreloadScene";
 import WorldScene from "../core/WorldScene";
@@ -22,7 +23,9 @@ const phaserConfig = {
 
   scale: {
     mode: Phaser.Scale.RESIZE,
-    autoCenter: Phaser.Scale.CENTER_BOTH
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: "100%",
+    height: "100%"
   },
   
 

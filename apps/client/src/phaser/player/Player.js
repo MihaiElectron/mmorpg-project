@@ -41,12 +41,21 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
    */
   setupPhysics() {
     this.setCollideWorldBounds(true);
-
-    // Exemple pour ajuster la hitbox (désactivé pour l’instant)
-    // this.setSize(16, 24);
-    // this.setOffset(8, 8);
+  
+    // -------------------------------------------------------------
+    // HITBOX DU PLAYER (réduite et centrée dans la moitié basse)
+    // -------------------------------------------------------------
+    const hitboxWidth = 20;
+    const hitboxHeight = 16;
+  
+    this.body.setSize(hitboxWidth, hitboxHeight);
+  
+    this.body.setOffset(
+      (this.width - hitboxWidth) / 2,
+      this.height - hitboxHeight
+    );
   }
-
+  
   /**
    * -------------------------------------------------------
    * MOUVEMENTS

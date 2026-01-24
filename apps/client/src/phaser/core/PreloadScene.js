@@ -15,7 +15,7 @@ export default class PreloadScene extends Phaser.Scene {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
-    const progressBg = this.add.rectangle(width / 2, height / 2, 300, 30, 0x222222).setOrigin(0.5);
+    // const progressBg = this.add.rectangle(width / 2, height / 2, 300, 30, 0x222222).setOrigin(0.5);
     const progressBar = this.add.rectangle(width / 2 - 150, height / 2, 0, 30, 0xffffff).setOrigin(0, 0.5);
 
     this.load.on("progress", (value) => {
@@ -37,6 +37,11 @@ export default class PreloadScene extends Phaser.Scene {
      * SPRITE FIRE CAMP
      */
     this.load.image("fire_camp", "assets/sprites/fire_camp.png");
+    
+    /**
+     * SPRITE DEAD TREE
+     */
+    this.load.image("dead_tree", "assets/sprites/dead_tree.png");
 
     this.load.on("complete", () => {
       console.log("PreloadScene: complete → start WorldScene");

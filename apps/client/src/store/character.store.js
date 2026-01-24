@@ -133,7 +133,7 @@ export const useCharacterStore = create((set, get) => ({
         return;
       }
 
-      const updatedCharacter = await res.json();
+      // const updatedCharacter = await res.json();
 
       // Recharge proprement depuis la source de vérité
       get().loadCharacter();

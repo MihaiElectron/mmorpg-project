@@ -4,13 +4,14 @@
  * Conteneur principal du layout personnage + inventaire
  * - Onglet demi-cercle pour ouvrir/fermer le panneau
  * - Affiche le CharacterLayer (personnage + équipement)
- * - Affiche un inventaire de 18 slots
+ * - Affiche un inventaire de 18 slots (désormais délégué à Inventory.jsx)
  *
  * Emplacement :
  * apps/client/src/components/CharacterLayout/CharacterLayout.jsx
  *
  * Dépendances :
  * - useCharacterStore : Zustand pour personnage, équipement et inventaire
+ * - Inventory.jsx : composant dédié à l'affichage et la logique UI de l'inventaire
  *
  * Fonctionnalités :
  * - Double-clic sur un item de l'inventaire l'équipe dans le slot approprié
@@ -19,6 +20,7 @@
  */
 
 import CharacterLayer from "../CharacterLayer/CharacterLayer";
+import Inventory from "../Inventory/Inventory";
 import { useCharacterStore } from "../../store/character.store";
 
 export default function CharacterLayout() {
@@ -30,18 +32,14 @@ export default function CharacterLayout() {
 
   // ---------------------------------------------------------------------------
   // Inventaire et équipement depuis le store
+  // (L'affichage est désormais géré par Inventory.jsx)
   // ---------------------------------------------------------------------------
   const inventory = useCharacterStore((s) => s.inventory);
-  const equipment = useCharacterStore((s) => s.equipment);
   const equipItem = useCharacterStore((s) => s.equipItem);
 
   // ---------------------------------------------------------------------------
-  // Slots d'inventaire : 18 cases
-  // ---------------------------------------------------------------------------
-  const inventorySlots = Array.from({ length: 18 }, (_, i) => i);
-
-  // ---------------------------------------------------------------------------
   // Fonction pour équiper un item depuis l'inventaire dans son slot
+  // (Cette logique reste ici car elle concerne le personnage)
   // ---------------------------------------------------------------------------
   const handleEquip = async (inv) => {
     if (!inv?.item) return;
@@ -63,39 +61,14 @@ export default function CharacterLayout() {
       </div>
 
       {/* ---------------------------------------------------------------------
-          Section inventaire : 18 slots dynamiques
-          - L'inventory est un tableau d'objets { id, quantity, equipped, item }
-          - Double-clic sur un item l'équipe dans le slot approprié
+          Section inventaire
+          - Désormais entièrement géré par Inventory.jsx
+          - On lui passe :
+            - inventory : tableau d'objets { id, quantity, equipped, item }
+            - onEquip : callback pour équiper un item
           --------------------------------------------------------------------- */}
       <div className="character-layout__inventory">
-        <div className="inventory-grid">
-          {inventorySlots.map((slotIndex) => {
-            const inv = inventory[slotIndex]; // objet inventory ou undefined
-            const item = inv?.item; // l'item réel (null si slot vide)
-            return (
-              <div
-                key={slotIndex}
-                className="inventory-slot"
-                onDoubleClick={() => handleEquip(inv)}
-                title={item ? `Double-clic pour équiper ${item.name}` : "Slot vide"}
-              >
-                {item?.image ? (
-                  <img
-                    src={item.image}
-                    alt={item.name || "item"}
-                    className="inventory-item-image"
-                  />
-                ) : (
-                  <span className="empty-slot">Vide</span>
-                )}
-                {/* Affiche la quantity si > 1 */}
-                {item && inv?.quantity > 1 && (
-                  <span className="inventory-quantity">{inv.quantity}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <Inventory inventory={inventory} onEquip={handleEquip} />
       </div>
     </div>
   );
