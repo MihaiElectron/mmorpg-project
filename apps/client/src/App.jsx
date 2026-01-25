@@ -5,20 +5,21 @@
  * - /world → WorldPage
  */
 
-import React from 'react';
-import './styles/main.scss';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React from "react";
+import "./styles/main.scss";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import LoginPage from './pages/LoginPage';
+import LoginPage from "./pages/LoginPage";
 import CreateCharacterPage from "./pages/CreateCharacterPage";
-import WorldPage from './pages/WorldPage';
-import GameLayout from './layouts/GameLayout';
+import WorldPage from "./pages/WorldPage";
+import GameLayout from "./layouts/GameLayout";  
+import ActionPanel from "./components/ActionPanel/ActionPanel";
+
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-
         <Route path="/create-character" element={<CreateCharacterPage />} />
 
         {/* Pages sans layer */}
@@ -28,7 +29,6 @@ function App() {
         <Route path="/world" element={<GameLayout />}>
           <Route index element={<WorldPage />} />
         </Route>
-
       </Routes>
     </BrowserRouter>
   );

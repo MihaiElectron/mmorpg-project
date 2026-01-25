@@ -25,9 +25,8 @@ const phaserConfig = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
-  
 
   parent: "game-container",
 
@@ -35,8 +34,8 @@ const phaserConfig = {
     default: "arcade",
     arcade: {
       gravity: { y: 0 }, // MMORPG top‑down → pas de gravité
-      debug: false       // Passe à true pour visualiser les hitboxes
-    }
+      debug: false, // Passe à true pour visualiser les hitboxes
+    },
   },
 
   /**
@@ -47,11 +46,7 @@ const phaserConfig = {
    * 2. PreloadScene  → charge les assets (sprites, maps, audio)
    * 3. WorldScene    → scène principale du monde
    */
-  scene: [
-    BootScene,
-    PreloadScene,
-    WorldScene
-  ]
+  scene: [BootScene, PreloadScene, WorldScene],
 };
 
 export default phaserConfig;

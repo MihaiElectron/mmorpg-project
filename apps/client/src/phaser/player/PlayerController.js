@@ -99,7 +99,7 @@ export default class PlayerController {
       endX,
       endY,
       "grid value:",
-      this.scene.collisionGrid[endY]?.[endX]
+      this.scene.collisionGrid[endY]?.[endX],
     );
 
     const newPath = this.scene.pathfinder.findPath(startX, startY, endX, endY);
@@ -180,7 +180,7 @@ export default class PlayerController {
     const dist = Math.hypot(dx, dy);
 
     console.log(
-      `📍 PATH STEP ${this.currentPathIndex}/${this.path.length} → dist ${dist}`
+      `📍 PATH STEP ${this.currentPathIndex}/${this.path.length} → dist ${dist}`,
     );
 
     if (dist <= this.arrivalThreshold) {

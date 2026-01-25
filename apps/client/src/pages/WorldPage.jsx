@@ -20,35 +20,16 @@ function WorldPage() {
   const clearCharacter = useCharacterStore((s) => s.clearCharacter);
   const equipment = useCharacterStore((s) => s.equipment);
 
-  // 🔥 Référence persistante pour empêcher Phaser de se recréer
   const phaserGameRef = useRef(null);
-
-  // 🔥 Flag pour tracker si Phaser a été initialisé
   const [phaserInitialized, setPhaserInitialized] = useState(false);
 
   const token = localStorage.getItem("token");
-  if (!token) {
-    return <Navigate to="/" />;
-  }
 
-  // Chargement du personnage
-  useEffect(() => {
-    if (!token) return;
-
-    loadCharacter().catch((error) => {
-      console.error("Erreur lors du chargement:", error);
-      if (!error.message?.includes("404")) {
-        navigate("/create-character");
-      }
-    });
-  }, [token, loadCharacter, navigate]);
-
-  // 🔥 Chargement initial du personnage
+  // Chargement initial du personnage
   useEffect(() => {
     if (!token) return;
 
     if (!character) {
-      console.log("WorldPage: Loading character...");
       loadCharacter().catch((error) => {
         console.error("Erreur lors du chargement:", error);
         if (!error.message?.includes("404")) {
@@ -56,35 +37,28 @@ function WorldPage() {
         }
       });
     }
-  }, [token]); // ❗ UNIQUEMENT au montage avec token
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
-  // 🔥 Trigger pour initialiser Phaser quand character devient disponible
+  // Trigger pour initialiser Phaser quand character devient disponible
   useEffect(() => {
     if (token && character && !phaserInitialized) {
-      console.log("WorldPage: Character ready, triggering Phaser init...");
-      setPhaserInitialized(true); // Cela déclenchera l'effet suivant
+      setPhaserInitialized(true);
     }
   }, [token, character, phaserInitialized]);
 
-  // 🔥 Initialisation de Phaser (seulement quand phaserInitialized devient true)
+  // Initialisation de Phaser
   useEffect(() => {
-    // ❗ Étape de sécurité : si pas de token → pas de jeu
     if (!token || !phaserInitialized) return;
-
-    // ❗ Vérifier que Phaser n'existe pas déjà
     if (phaserGameRef.current) return;
-
-    console.log("WorldPage: Creating Phaser game...");
 
     const config = {
       type: Phaser.AUTO,
       parent: "game-container",
-
       scale: {
         mode: Phaser.Scale.EXPAND,
         autoCenter: Phaser.Scale.NO_CENTER,
       },
-
       physics: {
         default: "arcade",
         arcade: {
@@ -92,29 +66,34 @@ function WorldPage() {
           gravity: { y: 0 },
         },
       },
-
       scene: [PreloadScene, WorldScene],
     };
 
-    // 🔥 Création de Phaser
     phaserGameRef.current = new Phaser.Game(config);
 
     return () => {
-      // 🔥 Destruction propre du jeu lors du démontage de la page
       if (phaserGameRef.current) {
         phaserGameRef.current.destroy(true);
         phaserGameRef.current = null;
       }
     };
-  }, [token, phaserInitialized]); // ❗ PAS de character ici pour éviter les re-init
+  }, [token, phaserInitialized]);
 
-  // 🔥 Écouter les changements d'équipement et les transmettre à Phaser
+  // 🔥 VERSION FINALE — PROTECTION CONTRE LE REFRESH
   useEffect(() => {
-    if (phaserGameRef.current && equipment) {
-      console.log('React: equipment changed, notifying Phaser', equipment);
-      phaserGameRef.current.events.emit('equipment-changed', equipment);
-    }
+    if (!phaserGameRef.current || !equipment) return;
+
+    const world = phaserGameRef.current.scene.getScene("WorldScene");
+
+    // 🔥 La ligne qui empêche 100% des refresh
+    if (!world || !world.sys.isActive()) return;
+
+    phaserGameRef.current.events.emit("equipment-changed", equipment);
   }, [equipment]);
+
+  if (!token) {
+    return <Navigate to="/" />;
+  }
 
   function handleLogout() {
     localStorage.removeItem("token");
@@ -136,7 +115,7 @@ function WorldPage() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       if (!res.ok) {
@@ -144,9 +123,7 @@ function WorldPage() {
           .json()
           .catch(() => ({ message: "Erreur lors de la suppression" }));
         alert(
-          Array.isArray(msg.message)
-            ? msg.message.join(", ")
-            : msg.message
+          Array.isArray(msg.message) ? msg.message.join(", ") : msg.message,
         );
         return;
       }
@@ -154,7 +131,6 @@ function WorldPage() {
       clearCharacter();
       navigate("/create-character");
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error);
       alert(error.message || "Une erreur est survenue");
     }
   }

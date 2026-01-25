@@ -39,7 +39,7 @@ function CreateCharacterPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`, // Authentification JWT
+          Authorization: `Bearer ${token}`, // Authentification JWT
         },
         body: JSON.stringify({ name, sex }),
       });

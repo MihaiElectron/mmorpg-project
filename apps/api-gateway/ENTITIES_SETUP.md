@@ -7,6 +7,7 @@ Ce document décrit les entités, services et modules créés pour le système d
 ## 🗄️ Entités Créées
 
 ### 1. User (`users/entities/user.entity.ts`)
+
 - **Champs**:
   - `id` (UUID, Primary Key)
   - `username` (unique)
@@ -16,6 +17,7 @@ Ce document décrit les entités, services et modules créés pour le système d
   - `createdAt`, `updatedAt`
 
 ### 2. Character (`characters/entities/character.entity.ts`)
+
 - **Champs**:
   - `id` (UUID, Primary Key)
   - `name`
@@ -28,6 +30,7 @@ Ce document décrit les entités, services et modules créés pour le système d
   - `createdAt`, `updatedAt`
 
 ### 3. CharacterEquipment (`characters/entities/character-equipment.entity.ts`)
+
 - **Champs**:
   - `id` (UUID, Primary Key)
   - `characterId` (Foreign Key vers Character)
@@ -37,26 +40,31 @@ Ce document décrit les entités, services et modules créés pour le système d
 - **Contrainte unique**: Un personnage ne peut avoir qu'un seul item par slot
 
 ### 4. Item (mis à jour)
+
 - **Relation ajoutée**: `characterEquipment` (OneToMany avec CharacterEquipment)
 
 ## 🔧 Modules Créés
 
 ### 1. UserModule (`users/user.module.ts`)
+
 - Exporte `UserService` et `TypeOrmModule`
 - Utilisé par `AuthModule`
 
 ### 2. CharactersModule (`characters/characters.module.ts`)
+
 - Importe `ItemModule` pour accéder aux items
 - Exporte `CharacterService`
 
 ## 🛠️ Services Créés
 
 ### 1. UserService (`users/user.service.ts`)
+
 - `findOne(id)`: Récupère un utilisateur par ID
 - `findByUsername(username)`: Récupère un utilisateur par username
 - `findAll()`: Récupère tous les utilisateurs
 
 ### 2. CharacterService (`characters/character.service.ts`)
+
 - `create(userId, dto)`: Crée un nouveau personnage
 - `findAllByUser(userId)`: Récupère tous les personnages d'un utilisateur
 - `findOne(id, userId)`: Récupère un personnage (vérifie la propriété)
@@ -67,6 +75,7 @@ Ce document décrit les entités, services et modules créés pour le système d
 ## 📝 DTOs Créés
 
 ### Characters
+
 - `CreateCharacterDto`: `{ name: string }`
 - `EquipItemDto`: `{ itemId: string, slot: string }`
 - `UnequipItemDto`: `{ slot: string }`
@@ -74,10 +83,12 @@ Ce document décrit les entités, services et modules créés pour le système d
 ## 🔐 Routes API
 
 ### Authentification (déjà existantes)
+
 - `POST /auth/register` - Inscription
 - `POST /auth/login` - Connexion
 
 ### Personnages (nouvelles routes, protégées par JWT)
+
 - `POST /characters` - Créer un personnage
 - `GET /characters` - Lister tous les personnages de l'utilisateur
 - `GET /characters/:id` - Récupérer un personnage
@@ -90,6 +101,7 @@ Ce document décrit les entités, services et modules créés pour le système d
 Avec `synchronize: true` en développement, TypeORM créera automatiquement les tables.
 
 **⚠️ Pour la production**, il faut :
+
 1. Désactiver `synchronize: false` dans `app.module.ts`
 2. Créer des migrations avec :
    ```bash
@@ -102,6 +114,7 @@ Avec `synchronize: true` en développement, TypeORM créera automatiquement les 
 ### Exemple d'utilisation
 
 #### 1. Inscription
+
 ```bash
 POST /auth/register
 {
@@ -111,6 +124,7 @@ POST /auth/register
 ```
 
 #### 2. Connexion
+
 ```bash
 POST /auth/login
 {
@@ -121,6 +135,7 @@ POST /auth/login
 ```
 
 #### 3. Créer un personnage
+
 ```bash
 POST /characters
 Authorization: Bearer <token>
@@ -130,6 +145,7 @@ Authorization: Bearer <token>
 ```
 
 #### 4. Équiper un item
+
 ```bash
 POST /characters/:characterId/equip
 Authorization: Bearer <token>
@@ -140,6 +156,7 @@ Authorization: Bearer <token>
 ```
 
 #### 5. Déséquiper un item
+
 ```bash
 POST /characters/:characterId/unequip
 Authorization: Bearer <token>
@@ -171,4 +188,3 @@ Item (1) ──< (N) CharacterEquipment
 3. Implémenter un système d'inventaire
 4. Ajouter des validations métier supplémentaires
 5. Implémenter le calcul des stats totales (base + équipement)
-

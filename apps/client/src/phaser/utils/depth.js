@@ -16,11 +16,11 @@
  */
 
 export const DEPTH_LAYERS = {
-  GROUND: 0,     // Sol, décor plat
-  OBJECTS: 10,   // Objets statiques (arbres, rochers…)
-  PLAYERS: 20,   // Joueurs
-  NPC: 30,       // PNJ
-  UI: 100        // Interface
+  GROUND: 0, // Sol, décor plat
+  OBJECTS: 10, // Objets statiques (arbres, rochers…)
+  PLAYERS: 20, // Joueurs
+  NPC: 30, // PNJ
+  UI: 100, // Interface
 };
 
 /**
@@ -42,9 +42,7 @@ export function calculateDepth(sprite) {
  * @returns {Array} - Liste triée
  */
 export function sortByDepth(objects) {
-  return [...objects].sort(
-    (a, b) => (a.y + a.height / 2) - (b.y + b.height / 2)
-  );
+  return [...objects].sort((a, b) => a.y + a.height / 2 - (b.y + b.height / 2));
 }
 
 /**
@@ -60,5 +58,5 @@ export default {
   DEPTH_LAYERS,
   calculateDepth,
   sortByDepth,
-  setSpriteDepth
+  setSpriteDepth,
 };

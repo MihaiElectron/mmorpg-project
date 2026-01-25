@@ -1,8 +1,13 @@
 import Phaser from "phaser";
+
 import Player from "../player/Player";
 import PlayerController from "../player/PlayerController";
+
 import Pathfinder from "../utils/pathfinding";
 import { setSpriteDepth } from "../utils/depth";
+
+// === ACTION PANEL (Zustand) ===
+import { useActionPanelStore } from "../../store/actionPanel.store";
 
 export default class WorldScene extends Phaser.Scene {
   constructor() {
@@ -18,6 +23,10 @@ export default class WorldScene extends Phaser.Scene {
     this.pathfinder = null;
 
     this.equipment = {};
+
+    // === GATHERING ===
+    this.socket = null;
+    this.interactionTargets = [];
   }
 
   create() {
@@ -26,8 +35,12 @@ export default class WorldScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x2ecc71);
     this.input.setPollAlways();
 
+    // === SOCKET ===
+    this.socket = this.game.socket;
+    this.registerGatheringEvents();
+
     // -----------------------------------------------------------------------
-    // WORLD BOUNDS (OBLIGATOIRE POUR LE MOUVEMENT)
+    // WORLD BOUNDS
     // -----------------------------------------------------------------------
     this.physics.world.setBounds(0, 0, 2000, 2000);
     this.cameras.main.setBounds(0, 0, 2000, 2000);
@@ -52,7 +65,7 @@ export default class WorldScene extends Phaser.Scene {
     setSpriteDepth(this.fireCamp);
 
     // -----------------------------------------------------------------------
-    // DEAD TREE
+    // DEAD TREE (récoltable)
     // -----------------------------------------------------------------------
     this.deadTree = this.physics.add.staticImage(600, 500, "dead_tree");
     this.deadTree.body.setSize(40, 20);
@@ -64,6 +77,14 @@ export default class WorldScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.deadTree);
     setSpriteDepth(this.deadTree);
 
+    // === GATHERING TARGETS ===
+    this.interactionTargets.push({
+      sprite: this.deadTree,
+      id: "tree_1",
+      type: "dead_tree",
+      actions: ["gather"],
+    });
+
     // -----------------------------------------------------------------------
     // CONTROLLER
     // -----------------------------------------------------------------------
@@ -73,13 +94,39 @@ export default class WorldScene extends Phaser.Scene {
     // INPUT RELAY
     // -----------------------------------------------------------------------
     this.input.on("pointerdown", (pointer) => {
-      this.controller.startMouseMove(pointer.worldX, pointer.worldY);
+      const worldX = pointer.worldX;
+      const worldY = pointer.worldY;
+
+      // === GATHERING : détecter si on clique un objet récoltable ===
+      const target = this.getGatheringTargetAt(worldX, worldY);
+
+      if (target) {
+        const openPanel = useActionPanelStore.getState().openPanel;
+
+        openPanel(
+          { id: target.id, type: target.type },
+          target.actions
+        );
+
+        return;
+      }
+
+      // Sinon → mouvement normal
+      this.controller.startMouseMove(worldX, worldY);
     });
 
     this.input.on("pointermove", (pointer) => {
       if (pointer.isDown) {
-        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const worldPoint = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y
+        );
         this.controller.updateMouseTarget(worldPoint.x, worldPoint.y);
+
+        // === GATHERING : si le joueur bouge → stop ===
+        if (this.player.isGathering) {
+          this.socket.emit("stop_gathering");
+        }
       }
     });
 
@@ -94,7 +141,7 @@ export default class WorldScene extends Phaser.Scene {
     this.pathfinder = new Pathfinder(this.collisionGrid);
 
     // -----------------------------------------------------------------------
-    // CAMERA (ZOOM AVANT FOLLOW)
+    // CAMERA
     // -----------------------------------------------------------------------
     this.cameras.main.setZoom(1);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -114,7 +161,29 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   // -------------------------------------------------------------------------
-  // DYNAMIC GRID (monde libre)
+  // === GATHERING : détection du clic sur un objet récoltable ===
+  // -------------------------------------------------------------------------
+  getGatheringTargetAt(x, y) {
+    for (const t of this.interactionTargets) {
+      const bounds = t.sprite.getBounds();
+      if (bounds.contains(x, y)) return t;
+    }
+    return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // === GATHERING : events socket ===
+  // -------------------------------------------------------------------------
+  registerGatheringEvents() {
+    if (!this.socket) return;
+
+    this.socket.on("open_gather_window", (data) => {
+      this.player.requestGather(data.targetId, data.targetType);
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // DYNAMIC GRID
   // -------------------------------------------------------------------------
   createDynamicCollisionGrid() {
     const tileSize = 32;
@@ -142,7 +211,10 @@ export default class WorldScene extends Phaser.Scene {
 
       for (let gy = startY; gy < endY; gy++) {
         for (let gx = startX; gx < endX; gx++) {
-          if (this.collisionGrid[gy] && this.collisionGrid[gy][gx] !== undefined) {
+          if (
+            this.collisionGrid[gy] &&
+            this.collisionGrid[gy][gx] !== undefined
+          ) {
             this.collisionGrid[gy][gx] = 1;
           }
         }

@@ -50,4 +50,3 @@ export class CharacterEquipment {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

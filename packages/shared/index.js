@@ -1,5 +1,4 @@
 export const GAME_CONSTANTS = {
-    START_LEVEL: 1,
-    MAX_HP: 100
-  };
-  
+  START_LEVEL: 1,
+  MAX_HP: 100,
+};

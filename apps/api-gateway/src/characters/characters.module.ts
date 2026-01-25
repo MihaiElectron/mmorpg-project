@@ -16,12 +16,7 @@ import { Inventory } from '../inventory/entities/inventory.entity';
     // Entités utilisées DIRECTEMENT par CharacterService
     // (obligatoire pour @InjectRepository)
     // -------------------------------------------------------------------------
-    TypeOrmModule.forFeature([
-      Character,
-      CharacterEquipment,
-      Item,
-      Inventory,
-    ]),
+    TypeOrmModule.forFeature([Character, CharacterEquipment, Item, Inventory]),
 
     // -------------------------------------------------------------------------
     // Module Item conservé (rien supprimé)

@@ -9,4 +9,3 @@ export class CreateCharacterDto {
   @IsIn(['male', 'female'])
   sex: string;
 }
-

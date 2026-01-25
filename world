@@ -1,0 +1,9 @@
+apps/api-gateway/src/world/
+├── loot.service.ts
+├── world.gateway.ts
+├── world.module.ts
+├── world.service.ts
+└── wrold.loot.ts
+touch  [error opening dir]
+
+1 directory, 5 files

@@ -1,7 +1,7 @@
 // Template de génération de service sécurisé
 
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 export function generateService(domain: string, name: string) {
   const className = capitalize(name);
@@ -51,7 +51,7 @@ export class ${className}Service {
 }
 `;
 
-  const filePath = path.join("src", domain, `${name}.service.ts`);
+  const filePath = path.join('src', domain, `${name}.service.ts`);
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content.trimStart());
 }

@@ -26,7 +26,6 @@ export class Character {
 
   @Column()
   name: string;
-  
 
   @Column({ default: 1 })
   level: number;
@@ -56,7 +55,6 @@ export class Character {
   @Column({ nullable: false })
   sex: string;
 
-
   @OneToMany(
     () => CharacterEquipment,
     (characterEquipment) => characterEquipment.character,
@@ -73,4 +71,3 @@ export class Character {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

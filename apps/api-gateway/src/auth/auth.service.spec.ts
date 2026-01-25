@@ -18,10 +18,23 @@ export class AuthService {
 
   async register(username: string, password: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
+
     // Generate a simple UUID-like string for testing
-    const user: User = { id: `test-${Date.now()}`, username, password: hashedPassword };
+    const user: User = {
+      id: `test-${Date.now()}`,
+      username,
+      password: hashedPassword,
+    };
+
     this.users.push(user);
-    return { message: 'User created', user: { id: user.id, username: user.username } };
+
+    return {
+      message: 'User created',
+      user: {
+        id: user.id,
+        username: user.username,
+      },
+    };
   }
 
   async login(username: string, password: string) {

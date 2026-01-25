@@ -44,10 +44,10 @@ export default class MapLoader {
      *   au nom du tileset dans Tiled.
      */
     const tileset = map.addTilesetImage(
-      "tiles",      // nom dans Tiled
-      "tiles",      // clé préloadée dans PreloadScene
+      "tiles", // nom dans Tiled
+      "tiles", // clé préloadée dans PreloadScene
       this.tileSize,
-      this.tileSize
+      this.tileSize,
     );
 
     // Configuration des collisions

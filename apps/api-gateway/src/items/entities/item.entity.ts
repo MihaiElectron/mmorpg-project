@@ -60,7 +60,6 @@ export class Item {
   @OneToMany(() => Inventory, (inventory) => inventory.item)
   inventory: Inventory[];
 
-
   @CreateDateColumn()
   createdAt: Date;
 

@@ -47,7 +47,7 @@ import { User } from '../users/entities/user.entity';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'), // Clé dans .env
-        signOptions: { expiresIn: '1h' },          // Durée de vie du token
+        signOptions: { expiresIn: '1h' }, // Durée de vie du token
       }),
     }),
   ],

@@ -14,12 +14,18 @@ export class InventoryController {
   }
 
   @Post(':characterId/equip/:itemId')
-  equipItem(@Param('characterId') characterId: string, @Param('itemId') itemId: string) {
+  equipItem(
+    @Param('characterId') characterId: string,
+    @Param('itemId') itemId: string,
+  ) {
     return this.inventoryService.equipItem(characterId, itemId);
   }
 
   @Post(':characterId/unequip/:slot')
-  unequipItem(@Param('characterId') characterId: string, @Param('slot') slot: string) {
+  unequipItem(
+    @Param('characterId') characterId: string,
+    @Param('slot') slot: string,
+  ) {
     return this.inventoryService.unequipItem(characterId, slot);
   }
 

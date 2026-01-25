@@ -13,6 +13,7 @@
 ## 🛠️ Stack Technique
 
 ### Backend
+
 - **Node.js** - Runtime JavaScript
 - **NestJS** - Framework backend progressif
 - **Express** - Serveur HTTP
@@ -22,6 +23,7 @@
 - **JWT** - Gestion des tokens
 
 ### Frontend
+
 - **React 18** - Bibliothèque UI
 - **Vite** - Build tool et dev server
 - **Three.js** - Rendu 3D
@@ -31,11 +33,13 @@
 - **Socket.io-client** - WebSocket client
 
 ### Base de Données & Cache
+
 - **PostgreSQL** - Base de données principale
 - **Redis** - Cache et sessions
 - **RabbitMQ** - Message broker
 
 ### DevOps & Tools
+
 - **Docker** - Conteneurisation
 - **Docker Compose** - Orchestration locale
 - **Swagger/OpenAPI** - Documentation API
@@ -56,7 +60,7 @@
 
 ```
 mmorpg-project/
-│   
+│
 ├── apps/
 │   ├── client/                  # Application React + Vite
 │   │   ├── src/
@@ -264,7 +268,7 @@ npm run test
 
 #### Auth Service (NestJS)
 
-```bash
+````bash
 cd apps/auth-service
 
 # Créer le projet
@@ -287,7 +291,7 @@ npm install @nestjs/cache-manager cache-manager cache-manager-redis-store
 
 # Démarrer
 npm run start:dev
-```
+````
 
 ### Frontend (React + Vite)
 
@@ -504,4 +508,3 @@ MIT
 ---
 
 **Bon développement ! 🎮**
-

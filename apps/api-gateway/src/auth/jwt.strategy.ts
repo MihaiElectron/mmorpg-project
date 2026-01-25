@@ -28,8 +28,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Extraction du token
-      ignoreExpiration: false,                                  // Refuse les tokens expirés
-      secretOrKey: configService.get<string>('JWT_SECRET'),     // Clé secrète JWT
+      ignoreExpiration: false, // Refuse les tokens expirés
+      secretOrKey: configService.get<string>('JWT_SECRET'), // Clé secrète JWT
     });
   }
 
@@ -50,7 +50,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Vérification minimale : un token doit contenir un identifiant utilisateur
     if (!userId) {
-      throw new UnauthorizedException('Token invalide : identifiant utilisateur manquant.');
+      throw new UnauthorizedException(
+        'Token invalide : identifiant utilisateur manquant.',
+      );
     }
 
     return {

@@ -3,9 +3,7 @@
 // Description : Point d'entrée des styles de layout (header, footer, sidebar, grid).
 // ============================================================================
 
-@forward './header';
-@forward './footer';
-@forward './sidebar';
-@forward './grid';
-
-
+@forward "./header";
+@forward "./footer";
+@forward "./sidebar";
+@forward "./grid";

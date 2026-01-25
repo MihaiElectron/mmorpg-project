@@ -1,7 +1,7 @@
 // module.ts
 
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 export function generateModule(domain: string, name: string) {
   const className = capitalize(name);
@@ -22,7 +22,7 @@ import { ${className}Controller } from './${name}.controller';
 export class ${className}Module {}
 `;
 
-  const filePath = path.join("src", domain, `${name}.module.ts`);
+  const filePath = path.join('src', domain, `${name}.module.ts`);
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content.trimStart());
 }

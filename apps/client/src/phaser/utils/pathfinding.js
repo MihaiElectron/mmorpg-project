@@ -13,10 +13,14 @@ export default class Pathfinder {
     const key = (x, y) => `${x},${y}`;
 
     const neighbors = [
-      [1, 0], [-1, 0],
-      [0, 1], [0, -1],
-      [1, 1], [1, -1],
-      [-1, 1], [-1, -1],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
     ];
 
     while (open.length > 0) {
@@ -47,7 +51,7 @@ export default class Pathfinder {
         const h = Math.hypot(endX - nx, endY - ny);
         const f = g + h;
 
-        const existing = open.find(n => n.x === nx && n.y === ny);
+        const existing = open.find((n) => n.x === nx && n.y === ny);
         if (existing && existing.f <= f) continue;
 
         open.push({

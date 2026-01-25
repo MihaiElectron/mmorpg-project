@@ -5,13 +5,11 @@
 // Remarque : N'importer ici que les index de chaque couche.
 // ============================================================================
 
-
-@use './abstracts/index' as *;
-@use './vendors/index' as *;
-@use './base/index' as *;
-@use './layout/index' as *;
-@use './components/index' as *;
-@use './pages/index' as *;
-@use './themes/index' as *;
-@use './utilities/index' as *;
-
+@use "./abstracts/index" as *;
+@use "./vendors/index" as *;
+@use "./base/index" as *;
+@use "./layout/index" as *;
+@use "./components/index" as *;
+@use "./pages/index" as *;
+@use "./themes/index" as *;
+@use "./utilities/index" as *;

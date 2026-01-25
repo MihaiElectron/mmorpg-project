@@ -19,7 +19,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
-import { InventoryModule } from './inventory/inventory.module'; // <-- nouveau
+import { InventoryModule } from './inventory/inventory.module';
 
 // 🔥 Log clair pour vérifier la connexion DB
 console.log('>>> Connecting to PostgreSQL with config:', {
@@ -62,7 +62,7 @@ console.log('>>> Connecting to PostgreSQL with config:', {
     AuthModule,
     CommonModule,
     CharactersModule,
-    InventoryModule, // <-- intégré pour que TypeORM crée la table Inventory
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

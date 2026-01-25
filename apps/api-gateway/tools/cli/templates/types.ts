@@ -1,22 +1,22 @@
 // Types communs utilisés par tous les templates du générateur
 
 export type PrimitiveType =
-  | "string"
-  | "number"
-  | "boolean"
-  | "date"
-  | "uuid"
-  | "enum"
-  | "json"
-  | "decimal";
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'uuid'
+  | 'enum'
+  | 'json'
+  | 'decimal';
 
 export type RelationType =
-  | "many-to-one"
-  | "one-to-many"
-  | "many-to-many"
-  | "one-to-one";
+  | 'many-to-one'
+  | 'one-to-many'
+  | 'many-to-many'
+  | 'one-to-one';
 
-export type FieldKind = "column" | "relation";
+export type FieldKind = 'column' | 'relation';
 
 export interface BaseField {
   kind: FieldKind;
@@ -36,7 +36,7 @@ export interface BaseField {
 }
 
 export interface RelationField extends BaseField {
-  kind: "relation";
+  kind: 'relation';
   relationType: RelationType;
   targetEntity: string; // nom de l'entité cible (className)
   inverseSide?: string; // ex: "dragons"
@@ -50,7 +50,7 @@ export interface RelationField extends BaseField {
 }
 
 export interface ColumnField extends BaseField {
-  kind: "column";
+  kind: 'column';
 }
 
 export type AnyField = ColumnField | RelationField;

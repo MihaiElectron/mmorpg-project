@@ -31,8 +31,7 @@ export const useItemsStore = create<ItemsState>((set) => ({
   // ---------------------------------------------------------------------------
   // Ajouter un item à l'inventaire
   // ---------------------------------------------------------------------------
-  addToInventory: (item) =>
-    set((s) => ({ inventory: [...s.inventory, item] })),
+  addToInventory: (item) => set((s) => ({ inventory: [...s.inventory, item] })),
 
   // ---------------------------------------------------------------------------
   // Équipe un item

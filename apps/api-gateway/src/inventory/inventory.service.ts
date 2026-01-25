@@ -31,7 +31,9 @@ export class InventoryService {
   // Ajouter un item dans l'inventaire
   // ---------------------------------------------------------------------------
   async addItem(dto: CreateInventoryDto): Promise<Inventory> {
-    const character = await this.characterRepository.findOneBy({ id: dto.characterId });
+    const character = await this.characterRepository.findOneBy({
+      id: dto.characterId,
+    });
     if (!character) throw new NotFoundException('Character not found');
 
     const item = await this.itemRepository.findOneBy({ id: dto.itemId });

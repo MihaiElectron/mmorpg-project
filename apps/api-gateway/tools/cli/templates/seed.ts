@@ -1,15 +1,11 @@
 // Template de génération de seed sécurisé
 
-import fs from "fs";
-import path from "path";
-import { AnyField, ColumnField, RelationField } from "./types";
+import fs from 'fs';
+import path from 'path';
+import { AnyField, ColumnField, RelationField } from './types';
 
-export function generateSeed(
-  domain: string,
-  name: string,
-  fields: AnyField[],
-) {
-  const seedDir = path.join("src", domain, "seeds");
+export function generateSeed(domain: string, name: string, fields: AnyField[]) {
+  const seedDir = path.join('src', domain, 'seeds');
   ensureDir(seedDir);
 
   const { columnFields, relationFields } = splitFields(fields);
@@ -31,15 +27,12 @@ export function generateSeed(
   const content = `
 export const ${className}Seed = [
   {
-${defaultObjectLines.join("\n")}
+${defaultObjectLines.join('\n')}
   },
 ];
 `;
 
-  fs.writeFileSync(
-    path.join(seedDir, `${name}.seed.ts`),
-    content.trimStart(),
-  );
+  fs.writeFileSync(path.join(seedDir, `${name}.seed.ts`), content.trimStart());
 }
 
 function splitFields(fields: AnyField[]) {
@@ -47,7 +40,7 @@ function splitFields(fields: AnyField[]) {
   const relationFields: RelationField[] = [];
 
   for (const f of fields) {
-    if (f.kind === "column") columnFields.push(f);
+    if (f.kind === 'column') columnFields.push(f);
     else relationFields.push(f);
   }
 
@@ -56,37 +49,37 @@ function splitFields(fields: AnyField[]) {
 
 function buildSeedDefaultValue(field: ColumnField): string {
   switch (field.primitiveType) {
-    case "string":
-    case "uuid":
-    case "json":
-      return "null";
-    case "number":
-    case "decimal":
-      return "0";
-    case "boolean":
-      return "false";
-    case "date":
-      return "new Date()";
-    case "enum":
+    case 'string':
+    case 'uuid':
+    case 'json':
+      return 'null';
+    case 'number':
+    case 'decimal':
+      return '0';
+    case 'boolean':
+      return 'false';
+    case 'date':
+      return 'new Date()';
+    case 'enum':
       if (field.enumName && field.enumValues && field.enumValues.length > 0) {
         return `${field.enumName}.${field.enumValues[0]}`;
       }
-      return "null";
+      return 'null';
     default:
-      return "null";
+      return 'null';
   }
 }
 
 function buildSeedRelationValue(field: RelationField): string {
   switch (field.relationType) {
-    case "many-to-one":
-    case "one-to-one":
+    case 'many-to-one':
+    case 'one-to-one':
       return "'<uuid>'";
-    case "many-to-many":
-    case "one-to-many":
+    case 'many-to-many':
+    case 'one-to-many':
       return "['<uuid1>', '<uuid2>']";
     default:
-      return "null";
+      return 'null';
   }
 }
 

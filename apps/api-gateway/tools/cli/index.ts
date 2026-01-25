@@ -1,32 +1,38 @@
 // Entry point du CLI pour le projet MMORPG
 
-import inquirer from "inquirer";
-import { generateEntity } from "./templates/entity";
-import { generateModule } from "./templates/module";
-import { generateService } from "./templates/service";
-import { generateController } from "./templates/controller";
-import { generateDTOs } from "./templates/dtos";
-import { generateSeed } from "./templates/seed";
-import { AnyField, ColumnField, RelationField, EntityOptions, RelationType } from "./templates/types";
+import inquirer from 'inquirer';
+import { generateEntity } from './templates/entity';
+import { generateModule } from './templates/module';
+import { generateService } from './templates/service';
+import { generateController } from './templates/controller';
+import { generateDTOs } from './templates/dtos';
+import { generateSeed } from './templates/seed';
+import {
+  AnyField,
+  ColumnField,
+  RelationField,
+  EntityOptions,
+  RelationType,
+} from './templates/types';
 
 async function main() {
-  console.log("\n=== NestJS Entity Generator (advanced, Symfony-style) ===\n");
+  console.log('\n=== NestJS Entity Generator (advanced, Symfony-style) ===\n');
 
   const { domain } = await inquirer.prompt([
     {
-      type: "input",
-      name: "domain",
-      message: "Domaine (ex: characters, monsters, items, quests) :",
-      validate: (v) => v.trim() !== "" || "Domaine requis",
+      type: 'input',
+      name: 'domain',
+      message: 'Domaine (ex: characters, monsters, items, quests) :',
+      validate: (v) => v.trim() !== '' || 'Domaine requis',
     },
   ]);
 
   const { entityName } = await inquirer.prompt([
     {
-      type: "input",
-      name: "entityName",
+      type: 'input',
+      name: 'entityName',
       message: "Nom de l'entité :",
-      validate: (v) => v.trim().length > 0 || "Nom requis",
+      validate: (v) => v.trim().length > 0 || 'Nom requis',
     },
   ]);
 
@@ -38,17 +44,17 @@ async function main() {
   while (addMore) {
     const { kind } = await inquirer.prompt([
       {
-        type: "list",
-        name: "kind",
-        message: "Type de champ :",
+        type: 'list',
+        name: 'kind',
+        message: 'Type de champ :',
         choices: [
-          { name: "Colonne simple", value: "column" },
-          { name: "Relation (ManyToOne, OneToMany, etc.)", value: "relation" },
+          { name: 'Colonne simple', value: 'column' },
+          { name: 'Relation (ManyToOne, OneToMany, etc.)', value: 'relation' },
         ],
       },
     ]);
 
-    if (kind === "column") {
+    if (kind === 'column') {
       const columnField = await askColumnField();
       fields.push(columnField);
     } else {
@@ -58,16 +64,16 @@ async function main() {
 
     const { again } = await inquirer.prompt([
       {
-        type: "confirm",
-        name: "again",
-        message: "Ajouter un autre champ ?",
+        type: 'confirm',
+        name: 'again',
+        message: 'Ajouter un autre champ ?',
         default: true, // (Y/n)
       },
     ]);
     addMore = again;
   }
 
-  console.log("\nGénération des fichiers...\n");
+  console.log('\nGénération des fichiers...\n');
 
   generateEntity(domain, entityName, fields, entityOptions);
   generateDTOs(domain, entityName, fields, entityOptions);
@@ -83,21 +89,21 @@ async function main() {
 async function askEntityOptions(): Promise<EntityOptions> {
   const answers = await inquirer.prompt([
     {
-      type: "confirm",
-      name: "addCreatedAt",
-      message: "Ajouter createdAt ? (Y/n)",
+      type: 'confirm',
+      name: 'addCreatedAt',
+      message: 'Ajouter createdAt ? (Y/n)',
       default: true,
     },
     {
-      type: "confirm",
-      name: "addUpdatedAt",
-      message: "Ajouter updatedAt ? (Y/n)",
+      type: 'confirm',
+      name: 'addUpdatedAt',
+      message: 'Ajouter updatedAt ? (Y/n)',
       default: true,
     },
     {
-      type: "confirm",
-      name: "addDeletedAt",
-      message: "Ajouter deletedAt (soft delete) ? (y/N)",
+      type: 'confirm',
+      name: 'addDeletedAt',
+      message: 'Ajouter deletedAt (soft delete) ? (y/N)',
       default: false,
     },
   ]);
@@ -109,75 +115,79 @@ async function askEntityOptions(): Promise<EntityOptions> {
 async function askColumnField(): Promise<ColumnField> {
   const base = await inquirer.prompt([
     {
-      type: "input",
-      name: "name",
-      message: "Nom du champ :",
-      validate: (v) => v.trim().length > 0 || "Nom requis",
+      type: 'input',
+      name: 'name',
+      message: 'Nom du champ :',
+      validate: (v) => v.trim().length > 0 || 'Nom requis',
     },
     {
-      type: "list",
-      name: "primitiveType",
-      message: "Type :",
+      type: 'list',
+      name: 'primitiveType',
+      message: 'Type :',
       choices: [
-        "string",
-        "number",
-        "boolean",
-        "date",
-        "uuid",
-        "enum",
-        "json",
-        "decimal",
+        'string',
+        'number',
+        'boolean',
+        'date',
+        'uuid',
+        'enum',
+        'json',
+        'decimal',
       ],
-      default: "string",
+      default: 'string',
     },
     {
-      type: "confirm",
-      name: "nullable",
-      message: "Nullable ? (Y/n)",
+      type: 'confirm',
+      name: 'nullable',
+      message: 'Nullable ? (Y/n)',
       default: false,
     },
     {
-      type: "confirm",
-      name: "unique",
-      message: "Unique ? (y/N)",
+      type: 'confirm',
+      name: 'unique',
+      message: 'Unique ? (y/N)',
       default: false,
     },
     {
-      type: "confirm",
-      name: "isIndexed",
-      message: "Indexer ce champ ? (y/N)",
+      type: 'confirm',
+      name: 'isIndexed',
+      message: 'Indexer ce champ ? (y/N)',
       default: false,
     },
   ]);
 
   let enumName: string | undefined;
   let enumValues: string[] | undefined;
-  if (base.primitiveType === "enum") {
+  if (base.primitiveType === 'enum') {
     const enumAnswers = await inquirer.prompt([
       {
-        type: "input",
-        name: "enumName",
+        type: 'input',
+        name: 'enumName',
         message: "Nom de l'enum (ex: DragonElement) :",
         validate: (v) => v.trim().length > 0 || "Nom d'enum requis",
       },
       {
-        type: "input",
-        name: "enumValues",
-        message: "Valeurs de l'enum (séparées par des virgules, ex: Fire,Water,Earth) :",
-        validate: (v) => v.trim().length > 0 || "Au moins une valeur",
+        type: 'input',
+        name: 'enumValues',
+        message:
+          "Valeurs de l'enum (séparées par des virgules, ex: Fire,Water,Earth) :",
+        validate: (v) => v.trim().length > 0 || 'Au moins une valeur',
       },
     ]);
     enumName = enumAnswers.enumName.trim();
-    enumValues = enumAnswers.enumValues.split(",").map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+    enumValues = enumAnswers.enumValues
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0);
   }
 
   let length: number | undefined;
-  if (base.primitiveType === "string") {
+  if (base.primitiveType === 'string') {
     const { length: len } = await inquirer.prompt([
       {
-        type: "input",
-        name: "length",
-        message: "Longueur (laisser vide pour défaut) :",
+        type: 'input',
+        name: 'length',
+        message: 'Longueur (laisser vide pour défaut) :',
       },
     ]);
     length = len ? Number(len) : undefined;
@@ -185,17 +195,17 @@ async function askColumnField(): Promise<ColumnField> {
 
   let precision: number | undefined;
   let scale: number | undefined;
-  if (base.primitiveType === "decimal") {
+  if (base.primitiveType === 'decimal') {
     const res = await inquirer.prompt([
       {
-        type: "input",
-        name: "precision",
-        message: "Précision (ex: 10) :",
+        type: 'input',
+        name: 'precision',
+        message: 'Précision (ex: 10) :',
       },
       {
-        type: "input",
-        name: "scale",
-        message: "Scale (ex: 2) :",
+        type: 'input',
+        name: 'scale',
+        message: 'Scale (ex: 2) :',
       },
     ]);
     precision = res.precision ? Number(res.precision) : undefined;
@@ -204,25 +214,25 @@ async function askColumnField(): Promise<ColumnField> {
 
   const { defaultValue, comment } = await inquirer.prompt([
     {
-      type: "input",
-      name: "defaultValue",
-      message: "Valeur par défaut (laisser vide si aucune) :",
+      type: 'input',
+      name: 'defaultValue',
+      message: 'Valeur par défaut (laisser vide si aucune) :',
     },
     {
-      type: "input",
-      name: "comment",
-      message: "Commentaire (optionnel) :",
+      type: 'input',
+      name: 'comment',
+      message: 'Commentaire (optionnel) :',
     },
   ]);
 
   const field: ColumnField = {
-    kind: "column",
+    kind: 'column',
     name: base.name.trim(),
     primitiveType: base.primitiveType,
     nullable: base.nullable,
     unique: base.unique,
     isIndexed: base.isIndexed,
-    defaultValue: defaultValue !== "" ? defaultValue : undefined,
+    defaultValue: defaultValue !== '' ? defaultValue : undefined,
     comment: comment || undefined,
     enumName,
     enumValues,
@@ -238,44 +248,44 @@ async function askColumnField(): Promise<ColumnField> {
 async function askRelationField(): Promise<RelationField> {
   const base = await inquirer.prompt([
     {
-      type: "input",
-      name: "name",
-      message: "Nom du champ de relation (ex: owner, items, dragons) :",
-      validate: (v) => v.trim().length > 0 || "Nom requis",
+      type: 'input',
+      name: 'name',
+      message: 'Nom du champ de relation (ex: owner, items, dragons) :',
+      validate: (v) => v.trim().length > 0 || 'Nom requis',
     },
     {
-      type: "list",
-      name: "relationType",
-      message: "Type de relation :",
+      type: 'list',
+      name: 'relationType',
+      message: 'Type de relation :',
       choices: [
-        { name: "ManyToOne", value: "many-to-one" },
-        { name: "OneToMany", value: "one-to-many" },
-        { name: "ManyToMany", value: "many-to-many" },
-        { name: "OneToOne", value: "one-to-one" },
+        { name: 'ManyToOne', value: 'many-to-one' },
+        { name: 'OneToMany', value: 'one-to-many' },
+        { name: 'ManyToMany', value: 'many-to-many' },
+        { name: 'OneToOne', value: 'one-to-one' },
       ],
     },
     {
-      type: "input",
-      name: "targetEntity",
-      message: "Entité cible (nom de classe, ex: Character, Item, Dragon) :",
-      validate: (v) => v.trim().length > 0 || "Entité cible requise",
+      type: 'input',
+      name: 'targetEntity',
+      message: 'Entité cible (nom de classe, ex: Character, Item, Dragon) :',
+      validate: (v) => v.trim().length > 0 || 'Entité cible requise',
     },
     {
-      type: "confirm",
-      name: "nullable",
-      message: "Nullable ? (Y/n)",
+      type: 'confirm',
+      name: 'nullable',
+      message: 'Nullable ? (Y/n)',
       default: true,
     },
     {
-      type: "confirm",
-      name: "cascade",
-      message: "Cascade ? (y/N)",
+      type: 'confirm',
+      name: 'cascade',
+      message: 'Cascade ? (y/N)',
       default: false,
     },
     {
-      type: "confirm",
-      name: "eager",
-      message: "Eager loading ? (y/N)",
+      type: 'confirm',
+      name: 'eager',
+      message: 'Eager loading ? (y/N)',
       default: false,
     },
   ]);
@@ -287,43 +297,43 @@ async function askRelationField(): Promise<RelationField> {
   let joinColumn: string | undefined;
   let inverseJoinColumn: string | undefined;
 
-  if (base.relationType === "one-to-many") {
+  if (base.relationType === 'one-to-many') {
     const { inv } = await inquirer.prompt([
       {
-        type: "input",
-        name: "inv",
-        message: "Nom du champ inverse côté cible (mappedBy, ex: owner) :",
+        type: 'input',
+        name: 'inv',
+        message: 'Nom du champ inverse côté cible (mappedBy, ex: owner) :',
       },
     ]);
     inverseSide = inv || undefined;
   }
 
-  if (base.relationType === "many-to-one") {
+  if (base.relationType === 'many-to-one') {
     const { joinCol } = await inquirer.prompt([
       {
-        type: "input",
-        name: "joinCol",
-        message: "Nom de la joinColumn (laisser vide pour défaut) :",
+        type: 'input',
+        name: 'joinCol',
+        message: 'Nom de la joinColumn (laisser vide pour défaut) :',
       },
     ]);
     joinColumnName = joinCol || undefined;
   }
 
-  if (base.relationType === "many-to-many") {
+  if (base.relationType === 'many-to-many') {
     const res = await inquirer.prompt([
       {
-        type: "input",
-        name: "joinTableName",
-        message: "Nom de la joinTable (laisser vide pour défaut) :",
+        type: 'input',
+        name: 'joinTableName',
+        message: 'Nom de la joinTable (laisser vide pour défaut) :',
       },
       {
-        type: "input",
-        name: "joinColumn",
-        message: "Nom de la joinColumn (laisser vide pour défaut) :",
+        type: 'input',
+        name: 'joinColumn',
+        message: 'Nom de la joinColumn (laisser vide pour défaut) :',
       },
       {
-        type: "input",
-        name: "inverseJoinColumn",
+        type: 'input',
+        name: 'inverseJoinColumn',
         message: "Nom de l'inverseJoinColumn (laisser vide pour défaut) :",
       },
     ]);
@@ -332,18 +342,18 @@ async function askRelationField(): Promise<RelationField> {
     inverseJoinColumn = res.inverseJoinColumn || undefined;
   }
 
-  if (base.relationType === "one-to-one") {
+  if (base.relationType === 'one-to-one') {
     const res = await inquirer.prompt([
       {
-        type: "confirm",
-        name: "ownerSide",
-        message: "Cette entité est-elle le côté owner ? (Y/n)",
+        type: 'confirm',
+        name: 'ownerSide',
+        message: 'Cette entité est-elle le côté owner ? (Y/n)',
         default: true,
       },
       {
-        type: "input",
-        name: "joinColumnName",
-        message: "Nom de la joinColumn (laisser vide pour défaut) :",
+        type: 'input',
+        name: 'joinColumnName',
+        message: 'Nom de la joinColumn (laisser vide pour défaut) :',
       },
     ]);
     ownerSide = res.ownerSide;
@@ -351,7 +361,7 @@ async function askRelationField(): Promise<RelationField> {
   }
 
   const field: RelationField = {
-    kind: "relation",
+    kind: 'relation',
     name: base.name.trim(),
     nullable: base.nullable,
     unique: false,

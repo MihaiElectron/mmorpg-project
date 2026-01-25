@@ -2,8 +2,6 @@
 // Fichier : _index.scss (base)
 // Description : Point d'entrée des styles de base (reset, typo, animations).\n// ============================================================================
 
-@forward './reset';
-@forward './typography';
-@forward './animations';
-
-
+@forward "./reset";
+@forward "./typography";
+@forward "./animations";

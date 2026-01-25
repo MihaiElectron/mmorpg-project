@@ -2,9 +2,7 @@
 // Fichier : _index.scss (abstracts)
 // Description : Point d'entrée des outils SASS (variables, mixins, fonctions, placeholders).\n// Utilise la syntaxe moderne `@forward`.\n// ============================================================================
 
-@forward './variables';
-@forward './mixins';
-@forward './functions';
-@forward './placeholders';
-
-
+@forward "./variables";
+@forward "./mixins";
+@forward "./functions";
+@forward "./placeholders";

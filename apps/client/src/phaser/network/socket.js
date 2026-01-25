@@ -1,5 +1,5 @@
 // Socket.io client for real-time communication
-import { io } from 'socket.io-client';
+import { io } from "socket.io-client";
 
 class SocketService {
   constructor() {
@@ -9,16 +9,16 @@ class SocketService {
 
   connect(url) {
     this.socket = io(url || window.location.origin, {
-      transports: ['websocket'],
-      autoConnect: true
+      transports: ["websocket"],
+      autoConnect: true,
     });
 
-    this.socket.on('connect', () => {
-      console.log('Socket connected:', this.socket.id);
+    this.socket.on("connect", () => {
+      console.log("Socket connected:", this.socket.id);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    this.socket.on("disconnect", () => {
+      console.log("Socket disconnected");
     });
 
     return this.socket;

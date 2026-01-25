@@ -4,4 +4,3 @@ export class UnequipItemDto {
   @IsString()
   slot: string; // 'head', 'chest', 'legs', 'weapon', 'shield', etc.
 }
-

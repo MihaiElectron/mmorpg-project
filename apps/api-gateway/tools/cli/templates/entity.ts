@@ -1,8 +1,8 @@
 // Template de génération d'entité avancée, sécurisé contre les conflits de noms
 
-import fs from "fs";
-import path from "path";
-import { AnyField, ColumnField, RelationField, EntityOptions } from "./types";
+import fs from 'fs';
+import path from 'path';
+import { AnyField, ColumnField, RelationField, EntityOptions } from './types';
 
 export function generateEntity(
   domain: string,
@@ -16,8 +16,8 @@ export function generateEntity(
 
   const imports = buildImports(columnFields, relationFields, options);
 
-  const columnsCode = columnFields.map(buildColumnCode).join("\n");
-  const relationsCode = relationFields.map(buildRelationCode).join("\n");
+  const columnsCode = columnFields.map(buildColumnCode).join('\n');
+  const relationsCode = relationFields.map(buildRelationCode).join('\n');
   const auditCode = buildAuditCode(options);
 
   const content = `
@@ -33,7 +33,7 @@ ${auditCode}
 }
 `;
 
-  const filePath = path.join("src", domain, "entities", `${name}.entity.ts`);
+  const filePath = path.join('src', domain, 'entities', `${name}.entity.ts`);
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content.trimStart());
 }
@@ -43,7 +43,7 @@ function splitFields(fields: AnyField[]) {
   const relationFields: RelationField[] = [];
 
   for (const f of fields) {
-    if (f.kind === "column") columnFields.push(f);
+    if (f.kind === 'column') columnFields.push(f);
     else relationFields.push(f);
   }
 
@@ -56,67 +56,67 @@ function buildImports(
   options: EntityOptions,
 ): string {
   const typeormImports = new Set<string>([
-    "Entity",
-    "PrimaryGeneratedColumn",
-    "Column",
+    'Entity',
+    'PrimaryGeneratedColumn',
+    'Column',
   ]);
 
-  if (options.addCreatedAt) typeormImports.add("CreateDateColumn");
-  if (options.addUpdatedAt) typeormImports.add("UpdateDateColumn");
-  if (options.addDeletedAt) typeormImports.add("DeleteDateColumn");
+  if (options.addCreatedAt) typeormImports.add('CreateDateColumn');
+  if (options.addUpdatedAt) typeormImports.add('UpdateDateColumn');
+  if (options.addDeletedAt) typeormImports.add('DeleteDateColumn');
 
   for (const rel of relationFields) {
     switch (rel.relationType) {
-      case "many-to-one":
-        typeormImports.add("ManyToOne");
-        typeormImports.add("JoinColumn");
+      case 'many-to-one':
+        typeormImports.add('ManyToOne');
+        typeormImports.add('JoinColumn');
         break;
-      case "one-to-many":
-        typeormImports.add("OneToMany");
+      case 'one-to-many':
+        typeormImports.add('OneToMany');
         break;
-      case "many-to-many":
-        typeormImports.add("ManyToMany");
-        typeormImports.add("JoinTable");
+      case 'many-to-many':
+        typeormImports.add('ManyToMany');
+        typeormImports.add('JoinTable');
         break;
-      case "one-to-one":
-        typeormImports.add("OneToOne");
-        typeormImports.add("JoinColumn");
+      case 'one-to-one':
+        typeormImports.add('OneToOne');
+        typeormImports.add('JoinColumn');
         break;
     }
   }
 
   const enumImports = columnFields
-    .filter((c) => c.primitiveType === "enum" && c.enumName)
+    .filter((c) => c.primitiveType === 'enum' && c.enumName)
     .map(
       (c) =>
         `import { ${c.enumName} } from '../enums/${toKebabCase(
           c.enumName!,
         )}.enum';`,
     )
-    .join("\n");
+    .join('\n');
 
   const typeormImportLine = `import { ${Array.from(typeormImports)
     .sort()
-    .join(", ")} } from 'typeorm';`;
+    .join(', ')} } from 'typeorm';`;
 
-  return [typeormImportLine, enumImports].filter(Boolean).join("\n");
+  return [typeormImportLine, enumImports].filter(Boolean).join('\n');
 }
 
 function buildColumnCode(field: ColumnField): string {
   const opts: string[] = [];
 
-  if (field.primitiveType === "enum" && field.enumName) {
+  if (field.primitiveType === 'enum' && field.enumName) {
     opts.push(`type: 'enum'`);
     opts.push(`enum: ${field.enumName}`);
   }
 
-  if (field.nullable) opts.push("nullable: true");
-  if (field.unique) opts.push("unique: true");
+  if (field.nullable) opts.push('nullable: true');
+  if (field.unique) opts.push('unique: true');
   if (field.length) opts.push(`length: ${field.length}`);
   if (field.precision) opts.push(`precision: ${field.precision}`);
   if (field.scale) opts.push(`scale: ${field.scale}`);
 
-  const optionsCode = opts.length ? `{ ${opts.join(", ")} }` : "";
+  const optionsCode = opts.length ? `{ ${opts.join(', ')} }` : '';
 
   return `
   @Column(${optionsCode})
@@ -126,33 +126,33 @@ function buildColumnCode(field: ColumnField): string {
 function buildRelationCode(field: RelationField): string {
   const opts: string[] = [];
 
-  if (field.cascade) opts.push("cascade: true");
-  if (field.eager) opts.push("eager: true");
-  if (field.nullable) opts.push("nullable: true");
+  if (field.cascade) opts.push('cascade: true');
+  if (field.eager) opts.push('eager: true');
+  if (field.nullable) opts.push('nullable: true');
 
-  const optionsCode = opts.length ? `, { ${opts.join(", ")} }` : "";
+  const optionsCode = opts.length ? `, { ${opts.join(', ')} }` : '';
 
   const target = field.targetEntity;
 
   switch (field.relationType) {
-    case "many-to-one":
+    case 'many-to-one':
       return `
   @ManyToOne(() => ${target}${optionsCode})
   @JoinColumn()
   ${field.name}: ${target};`;
 
-    case "one-to-many":
+    case 'one-to-many':
       return `
   @OneToMany(() => ${target}, (x) => x.${field.inverseSide})
   ${field.name}: ${target}[];`;
 
-    case "many-to-many":
+    case 'many-to-many':
       return `
   @ManyToMany(() => ${target}${optionsCode})
   @JoinTable()
   ${field.name}: ${target}[];`;
 
-    case "one-to-one":
+    case 'one-to-one':
       return `
   @OneToOne(() => ${target}${optionsCode})
   @JoinColumn()
@@ -176,26 +176,26 @@ function buildAuditCode(options: EntityOptions): string {
     lines.push(`  deletedAt: Date | null;`);
   }
 
-  return lines.length ? "\n" + lines.join("\n") : "";
+  return lines.length ? '\n' + lines.join('\n') : '';
 }
 
 function mapTsType(field: ColumnField): string {
   switch (field.primitiveType) {
-    case "string":
-    case "uuid":
-    case "json":
-      return "string";
-    case "number":
-    case "decimal":
-      return "number";
-    case "boolean":
-      return "boolean";
-    case "date":
-      return "Date";
-    case "enum":
-      return field.enumName || "string";
+    case 'string':
+    case 'uuid':
+    case 'json':
+      return 'string';
+    case 'number':
+    case 'decimal':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'date':
+      return 'Date';
+    case 'enum':
+      return field.enumName || 'string';
     default:
-      return "string";
+      return 'string';
   }
 }
 
@@ -204,9 +204,7 @@ function capitalize(s: string): string {
 }
 
 function toKebabCase(s: string): string {
-  return s
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase();
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
 
 function ensureDir(dir: string) {

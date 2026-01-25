@@ -27,7 +27,7 @@ async function handleResponse(res, defaultMessage) {
 
     // Cas NestJS : message = tableau d'erreurs
     if (Array.isArray(data.message)) {
-      errorMessage = data.message.join(', ');
+      errorMessage = data.message.join(", ");
     } else {
       errorMessage = data.message || errorMessage;
     }
@@ -47,9 +47,9 @@ async function handleResponse(res, defaultMessage) {
  * Utilise handleResponse pour une gestion d'erreur uniforme.
  */
 export async function registerUser(username, password) {
-  const res = await fetch('http://localhost:3000/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch("http://localhost:3000/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
 
@@ -63,9 +63,9 @@ export async function registerUser(username, password) {
  * Retourne { access_token } si succès.
  */
 export async function loginUser(username, password) {
-  const res = await fetch('http://localhost:3000/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch("http://localhost:3000/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
 

@@ -79,11 +79,7 @@ export class CharacterController {
     @Param('id') characterId: string,
     @Body() dto: UnequipItemDto,
   ) {
-    return this.characterService.unequipItem(
-      characterId,
-      req.user.userId,
-      dto,
-    );
+    return this.characterService.unequipItem(characterId, req.user.userId, dto);
   }
 
   /**
@@ -95,4 +91,3 @@ export class CharacterController {
     return this.characterService.remove(id, req.user.userId);
   }
 }
-

@@ -1,7 +1,7 @@
 // Template de génération de controller sécurisé
 
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 export function generateController(domain: string, name: string) {
   const className = capitalize(name);
@@ -44,7 +44,7 @@ export class ${className}Controller {
 }
 `;
 
-  const filePath = path.join("src", domain, `${name}.controller.ts`);
+  const filePath = path.join('src', domain, `${name}.controller.ts`);
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content.trimStart());
 }

@@ -1,5 +1,5 @@
 /**
- * Inventory.jsx 
+ * Inventory.jsx
  */
 
 export default function Inventory({ inventory, onEquip }) {
@@ -17,7 +17,9 @@ export default function Inventory({ inventory, onEquip }) {
               key={slotIndex}
               className="inventory-slot"
               onDoubleClick={() => onEquip(inv)}
-              title={item ? `Double-clic pour équiper ${item.name}` : "Slot vide"}
+              title={
+                item ? `Double-clic pour équiper ${item.name}` : "Slot vide"
+              }
             >
               {item?.image ? (
                 <img

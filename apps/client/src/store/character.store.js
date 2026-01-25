@@ -26,17 +26,16 @@ export const useCharacterStore = create((set, get) => ({
   // ---------------------------------------------------------------------------
   // État initial
   // ---------------------------------------------------------------------------
-  character: null,           // données du personnage
-  isOpen: false,             // panneau ouvert/fermé
-  inventory: [],             // Item[] NON équipés
-  equipment: {},             // mapping slot → Item équipé
+  character: null, // données du personnage
+  isOpen: false, // panneau ouvert/fermé
+  inventory: [], // Item[] NON équipés
+  equipment: {}, // mapping slot → Item équipé
 
   // ---------------------------------------------------------------------------
   // Mutateurs simples
   // ---------------------------------------------------------------------------
   setCharacter: (data) => set({ character: data }),
-  clearCharacter: () =>
-    set({ character: null, inventory: [], equipment: {} }),
+  clearCharacter: () => set({ character: null, inventory: [], equipment: {} }),
   toggleOpen: () => set((s) => ({ isOpen: !s.isOpen })),
 
   // ---------------------------------------------------------------------------
@@ -111,7 +110,8 @@ export const useCharacterStore = create((set, get) => ({
       const characterId = get().character.id;
       // Cherche par inventory.id OU par item.id pour compatibilité
       const inv = get().inventory.find(
-        (i) => i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId
+        (i) =>
+          i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId,
       );
       if (!inv) return console.warn("Item introuvable dans l'inventaire");
       const itemId = inv.item.id;
@@ -125,7 +125,7 @@ export const useCharacterStore = create((set, get) => ({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ itemId }),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -159,7 +159,7 @@ export const useCharacterStore = create((set, get) => ({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ slot }),
-        }
+        },
       );
 
       if (!res.ok) {

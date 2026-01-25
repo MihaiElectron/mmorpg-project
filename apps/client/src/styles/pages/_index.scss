@@ -3,13 +3,11 @@
 // Description : Export des styles spécifiques à chaque page.
 // ============================================================================
 
-@forward './home';
-@forward './login';
-@forward './register';
-@forward './character-creation';
-@forward './game';
-@forward './profile';
-@forward './_world.scss';
-@forward './leaderboard';
-
-
+@forward "./home";
+@forward "./login";
+@forward "./register";
+@forward "./character-creation";
+@forward "./game";
+@forward "./profile";
+@forward "./_world.scss";
+@forward "./leaderboard";

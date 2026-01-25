@@ -62,7 +62,9 @@ export default function CharacterLayer() {
   return (
     <div className="character-layer">
       {/* Portrait du personnage */}
-      <div className={`character-layer__character character--${character.sex}`}></div>
+      <div
+        className={`character-layer__character character--${character.sex}`}
+      ></div>
 
       {/* Boucle sur tous les slots pour afficher l'équipement */}
       {slots.map((slot) => {
@@ -73,7 +75,9 @@ export default function CharacterLayer() {
             key={slot}
             className={`character-layer__slot slot--${slot}`}
             onDoubleClick={() => handleUnequip(slot)}
-            title={item ? `Double-clic pour déséquiper ${item.name}` : "Slot vide"}
+            title={
+              item ? `Double-clic pour déséquiper ${item.name}` : "Slot vide"
+            }
           >
             {/* Affiche l'image de l'item seulement si elle existe */}
             {item?.image ? (

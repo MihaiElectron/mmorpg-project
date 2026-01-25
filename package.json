@@ -1,8 +1,8 @@
 {
-    "name": "mmorpg-project",
-    "private": true,
-    "workspaces": [
-      "apps/*",
-      "packages/*"
-    ]
-  }
+  "name": "mmorpg-project",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
