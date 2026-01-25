@@ -12,7 +12,7 @@ export class LootService {
   generateLoot(type: string): LootResult {
     switch (type) {
       case 'dead_tree':
-        return { itemId: 'wood', quantity: 1 };
+        return { itemId: 'wooden_stick', quantity: 1 };
 
       case 'ore':
         return { itemId: 'iron_ore', quantity: 1 };

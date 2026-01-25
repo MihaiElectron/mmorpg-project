@@ -1,12 +1,13 @@
-// ============================================================================
-// Fichier : _game.scss
-// Description : Page de jeu principale (vue en jeu).
-// ============================================================================
-
 .game-layout {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+
+  &__content {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
 }

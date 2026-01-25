@@ -11,6 +11,36 @@
   width: 100%;
 }
 
+.character-layer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+  width: 100%;
+}
+
+.character-layer-header {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  &__name {
+    color: #f1c40f;
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  &__stats {
+    color: #ecf0f1;
+    font-size: 0.9rem;
+  }
+}
+
 /* Personnage au centre */
 .character-layer__character {
   grid-column: 2 / 5;

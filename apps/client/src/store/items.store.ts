@@ -16,7 +16,7 @@ import { create } from "zustand";
 import type { Item, ItemSlot } from "../types/item.types";
 
 interface ItemsState {
-  inventory: Item[];
+  inventory: { item: Item; quantity: number }[];
   equipment: Partial<Record<ItemSlot, Item>>;
 
   addToInventory: (item: Item) => void;
@@ -31,7 +31,10 @@ export const useItemsStore = create<ItemsState>((set) => ({
   // ---------------------------------------------------------------------------
   // Ajouter un item à l'inventaire
   // ---------------------------------------------------------------------------
-  addToInventory: (item) => set((s) => ({ inventory: [...s.inventory, item] })),
+  addToInventory: (item) =>
+    set((s) => ({
+      inventory: [...s.inventory, { item, quantity: 1 }],
+    })),
 
   // ---------------------------------------------------------------------------
   // Équipe un item
@@ -41,7 +44,7 @@ export const useItemsStore = create<ItemsState>((set) => ({
   equipItem: (item) =>
     set((s) => ({
       equipment: { ...s.equipment, [item.slot]: item },
-      inventory: s.inventory.filter((i) => i.id !== item.id),
+      inventory: s.inventory.filter((i) => i.item.id !== item.id),
     })),
 
   // ---------------------------------------------------------------------------
@@ -51,11 +54,11 @@ export const useItemsStore = create<ItemsState>((set) => ({
   unequipItem: (slot) =>
     set((s) => {
       const item = s.equipment[slot];
-      if (!item) return s; // rien à déséquiper
+      if (!item) return s;
 
       return {
         equipment: { ...s.equipment, [slot]: undefined },
-        inventory: [...s.inventory, item],
+        inventory: [...s.inventory, { item, quantity: 1 }],
       };
     }),
 }));

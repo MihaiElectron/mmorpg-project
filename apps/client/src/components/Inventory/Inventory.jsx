@@ -1,22 +1,29 @@
 /**
  * Inventory.jsx
  */
+import { useCharacterStore } from "../../store/character.store";
 
-export default function Inventory({ inventory, onEquip }) {
+export default function Inventory() {
+  const inventory = useCharacterStore((s) => s.inventory);
+  const equipItem = useCharacterStore((s) => s.equipItem);
+
+  const safeInventory = Array.isArray(inventory) ? inventory : [];
   const inventorySlots = Array.from({ length: 18 }, (_, i) => i);
+
+  console.log("🎒 Rendering inventory, items:", safeInventory.length);
 
   return (
     <div className="inventory-section">
       <div className="inventory-grid">
         {inventorySlots.map((slotIndex) => {
-          const inv = inventory[slotIndex];
+          const inv = safeInventory[slotIndex]; // { id, quantity, item }
           const item = inv?.item;
 
           return (
             <div
               key={slotIndex}
               className="inventory-slot"
-              onDoubleClick={() => onEquip(inv)}
+              onDoubleClick={() => inv && equipItem(inv.id)}
               title={
                 item ? `Double-clic pour équiper ${item.name}` : "Slot vide"
               }

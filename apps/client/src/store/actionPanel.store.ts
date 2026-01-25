@@ -1,36 +1,20 @@
 // src/store/actionPanel.store.ts
 
-import { create } from 'zustand';
+import { create } from "zustand";
 
-// Types des objets interactifs du monde
-export type WorldTarget = {
-  type: string; // ex: "dead_tree", "ore", "npc"
-  id: string; // ex: "dead_tree_1"
-};
-
-// Types des actions possibles
-export type WorldAction = 'gather' | 'talk' | 'open' | 'mine' | 'cut';
-
-// Store Zustand
-type ActionPanelState = {
-  isOpen: boolean;
-  target: WorldTarget | null;
-  actions: WorldAction[];
-  openPanel: (target: WorldTarget, actions: WorldAction[]) => void;
-  closePanel: () => void;
-};
-
-export const useActionPanelStore = create<ActionPanelState>((set) => ({
+const storeLogic = (set) => ({
   isOpen: false,
   target: null,
   actions: [],
 
-  openPanel: (target, actions) =>
+  openPanel: (target, actions) => {
+    console.log("🏪 [ActionPanelStore] openPanel:", { target, actions });
     set({
       isOpen: true,
       target,
       actions,
-    }),
+    });
+  },
 
   closePanel: () =>
     set({
@@ -38,4 +22,20 @@ export const useActionPanelStore = create<ActionPanelState>((set) => ({
       target: null,
       actions: [],
     }),
-}));
+});
+
+// Singleton Pattern pour synchronisation parfaite Phaser/React
+const getStore = () => {
+  const KEY = "__GLOBAL_ACTION_PANEL_STORE__";
+  if (typeof window !== "undefined") {
+    if (!window[KEY]) {
+      window[KEY] = create(storeLogic);
+      console.log("📦 [ActionPanelStore] Global Singleton Initialized");
+    }
+    return window[KEY];
+  }
+  return create(storeLogic);
+};
+
+export const useActionPanelStore = (selector) => getStore()(selector);
+export const getActionPanelStore = () => getStore();

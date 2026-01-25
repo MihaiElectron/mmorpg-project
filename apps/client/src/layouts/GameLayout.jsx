@@ -1,17 +1,20 @@
 /**
  * GameLayout.jsx
- * Layout principal des pages du jeu.
- * Affiche le CharacterLayout + le contenu de la page.
  */
 
 import { Outlet } from "react-router-dom";
 import CharacterLayout from "../components/CharacterLayout/CharacterLayout";
+import ActionPanel from "../components/ActionPanel/ActionPanel";
 
 export default function GameLayout() {
   return (
-    <>
-      <Outlet />
+    <div className="game-layout">
+      <main className="game-layout__content">
+        <Outlet />
+      </main>
+
       <CharacterLayout />
-    </>
+      <ActionPanel />
+    </div>
   );
 }

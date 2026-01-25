@@ -79,6 +79,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.stopGathering();
     });
 
+    this.socket.on("gathering_success", () => {
+      // Re-lancer la barre pour le cycle suivant (Loot continu)
+      this.startGatheringProgress(3000);
+    });
+
     this.socket.on("stop_gathering_result", () => {
       this.stopGathering();
     });
@@ -168,7 +173,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
    * -------------------------------------------------------
    */
   move(direction) {
-    if (this.isGathering) return;
+    if (this.isGathering) {
+      this.socket.emit("stop_gathering");
+      this.stopGathering();
+    }
 
     this.direction = direction;
     this.setVelocity(0);

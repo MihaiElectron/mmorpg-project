@@ -1,164 +1,241 @@
-.
 ├── apps
-│   ├── api-gateway
-│   │   ├── eslint.config.mjs
-│   │   ├── nest-cli.json
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   ├── app.controller.spec.ts
-│   │   │   ├── app.controller.ts
-│   │   │   ├── app.module.ts
-│   │   │   ├── app.service.ts
-│   │   │   ├── auth
-│   │   │   │   ├── auth.controller.spec.ts
-│   │   │   │   ├── auth.controller.ts
-│   │   │   │   ├── auth.module.ts
-│   │   │   │   ├── auth.service.spec.ts
-│   │   │   │   ├── auth.service.ts
-│   │   │   │   ├── current-user.decorator.ts
-│   │   │   │   ├── dto
-│   │   │   │   │   ├── login-user.dto.ts
-│   │   │   │   │   └── register-user.dto.ts
-│   │   │   │   ├── jwt-auth.guard.ts
-│   │   │   │   └── jwt.strategy.ts
-│   │   │   ├── characters
-│   │   │   │   ├── characters.controller.spec.ts
-│   │   │   │   ├── characters.controller.ts
-│   │   │   │   ├── characters.module.ts
-│   │   │   │   ├── characters.service.spec.ts
-│   │   │   │   ├── characters.service.ts
-│   │   │   │   ├── dto
-│   │   │   │   │   ├── create-character.dto.ts
-│   │   │   │   │   ├── equip-item.dto.ts
-│   │   │   │   │   ├── unequip-item.dto.ts
-│   │   │   │   │   └── update-character.dto.ts
-│   │   │   │   ├── entities
-│   │   │   │   │   ├── character.entity.ts
-│   │   │   │   │   ├── character-equipment.entity.ts
-│   │   │   │   │   └── inventory.entity.ts
-│   │   │   │   └── enums
-│   │   │   │       └── equipment-slot.enum.ts
-│   │   │   ├── common
-│   │   │   │   └── common.module.ts
-│   │   │   ├── main.ts
-│   │   │   └── users
-│   │   │       ├── user.entity.ts
-│   │   │       ├── user.module.ts
-│   │   │       └── users.service.ts
-│   │   ├── tools
-│   │   │   └── cli
-│   │   │       ├── index.ts
-│   │   │       ├── templates
-│   │   │       │   ├── controller.ts
-│   │   │       │   ├── dtos.ts
-│   │   │       │   ├── entity.ts
-│   │   │       │   ├── module.ts
-│   │   │       │   ├── seed.ts
-│   │   │       │   └── service.ts
-│   │   │       └── utils
-│   │   │           └── format.ts
-│   │   ├── tsconfig.build.json
-│   │   └── tsconfig.json
-│   └── client
-│       ├── eslint.config.js
-│       ├── index.html
-│       ├── package.json
-│       ├── public
-│       │   └── vite.svg
-│       ├── README.md
-│       ├── src
-│       │   ├── api
-│       │   │   └── auth.js
-│       │   ├── App.jsx
-│       │   ├── assets
-│       │   │   ├── images
-│       │   │   │   ├── backgrounds
-│       │   │   │   │   └── login-personnages-conversation.webp
-│       │   │   │   └── characters
-│       │   │   │       ├── femme-souvetements.png
-│       │   │   │       └── homme-souvetements.png
-│       │   │   └── react.svg
-│       │   ├── components
-│       │   │   ├── CharacterLayer
-│       │   │   │   └── CharacterLayer.jsx
-│       │   │   └── CharacterLayout
-│       │   │       └── CharacterLayout.jsx
-│       │   ├── index.css
-│       │   ├── layouts
-│       │   │   └── GameLayout.jsx
-│       │   ├── main.jsx
-│       │   ├── pages
-│       │   │   ├── CreateCharacterPage.jsx
-│       │   │   ├── LoginPage.jsx
-│       │   │   └── WorldPage.jsx
-│       │   ├── store
-│       │   │   ├── character.store.js
-│       │   │   └── items.store.ts
-│       │   ├── styles
-│       │   │   ├── abstracts
-│       │   │   │   ├── _functions.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   ├── _mixins.scss
-│       │   │   │   ├── _placeholders.scss
-│       │   │   │   └── _variables.scss
-│       │   │   ├── base
-│       │   │   │   ├── _animations.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   ├── _reset.scss
-│       │   │   │   └── _typography.scss
-│       │   │   ├── components
-│       │   │   │   ├── _characterLayer.scss
-│       │   │   │   ├── _characterLayout.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   └── _inventory.scss
-│       │   │   ├── layout
-│       │   │   │   ├── _footer.scss
-│       │   │   │   ├── _grid.scss
-│       │   │   │   ├── _header.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   └── _sidebar.scss
-│       │   │   ├── main.scss
-│       │   │   ├── pages
-│       │   │   │   ├── _character-creation.scss
-│       │   │   │   ├── _game.scss
-│       │   │   │   ├── _home.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   ├── _leaderboard.scss
-│       │   │   │   ├── _login.scss
-│       │   │   │   ├── _profile.scss
-│       │   │   │   ├── _register.scss
-│       │   │   │   └── _world.scss
-│       │   │   ├── themes
-│       │   │   │   ├── _dark.scss
-│       │   │   │   ├── _default.scss
-│       │   │   │   ├── _fantasy.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   └── _light.scss
-│       │   │   ├── utilities
-│       │   │   │   ├── _colors.scss
-│       │   │   │   ├── _display.scss
-│       │   │   │   ├── _index.scss
-│       │   │   │   ├── _spacing.scss
-│       │   │   │   └── _text.scss
-│       │   │   └── vendors
-│       │   │       ├── _index.scss
-│       │   │       └── _normalize.scss
-│       │   └── types
-│       │       └── item.types.ts
-│       └── vite.config.js
+│   ├── api-gateway
+│   │   ├── ENTITIES_SETUP.md
+│   │   ├── eslint.config.mjs
+│   │   ├── nest-cli.json
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── app.controller.spec.ts
+│   │   │   ├── app.controller.ts
+│   │   │   ├── app.module.ts
+│   │   │   ├── app.service.ts
+│   │   │   ├── auth
+│   │   │   │   ├── auth.controller.spec.ts
+│   │   │   │   ├── auth.controller.ts
+│   │   │   │   ├── auth.module.ts
+│   │   │   │   ├── auth.service.spec.ts
+│   │   │   │   ├── auth.service.ts
+│   │   │   │   ├── current-user.decorator.ts
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── login-user.dto.ts
+│   │   │   │   │   └── register-user.dto.ts
+│   │   │   │   ├── jwt-auth.guard.ts
+│   │   │   │   └── jwt.strategy.ts
+│   │   │   ├── characters
+│   │   │   │   ├── character.controller.ts
+│   │   │   │   ├── character.service.ts
+│   │   │   │   ├── characters.module.ts
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── create-character.dto.ts
+│   │   │   │   │   ├── equip-item.dto.ts
+│   │   │   │   │   └── unequip-item.dto.ts
+│   │   │   │   └── entities
+│   │   │   │       ├── character.entity.ts
+│   │   │   │       └── character-equipment.entity.ts
+│   │   │   ├── common
+│   │   │   │   └── common.module.ts
+│   │   │   ├── inventory
+│   │   │   │   ├── dto
+│   │   │   │   │   └── create-inventory.dto.ts
+│   │   │   │   ├── entities
+│   │   │   │   │   └── inventory.entity.ts
+│   │   │   │   ├── inventory.controller.ts
+│   │   │   │   ├── inventory.module.ts
+│   │   │   │   └── inventory.service.ts
+│   │   │   ├── items
+│   │   │   │   ├── dto
+│   │   │   │   │   ├── create-item.dto.ts
+│   │   │   │   │   └── update-item.dto.ts
+│   │   │   │   ├── entities
+│   │   │   │   │   └── item.entity.ts
+│   │   │   │   ├── item.controller.ts
+│   │   │   │   ├── item.module.ts
+│   │   │   │   ├── item.service.ts
+│   │   │   │   └── seeds
+│   │   │   │       └── item.seed.ts
+│   │   │   ├── main.ts
+│   │   │   ├── resources
+│   │   │   │   ├── dto
+│   │   │   │   │   └── interact-resource.dto.ts
+│   │   │   │   ├── entities
+│   │   │   │   │   └── resource.entity.ts
+│   │   │   │   ├── resources.gateway.ts
+│   │   │   │   ├── resources.module.ts
+│   │   │   │   └── resources.service.ts
+│   │   │   ├── types
+│   │   │   │   └── world-socket.ts
+│   │   │   ├── users
+│   │   │   │   ├── entities
+│   │   │   │   │   └── user.entity.ts
+│   │   │   │   ├── user.module.ts
+│   │   │   │   └── user.service.ts
+│   │   │   └── world
+│   │   │       ├── loot.service.ts
+│   │   │       ├── world.gateway.ts
+│   │   │       ├── world.module.ts
+│   │   │       └── world.service.ts
+│   │   ├── tools
+│   │   │   └── cli
+│   │   │       ├── index.ts
+│   │   │       ├── templates
+│   │   │       │   ├── controller.ts
+│   │   │       │   ├── dtos.ts
+│   │   │       │   ├── entity.ts
+│   │   │       │   ├── module.ts
+│   │   │       │   ├── seed.ts
+│   │   │       │   ├── service.ts
+│   │   │       │   └── types.ts
+│   │   │       └── utils
+│   │   │           └── format.ts
+│   │   ├── tsconfig.build.json
+│   │   └── tsconfig.json
+│   └── client
+│       ├── eslint.config.js
+│       ├── index.html
+│       ├── package.json
+│       ├── public
+│       │   ├── assets
+│       │   │   ├── images
+│       │   │   │   └── items
+│       │   │   │       ├── casque.png
+│       │   │   │       ├── earring1.png
+│       │   │   │       ├── earring2.png
+│       │   │   │       ├── earring3.png
+│       │   │   │       └── earring.png
+│       │   │   ├── maps
+│       │   │   │   ├── collisions.json
+│       │   │   │   ├── Grass_03_64w.webp
+│       │   │   │   └── world.json
+│       │   │   ├── player
+│       │   │   │   └── player_idle_32px.png
+│       │   │   └── sprites
+│       │   │       ├── dead_tree.png
+│       │   │       └── fire_camp.png
+│       │   └── vite.svg
+│       ├── README.md
+│       ├── src
+│       │   ├── api
+│       │   │   └── auth.js
+│       │   ├── App.jsx
+│       │   ├── assets
+│       │   │   ├── images
+│       │   │   │   ├── backgrounds
+│       │   │   │   │   └── login-personnages-conversation.webp
+│       │   │   │   ├── characters
+│       │   │   │   │   ├── femme-souvetements.png
+│       │   │   │   │   └── homme-souvetements.png
+│       │   │   │   └── items
+│       │   │   │       ├── casque.png
+│       │   │   │       └── earring.png
+│       │   │   └── react.svg
+│       │   ├── components
+│       │   │   ├── ActionPanel
+│       │   │   │   └── ActionPanel.tsx
+│       │   │   ├── CharacterLayer
+│       │   │   │   └── CharacterLayer.jsx
+│       │   │   ├── CharacterLayout
+│       │   │   │   └── CharacterLayout.jsx
+│       │   │   └── Inventory
+│       │   │       └── Inventory.jsx
+│       │   ├── index.css
+│       │   ├── layouts
+│       │   │   └── GameLayout.jsx
+│       │   ├── main.jsx
+│       │   ├── pages
+│       │   │   ├── CreateCharacterPage.jsx
+│       │   │   ├── LoginPage.jsx
+│       │   │   └── WorldPage.jsx
+│       │   ├── phaser
+│       │   │   ├── config
+│       │   │   │   └── phaser.config.js
+│       │   │   ├── core
+│       │   │   │   ├── BootScene.js
+│       │   │   │   ├── PreloadScene.js
+│       │   │   │   └── WorldScene.js
+│       │   │   ├── map
+│       │   │   │   ├── collisions.json
+│       │   │   │   ├── MapLoader.js
+│       │   │   │   ├── tileset_spawn.tsx
+│       │   │   │   └── tiles.tsx
+│       │   │   ├── network
+│       │   │   │   └── socket.js
+│       │   │   ├── player
+│       │   │   │   ├── PlayerController.js
+│       │   │   │   └── Player.js
+│       │   │   └── utils
+│       │   │       ├── depth.js
+│       │   │       └── pathfinding.js
+│       │   ├── store
+│       │   │   ├── actionPanel.store.ts
+│       │   │   ├── character.store.js
+│       │   │   └── items.store.ts
+│       │   ├── styles
+│       │   │   ├── abstracts
+│       │   │   │   ├── _functions.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _mixins.scss
+│       │   │   │   ├── _placeholders.scss
+│       │   │   │   └── _variables.scss
+│       │   │   ├── base
+│       │   │   │   ├── _animations.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _reset.scss
+│       │   │   │   └── _typography.scss
+│       │   │   ├── components
+│       │   │   │   ├── _characterLayer.scss
+│       │   │   │   ├── _characterLayout.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _inventory.scss
+│       │   │   ├── layout
+│       │   │   │   ├── _footer.scss
+│       │   │   │   ├── _grid.scss
+│       │   │   │   ├── _header.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _sidebar.scss
+│       │   │   ├── main.scss
+│       │   │   ├── pages
+│       │   │   │   ├── _character-creation.scss
+│       │   │   │   ├── _game.scss
+│       │   │   │   ├── _home.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _leaderboard.scss
+│       │   │   │   ├── _login.scss
+│       │   │   │   ├── _profile.scss
+│       │   │   │   ├── _register.scss
+│       │   │   │   └── _world.scss
+│       │   │   ├── themes
+│       │   │   │   ├── _dark.scss
+│       │   │   │   ├── _default.scss
+│       │   │   │   ├── _fantasy.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   └── _light.scss
+│       │   │   ├── utilities
+│       │   │   │   ├── _colors.scss
+│       │   │   │   ├── _display.scss
+│       │   │   │   ├── _index.scss
+│       │   │   │   ├── _spacing.scss
+│       │   │   │   └── _text.scss
+│       │   │   └── vendors
+│       │   │       ├── _index.scss
+│       │   │       └── _normalize.scss
+│       │   └── types
+│       │       ├── global.d.ts
+│       │       └── item.types.ts
+│       └── vite.config.js
 ├── docker
-│   ├── backup.sql
-│   └── docker-compose.yml
+│   └── docker-compose.yml
 ├── package.json
 ├── package-lock.json
 ├── packages
-│   └── shared
-│       ├── index.js
-│       └── package.json
+│   └── shared
+│       ├── index.js
+│       └── package.json
 ├── README.md
 ├── script_copilot.txt
 ├── structure.txt
-└── tools
-
-44 directories, 118 files
+├── tools
+│   └── cli
+│       └── utils
+│           └── format.ts
+└── world

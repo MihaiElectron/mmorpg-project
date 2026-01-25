@@ -3,11 +3,10 @@ import Phaser from "phaser";
 import Player from "../player/Player";
 import PlayerController from "../player/PlayerController";
 
-import Pathfinder from "../utils/pathfinding";
 import { setSpriteDepth } from "../utils/depth";
 
-// === ACTION PANEL (Zustand) ===
-import { useActionPanelStore } from "../../store/actionPanel.store";
+import { getActionPanelStore } from "../../store/actionPanel.store";
+import { getCharacterStore } from "../../store/character.store";
 
 export default class WorldScene extends Phaser.Scene {
   constructor() {
@@ -19,114 +18,104 @@ export default class WorldScene extends Phaser.Scene {
     this.fireCamp = null;
     this.deadTree = null;
 
-    this.collisionGrid = null;
-    this.pathfinder = null;
-
-    this.equipment = {};
-
-    // === GATHERING ===
     this.socket = null;
     this.interactionTargets = [];
   }
 
   create() {
-    console.log("WorldScene: create()");
+    console.log("🌍 WorldScene.create()");
+    console.log("🌐 [WorldScene] socket at create:", this.game.socket);
+    console.log(
+      "🟧 [WorldScene] this.game === window.game ?",
+      this.game === window.game
+    );
+
+    // on garde window.game pointant sur cette instance
+    window.game = this.game;
 
     this.cameras.main.setBackgroundColor(0x2ecc71);
     this.input.setPollAlways();
+    this.input.topOnly = false;
 
-    // === SOCKET ===
     this.socket = this.game.socket;
-    this.registerGatheringEvents();
 
-    // -----------------------------------------------------------------------
+    if (!this.socket) {
+      console.warn("⚠️ No socket found in WorldScene");
+    } else {
+      console.log("🌐 [WorldScene] Waiting for socket connection...");
+
+      this.socket.on("connect", () => {
+        console.log("🌐 [WorldScene] Socket connected, registering events");
+        this.registerGatheringEvents();
+      });
+
+      // si déjà connecté au moment du create, on enregistre tout de suite
+      if (this.socket.connected) {
+        console.log("🌐 [WorldScene] Socket already connected, registering events immediately");
+        this.registerGatheringEvents();
+      }
+    }
+
     // WORLD BOUNDS
-    // -----------------------------------------------------------------------
     this.physics.world.setBounds(0, 0, 2000, 2000);
     this.cameras.main.setBounds(0, 0, 2000, 2000);
 
-    // -----------------------------------------------------------------------
     // PLAYER
-    // -----------------------------------------------------------------------
     this.player = new Player(this, 400, 300, "player_idle_32");
     setSpriteDepth(this.player);
 
-    // -----------------------------------------------------------------------
     // FIRE CAMP
-    // -----------------------------------------------------------------------
-    this.fireCamp = this.physics.add.staticImage(600, 300, "fire_camp");
-    this.fireCamp.body.setSize(40, 20);
-    this.fireCamp.body.setOffset(
-      (this.fireCamp.width - 40) / 2,
-      (this.fireCamp.height - 20) / 2
+    this.fireCamp = this.add.image(600, 300, "fire_camp");
+    this.fireCamp.setDepth(10);
+    this.fireCamp.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, this.fireCamp.width, this.fireCamp.height),
+      Phaser.Geom.Rectangle.Contains
     );
-    this.fireCamp.refreshBody();
-    this.physics.add.collider(this.player, this.fireCamp);
-    setSpriteDepth(this.fireCamp);
 
-    // -----------------------------------------------------------------------
-    // DEAD TREE (récoltable)
-    // -----------------------------------------------------------------------
-    this.deadTree = this.physics.add.staticImage(600, 500, "dead_tree");
-    this.deadTree.body.setSize(40, 20);
-    this.deadTree.body.setOffset(
-      (this.deadTree.width - 40) / 2,
-      (this.deadTree.height - 20) / 2
+    // DEAD TREE
+    this.deadTree = this.add.image(600, 500, "dead_tree");
+    this.deadTree.setDepth(10);
+    this.deadTree.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, this.deadTree.width, this.deadTree.height),
+      Phaser.Geom.Rectangle.Contains
     );
-    this.deadTree.refreshBody();
-    this.physics.add.collider(this.player, this.deadTree);
-    setSpriteDepth(this.deadTree);
 
-    // === GATHERING TARGETS ===
+    // REGISTER INTERACTION TARGETS
     this.interactionTargets.push({
       sprite: this.deadTree,
       id: "tree_1",
       type: "dead_tree",
-      actions: ["gather"],
+      actions: ["ramasser", "gathering"],
     });
 
-    // -----------------------------------------------------------------------
     // CONTROLLER
-    // -----------------------------------------------------------------------
     this.controller = new PlayerController(this, this.player);
 
-    // -----------------------------------------------------------------------
-    // INPUT RELAY
-    // -----------------------------------------------------------------------
+    // INPUT MAIN HANDLER
     this.input.on("pointerdown", (pointer) => {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
 
-      // === GATHERING : détecter si on clique un objet récoltable ===
       const target = this.getGatheringTargetAt(worldX, worldY);
 
       if (target) {
-        const openPanel = useActionPanelStore.getState().openPanel;
+        console.log("🎯 [Phaser] Target detected:", target);
 
-        openPanel(
+        const store = getActionPanelStore();
+        store.getState().openPanel(
           { id: target.id, type: target.type },
           target.actions
         );
-
         return;
       }
 
-      // Sinon → mouvement normal
       this.controller.startMouseMove(worldX, worldY);
     });
 
     this.input.on("pointermove", (pointer) => {
       if (pointer.isDown) {
-        const worldPoint = this.cameras.main.getWorldPoint(
-          pointer.x,
-          pointer.y
-        );
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         this.controller.updateMouseTarget(worldPoint.x, worldPoint.y);
-
-        // === GATHERING : si le joueur bouge → stop ===
-        if (this.player.isGathering) {
-          this.socket.emit("stop_gathering");
-        }
       }
     });
 
@@ -134,35 +123,17 @@ export default class WorldScene extends Phaser.Scene {
       this.controller.stopMouseMove();
     });
 
-    // -----------------------------------------------------------------------
-    // GRID + PATHFINDER
-    // -----------------------------------------------------------------------
-    this.createDynamicCollisionGrid();
-    this.pathfinder = new Pathfinder(this.collisionGrid);
-
-    // -----------------------------------------------------------------------
     // CAMERA
-    // -----------------------------------------------------------------------
     this.cameras.main.setZoom(1);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-
-    // -----------------------------------------------------------------------
-    // EQUIPMENT
-    // -----------------------------------------------------------------------
-    this.game.events.on("equipment-changed", this.updateEquipment, this);
   }
 
   update() {
     if (this.controller) this.controller.update();
-
     setSpriteDepth(this.player);
-    setSpriteDepth(this.fireCamp);
-    setSpriteDepth(this.deadTree);
   }
 
-  // -------------------------------------------------------------------------
-  // === GATHERING : détection du clic sur un objet récoltable ===
-  // -------------------------------------------------------------------------
+  // CLICK DETECTION
   getGatheringTargetAt(x, y) {
     for (const t of this.interactionTargets) {
       const bounds = t.sprite.getBounds();
@@ -171,71 +142,50 @@ export default class WorldScene extends Phaser.Scene {
     return null;
   }
 
-  // -------------------------------------------------------------------------
-  // === GATHERING : events socket ===
-  // -------------------------------------------------------------------------
+  // SOCKET EVENTS
   registerGatheringEvents() {
-    if (!this.socket) return;
+    console.log("🟦 [WorldScene] registerGatheringEvents CALLED");
+
+    if (!this.socket) {
+      console.warn("⚠️ No socket found in WorldScene");
+      return;
+    }
 
     this.socket.on("open_gather_window", (data) => {
+      console.log("🟩 [WorldScene] open_gather_window RECEIVED", data);
       this.player.requestGather(data.targetId, data.targetType);
+    });
+
+    this.socket.on("inventory_update", (data) => {
+      console.log("🟩 [WorldScene] inventory_update RECEIVED", data);
+
+      const store = getCharacterStore();
+      store.getState().updateInventoryItem({
+        id: data.itemId,
+        quantity: data.total,
+        name: data.itemId.replace("_", " "),
+        image: `/assets/images/items/${data.itemId}.png`,
+      });
+    });
+
+    this.socket.on("resource_loot", (data) => {
+      console.log("🟩 [WorldScene] resource_loot RECEIVED", data);
+
+      const store = getCharacterStore();
+      store.getState().updateInventoryItem({
+        id: data.itemId,
+        quantity: data.quantity,
+        name: data.itemId.replace("_", " "),
+        image: `/assets/images/items/${data.itemId}.png`,
+      });
+    });
+
+    this.socket.on("resource_update", (data) => {
+      console.log("🟩 [WorldScene] resource_update RECEIVED", data);
     });
   }
 
-  // -------------------------------------------------------------------------
-  // DYNAMIC GRID
-  // -------------------------------------------------------------------------
-  createDynamicCollisionGrid() {
-    const tileSize = 32;
-
-    const worldWidth = 2000;
-    const worldHeight = 2000;
-
-    const gridWidth = Math.ceil(worldWidth / tileSize);
-    const gridHeight = Math.ceil(worldHeight / tileSize);
-
-    this.collisionGrid = Array(gridHeight)
-      .fill()
-      .map(() => Array(gridWidth).fill(0));
-
-    const blockSprite = (sprite) => {
-      const x = sprite.x - sprite.width / 2;
-      const y = sprite.y - sprite.height / 2;
-      const w = sprite.width;
-      const h = sprite.height;
-
-      const startX = Math.floor(x / tileSize);
-      const startY = Math.floor(y / tileSize);
-      const endX = Math.ceil((x + w) / tileSize);
-      const endY = Math.ceil((y + h) / tileSize);
-
-      for (let gy = startY; gy < endY; gy++) {
-        for (let gx = startX; gx < endX; gx++) {
-          if (
-            this.collisionGrid[gy] &&
-            this.collisionGrid[gy][gx] !== undefined
-          ) {
-            this.collisionGrid[gy][gx] = 1;
-          }
-        }
-      }
-    };
-
-    blockSprite(this.fireCamp);
-    blockSprite(this.deadTree);
-
-    console.log("Dynamic collision grid created", gridWidth, "x", gridHeight);
-  }
-
-  updateEquipment(equipment) {
-    console.log("WorldScene: updateEquipment", equipment);
-    this.equipment = equipment;
-  }
-
   destroy() {
-    if (this.game && this.game.events) {
-      this.game.events.off("equipment-changed", this.updateEquipment, this);
-    }
     super.destroy();
   }
 }

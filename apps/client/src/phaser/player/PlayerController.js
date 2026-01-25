@@ -25,6 +25,11 @@ export default class PlayerController {
   startMouseMove(x, y) {
     console.log("🟦 POINTER DOWN at", x, y);
 
+    if (this.player.isGathering) {
+      this.player.socket.emit("stop_gathering");
+      this.player.stopGathering();
+    }
+
     this.mouseActive = true;
     this.isDragging = false;
     this.clickStartTime = performance.now();

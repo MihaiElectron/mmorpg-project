@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useCharacterStore } from "../store/character.store";
 import Phaser from "phaser";
+import { io } from "socket.io-client";
 
 import PreloadScene from "../phaser/core/PreloadScene.js";
 import WorldScene from "../phaser/core/WorldScene.js";
@@ -47,11 +48,15 @@ function WorldPage() {
     }
   }, [token, character, phaserInitialized]);
 
-  // Initialisation de Phaser
+  // Initialisation de Phaser + socket
   useEffect(() => {
     if (!token || !phaserInitialized) return;
     if (phaserGameRef.current) return;
 
+    // 1️⃣ Créer le socket AVANT Phaser
+    const socket = io("http://localhost:3000");
+
+    // 2️⃣ Config Phaser
     const config = {
       type: Phaser.AUTO,
       parent: "game-container",
@@ -69,7 +74,16 @@ function WorldPage() {
       scene: [PreloadScene, WorldScene],
     };
 
+    // 3️⃣ Créer Phaser
     phaserGameRef.current = new Phaser.Game(config);
+
+    // 4️⃣ Attacher le socket au jeu
+    phaserGameRef.current.socket = socket;
+
+    // 5️⃣ Exposer globalement
+    window.game = phaserGameRef.current;
+
+    console.log("🎮 Phaser + Socket initialized:", socket);
 
     return () => {
       if (phaserGameRef.current) {
@@ -85,8 +99,7 @@ function WorldPage() {
 
     const world = phaserGameRef.current.scene.getScene("WorldScene");
 
-    // 🔥 La ligne qui empêche 100% des refresh
-    if (!world || !world.sys.isActive()) return;
+    if (!world || !world.sys || !world.sys.isActive()) return;
 
     phaserGameRef.current.events.emit("equipment-changed", equipment);
   }, [equipment]);
@@ -115,7 +128,7 @@ function WorldPage() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        },
+        }
       );
 
       if (!res.ok) {
@@ -123,7 +136,9 @@ function WorldPage() {
           .json()
           .catch(() => ({ message: "Erreur lors de la suppression" }));
         alert(
-          Array.isArray(msg.message) ? msg.message.join(", ") : msg.message,
+          Array.isArray(msg.message)
+            ? msg.message.join(", ")
+            : msg.message
         );
         return;
       }

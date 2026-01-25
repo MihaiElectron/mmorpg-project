@@ -2,95 +2,60 @@ import React from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 
 export default function ActionPanel() {
-  const { isOpen, target, actions, closePanel } = useActionPanelStore();
+  const isOpen = useActionPanelStore((s) => s.isOpen);
+  const target = useActionPanelStore((s) => s.target);
+  const actions = useActionPanelStore((s) => s.actions);
+  const closePanel = useActionPanelStore((s) => s.closePanel);
 
-  if (!isOpen || !target) return null;
+  console.log("🎨 [ActionPanel] Render, isOpen:", isOpen);
 
-  const handleAction = (action: string) => {
-    switch (action) {
-      case "gather":
-        window.game.socket.emit("interact_object", {
-          targetId: target.id,
-        });
-        break;
+  if (!isOpen || !target) {
+    return null;
+  }
 
-      case "mine":
-        window.game.socket.emit("interact_object", {
-          targetId: target.id,
-        });
-        break;
+  const handleAction = (action) => {
+    console.log("▶️ [ActionPanel] Action clicked:", action);
 
-      case "talk":
-        window.game.socket.emit("npc_talk", {
-          npcId: target.id,
-        });
-        break;
+    // 🔍 LOG DIAGNOSTIC : socket au moment exact du clic
+    console.log("🔌 SOCKET AT CLICK:", window.game?.socket);
 
-      default:
-        console.warn("Action inconnue :", action);
+    if (window.game?.socket) {
+      /**
+       * 🔧 FIX : dead_tree est géré par ResourcesGateway
+       * → on doit émettre "interact_resource" et non "interact_object"
+       */
+      window.game.socket.emit("interact_resource", {
+        targetId: target.id,
+      });
     }
 
     closePanel();
   };
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        left: "50%",
-        bottom: "80px",
-        transform: "translateX(-50%)",
-        background: "rgba(0,0,0,0.7)",
-        padding: "12px 16px",
-        borderRadius: "8px",
-        color: "white",
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
-        zIndex: 9999,
-      }}
-    >
-      <div style={{ fontWeight: "bold", fontSize: "14px" }}>
+    <div className="action-panel">
+      <div className="action-panel__title">
         {target.type.replace("_", " ").toUpperCase()}
       </div>
 
-      {actions.map((action) => (
-        <button
-          key={action}
-          onClick={() => handleAction(action)}
-          style={{
-            padding: "6px 10px",
-            background: "#27ae60",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            color: "white",
-            fontSize: "14px",
-          }}
-        >
-          {action === "gather" && "Gathering: Woods"}
-          {action === "mine" && "Mining: Ore"}
-          {action === "talk" && "Talk"}
-          {action === "open" && "Open"}
-          {action === "cut" && "Cut"}
-        </button>
-      ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {actions.map((action) => (
+          <button
+            key={action}
+            className="action-panel__button"
+            onClick={() => handleAction(action)}
+          >
+            {action}
+          </button>
+        ))}
 
-      <button
-        onClick={closePanel}
-        style={{
-          marginTop: "4px",
-          padding: "4px 8px",
-          background: "#c0392b",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          color: "white",
-          fontSize: "12px",
-        }}
-      >
-        Cancel
-      </button>
+        <button
+          className="action-panel__button action-panel__button--cancel"
+          onClick={closePanel}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

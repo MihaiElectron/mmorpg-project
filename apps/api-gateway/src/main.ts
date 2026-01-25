@@ -24,7 +24,8 @@ async function bootstrap() {
    * ---------------------------------------------------------------------------
    * - whitelist : supprime les propriétés inconnues
    * - forbidNonWhitelisted : rejette les champs non autorisés
-   * - transform : cast automatique des types
+   * - transform : active class-transformer (OBLIGATOIRE pour WebSocket DTO)
+   * - enableImplicitConversion : conversion automatique des types primitifs
    */
   app.useGlobalPipes(
     new ValidationPipe({
@@ -39,11 +40,8 @@ async function bootstrap() {
 
   /**
    * ---------------------------------------------------------------------------
-   * CORS (OBLIGATOIRE pour le navigateur)
+   * CORS (OBLIGATOIRE pour le frontend Vite)
    * ---------------------------------------------------------------------------
-   * - origin : frontend Vite
-   * - credentials : autorise Authorization / cookies
-   * - methods / allowedHeaders : requis pour les preflight OPTIONS
    */
   app.enableCors({
     origin: 'http://localhost:5173',
@@ -75,7 +73,8 @@ async function bootstrap() {
    */
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
+
   console.log(`🚀 API démarrée sur http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();

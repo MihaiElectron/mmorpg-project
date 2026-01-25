@@ -3,7 +3,7 @@
  * ----------------------------
  * Point d'entrée principal du backend NestJS.
  * Configure :
- * - Les modules métier (auth, gateway, common, characters, inventory)
+ * - Les modules métier (auth, gateway, common, characters, inventory, resources)
  * - La connexion TypeORM à PostgreSQL
  *
  * ⚠ synchronize: true → OK en dev, à désactiver en production.
@@ -20,8 +20,8 @@ import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { ResourcesModule } from './resources/resources.module';
 
-// 🔥 Log clair pour vérifier la connexion DB
 console.log('>>> Connecting to PostgreSQL with config:', {
   host: 'localhost',
   port: 5432,
@@ -63,6 +63,7 @@ console.log('>>> Connecting to PostgreSQL with config:', {
     CommonModule,
     CharactersModule,
     InventoryModule,
+    ResourcesModule, // ⭐ Ajout propre ici
   ],
   controllers: [AppController],
   providers: [AppService],

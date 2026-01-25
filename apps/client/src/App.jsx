@@ -12,9 +12,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import CreateCharacterPage from "./pages/CreateCharacterPage";
 import WorldPage from "./pages/WorldPage";
-import GameLayout from "./layouts/GameLayout";  
-import ActionPanel from "./components/ActionPanel/ActionPanel";
-
+import GameLayout from "./layouts/GameLayout";
 
 function App() {
   return (
