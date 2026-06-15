@@ -27,8 +27,12 @@ export class ResourcesGateway {
   async handleConnection(client: Socket) {
     console.log('🔥 Client connected:', client.id);
 
-    const objects = await this.resources.findAll();
-    client.emit('resources', objects);
+    await this.sendResources(client);
+  }
+
+  @SubscribeMessage('get_resources')
+  async onGetResources(@ConnectedSocket() client: Socket) {
+    await this.sendResources(client);
   }
 
   @SubscribeMessage('interact_resource')
@@ -67,5 +71,10 @@ export class ResourcesGateway {
       id: targetId,
       state: 'dead',
     });
+  }
+
+  private async sendResources(client: Socket) {
+    const objects = await this.resources.findAll();
+    client.emit('resources', objects);
   }
 }

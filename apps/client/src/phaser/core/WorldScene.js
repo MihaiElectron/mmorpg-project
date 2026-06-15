@@ -16,15 +16,17 @@ export default class WorldScene extends Phaser.Scene {
     this.controller = null;
 
     this.fireCamp = null;
-    this.deadTree = null;
 
     this.socket = null;
     this.interactionTargets = [];
+    this.resourceSprites = new Map();
+    this.gatheringEventsRegistered = false;
   }
 
   create() {
     console.log("🌍 WorldScene.create()");
     console.log("🌐 [WorldScene] socket at create:", this.game.socket);
+
     console.log(
       "🟧 [WorldScene] this.game === window.game ?",
       this.game === window.game
@@ -42,18 +44,7 @@ export default class WorldScene extends Phaser.Scene {
     if (!this.socket) {
       console.warn("⚠️ No socket found in WorldScene");
     } else {
-      console.log("🌐 [WorldScene] Waiting for socket connection...");
-
-      this.socket.on("connect", () => {
-        console.log("🌐 [WorldScene] Socket connected, registering events");
-        this.registerGatheringEvents();
-      });
-
-      // si déjà connecté au moment du create, on enregistre tout de suite
-      if (this.socket.connected) {
-        console.log("🌐 [WorldScene] Socket already connected, registering events immediately");
-        this.registerGatheringEvents();
-      }
+      this.registerGatheringEvents();
     }
 
     // WORLD BOUNDS
@@ -71,22 +62,6 @@ export default class WorldScene extends Phaser.Scene {
       new Phaser.Geom.Rectangle(0, 0, this.fireCamp.width, this.fireCamp.height),
       Phaser.Geom.Rectangle.Contains
     );
-
-    // DEAD TREE
-    this.deadTree = this.add.image(600, 500, "dead_tree");
-    this.deadTree.setDepth(10);
-    this.deadTree.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, this.deadTree.width, this.deadTree.height),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    // REGISTER INTERACTION TARGETS
-    this.interactionTargets.push({
-      sprite: this.deadTree,
-      id: "tree_1",
-      type: "dead_tree",
-      actions: ["ramasser", "gathering"],
-    });
 
     // CONTROLLER
     this.controller = new PlayerController(this, this.player);
@@ -144,12 +119,28 @@ export default class WorldScene extends Phaser.Scene {
 
   // SOCKET EVENTS
   registerGatheringEvents() {
+    if (this.gatheringEventsRegistered) {
+      return;
+    }
+
     console.log("🟦 [WorldScene] registerGatheringEvents CALLED");
 
     if (!this.socket) {
       console.warn("⚠️ No socket found in WorldScene");
       return;
     }
+
+    this.gatheringEventsRegistered = true;
+
+    this.socket.on("connect", () => {
+      console.log("🌐 [WorldScene] Socket connected, requesting resources");
+      this.socket.emit("get_resources");
+    });
+
+    this.socket.on("resources", (resources) => {
+      console.log("🟩 [WorldScene] resources RECEIVED", resources);
+      this.renderResources(resources);
+    });
 
     this.socket.on("open_gather_window", (data) => {
       console.log("🟩 [WorldScene] open_gather_window RECEIVED", data);
@@ -182,10 +173,76 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("resource_update", (data) => {
       console.log("🟩 [WorldScene] resource_update RECEIVED", data);
+      if (data.state === "dead") {
+        this.removeResource(data.id);
+      }
     });
+
+    if (this.socket.connected) {
+      this.socket.emit("get_resources");
+    }
+  }
+
+  renderResources(resources) {
+    this.clearResources();
+
+    resources
+      .filter((resource) => resource.state === "alive")
+      .forEach((resource) => {
+        const textureKey = this.textures.exists(resource.type)
+          ? resource.type
+          : "dead_tree";
+
+        const sprite = this.add.image(resource.x, resource.y, textureKey);
+        sprite.setDepth(10);
+        sprite.setInteractive(
+          new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
+          Phaser.Geom.Rectangle.Contains
+        );
+
+        this.resourceSprites.set(resource.id, sprite);
+        this.interactionTargets.push({
+          sprite,
+          id: resource.id,
+          type: resource.type,
+          actions: ["ramasser", "gathering"],
+        });
+      });
+  }
+
+  clearResources() {
+    for (const sprite of this.resourceSprites.values()) {
+      sprite.destroy();
+    }
+
+    this.resourceSprites.clear();
+    this.interactionTargets = [];
+  }
+
+  removeResource(resourceId) {
+    const sprite = this.resourceSprites.get(resourceId);
+
+    if (sprite) {
+      sprite.destroy();
+      this.resourceSprites.delete(resourceId);
+    }
+
+    this.interactionTargets = this.interactionTargets.filter(
+      (target) => target.id !== resourceId
+    );
   }
 
   destroy() {
+    if (this.socket) {
+      this.socket.off("connect");
+      this.socket.off("resources");
+      this.socket.off("open_gather_window");
+      this.socket.off("inventory_update");
+      this.socket.off("resource_loot");
+      this.socket.off("resource_update");
+    }
+
+    this.clearResources();
     super.destroy();
   }
 }
