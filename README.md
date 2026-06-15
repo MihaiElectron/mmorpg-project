@@ -1,510 +1,306 @@
-# 🎮 MMORPG Project
+# MMORPG Project
 
-## 📋 Table des matières
+MMORPG Project est un prototype de jeu en ligne 2D top-down construit autour d'un client React/Vite avec Phaser et d'une API NestJS. Le projet couvre les bases d'un MMORPG web: authentification, création de personnage, inventaire, équipement, scène de monde, ressources récoltables et communication temps réel via Socket.IO.
 
-- [Stack Technique](#-stack-technique)
-- [Prérequis](#-prérequis)
-- [Architecture du Projet](#-architecture-du-projet)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Commandes de Développement](#-commandes-de-développement)
-- [Documentation API](#-documentation-api)
+Le dépôt est organisé en monorepo npm avec une application frontend, une API gateway backend et un petit package partagé.
 
-## 🛠️ Stack Technique
+## Sommaire
 
-### Backend
+- [Stack technique](#stack-technique)
+- [Architecture](#architecture)
+- [Fonctionnalités actuelles](#fonctionnalites-actuelles)
+- [Prérequis](#prerequis)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Démarrage local](#demarrage-local)
+- [Commandes utiles](#commandes-utiles)
+- [API et temps réel](#api-et-temps-reel)
+- [Notes de développement](#notes-de-developpement)
 
-- **Node.js** - Runtime JavaScript
-- **NestJS** - Framework backend progressif
-- **Express** - Serveur HTTP
-- **Socket.io** - Communication WebSocket temps réel
-- **Prisma** - ORM pour PostgreSQL
-- **Passport** - Authentification
-- **JWT** - Gestion des tokens
+## Stack technique
 
 ### Frontend
 
-- **React 18** - Bibliothèque UI
-- **Vite** - Build tool et dev server
-- **Three.js** - Rendu 3D
-- **PixiJS** - Alternative 2D performante
-- **Zustand** - Gestion d'état
-- **React Query** - Data fetching et cache
-- **Socket.io-client** - WebSocket client
+- React 19
+- Vite 7
+- React Router 7
+- Phaser 3 pour le rendu et les interactions de la scène de jeu
+- Zustand 5 pour l'état client partagé entre React et Phaser
+- Socket.IO Client pour les événements temps réel
+- Sass pour l'organisation des styles
+- ESLint pour l'analyse statique
 
-### Base de Données & Cache
+### Backend
 
-- **PostgreSQL** - Base de données principale
-- **Redis** - Cache et sessions
-- **RabbitMQ** - Message broker
+- Node.js
+- NestJS 11
+- TypeScript
+- TypeORM 0.3
+- PostgreSQL
+- Passport et JWT pour l'authentification
+- bcrypt pour le hash des mots de passe
+- Socket.IO via `@nestjs/websockets` et `@nestjs/platform-socket.io`
+- Swagger/OpenAPI pour la documentation HTTP
+- Jest et Supertest pour les tests backend
 
-### DevOps & Tools
+### Infrastructure locale
 
-- **Docker** - Conteneurisation
-- **Docker Compose** - Orchestration locale
-- **Swagger/OpenAPI** - Documentation API
-- **Postman** - Tests API
-- **Faker.js** - Génération de données de test
-- **Jest** - Tests unitaires
-- **Supertest** - Tests d'intégration API
-- **Playwright** - Tests end-to-end
+- Docker Compose
+- PostgreSQL 18
+- Redis 7
+- RabbitMQ 3 avec interface d'administration
 
-## 📦 Prérequis
+Redis et RabbitMQ sont disponibles dans l'environnement Docker, mais le code actuel utilise principalement PostgreSQL et Socket.IO.
 
-- Node.js >= 18.x
-- Docker >= 20.x
-- Docker Compose >= 2.x
-- npm >= 9.x ou pnpm >= 8.x
+## Architecture
 
-## 🏗️ Architecture du Projet
-
-```
+```text
 mmorpg-project/
-│
 ├── apps/
-│   ├── client/                  # Application React + Vite
+│   ├── api-gateway/
 │   │   ├── src/
-│   │   │   ├── components/
-│   │   │   ├── pages/
-│   │   │   ├── services/
-│   │   │   ├── hooks/
-│   │   │   └── utils/
-│   │   ├── public/
-│   │   ├── package.json
-│   │   └── vite.config.js
-│   │
-│   ├── api-gateway/             # Gateway principal NestJS
-│   │   ├── src/
-│   │   │   ├── auth/            - gestion Passport + JWT
-│   │   │   ├── gateway/         - contrôleurs principaux (routes REST, WebSocket)
-│   │   │   └── common/          - utils, guards, interceptors
-│   │   ├── package.json
-│   │   └── nest-cli.json
-│   │
-│   ├── game-server/             # Serveur de jeu NestJS
-│   │   ├── src/
-│   │   │   ├── player/
-│   │   │   ├── world/
-│   │   │   ├── combat/
-│   │   │   └── websocket/
+│   │   │   ├── auth/           # Inscription, connexion, JWT, guards
+│   │   │   ├── characters/     # Personnages, équipement, inventaire lié
+│   │   │   ├── common/         # Module commun
+│   │   │   ├── inventory/      # Inventaire et équipement
+│   │   │   ├── items/          # Items et seed d'items
+│   │   │   ├── resources/      # Ressources récoltables et gateway Socket.IO
+│   │   │   ├── users/          # Entité et service utilisateur
+│   │   │   └── world/          # Logique monde, loot et gateway de gathering
+│   │   ├── tools/cli/          # Générateur local d'entités/modules
 │   │   └── package.json
 │   │
-│   ├── auth-service/            # Service d'authentification
-│   │   ├── src/
-│   │   │   ├── users/
-│   │   │   ├── jwt/
-│   │   │   └── strategies/
-│   │   └── package.json
-│   │
-│   └── economy-service/         # Service économie/marketplace
+│   └── client/
+│       ├── public/assets/      # Maps et assets statiques
 │       ├── src/
-│       │   ├── inventory/
-│       │   ├── marketplace/
-│       │   └── trading/
+│       │   ├── api/            # Appels API
+│       │   ├── components/     # UI React
+│       │   ├── layouts/        # Layout de jeu
+│       │   ├── pages/          # Login, création personnage, monde
+│       │   ├── phaser/         # Scènes, joueur, map, réseau, pathfinding
+│       │   ├── store/          # Stores Zustand
+│       │   ├── styles/         # Sass par couches
+│       │   └── types/          # Types frontend
 │       └── package.json
 │
 ├── packages/
-│   ├── shared/                  # Code partagé entre services
-│   │   ├── constants/
-│   │   ├── interfaces/
-│   │   └── utils/
-│   │
-│   ├── game-engine/             # Logique métier du jeu
-│   │   ├── entities/
-│   │   ├── mechanics/
-│   │   └── calculations/
-│   │
-│   └── database/                # Schemas Prisma
-│       ├── prisma/
-│       │   ├── schema.prisma
-│       │   └── migrations/
-│       └── seed.js
+│   └── shared/                 # Package partagé minimal
 │
 ├── docker/
-│   ├── docker-compose.yml       # Configuration développement
-│   ├── docker-compose.prod.yml  # Configuration production
-│   ├── postgres/
-│   ├── redis/
-│   └── rabbitmq/
+│   └── docker-compose.yml      # PostgreSQL, Redis, RabbitMQ
 │
-├── docs/
-│   ├── swagger/                 # Documentation Swagger
-│   ├── postman/                 # Collections Postman
-│   └── architecture/            # Diagrammes et specs
-│
-├── scripts/
-│   ├── init-db.sh
-│   ├── seed-data.js
-│   └── generate-fake-users.js
-│
-├── .env.example
-├── .gitignore
-├── package.json
+├── package.json                # Workspaces npm
 └── README.md
 ```
 
-## 🚀 Installation
+## Fonctionnalités actuelles
 
-### 1. Cloner le projet
+- Authentification utilisateur par JWT.
+- Inscription et connexion via `/auth/register` et `/auth/login`.
+- Création, lecture et suppression de personnages.
+- Chargement du personnage courant via `/characters/me`.
+- Inventaire personnage et équipement/déséquipement d'items.
+- Client React avec routes `/`, `/create-character` et `/world`.
+- Scène Phaser intégrée dans la page monde.
+- Contrôle du joueur à la souris.
+- Panneau d'action React synchronisé avec la scène Phaser.
+- Ressources interactives et génération de loot côté serveur.
+- Synchronisation temps réel par événements Socket.IO.
+- Documentation Swagger générée par NestJS.
+
+## Prérequis
+
+- Node.js 22 recommandé, ou Node.js 20 minimum
+- npm 10 recommandé
+- Docker
+- Docker Compose
+
+Le dépôt contient un `package-lock.json`; npm est donc le gestionnaire de paquets attendu.
+
+## Installation
+
+Depuis la racine du projet:
 
 ```bash
-git clone https://github.com/mihaielectron/mmorpg-project.git
-cd mmorpg-project
-```
-
-### 2. Installer les dépendances
-
-```bash
-# Installation globale (si monorepo)
 npm install
-
-# Ou installation par service
-cd apps/client && npm install
-cd apps/api-gateway && npm install
-cd apps/game-server && npm install
-cd apps/auth-service && npm install
-cd apps/economy-service && npm install
 ```
 
-### 3. Initialiser l'environnement Docker
+Cette commande installe les dépendances des workspaces déclarés dans le `package.json` racine:
 
-```bash
-# Démarrer tous les services (PostgreSQL, Redis, RabbitMQ)
-cd docker
-docker compose up -d
-
-# Vérifier que les services sont actifs
-docker-compose ps
+```json
+{
+  "workspaces": ["apps/*", "packages/*"]
+}
 ```
 
-### 4. Configuration de la base de données
+## Configuration
 
-```bash
-# Copier le fichier d'environnement
-cp .env.example .env
+### Backend
 
-# Générer le client Prisma
-cd packages/database
-npx prisma generate
-
-# Exécuter les migrations
-npx prisma migrate dev --name init
-
-# Seed la base avec des données de test (utilise Faker)
-npm run seed
-```
-
-## ⚙️ Configuration
-
-### Variables d'environnement (.env)
+Créer ou adapter `apps/api-gateway/.env`:
 
 ```env
-# Database
-DATABASE_URL="postgresql://postgres:password@localhost:5432/mmorpgdb"
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@localhost:5672
-
-# JWT
-JWT_SECRET=your-super-secret-key
-JWT_EXPIRATION=3600
-
-# API
-API_PORT=3000
-GATEWAY_PORT=3001
-GAME_SERVER_PORT=3002
-AUTH_SERVICE_PORT=3003
-ECONOMY_SERVICE_PORT=3004
-
-# Client
-VITE_API_URL=http://localhost:3001
-VITE_WS_URL=ws://localhost:3002
+PORT=3000
+JWT_SECRET=change-me-in-development
 ```
 
-## 🎯 Commandes de Développement
+La connexion PostgreSQL est actuellement configurée dans `apps/api-gateway/src/app.module.ts`. En développement local, elle doit rester cohérente avec le service PostgreSQL défini dans `docker/docker-compose.yml`.
 
-### Docker Services
-
-```bash
-# Démarrer tous les services
-docker compose up -d
-
-# Arrêter tous les services
-docker compose down
-
-# Voir les logs
-docker compose logs -f
-
-# Redémarrer un service spécifique
-docker compose restart postgres
+```text
+host: localhost
+port: 5432
 ```
 
-### Backend Services
+Ne pas documenter de mot de passe réel dans le README. Si les identifiants changent, mettre à jour la configuration applicative et le fichier Docker Compose de développement en conséquence.
 
-#### API Gateway (NestJS)
+### Frontend
 
-```bash
-cd apps/api-gateway
+Créer ou adapter `apps/client/.env`:
 
-# Créer un nouveau projet NestJS
-npx @nestjs/cli new api-gateway
-
-# Installer Socket.io ?
-npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
-
-# Démarrer en mode dev
-npm run start:dev
-
-# Build pour production
-npm run build
-
-# Lancer les tests
-npm run test
+```env
+VITE_API_URL=http://localhost:3000
 ```
 
-#### Auth Service (NestJS)
+Une partie du client appelle encore directement `http://localhost:3000`; conserver ce port pour l'API évite les écarts de configuration en développement.
 
-````bash
-cd apps/auth-service
+## Démarrage local
 
-# Créer le projet
-npx @nestjs/cli new auth-service
+### 1. Démarrer les services Docker
 
-# Installer les dépendances d'authentification
-npm install @nestjs/jwt @nestjs/passport passport passport-local passport-jwt bcrypt
-
-
-#### Economy Service (NestJS)
+Depuis la racine:
 
 ```bash
-cd apps/economy-service
+docker compose -f docker/docker-compose.yml up -d
+```
 
-# Créer le projet
-npx @nestjs/cli new economy-service
+Services exposés:
 
-# Installer Redis
-npm install @nestjs/cache-manager cache-manager cache-manager-redis-store
+```text
+PostgreSQL: localhost:5432
+Redis:      localhost:6379
+RabbitMQ:   localhost:5672
+RabbitMQ UI: http://localhost:15672
+```
 
-# Démarrer
-npm run start:dev
-````
-
-### Frontend (React + Vite)
+### 2. Démarrer l'API NestJS
 
 ```bash
-cd apps/client
+npm --workspace api-gateway run start:dev
+```
 
-# Créer le projet React avec Vite
-npm create vite@latest client -- --template react
+L'API écoute par défaut sur:
 
-# Installer les dépendances
+```text
+http://localhost:3000
+```
 
+La documentation Swagger est disponible sur:
+
+```text
+http://localhost:3000/api/docs
+```
+
+### 3. Démarrer le client Vite
+
+Dans un autre terminal:
+
+```bash
+npm --workspace client run dev
+```
+
+Le client est disponible sur:
+
+```text
+http://localhost:5173
+```
+
+## Commandes utiles
+
+### Racine
+
+```bash
 npm install
-
-## Validation des DTOs
-
-Pour activer la validation automatique des données reçues par l’API, il faut installer deux dépendances :
-
-npm install class-validator class-transformer
-
-# Configuration de TypeORM avec NestJS
-
-## 1. Installation des dépendances
-
-Installez TypeORM, le module NestJS associé et le driver de votre base de données (exemple PostgreSQL) :
-
-npm install @nestjs/typeorm typeorm pg
-
-# Installer Three.js pour le rendu 3D
-npm install three @react-three/fiber @react-three/drei
-
-# Alternative 2D avec PixiJS
-npm install pixi.js @pixi/react
-
-# Installer Zustand pour la gestion d'état
-npm install zustand
-
-# Installer React Query
-npm install @tanstack/react-query
-
-# Installer Socket.io client
-npm install socket.io-client
-
-# Démarrer le dev server
-npm run dev
-
-# Build pour production
-npm run build
-
-# Preview du build
-npm run preview
+docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml down
+docker compose -f docker/docker-compose.yml logs -f
 ```
 
-### Database (Prisma)
+### API
 
 ```bash
-cd packages/database
-
-# Initialiser Prisma
-npx prisma init
-
-# Créer une migration
-npx prisma migrate dev --name add_users_table
-
-# Générer le client Prisma
-npx prisma generate
-
-# Ouvrir Prisma Studio (interface visuelle)
-npx prisma studio
-
-# Seed la base de données avec Faker
-npm run seed
-
-# Reset la base (⚠️ supprime toutes les données)
-npx prisma migrate reset
+npm --workspace api-gateway run start:dev
+npm --workspace api-gateway run build
+npm --workspace api-gateway run lint
+npm --workspace api-gateway run test
+npm --workspace api-gateway run test:cov
+npm --workspace api-gateway run make:entity
 ```
 
-### Tests
+### Client
 
 ```bash
-# Tests unitaires (Jest)
-npm run test
-
-# Tests en mode watch
-npm run test:watch
-
-# Coverage
-npm run test:cov
-
-# Tests E2E avec Playwright
-cd apps/client
-npx playwright install
-npm run test:e2e
+npm --workspace client run dev
+npm --workspace client run build
+npm --workspace client run lint
+npm --workspace client run preview
 ```
 
-### Génération de données de test avec Faker
+## API et temps réel
 
-```bash
-# Générer des utilisateurs fake
-node scripts/generate-fake-users.js
+### Routes HTTP principales
 
-# Générer des items de jeu
-node scripts/generate-fake-items.js
+```text
+POST   /auth/register
+POST   /auth/login
 
-# Générer un monde complet
-node scripts/generate-world-data.js
+POST   /characters
+GET    /characters
+GET    /characters/me
+GET    /characters/:id
+POST   /characters/:id/equip
+POST   /characters/:id/unequip
+DELETE /characters/:id
+
+POST   /inventory
+GET    /inventory/:characterId
+POST   /inventory/:characterId/equip/:itemId
+POST   /inventory/:characterId/unequip/:slot
 ```
 
-## 📚 Documentation API
+Les routes `characters` et `inventory` sont protégées par JWT. Envoyer le token dans l'en-tête:
 
-### Swagger
-
-Une fois l'API Gateway lancée, accéder à :
-
-```
-http://localhost:3001/api/docs
+```text
+Authorization: Bearer <access_token>
 ```
 
-### Postman
+### Evénements Socket.IO présents
 
-Les collections Postman sont disponibles dans `docs/postman/`
+```text
+interact_resource
+resource_loot
+resource_update
 
-```bash
-# Importer dans Postman
-docs/postman/MMORPG-API.postman_collection.json
-docs/postman/Environment.postman_environment.json
+interact_object
+open_gather_window
+gather
+gather_result
+start_gathering
+start_gathering_result
+stop_gathering
+stop_gathering_result
+inventory_update
 ```
 
-### Génération de la doc Swagger
+Le client Phaser ouvre une connexion Socket.IO vers `http://localhost:3000` lors de l'entrée dans le monde.
 
-```bash
-cd apps/api-gateway
+## Notes de développement
 
-# La configuration Swagger est dans main.js
-npm run start:dev
+- TypeORM est configuré avec `synchronize: true`. C'est pratique en développement, mais à désactiver avant une mise en production.
+- Le dépôt contient la dépendance Prisma, mais l'API actuelle utilise TypeORM pour les entités et repositories.
+- Les modules `ItemsModule`, `WorldModule` et `UserModule` existent dans le code; l'application principale charge actuellement `AuthModule`, `CommonModule`, `CharactersModule`, `InventoryModule` et `ResourcesModule`.
+- Le package `packages/shared` est minimal et sert de base pour partager des constantes, types ou utilitaires entre client et serveur.
+- Les fichiers `.env` locaux ne doivent pas contenir de secrets de production.
 
-# Accéder à http://localhost:3001/api/docs
-```
+## Licence
 
-## 🔧 Scripts Utiles
-
-```bash
-# Générer un nouveau module NestJS
-npx nest generate module users
-
-# Générer un controller
-npx nest generate controller users
-
-# Générer un service
-npx nest generate service users
-
-# Générer une ressource complète
-npx nest generate resource players
-```
-
-## 🐛 Debugging
-
-```bash
-# Logs Docker
-docker-compose logs -f [service-name]
-
-# Logs PostgreSQL
-docker-compose logs -f postgres
-
-# Se connecter à PostgreSQL
-docker exec -it mmorpg-postgres psql -U postgres -d mmorpg_db
-
-# Se connecter à Redis CLI
-docker exec -it mmorpg-redis redis-cli
-
-# Monitorer RabbitMQ
-# Interface web: http://localhost:15672 (guest/guest)
-```
-
-## 📈 Monitoring
-
-```bash
-# Installer les outils de monitoring (optionnel)
-npm install @nestjs/terminus
-
-# Health check endpoint
-curl http://localhost:3001/health
-```
-
-## 🚀 Déploiement
-
-```bash
-# Build tous les services
-npm run build:all
-
-# Utiliser docker-compose production
-docker-compose -f docker/docker-compose.prod.yml up -d
-```
-
-## 📝 Notes Importantes
-
-- Toujours utiliser `.env.example` comme template
-- Ne jamais commit le fichier `.env`
-- Utiliser Faker.js pour les données de test uniquement
-- Les ports par défaut peuvent être modifiés dans `.env`
-- Swagger est accessible uniquement en développement par défaut
-
-## 🤝 Contribution
-
-1. Fork le projet
-2. Créer une branche (`git checkout -b feature/amazing-feature`)
-3. Commit les changes (`git commit -m 'Add amazing feature'`)
-4. Push vers la branche (`git push origin feature/amazing-feature`)
-5. Ouvrir une Pull Request
-
-## 📄 License
-
-MIT
-
----
-
-**Bon développement ! 🎮**
+Projet privé. Aucune licence open source n'est déclarée pour le moment.
