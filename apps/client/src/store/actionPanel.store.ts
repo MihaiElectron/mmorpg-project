@@ -8,7 +8,7 @@ const storeLogic = (set) => ({
   actions: [],
 
   openPanel: (target, actions) => {
-    console.log("🏪 [ActionPanelStore] openPanel:", { target, actions });
+    console.log("[ActionPanelStore] openPanel:", { target, actions });
     set({
       isOpen: true,
       target,

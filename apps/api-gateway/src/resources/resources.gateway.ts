@@ -8,8 +8,11 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ResourcesService } from './resources.service';
-import { LootService } from '../world/loot.service'; // ✅ Ajout
-import { plainToInstance } from 'class-transformer';
+import { LootService } from '../world/loot.service';
+
+interface InteractResourcePayload {
+  targetId: string;
+}
 
 @WebSocketGateway({ cors: true })
 export class ResourcesGateway {
@@ -18,10 +21,12 @@ export class ResourcesGateway {
 
   constructor(
     private readonly resources: ResourcesService,
-    private readonly loot: LootService, // ✅ Injection propre
+    private readonly loot: LootService,
   ) {}
 
   async handleConnection(client: Socket) {
+    console.log('🔥 Client connected:', client.id);
+
     const objects = await this.resources.findAll();
     client.emit('resources', objects);
   }
@@ -29,28 +34,24 @@ export class ResourcesGateway {
   @SubscribeMessage('interact_resource')
   async onInteract(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: unknown,
+    @MessageBody() payload: InteractResourcePayload,
   ) {
-    // Transforme unknown → objet simple
-    const transformed = plainToInstance(
-      Object as unknown as new () => { targetId: string },
-      payload,
-    );
+    console.log('🔥 SERVER RECEIVED interact_resource:', payload);
 
-    // Validation minimale
-    if (
-      typeof transformed !== 'object' ||
-      transformed === null ||
-      typeof transformed.targetId !== 'string'
-    ) {
+    // Validation type-safe
+    if (!payload || typeof payload.targetId !== 'string') {
+      console.warn('❌ Invalid payload received:', payload);
       return;
     }
 
-    const targetId = transformed.targetId;
+    const targetId = payload.targetId;
 
     // 🔍 Récupération de la ressource
     const resource = await this.resources.findOne(targetId);
-    if (!resource) return;
+    if (!resource) {
+      console.warn('❌ Resource not found:', targetId);
+      return;
+    }
 
     // 🪓 Marque comme récolté
     await this.resources.markGathered(targetId);

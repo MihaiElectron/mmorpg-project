@@ -13,21 +13,22 @@ export default function ActionPanel() {
     return null;
   }
 
-  const handleAction = (action) => {
+  const handleAction = (action: string) => {
     console.log("▶️ [ActionPanel] Action clicked:", action);
 
-    // 🔍 LOG DIAGNOSTIC : socket au moment exact du clic
-    console.log("🔌 SOCKET AT CLICK:", window.game?.socket);
+    const socket = window.game?.socket;
+    console.log("🔌 SOCKET AT CLICK:", socket);
 
-    if (window.game?.socket) {
-      /**
-       * 🔧 FIX : dead_tree est géré par ResourcesGateway
-       * → on doit émettre "interact_resource" et non "interact_object"
-       */
-      window.game.socket.emit("interact_resource", {
-        targetId: target.id,
-      });
+    if (!socket || !socket.connected) {
+      console.warn("❌ No socket available or not connected");
+      closePanel();
+      return;
     }
+
+    // 👉 Envoi correct vers ResourcesGateway
+    socket.emit("interact_resource", {
+      targetId: target.id,
+    });
 
     closePanel();
   };
