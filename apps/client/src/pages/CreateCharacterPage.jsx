@@ -35,7 +35,7 @@ function CreateCharacterPage() {
     const token = localStorage.getItem("token");
 
     try {
-      const res = await fetch("http://localhost:3000/characters", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

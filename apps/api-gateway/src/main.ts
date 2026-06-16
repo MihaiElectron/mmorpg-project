@@ -14,7 +14,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import { CLIENT_ORIGIN } from './common/cors.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -44,8 +43,13 @@ async function bootstrap() {
    * CORS (OBLIGATOIRE pour le frontend Vite)
    * ---------------------------------------------------------------------------
    */
+  const rawOrigin = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
+  const corsOrigin: string | string[] = rawOrigin.includes(',')
+    ? rawOrigin.split(',').map((o) => o.trim())
+    : rawOrigin;
+
   app.enableCors({
-    origin: CLIENT_ORIGIN,
+    origin: corsOrigin,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

@@ -54,7 +54,7 @@ function WorldPage() {
     if (phaserGameRef.current) return;
 
     // Créer le socket AVANT Phaser (JWT transmis pour l'authentification serveur)
-    const socket = io("http://localhost:3000", {
+    const socket = io(import.meta.env.VITE_API_URL, {
       auth: { token },
     });
 
@@ -122,7 +122,7 @@ function WorldPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:3000/characters/${character.id}`,
+        `${import.meta.env.VITE_API_URL}/characters/${character.id}`,
         {
           method: "DELETE",
           headers: {

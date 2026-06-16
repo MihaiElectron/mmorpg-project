@@ -47,7 +47,7 @@ async function handleResponse(res, defaultMessage) {
  * Utilise handleResponse pour une gestion d'erreur uniforme.
  */
 export async function registerUser(username, password) {
-  const res = await fetch("http://localhost:3000/auth/register", {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
@@ -63,7 +63,7 @@ export async function registerUser(username, password) {
  * Retourne { access_token } si succès.
  */
 export async function loginUser(username, password) {
-  const res = await fetch("http://localhost:3000/auth/login", {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),

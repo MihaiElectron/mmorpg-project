@@ -42,7 +42,7 @@ const storeLogic = (set, get) => ({
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await fetch("http://localhost:3000/characters/me", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -79,7 +79,7 @@ const storeLogic = (set, get) => ({
       if (!token || !character) return;
       const invEntry = get().inventory.find(i => i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId);
       if (!invEntry) return;
-      const res = await fetch(`http://localhost:3000/characters/${character.id}/equip`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${character.id}/equip`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ itemId: invEntry.item.id }),
@@ -95,7 +95,7 @@ const storeLogic = (set, get) => ({
       const token = localStorage.getItem("token");
       const character = get().character;
       if (!token || !character) return;
-      const res = await fetch(`http://localhost:3000/characters/${character.id}/unequip`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${character.id}/unequip`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ slot }),
