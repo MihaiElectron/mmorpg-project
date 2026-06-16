@@ -29,6 +29,9 @@ export class Animal {
   @Column('int', { default: 2 })
   armor: number;
 
+  @Column('int', { default: 5 })
+  attack: number;
+
   @Column({ default: 'alive' })
   state: 'alive' | 'dead';
 }

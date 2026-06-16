@@ -8,7 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
-import { AnimalsService } from './animals.service';
+import { AnimalsService, isAttackFailure } from './animals.service';
 import { WsAuthService } from '../common/ws-auth.service';
 
 @WebSocketGateway({ cors: true })
@@ -47,22 +47,39 @@ export class AnimalsGateway implements OnGatewayConnection {
       return;
     }
 
-    // Le personnage est celui de la session ayant rejoint le monde
-    // (join_world), jamais celui fourni par le client dans ce payload.
-    const characterId = client.data.player?.characterId;
-    if (!characterId) {
+    // Le personnage (et sa position) sont ceux de la session ayant rejoint
+    // le monde (join_world), jamais ceux fournis par le client dans ce payload.
+    const player = client.data.player;
+    if (!player?.characterId) {
       console.warn('❌ No joined player for this socket:', client.id);
       return;
     }
 
-    const animal = await this.animalsService.attack(
+    const result = await this.animalsService.attack(
       payload.targetId,
-      characterId,
+      player.characterId,
+      { x: player.x, y: player.y },
     );
-    if (!animal) return;
 
-    client.emit('animal_hit', animal);
-    this.server.emit('animal_update', animal);
+    if (isAttackFailure(result)) {
+      console.warn('❌ Attack rejected:', result.error);
+      return;
+    }
+
+    client.emit('animal_hit', {
+      ...result.animal,
+      damage: result.damage,
+      attackerId: result.attackerId,
+    });
+    this.server.emit('animal_update', result.animal);
+
+    if (result.riposte) {
+      client.emit('character_damaged', {
+        characterId: player.characterId,
+        damage: result.riposte.damage,
+        health: result.riposte.characterHealth,
+      });
+    }
   }
 
   private async sendAnimals(client: WorldSocket) {

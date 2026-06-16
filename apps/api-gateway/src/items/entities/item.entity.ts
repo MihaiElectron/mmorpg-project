@@ -34,6 +34,13 @@ export class Item {
   defense: number;
 
   /**
+   * Portée d'attaque en pixels (pour les armes). Si non définie, une portée
+   * par défaut s'applique selon le slot (corps à corps ou arme à distance).
+   */
+  @Column({ nullable: true })
+  range: number;
+
+  /**
    * Slot où l'item peut être équipé
    * Utilise l'enum EquipmentSlot pour la cohérence frontend / backend / DB
    */
