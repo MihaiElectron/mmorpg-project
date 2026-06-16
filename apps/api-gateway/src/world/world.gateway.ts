@@ -13,6 +13,7 @@ import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { WorldService } from './world.service';
 import { WsAuthService } from '../common/ws-auth.service';
+import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 type JoinWorldPayload = {
   characterId: string;
@@ -36,7 +37,7 @@ function isJoinWorldPayload(payload: unknown): payload is JoinWorldPayload {
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: CLIENT_ORIGIN,
   },
 })
 export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {

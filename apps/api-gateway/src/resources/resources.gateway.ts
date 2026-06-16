@@ -15,6 +15,7 @@ import { LootService } from '../world/loot.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { WsAuthService } from '../common/ws-auth.service';
+import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 interface InteractResourcePayload {
   targetId: string;
@@ -36,7 +37,7 @@ type GatherSession = {
   lastY: number;
 };
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class ResourcesGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {

@@ -10,8 +10,9 @@ import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { AnimalsService, isAttackFailure } from './animals.service';
 import { WsAuthService } from '../common/ws-auth.service';
+import { CLIENT_ORIGIN } from '../common/cors.constants';
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class AnimalsGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
