@@ -36,12 +36,13 @@ export class InventoryService {
     });
     if (!character) throw new NotFoundException('Character not found');
 
-    const item = await this.itemRepository.findOneBy({ id: dto.itemId });
+    const item = await this.findItemForLoot(dto.itemId);
     if (!item) throw new NotFoundException('Item not found');
 
     // Vérifie si l'item existe déjà pour ce personnage
     let inventory = await this.inventoryRepository.findOne({
-      where: { character: { id: dto.characterId }, item: { id: dto.itemId } },
+      where: { character: { id: dto.characterId }, item: { id: item.id } },
+      relations: ['item'],
     });
 
     if (inventory) {
@@ -55,7 +56,29 @@ export class InventoryService {
       });
     }
 
-    return this.inventoryRepository.save(inventory);
+    const saved = await this.inventoryRepository.save(inventory);
+
+    return this.inventoryRepository.findOneOrFail({
+      where: { id: saved.id },
+      relations: ['item'],
+    });
+  }
+
+  private async findItemForLoot(itemRef: string): Promise<Item | null> {
+    if (this.isUuid(itemRef)) {
+      const item = await this.itemRepository.findOneBy({ id: itemRef });
+      if (item) return item;
+    }
+
+    return this.itemRepository.findOne({
+      where: [{ type: itemRef }, { category: itemRef }],
+    });
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 
   // ---------------------------------------------------------------------------

@@ -5,9 +5,10 @@ import { Resource } from './entities/resource.entity';
 import { ResourcesService } from './resources.service';
 import { ResourcesGateway } from './resources.gateway';
 import { LootService } from '../world/loot.service'; // ✅ Ajout propre
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource])],
+  imports: [TypeOrmModule.forFeature([Resource]), InventoryModule],
   providers: [
     ResourcesService,
     ResourcesGateway,

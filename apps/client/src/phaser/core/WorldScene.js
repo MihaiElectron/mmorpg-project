@@ -162,12 +162,18 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("resource_loot", (data) => {
       console.log("🟩 [WorldScene] resource_loot RECEIVED", data);
 
+      const item = data.item || {};
+      const itemId = item.id || data.itemId;
+      const itemName = item.name || itemId.replace("_", " ");
+      const itemImage =
+        item.image || `/assets/images/items/${data.lootItemId || data.itemId}.png`;
+
       const store = getCharacterStore();
       store.getState().updateInventoryItem({
-        id: data.itemId,
-        quantity: data.quantity,
-        name: data.itemId.replace("_", " "),
-        image: `/assets/images/items/${data.itemId}.png`,
+        id: itemId,
+        quantity: data.total ?? data.quantity,
+        name: itemName,
+        image: itemImage,
       });
     });
 

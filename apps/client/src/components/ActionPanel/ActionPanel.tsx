@@ -1,11 +1,13 @@
 import React from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
+import { useCharacterStore } from "../../store/character.store";
 
 export default function ActionPanel() {
   const isOpen = useActionPanelStore((s) => s.isOpen);
   const target = useActionPanelStore((s) => s.target);
   const actions = useActionPanelStore((s) => s.actions);
   const closePanel = useActionPanelStore((s) => s.closePanel);
+  const character = useCharacterStore((s) => s.character);
 
   console.log("🎨 [ActionPanel] Render, isOpen:", isOpen);
 
@@ -25,9 +27,16 @@ export default function ActionPanel() {
       return;
     }
 
+    if (!character?.id) {
+      console.warn("❌ No character available for resource interaction");
+      closePanel();
+      return;
+    }
+
     // 👉 Envoi correct vers ResourcesGateway
     socket.emit("interact_resource", {
       targetId: target.id,
+      characterId: character.id,
     });
 
     closePanel();

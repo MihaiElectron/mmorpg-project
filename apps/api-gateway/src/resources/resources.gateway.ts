@@ -9,9 +9,11 @@ import {
 import { Server, Socket } from 'socket.io';
 import { ResourcesService } from './resources.service';
 import { LootService } from '../world/loot.service';
+import { InventoryService } from '../inventory/inventory.service';
 
 interface InteractResourcePayload {
   targetId: string;
+  characterId: string;
 }
 
 @WebSocketGateway({ cors: true })
@@ -22,6 +24,7 @@ export class ResourcesGateway {
   constructor(
     private readonly resources: ResourcesService,
     private readonly loot: LootService,
+    private readonly inventory: InventoryService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -43,12 +46,17 @@ export class ResourcesGateway {
     console.log('🔥 SERVER RECEIVED interact_resource:', payload);
 
     // Validation type-safe
-    if (!payload || typeof payload.targetId !== 'string') {
+    if (
+      !payload ||
+      typeof payload.targetId !== 'string' ||
+      typeof payload.characterId !== 'string'
+    ) {
       console.warn('❌ Invalid payload received:', payload);
       return;
     }
 
     const targetId = payload.targetId;
+    const characterId = payload.characterId;
 
     // 🔍 Récupération de la ressource
     const resource = await this.resources.findOne(targetId);
@@ -64,6 +72,16 @@ export class ResourcesGateway {
 
     // 🎁 Génère le loot
     const loot = this.loot.generateLoot(resource.type);
+    if (loot.quantity <= 0) {
+      console.warn('❌ No loot generated for resource:', resource.type);
+      return;
+    }
+
+    const inventoryEntry = await this.inventory.addItem({
+      characterId,
+      itemId: loot.itemId,
+      quantity: loot.quantity,
+    });
 
     // 🪓 Consomme une charge de récolte
     const updatedResource = await this.resources.consumeLoot(targetId);
@@ -73,7 +91,17 @@ export class ResourcesGateway {
     }
 
     // 📤 Envoie le loot au client
-    client.emit('resource_loot', loot);
+    client.emit('resource_loot', {
+      itemId: inventoryEntry.item.id,
+      lootItemId: loot.itemId,
+      quantity: loot.quantity,
+      total: inventoryEntry.quantity,
+      item: {
+        id: inventoryEntry.item.id,
+        name: inventoryEntry.item.name,
+        image: inventoryEntry.item.image,
+      },
+    });
 
     // 🔄 Mise à jour visuelle pour tous
     this.server.emit('resource_update', {
