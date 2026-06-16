@@ -2,6 +2,7 @@ import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -13,7 +14,7 @@ import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
-export class AnimalsGateway implements OnGatewayConnection {
+export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
@@ -22,21 +23,23 @@ export class AnimalsGateway implements OnGatewayConnection {
     private readonly wsAuthService: WsAuthService,
   ) {}
 
+  afterInit(server: Server) {
+    this.animalsService.startPatrol(server);
+  }
+
   async handleConnection(client: WorldSocket) {
     const auth = await this.wsAuthService.authenticate(client);
     if (!auth) {
       client.disconnect(true);
       return;
     }
-
     client.data.userId = auth.userId;
-
-    await this.sendAnimals(client);
+    client.emit('animals', this.animalsService.findAll());
   }
 
   @SubscribeMessage('get_animals')
-  async onGetAnimals(@ConnectedSocket() client: WorldSocket) {
-    await this.sendAnimals(client);
+  onGetAnimals(@ConnectedSocket() client: WorldSocket) {
+    client.emit('animals', this.animalsService.findAll());
   }
 
   @SubscribeMessage('attack_animal')
@@ -44,12 +47,8 @@ export class AnimalsGateway implements OnGatewayConnection {
     @ConnectedSocket() client: WorldSocket,
     @MessageBody() payload: { targetId: string },
   ) {
-    if (!payload || typeof payload.targetId !== 'string') {
-      return;
-    }
+    if (!payload || typeof payload.targetId !== 'string') return;
 
-    // Le personnage (et sa position) sont ceux de la session ayant rejoint
-    // le monde (join_world), jamais ceux fournis par le client dans ce payload.
     const player = client.data.player;
     if (!player?.characterId) {
       console.warn('No joined player for this socket:', client.id);
@@ -67,12 +66,8 @@ export class AnimalsGateway implements OnGatewayConnection {
       return;
     }
 
-    client.emit('animal_hit', {
-      ...result.animal,
-      damage: result.damage,
-      attackerId: result.attackerId,
-    });
-    this.server.emit('animal_update', result.animal);
+    client.emit('animal_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
+    this.server.emit('animal_update', result.dto);
 
     if (result.riposte) {
       client.emit('character_damaged', {
@@ -81,10 +76,5 @@ export class AnimalsGateway implements OnGatewayConnection {
         health: result.riposte.characterHealth,
       });
     }
-  }
-
-  private async sendAnimals(client: WorldSocket) {
-    const animals = await this.animalsService.findAll();
-    client.emit('animals', animals);
   }
 }

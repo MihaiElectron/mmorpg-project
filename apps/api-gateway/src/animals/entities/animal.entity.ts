@@ -1,18 +1,20 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { CreatureSpawn } from './creature-spawn.entity';
 
 @Entity('animals')
 export class Animal {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
-  key: string;
-
-  @Column()
-  type: string;
-
-  @Column()
-  name: string;
+  @ManyToOne(() => CreatureSpawn, { eager: true, nullable: true })
+  @JoinColumn({ name: 'spawn_id' })
+  spawn: CreatureSpawn;
 
   @Column('int')
   x: number;
@@ -20,17 +22,8 @@ export class Animal {
   @Column('int')
   y: number;
 
-  @Column('int', { default: 30 })
+  @Column('int')
   health: number;
-
-  @Column('int', { default: 30 })
-  maxHealth: number;
-
-  @Column('int', { default: 2 })
-  armor: number;
-
-  @Column('int', { default: 5 })
-  attack: number;
 
   @Column({ default: 'alive' })
   state: 'alive' | 'dead';

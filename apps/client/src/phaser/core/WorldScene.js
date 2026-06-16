@@ -457,9 +457,20 @@ export default class WorldScene extends Phaser.Scene {
     const existing = this.animalSprites.get(animal.id);
 
     if (existing) {
-      existing.sprite.setPosition(animal.x, animal.y);
+      this.tweens.add({
+        targets: existing.sprite,
+        x: animal.x,
+        y: animal.y,
+        duration: 180,
+        ease: "Linear",
+        onUpdate: () => {
+          existing.healthText.setPosition(
+            existing.sprite.x,
+            existing.sprite.y - 40,
+          );
+        },
+      });
       existing.healthText.setText(this.getAnimalHealthLabel(animal));
-      existing.healthText.setPosition(animal.x, animal.y - 40);
       return;
     }
 
