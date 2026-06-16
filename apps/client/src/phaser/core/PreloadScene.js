@@ -37,7 +37,7 @@ export default class PreloadScene extends Phaser.Scene {
     );
     this.load.image("fire_camp", "/assets/sprites/fire_camp.png");
     this.load.image("dead_tree", "/assets/sprites/dead_tree.png");
-    this.load.image("turkey", "/assets/bestiary/turkey_64.png");
+    this.load.image("turkey", "/assets/bestiary/turkey_32.png");
     this.load.image("wooden_stick", "/assets/images/items/wooden_stick.png");
 
     this.load.on("filecomplete", (key) => {
