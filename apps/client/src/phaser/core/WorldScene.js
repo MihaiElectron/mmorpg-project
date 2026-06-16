@@ -20,6 +20,7 @@ export default class WorldScene extends Phaser.Scene {
     this.socket = null;
     this.interactionTargets = [];
     this.resourceSprites = new Map();
+    this.animalSprites = new Map();
     this.remotePlayers = new Map();
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
@@ -87,8 +88,8 @@ export default class WorldScene extends Phaser.Scene {
 
         const store = getActionPanelStore();
         store.getState().openPanel(
-          { id: target.id, type: target.type },
-          target.actions
+          { id: target.id, type: target.type, kind: target.kind },
+          target.actions,
         );
         return;
       }
@@ -146,14 +147,20 @@ export default class WorldScene extends Phaser.Scene {
     this.gatheringEventsRegistered = true;
 
     this.socket.on("connect", () => {
-      console.log("🌐 [WorldScene] Socket connected, requesting resources");
+      console.log("🌐 [WorldScene] Socket connected, requesting world objects");
       this.socket.emit("get_resources");
+      this.socket.emit("get_animals");
       this.joinWorld();
     });
 
     this.socket.on("resources", (resources) => {
       console.log("🟩 [WorldScene] resources RECEIVED", resources);
       this.renderResources(resources);
+    });
+
+    this.socket.on("animals", (animals) => {
+      console.log("🟩 [WorldScene] animals RECEIVED", animals);
+      this.renderAnimals(animals);
     });
 
     this.socket.on("open_gather_window", (data) => {
@@ -198,6 +205,20 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    this.socket.on("animal_update", (animal) => {
+      console.log("🟩 [WorldScene] animal_update RECEIVED", animal);
+      if (animal.state === "dead") {
+        this.removeAnimal(animal.id);
+        return;
+      }
+
+      this.upsertAnimal(animal);
+    });
+
+    this.socket.on("animal_hit", (animal) => {
+      console.log("🟩 [WorldScene] animal_hit RECEIVED", animal);
+    });
+
     this.socket.on("current_players", (players) => {
       console.log("🟩 [WorldScene] current_players RECEIVED", players);
       this.clearRemotePlayers();
@@ -215,11 +236,12 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("player_left", (player) => {
       console.log("🟩 [WorldScene] player_left RECEIVED", player);
-      this.removeRemotePlayer(player.socketId);
+      this.removeRemotePlayer(player);
     });
 
     if (this.socket.connected) {
       this.socket.emit("get_resources");
+      this.socket.emit("get_animals");
       this.joinWorld();
     }
   }
@@ -265,11 +287,9 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   upsertRemotePlayer(player) {
-    if (!player?.socketId || player.socketId === this.socket?.id) return;
+    if (!player?.characterId || player.socketId === this.socket?.id) return;
 
-    this.removeDuplicateRemotePlayers(player);
-
-    const existing = this.remotePlayers.get(player.socketId);
+    const existing = this.remotePlayers.get(player.characterId);
     if (existing) {
       this.tweens.add({
         targets: existing.sprite,
@@ -281,7 +301,7 @@ export default class WorldScene extends Phaser.Scene {
 
       existing.nameText.setText(player.name || "Joueur");
       existing.nameText.setPosition(player.x, player.y - 34);
-      existing.characterId = player.characterId;
+      existing.socketId = player.socketId;
       setSpriteDepth(existing.sprite);
       existing.nameText.setDepth(existing.sprite.depth + 1);
       return;
@@ -305,39 +325,28 @@ export default class WorldScene extends Phaser.Scene {
       .setOrigin(0.5);
     nameText.setDepth(sprite.depth + 1);
 
-    this.remotePlayers.set(player.socketId, {
+    this.remotePlayers.set(player.characterId, {
       sprite,
       nameText,
-      characterId: player.characterId,
+      socketId: player.socketId,
     });
-  }
-
-  removeDuplicateRemotePlayers(player) {
-    if (!player.characterId) return;
-
-    for (const [socketId, remote] of this.remotePlayers.entries()) {
-      if (
-        socketId !== player.socketId &&
-        remote.characterId === player.characterId
-      ) {
-        remote.sprite.destroy();
-        remote.nameText.destroy();
-        this.remotePlayers.delete(socketId);
-      }
-    }
   }
 
   getPlayerTexture(sex) {
     return sex === "female" ? "player_female_32x64" : "player_male_32x64";
   }
 
-  removeRemotePlayer(socketId) {
-    const remote = this.remotePlayers.get(socketId);
+  removeRemotePlayer(player) {
+    const remote = player?.characterId
+      ? this.remotePlayers.get(player.characterId)
+      : null;
     if (!remote) return;
+
+    if (player.socketId && remote.socketId !== player.socketId) return;
 
     remote.sprite.destroy();
     remote.nameText.destroy();
-    this.remotePlayers.delete(socketId);
+    this.remotePlayers.delete(player.characterId);
   }
 
   updateRemotePlayerLabels() {
@@ -348,8 +357,10 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   clearRemotePlayers() {
-    for (const socketId of this.remotePlayers.keys()) {
-      this.removeRemotePlayer(socketId);
+    for (const [characterId, remote] of this.remotePlayers.entries()) {
+      remote.sprite.destroy();
+      remote.nameText.destroy();
+      this.remotePlayers.delete(characterId);
     }
   }
 
@@ -375,9 +386,60 @@ export default class WorldScene extends Phaser.Scene {
           sprite,
           id: resource.id,
           type: resource.type,
+          kind: "resource",
           actions: ["ramasser", "gathering"],
         });
       });
+  }
+
+  renderAnimals(animals) {
+    this.clearAnimals();
+
+    animals
+      .filter((animal) => animal.state === "alive")
+      .forEach((animal) => this.upsertAnimal(animal));
+  }
+
+  upsertAnimal(animal) {
+    const existing = this.animalSprites.get(animal.id);
+
+    if (existing) {
+      existing.sprite.setPosition(animal.x, animal.y);
+      existing.healthText.setText(this.getAnimalHealthLabel(animal));
+      existing.healthText.setPosition(animal.x, animal.y - 40);
+      return;
+    }
+
+    const textureKey = this.textures.exists(animal.type) ? animal.type : "turkey";
+    const sprite = this.add.image(animal.x, animal.y, textureKey);
+    sprite.setDepth(10);
+    sprite.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
+      Phaser.Geom.Rectangle.Contains,
+    );
+
+    const healthText = this.add
+      .text(animal.x, animal.y - 40, this.getAnimalHealthLabel(animal), {
+        fontSize: "12px",
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5);
+    healthText.setDepth(11);
+
+    this.animalSprites.set(animal.id, { sprite, healthText });
+    this.interactionTargets.push({
+      sprite,
+      id: animal.id,
+      type: animal.type,
+      kind: "animal",
+      actions: ["attaquer"],
+    });
+  }
+
+  getAnimalHealthLabel(animal) {
+    return `${animal.health}/${animal.maxHealth} AR:${animal.armor ?? 0}`;
   }
 
   clearResources() {
@@ -386,7 +448,21 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.resourceSprites.clear();
-    this.interactionTargets = [];
+    this.interactionTargets = this.interactionTargets.filter(
+      (target) => target.kind !== "resource",
+    );
+  }
+
+  clearAnimals() {
+    for (const animal of this.animalSprites.values()) {
+      animal.sprite.destroy();
+      animal.healthText.destroy();
+    }
+
+    this.animalSprites.clear();
+    this.interactionTargets = this.interactionTargets.filter(
+      (target) => target.kind !== "animal",
+    );
   }
 
   removeResource(resourceId) {
@@ -398,7 +474,21 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.interactionTargets = this.interactionTargets.filter(
-      (target) => target.id !== resourceId
+      (target) => target.id !== resourceId,
+    );
+  }
+
+  removeAnimal(animalId) {
+    const animal = this.animalSprites.get(animalId);
+
+    if (animal) {
+      animal.sprite.destroy();
+      animal.healthText.destroy();
+      this.animalSprites.delete(animalId);
+    }
+
+    this.interactionTargets = this.interactionTargets.filter(
+      (target) => target.id !== animalId,
     );
   }
 
@@ -406,10 +496,13 @@ export default class WorldScene extends Phaser.Scene {
     if (this.socket) {
       this.socket.off("connect");
       this.socket.off("resources");
+      this.socket.off("animals");
       this.socket.off("open_gather_window");
       this.socket.off("inventory_update");
       this.socket.off("resource_loot");
       this.socket.off("resource_update");
+      this.socket.off("animal_update");
+      this.socket.off("animal_hit");
       this.socket.off("current_players");
       this.socket.off("player_joined");
       this.socket.off("player_moved");
@@ -417,6 +510,7 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.clearResources();
+    this.clearAnimals();
     this.clearRemotePlayers();
     super.destroy();
   }

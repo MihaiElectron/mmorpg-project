@@ -43,8 +43,10 @@ export default function ActionPanel() {
       return;
     }
 
-    // 👉 Envoi correct vers ResourcesGateway
-    socket.emit("interact_resource", {
+    const eventName =
+      target.kind === "animal" ? "attack_animal" : "interact_resource";
+
+    socket.emit(eventName, {
       targetId: target.id,
       characterId: character.id,
     });

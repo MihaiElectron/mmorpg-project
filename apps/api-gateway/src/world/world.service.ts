@@ -141,9 +141,15 @@ export class WorldService {
   }
 
   getPlayersExcept(socketId: string) {
-    return Array.from(this.connectedPlayers.values()).filter(
-      (player) => player.socketId !== socketId,
-    );
+    const playersByCharacter = new Map<string, ConnectedPlayer>();
+
+    for (const player of this.connectedPlayers.values()) {
+      if (player.socketId !== socketId) {
+        playersByCharacter.set(player.characterId, player);
+      }
+    }
+
+    return Array.from(playersByCharacter.values());
   }
 
   private findSocketIdByCharacterId(characterId: string, exceptSocketId: string) {
