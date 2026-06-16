@@ -30,7 +30,11 @@ export default class PreloadScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.load.image("player_idle_32", "/assets/player/player_idle_32px.png");
+    this.load.image("player_male_32x64", "/assets/player/player_male_32x64.png");
+    this.load.image(
+      "player_female_32x64",
+      "/assets/player/player_female_32x64.png",
+    );
     this.load.image("fire_camp", "/assets/sprites/fire_camp.png");
     this.load.image("dead_tree", "/assets/sprites/dead_tree.png");
     this.load.image("wooden_stick", "/assets/images/items/wooden_stick.png");

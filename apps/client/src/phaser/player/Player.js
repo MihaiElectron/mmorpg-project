@@ -18,7 +18,7 @@
 import Phaser from "phaser";
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
-  constructor(scene, x, y, texture = "player_idle_32px") {
+  constructor(scene, x, y, texture = "player_male_32x64") {
     super(scene, x, y, texture);
 
     scene.add.existing(this);

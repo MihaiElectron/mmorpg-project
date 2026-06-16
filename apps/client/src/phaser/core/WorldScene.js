@@ -55,7 +55,13 @@ export default class WorldScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, 2000, 2000);
 
     // PLAYER
-    this.player = new Player(this, 400, 300, "player_idle_32");
+    const character = getCharacterStore().getState().character;
+    this.player = new Player(
+      this,
+      400,
+      300,
+      this.getPlayerTexture(character?.sex),
+    );
     setSpriteDepth(this.player);
 
     // FIRE CAMP
@@ -281,7 +287,11 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const sprite = this.add.sprite(player.x, player.y, "player_idle_32");
+    const sprite = this.add.sprite(
+      player.x,
+      player.y,
+      this.getPlayerTexture(player.sex),
+    );
     sprite.setTint(0x66ccff);
     setSpriteDepth(sprite);
 
@@ -315,6 +325,10 @@ export default class WorldScene extends Phaser.Scene {
         this.remotePlayers.delete(socketId);
       }
     }
+  }
+
+  getPlayerTexture(sex) {
+    return sex === "female" ? "player_female_32x64" : "player_male_32x64";
   }
 
   removeRemotePlayer(socketId) {
