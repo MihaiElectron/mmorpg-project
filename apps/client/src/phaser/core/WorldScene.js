@@ -25,6 +25,9 @@ export default class WorldScene extends Phaser.Scene {
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
     this.lastSyncedPosition = null;
+
+    // Indicateur visuel de récolte (local, visible uniquement par ce client).
+    this.gatherIndicator = null;
   }
 
   create() {
@@ -122,6 +125,7 @@ export default class WorldScene extends Phaser.Scene {
     setSpriteDepth(this.player);
     this.syncLocalPlayer(time);
     this.updateRemotePlayerLabels();
+    this.updateGatherIndicator();
   }
 
   // CLICK DETECTION
@@ -200,6 +204,15 @@ export default class WorldScene extends Phaser.Scene {
       if (data.state === "dead") {
         this.removeResource(data.id);
       }
+    });
+
+    this.socket.on("gather_tick", (data) => {
+      this.startGatherIndicator(data.targetId, data.duration);
+    });
+
+    this.socket.on("gather_stopped", (data) => {
+      console.log("🟩 [WorldScene] gather_stopped RECEIVED", data);
+      this.stopGatherIndicator(data.targetId);
     });
 
     this.socket.on("animal_update", (animal) => {
@@ -373,6 +386,67 @@ export default class WorldScene extends Phaser.Scene {
     }
   }
 
+  // -----------------------------------------------------------------------
+  // INDICATEUR DE RÉCOLTE (local, visible uniquement par ce joueur)
+  // -----------------------------------------------------------------------
+  startGatherIndicator(targetId, duration) {
+    if (this.gatherIndicator && this.gatherIndicator.targetId !== targetId) {
+      this.gatherIndicator.graphics.destroy();
+      this.gatherIndicator = null;
+    }
+
+    if (!this.gatherIndicator) {
+      const graphics = this.add.graphics();
+      graphics.setDepth(20);
+      this.gatherIndicator = { targetId, graphics, startTime: this.time.now, duration };
+      return;
+    }
+
+    // Même cible : on resynchronise juste le timer du cycle suivant.
+    this.gatherIndicator.startTime = this.time.now;
+    this.gatherIndicator.duration = duration;
+  }
+
+  stopGatherIndicator(targetId) {
+    if (!this.gatherIndicator || this.gatherIndicator.targetId !== targetId) return;
+
+    this.gatherIndicator.graphics.destroy();
+    this.gatherIndicator = null;
+  }
+
+  updateGatherIndicator() {
+    if (!this.gatherIndicator) return;
+
+    const sprite = this.resourceSprites.get(this.gatherIndicator.targetId);
+    if (!sprite) {
+      this.stopGatherIndicator(this.gatherIndicator.targetId);
+      return;
+    }
+
+    const { graphics, startTime, duration } = this.gatherIndicator;
+    const progress = Phaser.Math.Clamp((this.time.now - startTime) / duration, 0, 1);
+
+    const x = sprite.x;
+    const y = sprite.y - 40;
+    const radius = 10;
+
+    graphics.clear();
+    graphics.lineStyle(3, 0x000000, 0.4);
+    graphics.strokeCircle(x, y, radius);
+
+    graphics.lineStyle(3, 0x00ff66, 1);
+    graphics.beginPath();
+    graphics.arc(
+      x,
+      y,
+      radius,
+      Phaser.Math.DegToRad(-90),
+      Phaser.Math.DegToRad(-90 + progress * 360),
+      false,
+    );
+    graphics.strokePath();
+  }
+
   renderResources(resources) {
     this.clearResources();
 
@@ -485,6 +559,8 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.id !== resourceId,
     );
+
+    this.stopGatherIndicator(resourceId);
   }
 
   removeAnimal(animalId) {
@@ -509,6 +585,8 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("inventory_update");
       this.socket.off("resource_loot");
       this.socket.off("resource_update");
+      this.socket.off("gather_tick");
+      this.socket.off("gather_stopped");
       this.socket.off("animal_update");
       this.socket.off("animal_hit");
       this.socket.off("current_players");
@@ -516,6 +594,11 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("player_joined");
       this.socket.off("player_moved");
       this.socket.off("player_left");
+    }
+
+    if (this.gatherIndicator) {
+      this.gatherIndicator.graphics.destroy();
+      this.gatherIndicator = null;
     }
 
     this.clearResources();
