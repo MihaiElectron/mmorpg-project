@@ -12,6 +12,7 @@ import { io } from "socket.io-client";
 
 import PreloadScene from "../phaser/core/PreloadScene.js";
 import WorldScene from "../phaser/core/WorldScene.js";
+import CoordinatesLayer from "../components/CoordinatesLayer/CoordinatesLayer.jsx";
 
 function WorldPage() {
   const navigate = useNavigate();
@@ -161,6 +162,8 @@ function WorldPage() {
           </button>
         </div>
       )}
+
+      <CoordinatesLayer />
 
       <div className="world__logout">
         <button onClick={handleLogout}>Se déconnecter</button>

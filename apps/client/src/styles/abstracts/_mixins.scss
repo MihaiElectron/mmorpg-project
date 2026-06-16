@@ -2,3 +2,13 @@
 // Fichier : _mixins.scss
 // Description : Mixins SASS réutilisables pour le client MMORPG.
 // ============================================================================
+
+@use './variables' as vars;
+
+@mixin coords-text {
+  color: vars.$coords-color;
+  font-size: vars.$coords-font-size;
+  font-family: vars.$coords-font-family;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+}

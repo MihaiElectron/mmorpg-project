@@ -1,0 +1,19 @@
+@use '../abstracts/mixins' as m;
+
+.coords-layer {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(201, 178, 124, 0.25);
+
+  &__text {
+    @include m.coords-text;
+    display: block;
+    white-space: nowrap;
+  }
+}
