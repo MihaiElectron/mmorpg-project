@@ -276,7 +276,17 @@ export class CharacterService {
    * Supprime un personnage
    */
   async remove(id: string, userId: string): Promise<void> {
-    const character = await this.findOne(id, userId);
-    await this.characterRepository.remove(character);
+    await this.findOne(id, userId);
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(CharacterEquipment, { characterId: id });
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Inventory)
+        .where('"characterId" = :id', { id })
+        .execute();
+      await manager.delete(Character, { id, userId });
+    });
   }
 }

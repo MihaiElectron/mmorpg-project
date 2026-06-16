@@ -11,9 +11,11 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { registerUser, loginUser } from "../api/auth";
+import { useCharacterStore } from "../store/character.store";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const clearCharacter = useCharacterStore((s) => s.clearCharacter);
   const [message, setMessage] = useState("Bienvenue"); // message affiché
   const [fade, setFade] = useState(false); // contrôle du fondu
 
@@ -36,11 +38,16 @@ function LoginPage() {
     try {
       if (action === "register") {
         await registerUser(username, password);
+        const data = await loginUser(username, password);
+        localStorage.setItem("token", data.access_token);
+        clearCharacter();
+        navigate("/create-character");
       } else {
         const data = await loginUser(username, password); // on récupère la réponse
         localStorage.setItem("token", data.access_token); // on stocke le token
+        clearCharacter();
+        navigate("/world");
       }
-      navigate("/world");
     } catch (err) {
       // 🔥 Avec fetch, le message du backend est dans err.message
       const backendMessage = err.message || "Erreur";

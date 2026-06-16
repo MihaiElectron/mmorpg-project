@@ -47,7 +47,12 @@ const storeLogic = (set, get) => ({
       const res = await fetch("http://localhost:3000/characters/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Character not found");
+      if (!res.ok) {
+        const error = new Error("Character not found");
+        error.status = res.status;
+        set({ character: null, equipment: {}, inventory: [] });
+        throw error;
+      }
       const data = await res.json();
       const equipmentMap = {};
       data.equipment?.forEach((eq) => {
@@ -62,8 +67,10 @@ const storeLogic = (set, get) => ({
           item: inv.item,
         }));
       set({ character: data, equipment: equipmentMap, inventory });
+      return data;
     } catch (err) {
       console.error("❌ [CharacterStore] loadCharacter error:", err);
+      throw err;
     }
   },
 

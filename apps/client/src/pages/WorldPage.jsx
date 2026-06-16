@@ -33,7 +33,7 @@ function WorldPage() {
     if (!character) {
       loadCharacter().catch((error) => {
         console.error("Erreur lors du chargement:", error);
-        if (!error.message?.includes("404")) {
+        if (error.status === 404) {
           navigate("/create-character");
         }
       });
