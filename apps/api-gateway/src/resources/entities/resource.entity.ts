@@ -17,4 +17,7 @@ export class Resource {
 
   @Column({ default: 'alive' })
   state: 'alive' | 'dead';
+
+  @Column('int', { name: 'remaining_loots', default: 9999 })
+  remainingLoots: number;
 }

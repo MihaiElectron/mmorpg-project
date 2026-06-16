@@ -23,9 +23,32 @@ export class ResourcesService {
   }
 
   /**
+   * Consomme une charge de récolte.
+   * La ressource ne disparaît que lorsque remainingLoots atteint 0.
+   */
+  async consumeLoot(id: string) {
+    const resource = await this.findOne(id);
+
+    if (!resource || resource.state === 'dead') {
+      return resource;
+    }
+
+    const remainingLoots = Math.max((resource.remainingLoots ?? 9999) - 1, 0);
+    const state = remainingLoots === 0 ? 'dead' : 'alive';
+
+    await this.repo.update(id, { remainingLoots, state });
+
+    return {
+      ...resource,
+      remainingLoots,
+      state,
+    };
+  }
+
+  /**
    * 🪓 Marque une ressource comme "dead"
    */
   async markGathered(id: string) {
-    await this.repo.update(id, { state: 'dead' });
+    await this.repo.update(id, { state: 'dead', remainingLoots: 0 });
   }
 }

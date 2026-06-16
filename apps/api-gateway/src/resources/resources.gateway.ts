@@ -57,11 +57,20 @@ export class ResourcesGateway {
       return;
     }
 
-    // 🪓 Marque comme récolté
-    await this.resources.markGathered(targetId);
+    if (resource.state === 'dead' || (resource.remainingLoots ?? 0) <= 0) {
+      console.warn('❌ Resource already depleted:', targetId);
+      return;
+    }
 
     // 🎁 Génère le loot
     const loot = this.loot.generateLoot(resource.type);
+
+    // 🪓 Consomme une charge de récolte
+    const updatedResource = await this.resources.consumeLoot(targetId);
+    if (!updatedResource) {
+      console.warn('❌ Resource not found while consuming loot:', targetId);
+      return;
+    }
 
     // 📤 Envoie le loot au client
     client.emit('resource_loot', loot);
@@ -69,7 +78,8 @@ export class ResourcesGateway {
     // 🔄 Mise à jour visuelle pour tous
     this.server.emit('resource_update', {
       id: targetId,
-      state: 'dead',
+      state: updatedResource.state,
+      remainingLoots: updatedResource.remainingLoots,
     });
   }
 
