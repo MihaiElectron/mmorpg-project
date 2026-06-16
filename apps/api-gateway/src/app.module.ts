@@ -11,7 +11,7 @@
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -24,14 +24,6 @@ import { ResourcesModule } from './resources/resources.module';
 import { WorldModule } from './world/world.module';
 import { AnimalsModule } from './animals/animals.module';
 
-console.log('>>> Connecting to PostgreSQL with config:', {
-  host: 'localhost',
-  port: 5432,
-  username: 'semoa',
-  password: 'ssap',
-  database: 'mmorpgdb',
-});
-
 @Module({
   imports: [
     // -------------------------------------------------------------------------
@@ -42,20 +34,25 @@ console.log('>>> Connecting to PostgreSQL with config:', {
     }),
 
     // -------------------------------------------------------------------------
-    // TypeORM : connexion PostgreSQL + auto-charge toutes les entités
+    // TypeORM : connexion PostgreSQL (config via .env) + auto-charge toutes
+    // les entités
     // -------------------------------------------------------------------------
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'semoa',
-      password: 'ssap',
-      database: 'mmorpgdb',
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get<string>('DB_HOST', 'localhost'),
+        port: config.get<number>('DB_PORT', 5432),
+        username: config.get<string>('DB_USERNAME', 'semoa'),
+        password: config.get<string>('DB_PASSWORD', 'ssap'),
+        database: config.get<string>('DB_NAME', 'mmorpgdb'),
 
-      // 🔥 Charge automatiquement TOUTES les entités du projet
-      entities: [__dirname + '/**/*.entity.{ts,js}'],
+        // 🔥 Charge automatiquement TOUTES les entités du projet
+        entities: [__dirname + '/**/*.entity.{ts,js}'],
 
-      synchronize: true, // ⚠ auto-create/update tables pour dev
+        synchronize: true, // ⚠ auto-create/update tables pour dev
+      }),
     }),
 
     // -------------------------------------------------------------------------

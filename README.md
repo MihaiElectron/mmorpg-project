@@ -137,21 +137,22 @@ Cette commande installe les dépendances des workspaces déclarés dans le `pack
 
 ### Backend
 
-Créer ou adapter `apps/api-gateway/.env`:
+Créer ou adapter `apps/api-gateway/.env` (voir `apps/api-gateway/.env.example`):
 
 ```env
 PORT=3000
 JWT_SECRET=change-me-in-development
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=semoa
+DB_PASSWORD=ssap
+DB_NAME=mmorpgdb
 ```
 
-La connexion PostgreSQL est actuellement configurée dans `apps/api-gateway/src/app.module.ts`. En développement local, elle doit rester cohérente avec le service PostgreSQL défini dans `docker/docker-compose.yml`.
+La connexion PostgreSQL est lue depuis ces variables d'environnement (`app.module.ts` via `ConfigService`). En développement local, elle doit rester cohérente avec le service PostgreSQL défini dans `docker/docker-compose.yml`.
 
-```text
-host: localhost
-port: 5432
-```
-
-Ne pas documenter de mot de passe réel dans le README. Si les identifiants changent, mettre à jour la configuration applicative et le fichier Docker Compose de développement en conséquence.
+Ne pas documenter de mot de passe réel dans le README. Si les identifiants changent, mettre à jour `.env` et le fichier Docker Compose de développement en conséquence.
 
 ### Frontend
 
