@@ -21,6 +21,7 @@ import { CommonModule } from './common/common.module';
 import { CharactersModule } from './characters/characters.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { ResourcesModule } from './resources/resources.module';
+import { WorldModule } from './world/world.module';
 
 console.log('>>> Connecting to PostgreSQL with config:', {
   host: 'localhost',
@@ -64,6 +65,7 @@ console.log('>>> Connecting to PostgreSQL with config:', {
     CharactersModule,
     InventoryModule,
     ResourcesModule, // ⭐ Ajout propre ici
+    WorldModule,
   ],
   controllers: [AppController],
   providers: [AppService],

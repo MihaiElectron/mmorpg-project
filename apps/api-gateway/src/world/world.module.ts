@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { WorldGateway } from './world.gateway';
 import { WorldService } from './world.service';
 import { LootService } from './loot.service';
-import { InventoryService } from '../inventory/inventory.service';
+import { InventoryModule } from '../inventory/inventory.module';
+import { ResourcesModule } from '../resources/resources.module';
 
 @Module({
-  providers: [WorldGateway, WorldService, LootService, InventoryService],
+  imports: [InventoryModule, ResourcesModule],
+  providers: [WorldGateway, WorldService, LootService],
 })
 export class WorldModule {}

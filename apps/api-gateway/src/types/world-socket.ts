@@ -4,8 +4,11 @@ import { Socket } from 'socket.io';
 
 export type PlayerData = {
   characterId: string;
+  name: string;
+  sex?: string;
   x: number;
   y: number;
+  direction?: string;
 };
 
 export type WorldSocket = Socket<

@@ -14,6 +14,6 @@ import { InventoryModule } from '../inventory/inventory.module';
     ResourcesGateway,
     LootService, // ✅ Injection du loot ici
   ],
-  exports: [ResourcesService],
+  exports: [ResourcesService, ResourcesGateway],
 })
 export class ResourcesModule {}

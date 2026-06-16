@@ -2,10 +2,13 @@
 
 import {
   WebSocketGateway,
+  WebSocketServer,
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { WorldService } from './world.service';
 
@@ -14,8 +17,83 @@ import { WorldService } from './world.service';
     origin: '*',
   },
 })
-export class WorldGateway {
+export class WorldGateway implements OnGatewayDisconnect {
+  @WebSocketServer()
+  server: Server;
+
   constructor(private readonly worldService: WorldService) {}
+
+  /**
+   * Un personnage entre dans le monde.
+   */
+  @SubscribeMessage('join_world')
+  handleJoinWorld(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody()
+    payload: {
+      characterId: string;
+      name: string;
+      sex?: string;
+      x?: number;
+      y?: number;
+      direction?: string;
+    },
+  ) {
+    if (!payload?.characterId || !payload?.name) {
+      client.emit('join_world_error', 'Invalid player payload');
+      return;
+    }
+
+    const { player, previousSocketId } = this.worldService.joinPlayer(
+      client,
+      payload,
+    );
+
+    if (previousSocketId) {
+      this.server.emit('player_left', {
+        socketId: previousSocketId,
+        characterId: player.characterId,
+      });
+    }
+
+    client.emit(
+      'current_players',
+      this.worldService.getPlayersExcept(client.id),
+    );
+    client.broadcast.emit('player_joined', player);
+  }
+
+  /**
+   * Position du joueur local, diffusée aux autres clients.
+   */
+  @SubscribeMessage('player_move')
+  handlePlayerMove(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { x: number; y: number; direction?: string },
+  ) {
+    if (
+      !payload ||
+      typeof payload.x !== 'number' ||
+      typeof payload.y !== 'number'
+    ) {
+      return;
+    }
+
+    const player = this.worldService.updatePlayer(client, payload);
+    if (!player) return;
+
+    client.broadcast.emit('player_moved', player);
+  }
+
+  handleDisconnect(client: WorldSocket) {
+    const player = this.worldService.removePlayer(client);
+    if (player) {
+      client.broadcast.emit('player_left', {
+        socketId: player.socketId,
+        characterId: player.characterId,
+      });
+    }
+  }
 
   /**
    * Le joueur clique sur un objet → vérification distance → ouverture fenêtre

@@ -20,12 +20,27 @@ type GatheringSession = {
   timer?: NodeJS.Timeout;
 };
 
+export type ConnectedPlayer = {
+  socketId: string;
+  characterId: string;
+  name: string;
+  sex?: string;
+  x: number;
+  y: number;
+  direction?: string;
+};
+
 @Injectable()
 export class WorldService {
   /**
    * Sessions de gathering en cours, indexées par client.id
    */
   private gatheringSessions = new Map<string, GatheringSession>();
+
+  /**
+   * Joueurs connectés, indexés par socket.id
+   */
+  private connectedPlayers = new Map<string, ConnectedPlayer>();
 
   /**
    * Objets du monde (placeholder — plus tard remplacé par DB)
@@ -49,6 +64,102 @@ export class WorldService {
   ) {}
 
   // ---------------------------------------------------------------------------
+  // Synchronisation temps réel des joueurs
+  // ---------------------------------------------------------------------------
+  joinPlayer(
+    client: WorldSocket,
+    payload: {
+      characterId: string;
+      name: string;
+      sex?: string;
+      x?: number;
+      y?: number;
+      direction?: string;
+    },
+  ) {
+    const previousSocketId = this.findSocketIdByCharacterId(
+      payload.characterId,
+      client.id,
+    );
+
+    if (previousSocketId) {
+      this.connectedPlayers.delete(previousSocketId);
+      this.gatheringSessions.delete(previousSocketId);
+    }
+
+    const player: ConnectedPlayer = {
+      socketId: client.id,
+      characterId: payload.characterId,
+      name: payload.name,
+      sex: payload.sex,
+      x: payload.x ?? 400,
+      y: payload.y ?? 300,
+      direction: payload.direction ?? 'down',
+    };
+
+    this.connectedPlayers.set(client.id, player);
+    client.data.player = {
+      characterId: player.characterId,
+      name: player.name,
+      sex: player.sex,
+      x: player.x,
+      y: player.y,
+      direction: player.direction,
+    };
+
+    return { player, previousSocketId };
+  }
+
+  updatePlayer(
+    client: WorldSocket,
+    payload: { x: number; y: number; direction?: string },
+  ) {
+    const player = this.connectedPlayers.get(client.id);
+    if (!player) return null;
+
+    player.x = payload.x;
+    player.y = payload.y;
+    player.direction = payload.direction ?? player.direction;
+
+    client.data.player = {
+      characterId: player.characterId,
+      name: player.name,
+      sex: player.sex,
+      x: player.x,
+      y: player.y,
+      direction: player.direction,
+    };
+
+    return player;
+  }
+
+  removePlayer(client: WorldSocket) {
+    const player = this.connectedPlayers.get(client.id);
+    this.connectedPlayers.delete(client.id);
+    this.stopGathering(client);
+    return player;
+  }
+
+  getPlayersExcept(socketId: string) {
+    return Array.from(this.connectedPlayers.values()).filter(
+      (player) => player.socketId !== socketId,
+    );
+  }
+
+  private findSocketIdByCharacterId(characterId: string, exceptSocketId: string) {
+    for (const player of this.connectedPlayers.values()) {
+      if (
+        player.characterId === characterId &&
+        player.socketId !== exceptSocketId
+      ) {
+        return player.socketId;
+      }
+    }
+
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
   // Vérifie que le joueur est assez proche de l’objet
   // ---------------------------------------------------------------------------
   checkInteraction(client: WorldSocket, payload: { targetId: string }) {
@@ -56,6 +167,7 @@ export class WorldService {
     if (!target) return { error: 'Object not found' };
 
     const player = client.data.player;
+    if (!player) return { error: 'Player not initialized' };
 
     const dx = target.x - player.x;
     const dy = target.y - player.y;
