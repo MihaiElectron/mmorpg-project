@@ -2,6 +2,16 @@ import React from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
 
+type GameWindow = Window &
+  typeof globalThis & {
+    game?: {
+      socket?: {
+        connected?: boolean;
+        emit: (event: string, payload: unknown) => void;
+      };
+    };
+  };
+
 export default function ActionPanel() {
   const isOpen = useActionPanelStore((s) => s.isOpen);
   const target = useActionPanelStore((s) => s.target);
@@ -18,7 +28,7 @@ export default function ActionPanel() {
   const handleAction = (action: string) => {
     console.log("▶️ [ActionPanel] Action clicked:", action);
 
-    const socket = window.game?.socket;
+    const socket = (window as GameWindow).game?.socket;
     console.log("🔌 SOCKET AT CLICK:", socket);
 
     if (!socket || !socket.connected) {
