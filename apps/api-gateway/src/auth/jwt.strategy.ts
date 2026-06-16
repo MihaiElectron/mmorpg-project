@@ -22,6 +22,13 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '../users/entities/user.entity';
+
+type JwtPayload = {
+  sub?: string;
+  username?: string;
+  role?: UserRole;
+};
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -45,7 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    *
    * Le retour de cette méthode sera injecté dans req.user.
    */
-  async validate(payload: any) {
+  async validate(payload: JwtPayload) {
     const userId = String(payload.sub);
 
     // Vérification minimale : un token doit contenir un identifiant utilisateur
@@ -58,6 +65,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       userId,
       username: payload.username,
+      role: payload.role,
     };
   }
 }

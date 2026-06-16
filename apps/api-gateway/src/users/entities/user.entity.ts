@@ -8,6 +8,11 @@ import {
 } from 'typeorm';
 import { Character } from '../../characters/entities/character.entity';
 
+export enum UserRole {
+  PLAYER = 'player',
+  ADMIN = 'admin',
+}
+
 /**
  * User Entity
  * -----------
@@ -29,6 +34,13 @@ export class User {
 
   @Column({ default: true })
   isActive: boolean;
+
+  /**
+   * Role applicatif. Le client ne peut jamais le definir lui-meme
+   * (register force toujours PLAYER) ; le passage en ADMIN se fait hors API.
+   */
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.PLAYER })
+  role: UserRole;
 
   @OneToMany(() => Character, (character) => character.user)
   characters: Character[];
