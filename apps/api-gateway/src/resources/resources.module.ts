@@ -4,7 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Resource } from './entities/resource.entity';
 import { ResourcesService } from './resources.service';
 import { ResourcesGateway } from './resources.gateway';
-import { LootService } from '../world/loot.service'; // ✅ Ajout propre
+import { LootService } from '../world/loot.service';
 import { InventoryModule } from '../inventory/inventory.module';
 import { CommonModule } from '../common/common.module';
 
@@ -14,11 +14,7 @@ import { CommonModule } from '../common/common.module';
     InventoryModule,
     CommonModule,
   ],
-  providers: [
-    ResourcesService,
-    ResourcesGateway,
-    LootService, // ✅ Injection du loot ici
-  ],
+  providers: [ResourcesService, ResourcesGateway, LootService],
   exports: [ResourcesService, ResourcesGateway],
 })
 export class ResourcesModule {}

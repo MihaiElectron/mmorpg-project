@@ -83,7 +83,7 @@ export class ResourcesGateway
     @MessageBody() payload: InteractResourcePayload,
   ) {
     if (!payload || typeof payload.targetId !== 'string') {
-      console.warn('❌ Invalid payload received:', payload);
+      console.warn('Invalid payload received:', payload);
       return;
     }
 
@@ -91,7 +91,7 @@ export class ResourcesGateway
     // le monde (join_world), jamais ceux fournis par le client.
     const player = client.data.player;
     if (!player?.characterId) {
-      console.warn('❌ No joined player for this socket:', client.id);
+      console.warn('No joined player for this socket:', client.id);
       return;
     }
 
@@ -108,17 +108,17 @@ export class ResourcesGateway
 
     const resource = await this.resources.findOne(targetId);
     if (!resource) {
-      console.warn('❌ Resource not found:', targetId);
+      console.warn('Resource not found:', targetId);
       return;
     }
 
     if (resource.state === 'dead' || (resource.remainingLoots ?? 0) <= 0) {
-      console.warn('❌ Resource already depleted:', targetId);
+      console.warn('Resource already depleted:', targetId);
       return;
     }
 
     if (!this.isInRange(player, resource)) {
-      console.warn('❌ Too far from resource:', targetId);
+      console.warn('Too far from resource:', targetId);
       return;
     }
 

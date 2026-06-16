@@ -8,7 +8,6 @@ const storeLogic = (set) => ({
   actions: [],
 
   openPanel: (target, actions) => {
-    console.log("[ActionPanelStore] openPanel:", { target, actions });
     set({
       isOpen: true,
       target,
@@ -30,7 +29,6 @@ const getStore = () => {
   if (typeof window !== "undefined") {
     if (!window[KEY]) {
       window[KEY] = create(storeLogic);
-      console.log("📦 [ActionPanelStore] Global Singleton Initialized");
     }
     return window[KEY];
   }

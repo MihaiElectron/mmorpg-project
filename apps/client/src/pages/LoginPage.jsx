@@ -49,7 +49,7 @@ function LoginPage() {
         navigate("/world");
       }
     } catch (err) {
-      // 🔥 Avec fetch, le message du backend est dans err.message
+      // Avec fetch, le message du backend est dans err.message
       const backendMessage = err.message || "Erreur";
 
       setMessage(backendMessage);

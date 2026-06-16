@@ -16,7 +16,7 @@ export class ResourcesService {
   }
 
   /**
-   * 🔍 Récupère une ressource par ID
+   * Récupère une ressource par ID
    */
   findOne(id: string) {
     return this.repo.findOne({ where: { id } });
@@ -46,7 +46,7 @@ export class ResourcesService {
   }
 
   /**
-   * 🪓 Marque une ressource comme "dead"
+   * Marque une ressource comme "dead"
    */
   async markGathered(id: string) {
     await this.repo.update(id, { state: 'dead', remainingLoots: 0 });

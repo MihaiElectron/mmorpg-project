@@ -10,8 +10,6 @@ export default function Inventory() {
   const safeInventory = Array.isArray(inventory) ? inventory : [];
   const inventorySlots = Array.from({ length: 18 }, (_, i) => i);
 
-  console.log("🎒 Rendering inventory, items:", safeInventory.length);
-
   return (
     <div className="inventory-section">
       <div className="inventory-grid">

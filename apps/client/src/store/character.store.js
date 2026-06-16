@@ -12,12 +12,10 @@ const storeLogic = (set, get) => ({
   setCharacter: (data) => set({ character: data }),
   clearCharacter: () => set({ character: null, inventory: [], equipment: {} }),
   toggleOpen: () => {
-    console.log("🏪 [CharacterStore] toggleOpen");
     set((s) => ({ isOpen: !s.isOpen }));
   },
 
   updateInventoryItem: (itemData) => {
-    console.log("🏪 [CharacterStore] updateInventoryItem:", itemData);
     set((state) => {
       const inventory = [...(state.inventory || [])];
       const index = inventory.findIndex((inv) => inv.item?.id === itemData.id);
@@ -69,7 +67,7 @@ const storeLogic = (set, get) => ({
       set({ character: data, equipment: equipmentMap, inventory });
       return data;
     } catch (err) {
-      console.error("❌ [CharacterStore] loadCharacter error:", err);
+      console.error("[CharacterStore] loadCharacter error:", err);
       throw err;
     }
   },
@@ -88,7 +86,7 @@ const storeLogic = (set, get) => ({
       });
       if (res.ok) await get().loadCharacter();
     } catch (err) {
-      console.error("❌ [CharacterStore] equipItem error:", err);
+      console.error("[CharacterStore] equipItem error:", err);
     }
   },
 
@@ -104,7 +102,7 @@ const storeLogic = (set, get) => ({
       });
       if (res.ok) await get().loadCharacter();
     } catch (err) {
-      console.error("❌ [CharacterStore] unequipItem error:", err);
+      console.error("[CharacterStore] unequipItem error:", err);
     }
   },
 });
@@ -115,7 +113,6 @@ const getStore = () => {
   if (typeof window !== "undefined") {
     if (!window[KEY]) {
       window[KEY] = create(storeLogic);
-      console.log("📦 [CharacterStore] Global Singleton Initialized");
     }
     return window[KEY];
   }

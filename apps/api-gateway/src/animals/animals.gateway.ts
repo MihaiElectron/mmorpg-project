@@ -52,7 +52,7 @@ export class AnimalsGateway implements OnGatewayConnection {
     // le monde (join_world), jamais ceux fournis par le client dans ce payload.
     const player = client.data.player;
     if (!player?.characterId) {
-      console.warn('❌ No joined player for this socket:', client.id);
+      console.warn('No joined player for this socket:', client.id);
       return;
     }
 
@@ -63,7 +63,7 @@ export class AnimalsGateway implements OnGatewayConnection {
     );
 
     if (isAttackFailure(result)) {
-      console.warn('❌ Attack rejected:', result.error);
+      console.warn('Attack rejected:', result.error);
       return;
     }
 

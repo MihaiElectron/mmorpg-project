@@ -15,5 +15,5 @@ export type WorldSocket = Socket<
   any, // events envoyés par le client
   any, // events envoyés au client
   any, // events internes
-  { player: PlayerData; userId: string } // 🔥 ICI : data strictement typé
+  { player: PlayerData; userId: string } // data strictement typé
 >;

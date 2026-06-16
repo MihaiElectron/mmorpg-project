@@ -19,26 +19,21 @@ export default function ActionPanel() {
   const closePanel = useActionPanelStore((s) => s.closePanel);
   const character = useCharacterStore((s) => s.character);
 
-  console.log("🎨 [ActionPanel] Render, isOpen:", isOpen);
-
   if (!isOpen || !target) {
     return null;
   }
 
   const handleAction = (action: string) => {
-    console.log("▶️ [ActionPanel] Action clicked:", action);
-
     const socket = (window as GameWindow).game?.socket;
-    console.log("🔌 SOCKET AT CLICK:", socket);
 
     if (!socket || !socket.connected) {
-      console.warn("❌ No socket available or not connected");
+      console.warn("No socket available or not connected");
       closePanel();
       return;
     }
 
     if (!character?.id) {
-      console.warn("❌ No character available for resource interaction");
+      console.warn("No character available for resource interaction");
       closePanel();
       return;
     }

@@ -12,7 +12,7 @@ interface User {
 
 @Injectable()
 export class AuthService {
-  private users: User[] = []; // ⚠️ à remplacer par une vraie DB
+  private users: User[] = []; // à remplacer par une vraie DB
 
   constructor(private readonly jwtService: JwtService) {}
 

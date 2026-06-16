@@ -75,7 +75,7 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
-  console.log(`🚀 API démarrée sur http://localhost:${port}`);
+  console.log(`API démarrée sur http://localhost:${port}`);
 }
 
 void bootstrap();

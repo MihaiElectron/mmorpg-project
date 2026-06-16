@@ -10,8 +10,6 @@ export default function CharacterLayout() {
   const isOpen = useCharacterStore((s) => s.isOpen);
   const toggleOpen = useCharacterStore((s) => s.toggleOpen);
 
-  console.log("👤 [CharacterLayout] Render, isOpen:", isOpen);
-
   return (
     <div className={`character-layout ${isOpen ? "is-open" : "is-closed"}`}>
       <button className="character-layout__tab" onClick={toggleOpen}>

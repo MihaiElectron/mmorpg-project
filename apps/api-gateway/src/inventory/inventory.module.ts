@@ -16,7 +16,7 @@ import { Item } from '../items/entities/item.entity';
 
 @Module({
   imports: [
-    // 🔹 On importe toutes les entités nécessaires pour le service
+    // On importe toutes les entités nécessaires pour le service
     TypeOrmModule.forFeature([Inventory, Character, Item]),
   ],
   providers: [InventoryService],

@@ -8,8 +8,6 @@ export default function CharacterLayer() {
   const unequipItem = useCharacterStore((s) => s.unequipItem);
   const equipment = useCharacterStore((s) => s.equipment);
 
-  console.log("👤 CharacterLayer state:", { character, equipment });
-
   if (!character) {
     return <div style={{ color: "white" }}>Chargement du personnage...</div>;
   }

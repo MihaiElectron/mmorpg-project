@@ -84,10 +84,8 @@ export class CharacterService {
     userId: string,
     dto: EquipItemDto,
   ): Promise<Character> {
-    // ✏️ MODIF : remplacer "id" (inexistant) par le vrai personnage
+    // Valide que l'utilisateur a bien un personnage avant d'equiper l'item.
     const character = await this.findFirstByUser(userId);
-
-    // 🔥 AJOUT : éviter l'erreur "unused variable"
     void character;
 
     const item = await this.itemRepository.findOne({
@@ -213,12 +211,6 @@ export class CharacterService {
         throw new NotFoundException(`No item equipped in slot ${dto.slot}`);
       }
 
-      console.log(
-        'Equipped item found:',
-        equippedItem.item.id,
-        equippedItem.item.name,
-      );
-
       // 2. Supprimer de CharacterEquipment
       await manager.delete(CharacterEquipment, { characterId, slot: dto.slot });
 
@@ -232,12 +224,9 @@ export class CharacterService {
         .andWhere('item.id = :itemId', { itemId: equippedItem.item.id })
         .getOne();
 
-      console.log('Inventory entry found:', inventoryEntry);
-
       if (inventoryEntry) {
         inventoryEntry.equipped = false;
         await manager.save(Inventory, inventoryEntry);
-        console.log('Inventory entry updated: equipped = false');
       }
 
       await this.recalculateStats(characterId, manager);
@@ -264,11 +253,9 @@ export class CharacterService {
     characterId: string,
     manager: EntityManager,
   ): Promise<void> {
-    // 🔥 AJOUT : éviter l'erreur "unused variable"
     void characterId;
     void manager;
 
-    // 🔥 AJOUT : éviter l'erreur "async method has no await"
     await Promise.resolve();
   }
 

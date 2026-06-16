@@ -13,14 +13,6 @@ class SocketService {
       autoConnect: true,
     });
 
-    this.socket.on("connect", () => {
-      console.log("Socket connected:", this.socket.id);
-    });
-
-    this.socket.on("disconnect", () => {
-      console.log("Socket disconnected");
-    });
-
     return this.socket;
   }
 

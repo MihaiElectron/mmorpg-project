@@ -53,12 +53,12 @@ function WorldPage() {
     if (!token || !phaserInitialized) return;
     if (phaserGameRef.current) return;
 
-    // 1️⃣ Créer le socket AVANT Phaser (JWT transmis pour l'authentification serveur)
+    // Créer le socket AVANT Phaser (JWT transmis pour l'authentification serveur)
     const socket = io("http://localhost:3000", {
       auth: { token },
     });
 
-    // 2️⃣ Config Phaser
+    // Config Phaser
     const config = {
       type: Phaser.AUTO,
       parent: "game-container",
@@ -76,16 +76,14 @@ function WorldPage() {
       scene: [PreloadScene, WorldScene],
     };
 
-    // 3️⃣ Créer Phaser
+    // Créer Phaser
     phaserGameRef.current = new Phaser.Game(config);
 
-    // 4️⃣ Attacher le socket au jeu
+    // Attacher le socket au jeu
     phaserGameRef.current.socket = socket;
 
-    // 5️⃣ Exposer globalement
+    // Exposer globalement
     window.game = phaserGameRef.current;
-
-    console.log("🎮 Phaser + Socket initialized:", socket);
 
     return () => {
       if (phaserGameRef.current) {
@@ -95,7 +93,7 @@ function WorldPage() {
     };
   }, [token, phaserInitialized]);
 
-  // 🔥 VERSION FINALE — PROTECTION CONTRE LE REFRESH
+  // Protection contre le refresh : ne notifier Phaser que si la scène est prête.
   useEffect(() => {
     if (!phaserGameRef.current || !equipment) return;
 

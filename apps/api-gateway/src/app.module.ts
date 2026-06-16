@@ -6,7 +6,7 @@
  * - Les modules métier (auth, gateway, common, characters, inventory, resources)
  * - La connexion TypeORM à PostgreSQL
  *
- * ⚠ synchronize: true → OK en dev, à désactiver en production.
+ * synchronize: true → OK en dev, à désactiver en production.
  */
 
 import { Module } from '@nestjs/common';
@@ -48,10 +48,10 @@ import { AnimalsModule } from './animals/animals.module';
         password: config.get<string>('DB_PASSWORD', 'ssap'),
         database: config.get<string>('DB_NAME', 'mmorpgdb'),
 
-        // 🔥 Charge automatiquement TOUTES les entités du projet
+        // Charge automatiquement TOUTES les entités du projet
         entities: [__dirname + '/**/*.entity.{ts,js}'],
 
-        synchronize: true, // ⚠ auto-create/update tables pour dev
+        synchronize: true, // auto-create/update tables pour dev
       }),
     }),
 
@@ -62,7 +62,7 @@ import { AnimalsModule } from './animals/animals.module';
     CommonModule,
     CharactersModule,
     InventoryModule,
-    ResourcesModule, // ⭐ Ajout propre ici
+    ResourcesModule,
     WorldModule,
     AnimalsModule,
   ],

@@ -21,7 +21,7 @@ export default class BootScene extends Phaser.Scene {
 
   preload() {
     /**
-     * ⚠️ Ici tu peux charger un logo ou un loader minimal.
+     * Ici tu peux charger un logo ou un loader minimal.
      * Exemple :
      * this.load.image("logo", "assets/ui/logo.png");
      *
@@ -31,7 +31,7 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     /**
-     * 🔹 Paramètres globaux du jeu
+     * Paramètres globaux du jeu
      * Ici tu peux définir :
      * - limites du monde
      * - paramètres de scaling
@@ -46,7 +46,7 @@ export default class BootScene extends Phaser.Scene {
     this.game.renderer.antialias = false;
 
     /**
-     * 🔥 Transition immédiate vers PreloadScene
+     * Transition immédiate vers PreloadScene
      * PreloadScene va charger :
      * - spritesheets
      * - tilesets

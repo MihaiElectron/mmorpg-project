@@ -10,8 +10,6 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   preload() {
-    console.log("🎮 PreloadScene: preload()");
-
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
@@ -39,18 +37,9 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image("dead_tree", "/assets/sprites/dead_tree.png");
     this.load.image("turkey", "/assets/bestiary/turkey_32.png");
     this.load.image("wooden_stick", "/assets/images/items/wooden_stick.png");
-
-    this.load.on("filecomplete", (key) => {
-      console.log(`✅ Asset loaded: ${key}`);
-    });
-
-    this.load.on("complete", () => {
-      console.log("✅ All assets loaded");
-    });
   }
 
   create() {
-    console.log("🚀 Starting WorldScene...");
     this.scene.start("WorldScene");
   }
 }

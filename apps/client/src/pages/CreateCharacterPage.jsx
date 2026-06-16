@@ -73,7 +73,6 @@ function CreateCharacterPage() {
 
       // Succès → on parse le JSON une seule fois
       const character = await res.json();
-      console.log("Personnage créé :", character);
 
       // Stockage dans Zustand
       setCharacter(character);

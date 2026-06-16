@@ -31,14 +31,6 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    console.log("🌍 WorldScene.create()");
-    console.log("🌐 [WorldScene] socket at create:", this.game.socket);
-
-    console.log(
-      "🟧 [WorldScene] this.game === window.game ?",
-      this.game === window.game
-    );
-
     // on garde window.game pointant sur cette instance
     window.game = this.game;
 
@@ -49,7 +41,7 @@ export default class WorldScene extends Phaser.Scene {
     this.socket = this.game.socket;
 
     if (!this.socket) {
-      console.warn("⚠️ No socket found in WorldScene");
+      console.warn("No socket found in WorldScene");
     } else {
       this.registerGatheringEvents();
     }
@@ -89,8 +81,6 @@ export default class WorldScene extends Phaser.Scene {
       const target = this.getGatheringTargetAt(worldX, worldY);
 
       if (target) {
-        console.log("🎯 [Phaser] Target detected:", target);
-
         const store = getActionPanelStore();
         store.getState().openPanel(
           { id: target.id, type: target.type, kind: target.kind },
@@ -143,35 +133,28 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    console.log("🟦 [WorldScene] registerGatheringEvents CALLED");
-
     if (!this.socket) {
-      console.warn("⚠️ No socket found in WorldScene");
+      console.warn("No socket found in WorldScene");
       return;
     }
 
     this.gatheringEventsRegistered = true;
 
     this.socket.on("connect", () => {
-      console.log("🌐 [WorldScene] Socket connected, requesting world objects");
       this.socket.emit("get_resources");
       this.socket.emit("get_animals");
       this.joinWorld();
     });
 
     this.socket.on("resources", (resources) => {
-      console.log("🟩 [WorldScene] resources RECEIVED", resources);
       this.renderResources(resources);
     });
 
     this.socket.on("animals", (animals) => {
-      console.log("🟩 [WorldScene] animals RECEIVED", animals);
       this.renderAnimals(animals);
     });
 
     this.socket.on("inventory_update", (data) => {
-      console.log("🟩 [WorldScene] inventory_update RECEIVED", data);
-
       const store = getCharacterStore();
       store.getState().updateInventoryItem({
         id: data.itemId,
@@ -182,8 +165,6 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("resource_loot", (data) => {
-      console.log("🟩 [WorldScene] resource_loot RECEIVED", data);
-
       const item = data.item || {};
       const itemId = item.id || data.itemId;
       const itemName = item.name || itemId.replace("_", " ");
@@ -200,7 +181,6 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("resource_update", (data) => {
-      console.log("🟩 [WorldScene] resource_update RECEIVED", data);
       if (data.state === "dead") {
         this.removeResource(data.id);
       }
@@ -211,12 +191,10 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("gather_stopped", (data) => {
-      console.log("🟩 [WorldScene] gather_stopped RECEIVED", data);
       this.stopGatherIndicator(data.targetId);
     });
 
     this.socket.on("animal_update", (animal) => {
-      console.log("🟩 [WorldScene] animal_update RECEIVED", animal);
       if (animal.state === "dead") {
         this.removeAnimal(animal.id);
         return;
@@ -225,18 +203,12 @@ export default class WorldScene extends Phaser.Scene {
       this.upsertAnimal(animal);
     });
 
-    this.socket.on("animal_hit", (animal) => {
-      console.log("🟩 [WorldScene] animal_hit RECEIVED", animal);
-    });
-
     this.socket.on("current_players", (players) => {
-      console.log("🟩 [WorldScene] current_players RECEIVED", players);
       this.clearRemotePlayers();
       players.forEach((player) => this.upsertRemotePlayer(player));
     });
 
     this.socket.on("world_joined", (player) => {
-      console.log("🟩 [WorldScene] world_joined RECEIVED", player);
       if (!this.player) return;
 
       this.player.setPosition(player.x, player.y);
@@ -248,7 +220,6 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("player_joined", (player) => {
-      console.log("🟩 [WorldScene] player_joined RECEIVED", player);
       this.upsertRemotePlayer(player);
     });
 
@@ -257,7 +228,6 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("player_left", (player) => {
-      console.log("🟩 [WorldScene] player_left RECEIVED", player);
       this.removeRemotePlayer(player);
     });
 
@@ -588,7 +558,6 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("gather_tick");
       this.socket.off("gather_stopped");
       this.socket.off("animal_update");
-      this.socket.off("animal_hit");
       this.socket.off("current_players");
       this.socket.off("world_joined");
       this.socket.off("player_joined");
