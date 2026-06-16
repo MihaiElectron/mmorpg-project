@@ -53,8 +53,10 @@ function WorldPage() {
     if (!token || !phaserInitialized) return;
     if (phaserGameRef.current) return;
 
-    // 1️⃣ Créer le socket AVANT Phaser
-    const socket = io("http://localhost:3000");
+    // 1️⃣ Créer le socket AVANT Phaser (JWT transmis pour l'authentification serveur)
+    const socket = io("http://localhost:3000", {
+      auth: { token },
+    });
 
     // 2️⃣ Config Phaser
     const config = {

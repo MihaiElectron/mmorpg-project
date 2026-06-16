@@ -6,11 +6,13 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { WorldService } from './world.service';
+import { WsAuthService } from '../common/ws-auth.service';
 
 type JoinWorldPayload = {
   characterId: string;
@@ -37,11 +39,28 @@ function isJoinWorldPayload(payload: unknown): payload is JoinWorldPayload {
     origin: '*',
   },
 })
-export class WorldGateway implements OnGatewayDisconnect {
+export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly worldService: WorldService) {}
+  constructor(
+    private readonly worldService: WorldService,
+    private readonly wsAuthService: WsAuthService,
+  ) {}
+
+  /**
+   * Rejette toute connexion sans JWT valide avant d'accepter le moindre
+   * événement (join_world, gather, etc.).
+   */
+  async handleConnection(client: WorldSocket) {
+    const auth = await this.wsAuthService.authenticate(client);
+    if (!auth) {
+      client.disconnect(true);
+      return;
+    }
+
+    client.data.userId = auth.userId;
+  }
 
   /**
    * Un personnage entre dans le monde.

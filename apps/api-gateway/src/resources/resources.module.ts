@@ -6,9 +6,14 @@ import { ResourcesService } from './resources.service';
 import { ResourcesGateway } from './resources.gateway';
 import { LootService } from '../world/loot.service'; // ✅ Ajout propre
 import { InventoryModule } from '../inventory/inventory.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource]), InventoryModule],
+  imports: [
+    TypeOrmModule.forFeature([Resource]),
+    InventoryModule,
+    CommonModule,
+  ],
   providers: [
     ResourcesService,
     ResourcesGateway,

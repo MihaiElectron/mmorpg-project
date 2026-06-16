@@ -6,12 +6,14 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Character } from '../characters/entities/character.entity';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
     InventoryModule,
     ResourcesModule,
     TypeOrmModule.forFeature([Character]),
+    CommonModule,
   ],
   providers: [WorldGateway, WorldService, LootService],
 })

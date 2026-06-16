@@ -109,6 +109,9 @@ export class WorldService {
     });
     if (!character) return null;
 
+    // Le personnage doit appartenir à l'utilisateur authentifié sur ce socket.
+    if (character.userId !== client.data.userId) return null;
+
     const player: ConnectedPlayer = {
       socketId: client.id,
       characterId: payload.characterId,
