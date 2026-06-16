@@ -165,11 +165,6 @@ export default class WorldScene extends Phaser.Scene {
       this.renderAnimals(animals);
     });
 
-    this.socket.on("open_gather_window", (data) => {
-      console.log("🟩 [WorldScene] open_gather_window RECEIVED", data);
-      this.player.requestGather(data.targetId, data.targetType);
-    });
-
     this.socket.on("inventory_update", (data) => {
       console.log("🟩 [WorldScene] inventory_update RECEIVED", data);
 
@@ -511,7 +506,6 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("connect");
       this.socket.off("resources");
       this.socket.off("animals");
-      this.socket.off("open_gather_window");
       this.socket.off("inventory_update");
       this.socket.off("resource_loot");
       this.socket.off("resource_update");
