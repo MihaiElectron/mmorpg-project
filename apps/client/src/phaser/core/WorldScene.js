@@ -57,10 +57,12 @@ export default class WorldScene extends Phaser.Scene {
 
     // PLAYER
     const character = getCharacterStore().getState().character;
+    const startX = character?.positionX ?? 400;
+    const startY = character?.positionY ?? 300;
     this.player = new Player(
       this,
-      400,
-      300,
+      startX,
+      startY,
       this.getPlayerTexture(character?.sex),
     );
     setSpriteDepth(this.player);
@@ -223,6 +225,18 @@ export default class WorldScene extends Phaser.Scene {
       console.log("🟩 [WorldScene] current_players RECEIVED", players);
       this.clearRemotePlayers();
       players.forEach((player) => this.upsertRemotePlayer(player));
+    });
+
+    this.socket.on("world_joined", (player) => {
+      console.log("🟩 [WorldScene] world_joined RECEIVED", player);
+      if (!this.player) return;
+
+      this.player.setPosition(player.x, player.y);
+      this.lastSyncedPosition = {
+        x: Math.round(player.x),
+        y: Math.round(player.y),
+        direction: player.direction,
+      };
     });
 
     this.socket.on("player_joined", (player) => {
@@ -504,6 +518,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("animal_update");
       this.socket.off("animal_hit");
       this.socket.off("current_players");
+      this.socket.off("world_joined");
       this.socket.off("player_joined");
       this.socket.off("player_moved");
       this.socket.off("player_left");

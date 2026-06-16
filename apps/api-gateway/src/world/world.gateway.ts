@@ -12,6 +12,26 @@ import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { WorldService } from './world.service';
 
+type JoinWorldPayload = {
+  characterId: string;
+  name: string;
+  sex?: string;
+  x?: number;
+  y?: number;
+  direction?: string;
+};
+
+function isJoinWorldPayload(payload: unknown): payload is JoinWorldPayload {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Record<string, unknown>;
+
+  return (
+    typeof candidate.characterId === 'string' &&
+    typeof candidate.name === 'string'
+  );
+}
+
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -27,27 +47,23 @@ export class WorldGateway implements OnGatewayDisconnect {
    * Un personnage entre dans le monde.
    */
   @SubscribeMessage('join_world')
-  handleJoinWorld(
+  async handleJoinWorld(
     @ConnectedSocket() client: WorldSocket,
     @MessageBody()
-    payload: {
-      characterId: string;
-      name: string;
-      sex?: string;
-      x?: number;
-      y?: number;
-      direction?: string;
-    },
+    payload: unknown,
   ) {
-    if (!payload?.characterId || !payload?.name) {
+    if (!isJoinWorldPayload(payload)) {
       client.emit('join_world_error', 'Invalid player payload');
       return;
     }
 
-    const { player, previousSocketId } = this.worldService.joinPlayer(
-      client,
-      payload,
-    );
+    const joined = await this.worldService.joinPlayer(client, payload);
+    if (!joined) {
+      client.emit('join_world_error', 'Character not found');
+      return;
+    }
+
+    const { player, previousSocketId } = joined;
 
     if (previousSocketId) {
       this.server.emit('player_left', {
@@ -60,6 +76,7 @@ export class WorldGateway implements OnGatewayDisconnect {
       'current_players',
       this.worldService.getPlayersExcept(client.id),
     );
+    client.emit('world_joined', player);
     client.broadcast.emit('player_joined', player);
   }
 
@@ -85,9 +102,10 @@ export class WorldGateway implements OnGatewayDisconnect {
     client.broadcast.emit('player_moved', player);
   }
 
-  handleDisconnect(client: WorldSocket) {
+  async handleDisconnect(client: WorldSocket) {
     const player = this.worldService.removePlayer(client);
     if (player) {
+      await this.worldService.persistPlayerPosition(player);
       client.broadcast.emit('player_left', {
         socketId: player.socketId,
         characterId: player.characterId,

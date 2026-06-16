@@ -45,6 +45,12 @@ export class Character {
   @Column({ default: 0 })
   defense: number; // Défense de base
 
+  @Column({ default: 400 })
+  positionX: number;
+
+  @Column({ default: 300 })
+  positionY: number;
+
   @ManyToOne(() => User, (user) => user.characters, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;

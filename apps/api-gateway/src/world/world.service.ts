@@ -6,6 +6,9 @@ import { LootService } from './loot.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { ResourcesService } from '../resources/resources.service';
 import { ResourcesGateway } from '../resources/resources.gateway';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Character } from '../characters/entities/character.entity';
 
 type WorldObject = {
   id: string;
@@ -28,6 +31,20 @@ export type ConnectedPlayer = {
   x: number;
   y: number;
   direction?: string;
+};
+
+export type JoinWorldPayload = {
+  characterId: string;
+  name: string;
+  sex?: string;
+  x?: number;
+  y?: number;
+  direction?: string;
+};
+
+export type JoinedPlayer = {
+  player: ConnectedPlayer;
+  previousSocketId: string | null;
 };
 
 @Injectable()
@@ -61,39 +78,44 @@ export class WorldService {
      */
     private readonly resourcesService: ResourcesService,
     private readonly resourcesGateway: ResourcesGateway,
+    @InjectRepository(Character)
+    private readonly characterRepository: Repository<Character>,
   ) {}
 
   // ---------------------------------------------------------------------------
   // Synchronisation temps réel des joueurs
   // ---------------------------------------------------------------------------
-  joinPlayer(
+  async joinPlayer(
     client: WorldSocket,
-    payload: {
-      characterId: string;
-      name: string;
-      sex?: string;
-      x?: number;
-      y?: number;
-      direction?: string;
-    },
-  ) {
+    payload: JoinWorldPayload,
+  ): Promise<JoinedPlayer | null> {
     const previousSocketId = this.findSocketIdByCharacterId(
       payload.characterId,
       client.id,
     );
 
     if (previousSocketId) {
+      const previousPlayer = this.connectedPlayers.get(previousSocketId);
+      if (previousPlayer) {
+        await this.persistPlayerPosition(previousPlayer);
+      }
+
       this.connectedPlayers.delete(previousSocketId);
       this.gatheringSessions.delete(previousSocketId);
     }
 
+    const character = await this.characterRepository.findOne({
+      where: { id: payload.characterId },
+    });
+    if (!character) return null;
+
     const player: ConnectedPlayer = {
       socketId: client.id,
       characterId: payload.characterId,
-      name: payload.name,
-      sex: payload.sex,
-      x: payload.x ?? 400,
-      y: payload.y ?? 300,
+      name: character.name,
+      sex: character.sex,
+      x: character.positionX ?? payload.x ?? 400,
+      y: character.positionY ?? payload.y ?? 300,
       direction: payload.direction ?? 'down',
     };
 
@@ -113,7 +135,7 @@ export class WorldService {
   updatePlayer(
     client: WorldSocket,
     payload: { x: number; y: number; direction?: string },
-  ) {
+  ): ConnectedPlayer | null {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
 
@@ -133,14 +155,21 @@ export class WorldService {
     return player;
   }
 
-  removePlayer(client: WorldSocket) {
+  removePlayer(client: WorldSocket): ConnectedPlayer | undefined {
     const player = this.connectedPlayers.get(client.id);
     this.connectedPlayers.delete(client.id);
     this.stopGathering(client);
     return player;
   }
 
-  getPlayersExcept(socketId: string) {
+  async persistPlayerPosition(player: ConnectedPlayer): Promise<void> {
+    await this.characterRepository.update(player.characterId, {
+      positionX: Math.round(player.x),
+      positionY: Math.round(player.y),
+    });
+  }
+
+  getPlayersExcept(socketId: string): ConnectedPlayer[] {
     const playersByCharacter = new Map<string, ConnectedPlayer>();
 
     for (const player of this.connectedPlayers.values()) {
@@ -152,7 +181,10 @@ export class WorldService {
     return Array.from(playersByCharacter.values());
   }
 
-  private findSocketIdByCharacterId(characterId: string, exceptSocketId: string) {
+  private findSocketIdByCharacterId(
+    characterId: string,
+    exceptSocketId: string,
+  ) {
     for (const player of this.connectedPlayers.values()) {
       if (
         player.characterId === characterId &&
