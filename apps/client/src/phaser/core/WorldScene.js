@@ -8,6 +8,42 @@ import { setSpriteDepth } from "../utils/depth";
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
 
+// ── HP bar constants (mirrors SCSS variables) ──────────────────────────────
+const HP_BAR_WIDTH = 40;
+const HP_BAR_HEIGHT = 6;
+const HP_BAR_OFFSET_Y = -46;
+const HP_BAR_DEPTH = 18;
+
+function getHpColor(pct) {
+  if (pct >= 0.75) return 0x4caf50; // $hp-color-high
+  if (pct >= 0.50) return 0xf4d03f; // $hp-color-medium
+  if (pct >= 0.25) return 0xe67e22; // $hp-color-low
+  return 0xc0392b;                   // $hp-color-critical
+}
+
+function createHpBar(scene, x, y) {
+  const bg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x000000, 0.65);
+  bg.setDepth(HP_BAR_DEPTH);
+  const fill = scene.add.rectangle(x - HP_BAR_WIDTH / 2, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x4caf50);
+  fill.setOrigin(0, 0.5);
+  fill.setDepth(HP_BAR_DEPTH + 1);
+  return { bg, fill };
+}
+
+function updateHpBar(hpBar, health, maxHealth, x, y) {
+  const pct = maxHealth > 0 ? Math.min(health / maxHealth, 1) : 0;
+  hpBar.bg.setPosition(x, y + HP_BAR_OFFSET_Y);
+  hpBar.fill.setPosition(x - HP_BAR_WIDTH / 2, y + HP_BAR_OFFSET_Y);
+  hpBar.fill.setSize(Math.max(HP_BAR_WIDTH * pct, 1), HP_BAR_HEIGHT);
+  hpBar.fill.setFillStyle(getHpColor(pct));
+}
+
+function destroyHpBar(hpBar) {
+  if (!hpBar) return;
+  hpBar.bg.destroy();
+  hpBar.fill.destroy();
+}
+
 export default class WorldScene extends Phaser.Scene {
   constructor() {
     super({ key: "WorldScene" });
@@ -31,11 +67,16 @@ export default class WorldScene extends Phaser.Scene {
 
     this.autoAttackTargetId = null;
     this.autoAttackInterval = null;
+    this.playerHpBar = null;
   }
 
   startAutoAttack(targetId) {
     this.stopAutoAttack();
     this.autoAttackTargetId = targetId;
+
+    if (this.player && !this.playerHpBar) {
+      this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
+    }
 
     let lastAttackEmitAt = 0;
     const ATTACK_INTERVAL_MS = 750;
@@ -76,6 +117,8 @@ export default class WorldScene extends Phaser.Scene {
       this.autoAttackInterval = null;
     }
     this.autoAttackTargetId = null;
+    destroyHpBar(this.playerHpBar);
+    this.playerHpBar = null;
   }
 
   create() {
@@ -173,6 +216,23 @@ export default class WorldScene extends Phaser.Scene {
     this.syncLocalPlayer(time);
     this.updateRemotePlayerLabels();
     this.updateGatherIndicator();
+    this.updatePlayerHpBar();
+    this.updateAnimalHpBars();
+  }
+
+  updatePlayerHpBar() {
+    if (!this.playerHpBar || !this.player) return;
+    const char = getCharacterStore().getState().character;
+    if (!char) return;
+    updateHpBar(this.playerHpBar, char.health, char.maxHealth, this.player.x, this.player.y);
+  }
+
+  updateAnimalHpBars() {
+    for (const entry of this.animalSprites.values()) {
+      if (entry.hpBar) {
+        updateHpBar(entry.hpBar, entry.animal.health, entry.animal.maxHealth, entry.sprite.x, entry.sprite.y);
+      }
+    }
   }
 
   // CLICK DETECTION
@@ -303,10 +363,15 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("character_damaged", (data) => {
       getCharacterStore().getState().setHealth(data.health);
+      if (!this.playerHpBar && this.player) {
+        this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
+      }
     });
 
     this.socket.on("character_respawn", (data) => {
       getCharacterStore().getState().setHealth(data.health);
+      destroyHpBar(this.playerHpBar);
+      this.playerHpBar = null;
       if (this.player) {
         this.player.setPosition(data.x, data.y);
         this.cameras.main.centerOn(data.x, data.y);
@@ -548,6 +613,14 @@ export default class WorldScene extends Phaser.Scene {
         duration: 180,
         ease: "Linear",
       });
+
+      const inCombat = animal.state === "fighting" || animal.state === "escaping";
+      if (inCombat && !existing.hpBar) {
+        existing.hpBar = createHpBar(this, existing.sprite.x, existing.sprite.y);
+      } else if (!inCombat && existing.hpBar) {
+        destroyHpBar(existing.hpBar);
+        existing.hpBar = null;
+      }
       return;
     }
 
@@ -559,7 +632,11 @@ export default class WorldScene extends Phaser.Scene {
       Phaser.Geom.Rectangle.Contains,
     );
 
-    this.animalSprites.set(animal.id, { sprite, animal });
+    const inCombat = animal.state === "fighting" || animal.state === "escaping";
+    const hpBar = inCombat ? createHpBar(this, animal.x, animal.y) : null;
+    if (hpBar) updateHpBar(hpBar, animal.health, animal.maxHealth, animal.x, animal.y);
+
+    this.animalSprites.set(animal.id, { sprite, animal, hpBar });
     this.interactionTargets.push({
       sprite,
       id: animal.id,
@@ -581,8 +658,9 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   clearAnimals() {
-    for (const animal of this.animalSprites.values()) {
-      animal.sprite.destroy();
+    for (const entry of this.animalSprites.values()) {
+      entry.sprite.destroy();
+      destroyHpBar(entry.hpBar);
     }
 
     this.animalSprites.clear();
@@ -607,10 +685,11 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   removeAnimal(animalId) {
-    const animal = this.animalSprites.get(animalId);
+    const entry = this.animalSprites.get(animalId);
 
-    if (animal) {
-      animal.sprite.destroy();
+    if (entry) {
+      entry.sprite.destroy();
+      destroyHpBar(entry.hpBar);
       this.animalSprites.delete(animalId);
     }
 
@@ -643,6 +722,8 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.clearResources();
+    destroyHpBar(this.playerHpBar);
+    this.playerHpBar = null;
     this.clearAnimals();
     this.clearRemotePlayers();
     super.destroy();
