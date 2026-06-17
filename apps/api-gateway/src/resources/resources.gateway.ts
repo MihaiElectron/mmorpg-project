@@ -64,6 +64,7 @@ export class ResourcesGateway
     }
 
     client.data.userId = auth.userId;
+    client.data.role = auth.role;
 
     await this.sendResources(client);
   }

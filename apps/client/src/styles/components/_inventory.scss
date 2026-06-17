@@ -1,16 +1,15 @@
-/* ---------------------------------------------------------
-   INVENTORY — UI simple
-   --------------------------------------------------------- */
+@use '../abstracts/variables' as vars;
 
 .inventory-section {
   margin-top: 20px;
   padding: 10px 0;
-}
 
-.inventory-section h3 {
-  margin-bottom: 10px;
-  font-size: 14px;
-  font-weight: 600;
+  h3 {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: vars.$color-text-primary;
+  }
 }
 
 .inventory-grid {
@@ -22,14 +21,12 @@
 .inventory-slot {
   width: 50px;
   height: 50px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-
+  background: vars.$panel-border-subtle;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
   display: flex;
   align-items: center;
   justify-content: center;
-
   font-size: 10px;
-  color: #ccc;
+  color: vars.$color-text-muted;
 }

@@ -1,3 +1,6 @@
+@use '../abstracts/variables' as vars;
+@use '../abstracts/mixins' as m;
+
 .character-layout {
   position: fixed;
   bottom: 0;
@@ -6,55 +9,67 @@
   width: 90%;
   max-width: 800px;
   height: 60vh;
-  background-color: rgba(44, 62, 80, 0.95);
+  background-color: vars.$panel-bg;
   display: flex;
   flex-direction: row;
   z-index: 1000;
   transition: transform 0.4s ease-out;
   padding: 20px;
   border-radius: 20px 20px 0 0;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: vars.$panel-shadow;
   gap: 20px;
 
   &.is-open {
     transform: translateX(-50%) translateY(0);
   }
 
-  &__tab {
+  // ── Barre d'onglets ──────────────────────────────────────────────────────
+  &__tabs {
     position: absolute;
     top: -40px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 10px 30px;
-    background-color: #2c3e50;
-    color: white;
-    border: none;
-    border-radius: 10px 10px 0 0;
-    cursor: pointer;
-    font-weight: bold;
+    display: flex;
+    gap: 4px;
+  }
+
+  &__tab {
+    @include m.btn-tab;
+    position: relative;
     z-index: 1001;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-    
-    &:hover {
-      background-color: #34495e;
+
+    &--active {
+      background: vars.$tab-bg-active;
+      color: vars.$color-text-gold;
+    }
+
+    &--admin {
+      color: vars.$color-magic-amber;
+
+      &.character-layout__tab--active {
+        color: vars.$color-text-gold;
+      }
     }
   }
 
+  // ── Contenus ─────────────────────────────────────────────────────────────
   &__content {
     flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-    padding: 10px;
+    @include m.panel-section;
+
+    &--admin {
+      flex: 2;
+      align-items: flex-start;
+    }
   }
 
   &__inventory {
     flex: 1;
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-    padding: 10px;
+    @include m.panel-section;
   }
 }

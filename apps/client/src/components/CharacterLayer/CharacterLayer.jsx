@@ -9,7 +9,7 @@ export default function CharacterLayer() {
   const equipment = useCharacterStore((s) => s.equipment);
 
   if (!character) {
-    return <div style={{ color: "white" }}>Chargement du personnage...</div>;
+    return <div className="character-layer__loading">Chargement du personnage...</div>;
   }
 
   const slots = [

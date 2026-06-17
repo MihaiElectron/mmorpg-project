@@ -34,6 +34,7 @@ export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
       return;
     }
     client.data.userId = auth.userId;
+    client.data.role = auth.role;
     client.emit('animals', this.animalsService.findAll());
   }
 

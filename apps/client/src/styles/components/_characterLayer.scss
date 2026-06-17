@@ -1,3 +1,6 @@
+@use '../abstracts/variables' as vars;
+@use '../abstracts/mixins' as m;
+
 .character-layer {
   display: grid;
   grid-template-columns: repeat(5, 60px);
@@ -5,7 +8,7 @@
   column-gap: 6px;
   row-gap: 6px;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: vars.$panel-radius-sm;
   position: relative;
   height: 100%;
   width: 100%;
@@ -20,14 +23,11 @@
 }
 
 .character-layer-header {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 10px;
-  border-radius: 8px;
+  @include m.panel-header;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
 
   &__name {
-    color: #f1c40f;
+    color: vars.$color-text-gold;
     font-size: 1.2rem;
     font-weight: bold;
     text-transform: uppercase;
@@ -36,16 +36,14 @@
   }
 
   &__stats {
-    color: #ecf0f1;
+    color: vars.$color-text-primary;
     font-size: 0.9rem;
   }
 }
 
-/* Personnage au centre */
 .character-layer__character {
   grid-column: 2 / 5;
   grid-row: 1 / 6;
-
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
@@ -60,11 +58,8 @@
   background-image: url("/src/assets/images/characters/femme-souvetements.png");
 }
 
-/* Style générique des slots */
 .character-layer__slot {
-  border: 1px solid #666;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  @include m.panel-slot;
   width: 100%;
 }
 
@@ -74,76 +69,29 @@
   object-fit: contain;
 }
 
-/* Ligne du haut (4 slots) */
-.slot--left-earring {
-  grid-column: 1;
-  grid-row: 1;
-}
-.slot--right-earring {
-  grid-column: 2;
-  grid-row: 1;
-}
-.slot--headgear {
-  grid-column: 4;
-  grid-row: 1;
-}
-.slot--ranged-weapon {
-  grid-column: 5;
-  grid-row: 1;
+.character-layer__loading {
+  color: vars.$color-text-primary;
 }
 
-/* Deuxième ligne (2 slots) */
-.slot--necklace {
-  grid-column: 1;
-  grid-row: 2;
-}
-.slot--chest-armor {
-  grid-column: 5;
-  grid-row: 2;
-}
+// ── Positionnement des slots ──────────────────────────────────────────────────
 
-/* Troisième ligne (4 slots) */
-.slot--left-bracelet {
-  grid-column: 1;
-  grid-row: 3;
-}
-.slot--right-hand {
-  grid-column: 2;
-  grid-row: 3;
-}
-.slot--left-hand {
-  grid-column: 4;
-  grid-row: 3;
-}
-.slot--gloves {
-  grid-column: 5;
-  grid-row: 3;
-}
+.slot--left-earring  { grid-column: 1; grid-row: 1; }
+.slot--right-earring { grid-column: 2; grid-row: 1; }
+.slot--headgear      { grid-column: 4; grid-row: 1; }
+.slot--ranged-weapon { grid-column: 5; grid-row: 1; }
 
-/* Quatrième ligne (2 slots) */
-.slot--right-bracelet {
-  grid-column: 1;
-  grid-row: 4;
-}
-.slot--leg-armor {
-  grid-column: 5;
-  grid-row: 4;
-}
+.slot--necklace      { grid-column: 1; grid-row: 2; }
+.slot--chest-armor   { grid-column: 5; grid-row: 2; }
 
-/* Ligne du bas (4 slots) */
-.slot--left-ring {
-  grid-column: 1;
-  grid-row: 5;
-}
-.slot--right-ring {
-  grid-column: 2;
-  grid-row: 5;
-}
-.slot--boots {
-  grid-column: 4;
-  grid-row: 5;
-}
-.slot--bag {
-  grid-column: 5;
-  grid-row: 5;
-}
+.slot--left-bracelet { grid-column: 1; grid-row: 3; }
+.slot--right-hand    { grid-column: 2; grid-row: 3; }
+.slot--left-hand     { grid-column: 4; grid-row: 3; }
+.slot--gloves        { grid-column: 5; grid-row: 3; }
+
+.slot--right-bracelet { grid-column: 1; grid-row: 4; }
+.slot--leg-armor      { grid-column: 5; grid-row: 4; }
+
+.slot--left-ring     { grid-column: 1; grid-row: 5; }
+.slot--right-ring    { grid-column: 2; grid-row: 5; }
+.slot--boots         { grid-column: 4; grid-row: 5; }
+.slot--bag           { grid-column: 5; grid-row: 5; }

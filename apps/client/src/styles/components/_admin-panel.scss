@@ -1,0 +1,156 @@
+@use '../abstracts/variables' as vars;
+@use '../abstracts/mixins' as m;
+
+// ── Panneau admin principal ───────────────────────────────────────────────────
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  color: vars.$color-text-primary;
+
+  // ── Champ de commande ─────────────────────────────────────────────────────
+  &__command {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    @include m.panel-header;
+  }
+
+  &__command-prefix {
+    color: vars.$color-text-gold;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  &__command-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: vars.$color-text-primary;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9rem;
+
+    &::placeholder {
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  // ── Sections ──────────────────────────────────────────────────────────────
+  &__section {
+    @include m.panel-section;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__section-title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  // ── Vue d'ensemble ────────────────────────────────────────────────────────
+  &__overview {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__stat {
+    flex: 1;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    padding: 8px;
+    text-align: center;
+
+    &-value {
+      color: vars.$color-text-gold;
+      font-size: 1.4rem;
+      font-weight: bold;
+      display: block;
+    }
+
+    &-label {
+      color: vars.$color-text-muted;
+      font-size: 0.75rem;
+      display: block;
+      margin-top: 2px;
+    }
+  }
+
+  // ── Liste de templates ────────────────────────────────────────────────────
+  &__template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__template-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    padding: 8px 10px;
+    transition: border-color 0.15s;
+
+    &:hover {
+      border-color: vars.$color-metal-silver;
+    }
+  }
+
+  &__template-name {
+    flex: 1;
+    font-weight: bold;
+    color: vars.$color-text-primary;
+    font-size: 0.9rem;
+  }
+
+  &__template-stats {
+    display: flex;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+  }
+
+  &__template-stat {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+
+    span:first-child {
+      color: vars.$color-text-disabled;
+    }
+
+    span:last-child {
+      color: vars.$color-magic-amber;
+    }
+  }
+
+  // ── Chargement / erreur ───────────────────────────────────────────────────
+  &__loading,
+  &__empty {
+    color: vars.$color-text-muted;
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  &__error {
+    color: vars.$btn-danger-bg;
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 8px;
+  }
+}

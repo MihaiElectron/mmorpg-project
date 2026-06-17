@@ -23,6 +23,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { ResourcesModule } from './resources/resources.module';
 import { WorldModule } from './world/world.module';
 import { AnimalsModule } from './animals/animals.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { AnimalsModule } from './animals/animals.module';
     ResourcesModule,
     WorldModule,
     AnimalsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

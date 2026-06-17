@@ -6,11 +6,13 @@ import type { WorldSocket } from '../types/world-socket';
 export type WsAuthPayload = {
   userId: string;
   username?: string;
+  role?: string;
 };
 
 type JwtPayload = {
   sub?: string;
   username?: string;
+  role?: string;
 };
 
 /**
@@ -31,7 +33,7 @@ export class WsAuthService {
 
       if (!payload?.sub) return null;
 
-      return { userId: String(payload.sub), username: payload.username };
+      return { userId: String(payload.sub), username: payload.username, role: payload.role };
     } catch {
       return null;
     }

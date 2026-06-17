@@ -31,3 +31,67 @@
   &--low      { background: vars.$hp-color-low; }
   &--critical { background: vars.$hp-color-critical; }
 }
+
+// ── Panneaux ─────────────────────────────────────────────────────────────────
+
+@mixin panel-section {
+  background: vars.$panel-inner-bg;
+  border-radius: vars.$panel-radius;
+  padding: 10px;
+}
+
+@mixin panel-header {
+  background: vars.$panel-header-bg;
+  padding: 10px;
+  border-radius: vars.$panel-radius;
+  border: 1px solid vars.$panel-border;
+}
+
+@mixin panel-slot {
+  background: vars.$panel-inner-bg;
+  border: 1px solid vars.$panel-border-subtle;
+  border-radius: vars.$panel-radius-sm;
+}
+
+// ── Boutons ──────────────────────────────────────────────────────────────────
+
+@mixin btn-base {
+  border: none;
+  border-radius: vars.$btn-radius;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: vars.$color-text-primary;
+}
+
+@mixin btn-success {
+  @include btn-base;
+  background: vars.$btn-success-bg;
+  &:hover { background: vars.$btn-success-hover; }
+}
+
+@mixin btn-danger {
+  @include btn-base;
+  background: vars.$btn-danger-bg;
+  &:hover { background: vars.$btn-danger-hover; }
+}
+
+@mixin btn-neutral {
+  @include btn-base;
+  background: vars.$btn-neutral-bg;
+  &:hover { background: vars.$btn-neutral-hover; }
+}
+
+@mixin btn-tab($active: false) {
+  @include btn-base;
+  padding: 10px 30px;
+  border-radius: vars.$tab-radius;
+  background: vars.$tab-bg;
+  @if $active {
+    background: vars.$tab-bg-active;
+    color: vars.$color-text-gold;
+  }
+  &:hover { background: vars.$tab-bg-hover; }
+}

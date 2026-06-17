@@ -61,6 +61,7 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     client.data.userId = auth.userId;
+    client.data.role = auth.role;
   }
 
   /**

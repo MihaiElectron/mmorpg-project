@@ -44,6 +44,48 @@ $color-shadow-soft: #2e2f33;
 $color-shadow-deep: #1f1e23;
 
 // ===============================
+// UI — Panneaux et fenêtres
+// ===============================
+$panel-bg:              rgba(44, 62, 80, 0.95);
+$panel-inner-bg:        rgba(0, 0, 0, 0.2);
+$panel-header-bg:       rgba(0, 0, 0, 0.4);
+$panel-overlay-bg:      rgba(0, 0, 0, 0.85);
+$panel-border:          rgba(255, 255, 255, 0.1);
+$panel-border-subtle:   rgba(255, 255, 255, 0.08);
+$panel-radius:          10px;
+$panel-radius-card:     8px;
+$panel-radius-sm:       4px;
+$panel-shadow:          0 -4px 20px rgba(0, 0, 0, 0.5);
+$panel-shadow-float:    0 4px 15px rgba(0, 0, 0, 0.5);
+
+// ===============================
+// UI — Onglets
+// ===============================
+$tab-bg:                #2c3e50;
+$tab-bg-hover:          #34495e;
+$tab-bg-active:         #1a252f;
+$tab-radius:            10px 10px 0 0;
+
+// ===============================
+// UI — Texte
+// ===============================
+$color-text-primary:    #ecf0f1;
+$color-text-gold:       #f1c40f;
+$color-text-muted:      rgba(255, 255, 255, 0.5);
+$color-text-disabled:   rgba(255, 255, 255, 0.3);
+
+// ===============================
+// UI — Boutons
+// ===============================
+$btn-success-bg:        #27ae60;
+$btn-success-hover:     #2ecc71;
+$btn-danger-bg:         #c0392b;
+$btn-danger-hover:      #e74c3c;
+$btn-neutral-bg:        #555;
+$btn-neutral-hover:     #666;
+$btn-radius:            $panel-radius-sm;
+
+// ===============================
 // HUD — Coordonnées joueur
 // ===============================
 $coords-color: $color-magic-glow;
