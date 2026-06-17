@@ -10,6 +10,8 @@ const storeLogic = (set, get) => ({
   equipment: {},
 
   setCharacter: (data) => set({ character: data }),
+  setHealth: (health) =>
+    set((s) => s.character ? { character: { ...s.character, health } } : {}),
   clearCharacter: () => set({ character: null, inventory: [], equipment: {} }),
   toggleOpen: () => {
     set((s) => ({ isOpen: !s.isOpen }));

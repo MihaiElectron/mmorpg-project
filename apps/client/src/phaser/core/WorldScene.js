@@ -249,6 +249,19 @@ export default class WorldScene extends Phaser.Scene {
       this.removeRemotePlayer(player);
     });
 
+    this.socket.on("character_damaged", (data) => {
+      getCharacterStore().getState().setHealth(data.health);
+    });
+
+    this.socket.on("character_respawn", (data) => {
+      getCharacterStore().getState().setHealth(data.health);
+      if (this.player) {
+        this.player.setPosition(data.x, data.y);
+        this.cameras.main.centerOn(data.x, data.y);
+        this.lastSyncedPosition = { x: data.x, y: data.y, direction: "down" };
+      }
+    });
+
     if (this.socket.connected) {
       this.socket.emit("get_resources");
       this.socket.emit("get_animals");

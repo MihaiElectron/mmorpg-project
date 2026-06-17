@@ -3,10 +3,11 @@ import { WorldGateway } from './world.gateway';
 import { WorldService } from './world.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Character } from '../characters/entities/character.entity';
+import { RespawnPoint } from './entities/respawn-point.entity';
 import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Character]), CommonModule],
+  imports: [TypeOrmModule.forFeature([Character, RespawnPoint]), CommonModule],
   providers: [WorldGateway, WorldService],
   exports: [WorldService],
 })

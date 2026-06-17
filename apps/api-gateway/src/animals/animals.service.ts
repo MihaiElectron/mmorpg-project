@@ -275,6 +275,9 @@ export class AnimalsService implements OnModuleInit {
           damage: dmg,
           health: newHealth,
         });
+        if (newHealth === 0) {
+          await this.worldService.respawnCharacter(char.id, server);
+        }
       }
     }
   }
@@ -395,6 +398,9 @@ export class AnimalsService implements OnModuleInit {
       const characterHealth = Math.max(character.health - riposteDamage, 0);
       await this.characterRepository.update(characterId, { health: characterHealth });
       riposte = { damage: riposteDamage, characterHealth };
+      if (characterHealth === 0 && this.server) {
+        await this.worldService.respawnCharacter(characterId, this.server);
+      }
     }
 
     return { success: true, dto: toDto(animal), damage, attackerId: character.id, riposte };

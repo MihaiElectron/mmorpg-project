@@ -1,10 +1,12 @@
 // apps/api-gateway/src/world/world.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { WorldSocket } from '../types/world-socket';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
+import { RespawnPoint } from './entities/respawn-point.entity';
 
 export type ConnectedPlayer = {
   socketId: string;
@@ -31,16 +33,75 @@ export type JoinedPlayer = {
 };
 
 @Injectable()
-export class WorldService {
-  /**
-   * Joueurs connectés, indexés par socket.id
-   */
+export class WorldService implements OnModuleInit {
   private connectedPlayers = new Map<string, ConnectedPlayer>();
 
   constructor(
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
+    @InjectRepository(RespawnPoint)
+    private readonly respawnPointRepository: Repository<RespawnPoint>,
   ) {}
+
+  async onModuleInit() {
+    // Remettre les personnages morts à plein de vie au redémarrage
+    const deadChars = await this.characterRepository.find({ where: { health: 0 } });
+    for (const char of deadChars) {
+      await this.characterRepository.update(char.id, { health: char.maxHealth });
+    }
+
+    const count = await this.respawnPointRepository.count();
+    if (count === 0) {
+      await this.respawnPointRepository.save(
+        this.respawnPointRepository.create({ x: 600, y: 300, radius: 20 }),
+      );
+    }
+  }
+
+  async respawnCharacter(characterId: string, server: Server): Promise<void> {
+    const character = await this.characterRepository.findOne({ where: { id: characterId } });
+    if (!character) return;
+
+    const points = await this.respawnPointRepository.find();
+    if (points.length === 0) return;
+
+    // Trouver le point le plus proche de la position persistée du personnage
+    let nearest = points[0];
+    let minDist = Math.hypot(nearest.x - character.positionX, nearest.y - character.positionY);
+    for (const p of points) {
+      const d = Math.hypot(p.x - character.positionX, p.y - character.positionY);
+      if (d < minDist) { minDist = d; nearest = p; }
+    }
+
+    // Position aléatoire dans le radius
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * nearest.radius;
+    const newX = Math.round(nearest.x + Math.cos(angle) * dist);
+    const newY = Math.round(nearest.y + Math.sin(angle) * dist);
+    const newHealth = character.maxHealth;
+
+    await this.characterRepository.update(characterId, {
+      health: newHealth,
+      positionX: newX,
+      positionY: newY,
+    });
+
+    // Mettre à jour la position en mémoire et notifier le joueur
+    for (const player of this.connectedPlayers.values()) {
+      if (player.characterId === characterId) {
+        player.x = newX;
+        player.y = newY;
+        server.to(player.socketId).emit('character_respawn', {
+          characterId,
+          x: newX,
+          y: newY,
+          health: newHealth,
+          maxHealth: character.maxHealth,
+        });
+        break;
+      }
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Synchronisation temps réel des joueurs
