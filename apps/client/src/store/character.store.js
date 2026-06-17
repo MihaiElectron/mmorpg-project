@@ -16,6 +16,7 @@ const storeLogic = (set, get) => ({
   toggleOpen: () => {
     set((s) => ({ isOpen: !s.isOpen }));
   },
+  closePanel: () => set({ isOpen: false }),
 
   updateInventoryItem: (itemData) => {
     set((state) => {

@@ -170,6 +170,8 @@ export default class WorldScene extends Phaser.Scene {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
 
+      getCharacterStore().getState().closePanel?.();
+
       const targets = this.getGatheringTargetsAt(worldX, worldY);
 
       if (targets.length > 0) {

@@ -15,6 +15,7 @@ function decodeJwtRole(token) {
 export default function CharacterLayout() {
   const isOpen = useCharacterStore((s) => s.isOpen);
   const toggleOpen = useCharacterStore((s) => s.toggleOpen);
+  const closePanel = useCharacterStore((s) => s.closePanel);
 
   const token = localStorage.getItem("token") ?? "";
   const isAdmin = decodeJwtRole(token) === "admin";
