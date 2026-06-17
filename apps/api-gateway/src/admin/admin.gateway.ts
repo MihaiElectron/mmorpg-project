@@ -16,6 +16,7 @@ type SpawnPayload = { templateKey: string; x: number; y: number };
 type TeleportPayload = { characterId: string; x: number; y: number };
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
+type MoveAnimalPayload = { animalId: string; x: number; y: number };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -66,14 +67,19 @@ export class AdminGateway {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { characterId, x, y } = payload ?? {};
-    if (!characterId || typeof x !== 'number' || typeof y !== 'number') {
+    const { characterId: rawId, x, y } = payload ?? {};
+    if (!rawId || typeof x !== 'number' || typeof y !== 'number') {
       return { success: false, message: 'Payload invalide : characterId, x, y requis.' };
     }
 
-    const player = await this.worldService.teleportCharacter(characterId, x, y, this.server);
+    const resolved = this.worldService.findPlayerByNameOrId(rawId);
+    if (!resolved) {
+      return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
+    }
+
+    const player = await this.worldService.teleportCharacter(resolved.characterId, x, y, this.server);
     if (!player) {
-      return { success: false, message: `Personnage "${characterId}" introuvable ou non connecté.` };
+      return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
     }
 
     return {
@@ -137,6 +143,32 @@ export class AdminGateway {
       success: true,
       message: `Template "${updated.name}" mis à jour : ${changes}.`,
       data: updated,
+    };
+  }
+
+  @SubscribeMessage('admin:move_animal')
+  async onMoveAnimal(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: MoveAnimalPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') {
+      return { success: false, message: 'Non autorisé.' };
+    }
+
+    const { animalId, x, y } = payload ?? {};
+    if (!animalId || typeof x !== 'number' || typeof y !== 'number') {
+      return { success: false, message: 'Payload invalide : animalId, x, y requis.' };
+    }
+
+    const dto = await this.animalsService.moveAnimal(animalId, x, y);
+    if (!dto) {
+      return { success: false, message: `Animal "${animalId}" introuvable ou mort.` };
+    }
+
+    return {
+      success: true,
+      message: `"${dto.name}" (${dto.id}) déplacé en (${Math.round(x)}, ${Math.round(y)}).`,
+      data: dto,
     };
   }
 

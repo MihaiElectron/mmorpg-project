@@ -1,4 +1,4 @@
-import { spawnCreature, teleportCharacter, updateTemplate, respawnAll } from "./admin.actions";
+import { spawnCreature, teleportCharacter, updateTemplate, respawnAll, moveAnimal } from "./admin.actions";
 import type { ActionResult } from "./admin.actions";
 
 export type CommandContext = {
@@ -65,40 +65,44 @@ export const commandRegistry: Record<string, CommandDef> = {
   },
 
   tp: {
-    description: "Téléporte un joueur à la position donnée (cible sélectionnée ou par id).",
-    usage: "/tp [characterId] <x> <y>",
-    argNames: ["characterId?", "x", "y"],
+    description: "Téléporte/déplace la cible sélectionnée (joueur ou animal) à la position donnée.",
+    usage: "/tp [id] <x> <y>",
+    argNames: ["id?", "x", "y"],
     handler: async (args, _flags, ctx) => {
-      let characterId: string | null = null;
+      let entityId: string | null = null;
+      let entityKind: string | null = null;
       let rawX: string | undefined;
       let rawY: string | undefined;
 
-      // Si le premier arg n'est pas un nombre, c'est un characterId explicite
+      // Si le premier arg n'est pas un nombre, c'est un id explicite (joueur)
       if (args[0] && isNaN(parseFloat(args[0]))) {
-        characterId = args[0];
+        entityId = args[0];
+        entityKind = "player";
         rawX = args[1];
         rawY = args[2];
       } else {
         const target = ctx.getTarget();
-        if (!target || target.kind !== "player") {
+        if (!target) {
           return {
             success: false,
-            message: "Erreur : sélectionnez un joueur ou fournissez son id. Ex: /tp <id> 300 400",
+            message: "Erreur : sélectionnez une cible ou fournissez un id. Ex: /tp <id> 300 400",
           };
         }
-        characterId = target.id;
+        entityId = target.id;
+        entityKind = target.kind;
         rawX = args[0];
         rawY = args[1];
       }
 
       const pos = resolvePos(rawX, rawY, ctx);
       if (!pos) {
-        return {
-          success: false,
-          message: "Erreur : x et y requis. Ex: /tp 300 400",
-        };
+        return { success: false, message: "Erreur : x et y requis. Ex: /tp 300 400" };
       }
-      return teleportCharacter(characterId, pos.x, pos.y, ctx.socket);
+
+      if (entityKind === "animal") {
+        return moveAnimal(entityId!, pos.x, pos.y, ctx.socket);
+      }
+      return teleportCharacter(entityId!, pos.x, pos.y, ctx.socket);
     },
   },
 

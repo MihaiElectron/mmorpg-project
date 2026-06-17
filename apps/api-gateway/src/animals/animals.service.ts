@@ -508,6 +508,22 @@ export class AnimalsService implements OnModuleInit {
     return toDto(animal);
   }
 
+  async moveAnimal(animalId: string, x: number, y: number): Promise<AnimalDto | null> {
+    const animal = this.liveAnimals.get(animalId);
+    if (!animal || animal.state === 'dead') return null;
+
+    animal.x = Math.round(x);
+    animal.y = Math.round(y);
+    this.patrolStates.delete(animalId);
+
+    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y });
+
+    if (this.server) {
+      this.server.emit('animal_update', toDto(animal));
+    }
+    return toDto(animal);
+  }
+
   async forceRespawnAll(templateKey: string): Promise<number> {
     let count = 0;
     for (const animal of this.liveAnimals.values()) {

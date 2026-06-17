@@ -214,6 +214,17 @@ export class WorldService implements OnModuleInit {
     return null;
   }
 
+  findPlayerByNameOrId(nameOrId: string): ConnectedPlayer | null {
+    const lower = nameOrId.toLowerCase();
+    for (const player of this.connectedPlayers.values()) {
+      if (player.characterId === nameOrId) return player;
+    }
+    for (const player of this.connectedPlayers.values()) {
+      if (player.name.toLowerCase() === lower) return player;
+    }
+    return null;
+  }
+
   async teleportCharacter(
     characterId: string,
     x: number,
@@ -223,15 +234,11 @@ export class WorldService implements OnModuleInit {
     const rx = Math.round(x);
     const ry = Math.round(y);
 
-    await this.characterRepository.update(characterId, {
-      positionX: rx,
-      positionY: ry,
-    });
-
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
         player.x = rx;
         player.y = ry;
+        await this.characterRepository.update(characterId, { positionX: rx, positionY: ry });
         server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
         server.except(player.socketId).emit('player_moved', player);
         return player;
