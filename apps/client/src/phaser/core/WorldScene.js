@@ -82,13 +82,21 @@ export default class WorldScene extends Phaser.Scene {
 
       if (target) {
         const store = getActionPanelStore();
+        const animalData = this.animalSprites.get(target.id)?.animal;
         store.getState().openPanel(
-          { id: target.id, type: target.type, kind: target.kind },
+          {
+            id: target.id,
+            type: target.type,
+            kind: target.kind,
+            health: animalData?.health ?? null,
+            maxHealth: animalData?.maxHealth ?? null,
+          },
           target.actions,
         );
         return;
       }
 
+      getActionPanelStore().getState().closePanel();
       this.controller.startMouseMove(worldX, worldY);
     });
 
@@ -201,6 +209,12 @@ export default class WorldScene extends Phaser.Scene {
       }
 
       this.upsertAnimal(animal);
+
+      const panelStore = getActionPanelStore();
+      const panelState = panelStore.getState();
+      if (panelState.target?.id === animal.id) {
+        panelState.updateTargetHealth(animal.health, animal.maxHealth);
+      }
     });
 
     this.socket.on("current_players", (players) => {
@@ -457,20 +471,14 @@ export default class WorldScene extends Phaser.Scene {
     const existing = this.animalSprites.get(animal.id);
 
     if (existing) {
+      existing.animal = animal;
       this.tweens.add({
         targets: existing.sprite,
         x: animal.x,
         y: animal.y,
         duration: 180,
         ease: "Linear",
-        onUpdate: () => {
-          existing.healthText.setPosition(
-            existing.sprite.x,
-            existing.sprite.y - 40,
-          );
-        },
       });
-      existing.healthText.setText(this.getAnimalHealthLabel(animal));
       return;
     }
 
@@ -482,17 +490,7 @@ export default class WorldScene extends Phaser.Scene {
       Phaser.Geom.Rectangle.Contains,
     );
 
-    const healthText = this.add
-      .text(animal.x, animal.y - 40, this.getAnimalHealthLabel(animal), {
-        fontSize: "12px",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5);
-    healthText.setDepth(11);
-
-    this.animalSprites.set(animal.id, { sprite, healthText });
+    this.animalSprites.set(animal.id, { sprite, animal });
     this.interactionTargets.push({
       sprite,
       id: animal.id,
@@ -500,10 +498,6 @@ export default class WorldScene extends Phaser.Scene {
       kind: "animal",
       actions: ["attaquer"],
     });
-  }
-
-  getAnimalHealthLabel(animal) {
-    return `${animal.health}/${animal.maxHealth} AR:${animal.armor ?? 0}`;
   }
 
   clearResources() {
@@ -520,7 +514,6 @@ export default class WorldScene extends Phaser.Scene {
   clearAnimals() {
     for (const animal of this.animalSprites.values()) {
       animal.sprite.destroy();
-      animal.healthText.destroy();
     }
 
     this.animalSprites.clear();
@@ -549,7 +542,6 @@ export default class WorldScene extends Phaser.Scene {
 
     if (animal) {
       animal.sprite.destroy();
-      animal.healthText.destroy();
       this.animalSprites.delete(animalId);
     }
 

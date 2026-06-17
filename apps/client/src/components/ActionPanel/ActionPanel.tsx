@@ -1,6 +1,7 @@
 import React from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
+import HealthBar from "../HealthBar/HealthBar";
 
 type GameWindow = Window &
   typeof globalThis & {
@@ -54,6 +55,12 @@ export default function ActionPanel() {
       <div className="action-panel__title">
         {target.type.replace("_", " ").toUpperCase()}
       </div>
+
+      {target.kind === "animal" &&
+        target.health != null &&
+        target.maxHealth != null && (
+          <HealthBar health={target.health} maxHealth={target.maxHealth} />
+        )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {actions.map((action) => (

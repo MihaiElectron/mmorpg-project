@@ -49,3 +49,14 @@ $color-shadow-deep: #1f1e23;
 $coords-color: $color-magic-glow;
 $coords-font-size: 13px;
 $coords-font-family: 'Courier New', Courier, monospace;
+
+// ===============================
+// Barre de vie
+// ===============================
+$hp-color-high:     #4caf50;
+$hp-color-medium:   #f4d03f;
+$hp-color-low:      #e67e22;
+$hp-color-critical: #c0392b;
+$hp-bar-height:     8px;
+$hp-bar-radius:     4px;
+$hp-bar-bg:         rgba(0, 0, 0, 0.55);

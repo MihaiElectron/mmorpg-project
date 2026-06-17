@@ -12,3 +12,22 @@
   line-height: 1.6;
   letter-spacing: 0.04em;
 }
+
+@mixin health-bar-track {
+  width: 100%;
+  height: vars.$hp-bar-height;
+  background: vars.$hp-bar-bg;
+  border-radius: vars.$hp-bar-radius;
+  overflow: hidden;
+}
+
+@mixin health-bar-fill {
+  height: 100%;
+  border-radius: vars.$hp-bar-radius;
+  transition: width 0.15s ease, background-color 0.2s ease;
+
+  &--high     { background: vars.$hp-color-high; }
+  &--medium   { background: vars.$hp-color-medium; }
+  &--low      { background: vars.$hp-color-low; }
+  &--critical { background: vars.$hp-color-critical; }
+}

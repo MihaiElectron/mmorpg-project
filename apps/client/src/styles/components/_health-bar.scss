@@ -1,0 +1,22 @@
+@use '../abstracts/mixins' as m;
+
+.health-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &__track {
+    @include m.health-bar-track;
+  }
+
+  &__fill {
+    @include m.health-bar-fill;
+  }
+
+  &__label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: right;
+  }
+}

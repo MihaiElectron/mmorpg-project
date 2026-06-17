@@ -8,19 +8,16 @@ const storeLogic = (set) => ({
   actions: [],
 
   openPanel: (target, actions) => {
-    set({
-      isOpen: true,
-      target,
-      actions,
-    });
+    set({ isOpen: true, target, actions });
   },
 
   closePanel: () =>
-    set({
-      isOpen: false,
-      target: null,
-      actions: [],
-    }),
+    set({ isOpen: false, target: null, actions: [] }),
+
+  updateTargetHealth: (health: number, maxHealth: number) =>
+    set((state) =>
+      state.target ? { target: { ...state.target, health, maxHealth } } : {},
+    ),
 });
 
 // Singleton Pattern pour synchronisation parfaite Phaser/React
