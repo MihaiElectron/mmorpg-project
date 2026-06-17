@@ -51,7 +51,7 @@ export class AdminGateway {
     this.server.emit('animal_update', dto);
     return {
       success: true,
-      message: `${dto.name} spawné en (${Math.round(x)}, ${Math.round(y)}).`,
+      message: `"${dto.name}" spawné en (${Math.round(x)}, ${Math.round(y)}). ID: ${dto.id}`,
       data: dto,
     };
   }
@@ -70,14 +70,15 @@ export class AdminGateway {
       return { success: false, message: 'Payload invalide : characterId, x, y requis.' };
     }
 
-    const ok = await this.worldService.teleportCharacter(characterId, x, y, this.server);
-    if (!ok) {
-      return { success: false, message: 'Personnage introuvable ou non connecté.' };
+    const player = await this.worldService.teleportCharacter(characterId, x, y, this.server);
+    if (!player) {
+      return { success: false, message: `Personnage "${characterId}" introuvable ou non connecté.` };
     }
 
     return {
       success: true,
-      message: `Personnage téléporté en (${Math.round(x)}, ${Math.round(y)}).`,
+      message: `"${player.name}" (${player.characterId}) téléporté en (${Math.round(x)}, ${Math.round(y)}).`,
+      data: { characterId: player.characterId, name: player.name },
     };
   }
 

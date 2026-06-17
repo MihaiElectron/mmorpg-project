@@ -219,7 +219,7 @@ export class WorldService implements OnModuleInit {
     x: number,
     y: number,
     server: Server,
-  ): Promise<boolean> {
+  ): Promise<ConnectedPlayer | null> {
     const rx = Math.round(x);
     const ry = Math.round(y);
 
@@ -234,11 +234,11 @@ export class WorldService implements OnModuleInit {
         player.y = ry;
         server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
         server.except(player.socketId).emit('player_moved', player);
-        return true;
+        return player;
       }
     }
 
-    return false;
+    return null;
   }
 
   private findSocketIdByCharacterId(

@@ -65,25 +65,40 @@ export const commandRegistry: Record<string, CommandDef> = {
   },
 
   tp: {
-    description: "Téléporte le joueur sélectionné à la position donnée.",
-    usage: "/tp <x> <y>",
-    argNames: ["x", "y"],
+    description: "Téléporte un joueur à la position donnée (cible sélectionnée ou par id).",
+    usage: "/tp [characterId] <x> <y>",
+    argNames: ["characterId?", "x", "y"],
     handler: async (args, _flags, ctx) => {
-      const target = ctx.getTarget();
-      if (!target || target.kind !== "player") {
-        return {
-          success: false,
-          message: "Erreur : sélectionnez d'abord un personnage joueur dans le panel.",
-        };
+      let characterId: string | null = null;
+      let rawX: string | undefined;
+      let rawY: string | undefined;
+
+      // Si le premier arg n'est pas un nombre, c'est un characterId explicite
+      if (args[0] && isNaN(parseFloat(args[0]))) {
+        characterId = args[0];
+        rawX = args[1];
+        rawY = args[2];
+      } else {
+        const target = ctx.getTarget();
+        if (!target || target.kind !== "player") {
+          return {
+            success: false,
+            message: "Erreur : sélectionnez un joueur ou fournissez son id. Ex: /tp <id> 300 400",
+          };
+        }
+        characterId = target.id;
+        rawX = args[0];
+        rawY = args[1];
       }
-      const pos = resolvePos(args[0], args[1], ctx);
+
+      const pos = resolvePos(rawX, rawY, ctx);
       if (!pos) {
         return {
           success: false,
           message: "Erreur : x et y requis. Ex: /tp 300 400",
         };
       }
-      return teleportCharacter(target.id, pos.x, pos.y, ctx.socket);
+      return teleportCharacter(characterId, pos.x, pos.y, ctx.socket);
     },
   },
 
