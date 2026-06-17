@@ -233,6 +233,7 @@ export class WorldService implements OnModuleInit {
         player.x = rx;
         player.y = ry;
         server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
+        server.except(player.socketId).emit('player_moved', player);
         return true;
       }
     }
