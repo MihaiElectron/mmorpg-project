@@ -316,7 +316,7 @@ AI proposals SHOULD still consider:
 ## Related files
 
 - [Documentation Index](../README.md)
-- [Codex ChatGPT Workflow](../09_Workflow/codex-chatgpt.md)
+- [AI Assistant Workflow](../09_Workflow/ai-assistant-workflow.md)
 - [Review Checklist](../09_Workflow/review-checklist.md)
 - [Client Server Trust](../02_Security/client-server-trust.md)
 - [Client Server Boundaries](../01_Architecture/client-server-boundaries.md)

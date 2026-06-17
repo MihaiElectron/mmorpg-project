@@ -120,7 +120,7 @@ If a contradiction is found:
 ### 09_Workflow
 
 - [Development Workflow](09_Workflow/development.md) - Status: Draft - Documentation planned for development workflow.
-- [Codex ChatGPT Workflow](09_Workflow/codex-chatgpt.md) - Status: Draft - Documentation planned for Codex and ChatGPT workflow.
+- [AI Assistant Workflow](09_Workflow/ai-assistant-workflow.md) - Status: Draft - Documentation planned for AI assistant workflow.
 - [Documentation Guidelines](09_Workflow/documentation-guidelines.md) - Status: Draft - Documentation planned for documentation guidelines.
 - [Review Checklist](09_Workflow/review-checklist.md) - Status: Draft - Documentation planned for review checklists.
 
@@ -166,7 +166,7 @@ Assistants should start with:
 ```text
 docs/README.md
 docs/10_AI/golden-rules.md
-docs/09_Workflow/codex-chatgpt.md
+docs/09_Workflow/ai-assistant-workflow.md
 docs/09_Workflow/review-checklist.md
 ```
 
@@ -196,7 +196,7 @@ This document has no runtime impact.
 - [CLAUDE.md](../CLAUDE.md)
 - [STATUS.md](../STATUS.md)
 - [AI Golden Rules](10_AI/golden-rules.md)
-- [Codex ChatGPT Workflow](09_Workflow/codex-chatgpt.md)
+- [AI Assistant Workflow](09_Workflow/ai-assistant-workflow.md)
 - [Review Checklist](09_Workflow/review-checklist.md)
 
 ## Open questions
