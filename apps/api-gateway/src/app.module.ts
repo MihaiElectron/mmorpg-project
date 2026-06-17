@@ -44,9 +44,9 @@ import { AnimalsModule } from './animals/animals.module';
         type: 'postgres',
         host: config.get<string>('DB_HOST', 'localhost'),
         port: config.get<number>('DB_PORT', 5432),
-        username: config.get<string>('DB_USERNAME', 'semoa'),
-        password: config.get<string>('DB_PASSWORD', 'ssap'),
-        database: config.get<string>('DB_NAME', 'mmorpgdb'),
+        username: config.getOrThrow<string>('DB_USERNAME'),
+        password: config.getOrThrow<string>('DB_PASSWORD'),
+        database: config.getOrThrow<string>('DB_NAME'),
 
         // Charge automatiquement TOUTES les entités du projet
         entities: [__dirname + '/**/*.entity.{ts,js}'],

@@ -135,18 +135,28 @@ Cette commande installe les dépendances des workspaces déclarés dans le `pack
 
 ## Configuration
 
+### Docker
+
+Créer ou adapter le fichier `.env` à la racine du projet pour Docker Compose:
+
+```env
+POSTGRES_USER=replace-with-db-user
+POSTGRES_PASSWORD=replace-with-db-password
+POSTGRES_DB=mmorpgdb
+```
+
 ### Backend
 
 Créer ou adapter `apps/api-gateway/.env` (voir `apps/api-gateway/.env.example`):
 
 ```env
 PORT=3000
-JWT_SECRET=change-me-in-development
+JWT_SECRET=replace-with-a-long-random-secret
 
 DB_HOST=localhost
 DB_PORT=5432
-DB_USERNAME=semoa
-DB_PASSWORD=ssap
+DB_USERNAME=replace-with-db-user
+DB_PASSWORD=replace-with-db-password
 DB_NAME=mmorpgdb
 ```
 
