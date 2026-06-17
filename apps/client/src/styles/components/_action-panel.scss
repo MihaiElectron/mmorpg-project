@@ -15,7 +15,7 @@
   flex-direction: column;
   gap: 10px;
   z-index: 10000;
-  min-width: 150px;
+  min-width: 200px;
   box-shadow: vars.$panel-shadow-float;
 
   &__title {
@@ -28,6 +28,81 @@
     color: vars.$color-text-gold;
   }
 
+  // ── Console admin ─────────────────────────────────────────────────────────
+  &__console {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 8px;
+  }
+
+  &__overlap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__overlap-label {
+    font-size: 0.72rem;
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__overlap-select {
+    flex: 1;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-magic-amber;
+    font-size: 0.8rem;
+    padding: 3px 6px;
+    cursor: pointer;
+    outline: none;
+
+    &:focus {
+      border-color: vars.$color-metal-silver;
+    }
+
+    option {
+      background: vars.$color-shadow-deep;
+      color: vars.$color-text-primary;
+    }
+  }
+
+  &__console-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    padding: 4px 8px;
+  }
+
+  &__console-prefix {
+    color: vars.$color-text-gold;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  &__console-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: vars.$color-text-primary;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+
+    &::placeholder {
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
   &__actions {
     display: flex;
     flex-direction: column;

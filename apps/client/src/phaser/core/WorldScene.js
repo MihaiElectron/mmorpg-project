@@ -169,20 +169,34 @@ export default class WorldScene extends Phaser.Scene {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
 
-      const target = this.getGatheringTargetAt(worldX, worldY);
+      const targets = this.getGatheringTargetsAt(worldX, worldY);
 
-      if (target) {
+      if (targets.length > 0) {
         const store = getActionPanelStore();
-        const animalData = this.animalSprites.get(target.id)?.animal;
-        store.getState().openPanel(
-          {
-            id: target.id,
-            type: target.type,
-            kind: target.kind,
+        const first = targets[0];
+        const firstAnimal = this.animalSprites.get(first.id)?.animal;
+
+        const overlapping = targets.map((t) => {
+          const animalData = this.animalSprites.get(t.id)?.animal;
+          return {
+            id: t.id,
+            type: t.type,
+            kind: t.kind,
             health: animalData?.health ?? null,
             maxHealth: animalData?.maxHealth ?? null,
+          };
+        });
+
+        store.getState().openPanel(
+          {
+            id: first.id,
+            type: first.type,
+            kind: first.kind,
+            health: firstAnimal?.health ?? null,
+            maxHealth: firstAnimal?.maxHealth ?? null,
           },
-          target.actions,
+          first.actions,
+          overlapping.length > 1 ? overlapping : [],
         );
         return;
       }
@@ -242,6 +256,12 @@ export default class WorldScene extends Phaser.Scene {
       if (bounds.contains(x, y)) return t;
     }
     return null;
+  }
+
+  getGatheringTargetsAt(x, y) {
+    return this.interactionTargets.filter((t) =>
+      t.sprite.getBounds().contains(x, y)
+    );
   }
 
   // SOCKET EVENTS
@@ -454,6 +474,10 @@ export default class WorldScene extends Phaser.Scene {
     );
     sprite.setTint(0x66ccff);
     setSpriteDepth(sprite);
+    sprite.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
+      Phaser.Geom.Rectangle.Contains,
+    );
 
     const nameText = this.add
       .text(player.x, player.y - 34, player.name || "Joueur", {
@@ -469,6 +493,14 @@ export default class WorldScene extends Phaser.Scene {
       sprite,
       nameText,
       socketId: player.socketId,
+    });
+
+    this.interactionTargets.push({
+      sprite,
+      id: player.characterId,
+      type: player.name || "joueur",
+      kind: "player",
+      actions: ["inspecter"],
     });
   }
 
@@ -487,6 +519,9 @@ export default class WorldScene extends Phaser.Scene {
     remote.sprite.destroy();
     remote.nameText.destroy();
     this.remotePlayers.delete(player.characterId);
+    this.interactionTargets = this.interactionTargets.filter(
+      (t) => !(t.kind === "player" && t.id === player.characterId),
+    );
   }
 
   updateRemotePlayerLabels() {
@@ -502,6 +537,9 @@ export default class WorldScene extends Phaser.Scene {
       remote.nameText.destroy();
       this.remotePlayers.delete(characterId);
     }
+    this.interactionTargets = this.interactionTargets.filter(
+      (t) => t.kind !== "player",
+    );
   }
 
   // -----------------------------------------------------------------------
