@@ -215,7 +215,7 @@ Implemented:
 - Emits Socket.IO events for world join, movement, resource interaction, animal
   attack, and admin commands.
 
-TBD:
+Not verified:
 
 - Full Tiled map rendering in the active world scene.
 
@@ -282,12 +282,16 @@ Not verified:
 - Complete synchronization or crash recovery between in-memory world state and
   persisted database state.
 
+Architecture constraint:
+
+- Security-sensitive gameplay decisions must remain validated server-side.
+
 TBD:
 
-- The authoritative source depends on the domain, but security-sensitive
-  gameplay decisions must remain validated server-side.
+- Define and document the authoritative source for each gameplay and world-state
+  domain.
 
-### Tiled or map data
+## Tiled and map data
 
 Implemented:
 
@@ -459,7 +463,8 @@ flowchart LR
 - This document does not define new architecture.
 - This document does not replace specialized documentation.
 - This document does not create ADRs.
-- This document does not prove that planned or unverified behavior exists.
+- This document does not prove that configured, `TBD`, or unverified behavior is
+  implemented or active at runtime.
 - This document does not document every file in the repository.
 
 ## Security notes
@@ -475,8 +480,8 @@ flowchart LR
 This document has no runtime impact.
 
 Current performance concerns observed in project documentation and code include
-broad Socket.IO broadcasts, future need for rooms/zones/chunks, and migration
-planning for production database changes.
+broad Socket.IO broadcasts, future rooms, zones, or chunk-scoped communication,
+client and server entity volume, and memory and network scalability.
 
 ## Related files
 
