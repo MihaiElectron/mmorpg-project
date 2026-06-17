@@ -205,6 +205,10 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("animal_update", (animal) => {
       if (animal.state === "dead") {
         this.removeAnimal(animal.id);
+        const panelStore = getActionPanelStore();
+        if (panelStore.getState().target?.id === animal.id) {
+          panelStore.getState().closePanel();
+        }
         return;
       }
 

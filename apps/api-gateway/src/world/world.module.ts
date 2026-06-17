@@ -8,5 +8,6 @@ import { CommonModule } from '../common/common.module';
 @Module({
   imports: [TypeOrmModule.forFeature([Character]), CommonModule],
   providers: [WorldGateway, WorldService],
+  exports: [WorldService],
 })
 export class WorldModule {}

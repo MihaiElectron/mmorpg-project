@@ -37,4 +37,10 @@ export class CreatureTemplate {
 
   @Column('int', { default: 3000 })
   pauseMaxMs: number;
+
+  @Column('int', { default: 0 })
+  aggroRadius: number;
+
+  @Column('int', { default: 0 })
+  fleeThresholdPct: number;
 }

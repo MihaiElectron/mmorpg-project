@@ -8,5 +8,5 @@ export type AnimalDto = {
   maxHealth: number;
   armor: number;
   attack: number;
-  state: 'alive' | 'dead';
+  state: 'alive' | 'fighting' | 'escaping' | 'dead';
 };

@@ -130,6 +130,10 @@ export class WorldService {
     });
   }
 
+  getAllConnectedPlayers(): ConnectedPlayer[] {
+    return Array.from(this.connectedPlayers.values());
+  }
+
   getPlayersExcept(socketId: string): ConnectedPlayer[] {
     const playersByCharacter = new Map<string, ConnectedPlayer>();
 

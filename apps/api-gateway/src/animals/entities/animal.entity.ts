@@ -26,5 +26,5 @@ export class Animal {
   health: number;
 
   @Column({ default: 'alive' })
-  state: 'alive' | 'dead';
+  state: 'alive' | 'fighting' | 'escaping' | 'dead';
 }
