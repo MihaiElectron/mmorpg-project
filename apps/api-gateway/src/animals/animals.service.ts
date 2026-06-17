@@ -431,23 +431,81 @@ export class AnimalsService implements OnModuleInit {
 
   private async seedTemplates() {
     await this.templateRepository.upsert(
-      {
-        key: 'turkey',
-        name: 'Turkey',
-        textureKey: 'turkey',
-        baseHealth: 30,
-        baseArmor: 2,
-        baseAttack: 5,
-        patrolRadius: 200,
-        speedMin: 25,
-        speedMax: 60,
-        pauseMinMs: 2000,
-        pauseMaxMs: 12000,
-        aggroRadius: 50,
-        fleeThresholdPct: 75,
-      },
+      [
+        {
+          key: 'turkey',
+          name: 'Turkey',
+          textureKey: 'turkey',
+          baseHealth: 30,
+          baseArmor: 2,
+          baseAttack: 5,
+          patrolRadius: 200,
+          speedMin: 25,
+          speedMax: 60,
+          pauseMinMs: 2000,
+          pauseMaxMs: 12000,
+          aggroRadius: 50,
+          fleeThresholdPct: 75,
+        },
+        {
+          key: 'goblin',
+          name: 'Goblin',
+          textureKey: 'turkey', // placeholder jusqu'à l'import du sprite goblin
+          baseHealth: 60,
+          baseArmor: 5,
+          baseAttack: 12,
+          patrolRadius: 150,
+          speedMin: 40,
+          speedMax: 80,
+          pauseMinMs: 1000,
+          pauseMaxMs: 6000,
+          aggroRadius: 120,
+          fleeThresholdPct: 20,
+        },
+      ],
       ['key'],
     );
+  }
+
+  async createAdminSpawn(
+    templateKey: string,
+    x: number,
+    y: number,
+  ): Promise<AnimalDto | null> {
+    const template = await this.templateRepository.findOne({
+      where: { key: templateKey },
+    });
+    if (!template) return null;
+
+    const spawnKey = `admin-${templateKey}-${Date.now()}`;
+    const spawn = await this.spawnRepository.save(
+      this.spawnRepository.create({
+        key: spawnKey,
+        template,
+        spawnX: Math.round(x),
+        spawnY: Math.round(y),
+        respawnDelayMs: 30000,
+      }),
+    );
+
+    const rawAnimal = await this.animalRepository.save(
+      this.animalRepository.create({
+        spawn,
+        x: Math.round(x),
+        y: Math.round(y),
+        health: template.baseHealth,
+        state: 'alive',
+      }),
+    );
+
+    // Recharger avec les relations eager (spawn.template)
+    const animal = await this.animalRepository.findOne({
+      where: { id: rawAnimal.id },
+    });
+    if (!animal) return null;
+
+    this.liveAnimals.set(animal.id, animal);
+    return toDto(animal);
   }
 
   private async seedSpawns() {

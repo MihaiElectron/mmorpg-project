@@ -71,6 +71,33 @@
     }
   }
 
+  &__console-results {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  &__console-result {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    padding: 3px 6px;
+    border-radius: vars.$panel-radius-sm;
+    line-height: 1.4;
+    word-break: break-word;
+
+    &--ok {
+      color: #7ecf7e;
+      background: rgba(126, 207, 126, 0.08);
+    }
+
+    &--err {
+      color: #cf7e7e;
+      background: rgba(207, 126, 126, 0.08);
+    }
+  }
+
   &__console-input {
     display: flex;
     align-items: center;

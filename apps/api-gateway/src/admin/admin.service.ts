@@ -20,6 +20,16 @@ export class AdminService {
     return this.templateRepo.find({ order: { name: 'ASC' } });
   }
 
+  async updateTemplate(
+    key: string,
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius'>>,
+  ): Promise<CreatureTemplate | null> {
+    const template = await this.templateRepo.findOne({ where: { key } });
+    if (!template) return null;
+    Object.assign(template, fields);
+    return this.templateRepo.save(template);
+  }
+
   getSpawns(): Promise<CreatureSpawn[]> {
     return this.spawnRepo.find({ relations: ['template'], order: { key: 'ASC' } });
   }

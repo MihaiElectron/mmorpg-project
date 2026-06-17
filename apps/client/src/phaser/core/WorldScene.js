@@ -7,6 +7,7 @@ import { setSpriteDepth } from "../utils/depth";
 
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
+import { getAdminStore } from "../../store/admin.store";
 
 // ── HP bar constants (mirrors SCSS variables) ──────────────────────────────
 const HP_BAR_WIDTH = 40;
@@ -201,6 +202,7 @@ export default class WorldScene extends Phaser.Scene {
         return;
       }
 
+      getAdminStore().getState().setLastClickedPos({ x: Math.round(worldX), y: Math.round(worldY) });
       getActionPanelStore().getState().closePanel();
       this.stopAutoAttack();
       this.controller.startMouseMove(worldX, worldY);
@@ -385,6 +387,14 @@ export default class WorldScene extends Phaser.Scene {
       getCharacterStore().getState().setHealth(data.health);
       if (!this.playerHpBar && this.player) {
         this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
+      }
+    });
+
+    this.socket.on("character_teleport", (data) => {
+      if (this.player) {
+        this.player.setPosition(data.x, data.y);
+        this.cameras.main.centerOn(data.x, data.y);
+        this.lastSyncedPosition = { x: data.x, y: data.y, direction: this.player.direction };
       }
     });
 

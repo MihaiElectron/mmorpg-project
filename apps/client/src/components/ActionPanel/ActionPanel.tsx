@@ -1,64 +1,68 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
+import { getAdminStore } from "../../store/admin.store";
+import { parseCommand } from "../../phaser/admin/commandParser";
+import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import HealthBar from "../HealthBar/HealthBar";
 
 type GameWindow = Window &
   typeof globalThis & {
     game?: {
-      socket?: {
-        connected?: boolean;
-        emit: (event: string, payload: unknown) => void;
-      };
+      socket?: { connected?: boolean; emit: (e: string, p: unknown, cb?: (r: unknown) => void) => void };
+      scene?: { getScene?: (k: string) => any };
     };
   };
 
+type ConsoleLine = { text: string; ok: boolean };
+
 function decodeJwtRole(token: string): string | null {
+  try { return JSON.parse(atob(token.split(".")[1]))?.role ?? null; }
+  catch { return null; }
+}
+
+function getTemplateKeys(): string[] {
   try {
-    return JSON.parse(atob(token.split(".")[1]))?.role ?? null;
-  } catch {
-    return null;
-  }
+    const store = (window as any).__GLOBAL_ADMIN_STORE__;
+    return store?.getState?.()?.templates?.map((t: any) => t.key) ?? [];
+  } catch { return []; }
 }
 
 export default function ActionPanel() {
-  const isOpen = useActionPanelStore((s) => s.isOpen);
-  const target = useActionPanelStore((s) => s.target);
-  const actions = useActionPanelStore((s) => s.actions);
+  const isOpen            = useActionPanelStore((s) => s.isOpen);
+  const target            = useActionPanelStore((s) => s.target);
+  const actions           = useActionPanelStore((s) => s.actions);
   const overlappingTargets = useActionPanelStore((s) => s.overlappingTargets);
-  const closePanel = useActionPanelStore((s) => s.closePanel);
+  const closePanel        = useActionPanelStore((s) => s.closePanel);
   const selectOverlapTarget = useActionPanelStore((s) => s.selectOverlapTarget);
-  const character = useCharacterStore((s) => s.character);
+  const character         = useCharacterStore((s) => s.character);
 
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef       = useRef<HTMLDivElement>(null);
   const consoleInputRef = useRef<HTMLInputElement>(null);
-  const [command, setCommand] = useState("");
 
-  const token = localStorage.getItem("token") ?? "";
+  const [command, setCommand]   = useState("");
+  const [results, setResults]   = useState<ConsoleLine[]>([]);
+
+  const token   = localStorage.getItem("token") ?? "";
   const isAdmin = decodeJwtRole(token) === "admin";
   const hasOverlap = overlappingTargets.length > 1;
 
+  // ── Fermeture au clic extérieur (sauf canvas Phaser) ─────────────────────
   useEffect(() => {
-    function handleMouseDown(e: MouseEvent) {
-      const clickTarget = e.target as HTMLElement;
-      if (clickTarget.tagName === "CANVAS") return;
-      if (panelRef.current && !panelRef.current.contains(clickTarget)) {
-        closePanel();
-      }
+    function onMouseDown(e: MouseEvent) {
+      const t = e.target as HTMLElement;
+      if (t.tagName === "CANVAS") return;
+      if (panelRef.current && !panelRef.current.contains(t)) closePanel();
     }
-    document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
   }, [closePanel]);
 
-  // Focus automatique sur la console admin à l'ouverture du panel
+  // ── Focus + pré-remplissage console ──────────────────────────────────────
   useEffect(() => {
-    if (isOpen && isAdmin) {
-      // setTimeout 0 laisse React finir le rendu avant de focus
-      setTimeout(() => consoleInputRef.current?.focus(), 0);
-    }
+    if (isOpen && isAdmin) setTimeout(() => consoleInputRef.current?.focus(), 0);
   }, [isOpen, isAdmin]);
 
-  // Pré-remplir la console avec /select quand plusieurs objets se superposent
   useEffect(() => {
     if (isAdmin && hasOverlap) {
       setCommand("/select ");
@@ -68,32 +72,126 @@ export default function ActionPanel() {
     }
   }, [isAdmin, hasOverlap, target?.id]);
 
-  if (!isOpen || !target) return null;
+  // ── Gestion du focus → store admin + désactivation capture clavier Phaser ─
+  function getPhaserKeyboard() {
+    return (window as GameWindow).game?.scene?.getScene?.("WorldScene")?.input?.keyboard;
+  }
 
-  const handleAction = (action: string) => {
+  function onFocus() {
+    getAdminStore().getState().setConsoleActive(true);
+    getPhaserKeyboard()?.disableGlobalCapture();
+  }
+
+  function onBlur() {
+    getAdminStore().getState().setConsoleActive(false);
+    getPhaserKeyboard()?.enableGlobalCapture();
+  }
+
+  // ── Exécution de commande ─────────────────────────────────────────────────
+  async function runCommand(raw: string) {
+    const parsed = parseCommand(raw.trim());
+    if (!parsed) {
+      pushResult("Syntaxe invalide — commencez par '/'.", false);
+      return;
+    }
+
+    const def = commandRegistry[parsed.name];
+    if (!def) {
+      const matches = autocompleteCommand(parsed.name);
+      const hint = matches.length ? ` Vouliez-vous dire : ${matches.join(", ")} ?` : "";
+      pushResult(`Commande "${parsed.name}" inconnue.${hint}`, false);
+      return;
+    }
+
+    if (def.destructive && parsed.flags["confirm"] !== "true") {
+      pushResult(`Commande destructive — ajoutez --confirm pour l'exécuter.`, false);
+      return;
+    }
+
     const socket = (window as GameWindow).game?.socket;
-    if (!socket?.connected) { closePanel(); return; }
-    if (!character?.id) { closePanel(); return; }
+    if (!socket?.connected) {
+      pushResult("Erreur : socket non connecté.", false);
+      return;
+    }
 
-    if (target.kind === "animal") {
-      const scene = (window as any).game?.scene?.getScene?.("WorldScene");
+    const ctx = {
+      socket,
+      token,
+      getTarget: () => target,
+      getCharacterPos: () =>
+        character ? { x: character.positionX ?? 400, y: character.positionY ?? 300 } : null,
+      getLastClickedPos: () => getAdminStore().getState().lastClickedPos,
+      getTemplateKeys,
+    };
+
+    const result = await def.handler(parsed.args, parsed.flags, ctx);
+    pushResult(result.message, result.success);
+    getAdminStore().getState().addToHistory(raw.trim());
+  }
+
+  function pushResult(text: string, ok: boolean) {
+    setResults((prev) => [{ text, ok }, ...prev].slice(0, 5));
+  }
+
+  // ── Gestion clavier console ───────────────────────────────────────────────
+  async function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cmd = command.trim();
+      if (!cmd) return;
+      setCommand("");
+      await runCommand(cmd);
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = getAdminStore().getState().navigateHistory("up", command);
+      setCommand(prev);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = getAdminStore().getState().navigateHistory("down", command);
+      setCommand(next);
+      return;
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const parts = command.split(/\s+/);
+      if (parts.length === 1 && parts[0].startsWith("/")) {
+        const suggestions = autocompleteCommand(parts[0].slice(1));
+        if (suggestions.length === 1) {
+          setCommand(suggestions[0] + " ");
+        } else if (suggestions.length > 1) {
+          pushResult(`Suggestions : ${suggestions.join("  ")}`, true);
+        }
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      closePanel();
+    }
+  }
+
+  // ── Actions gameplay ──────────────────────────────────────────────────────
+  function handleAction(action: string) {
+    const socket = (window as GameWindow).game?.socket;
+    if (!socket?.connected || !character?.id) { closePanel(); return; }
+
+    if (target?.kind === "animal") {
+      const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
       if (scene?.startAutoAttack) scene.startAutoAttack(target.id);
     } else {
-      socket.emit("interact_resource", { targetId: target.id, characterId: character.id });
+      socket.emit("interact_resource", { targetId: target!.id, characterId: character.id });
     }
     closePanel();
-  };
-
-  function handleCommandKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter" || !command.trim()) return;
-    // Le parsing complet des commandes sera implémenté dans la prochaine étape
-    setCommand("");
   }
 
-  function handleOverlapChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    selectOverlapTarget(e.target.value);
-    setCommand("");
-  }
+  if (!isOpen || !target) return null;
 
   return (
     <div className="action-panel" ref={panelRef}>
@@ -107,7 +205,6 @@ export default function ActionPanel() {
           <HealthBar health={target.health} maxHealth={target.maxHealth} />
         )}
 
-      {/* Console admin — visible uniquement pour le rôle admin */}
       {isAdmin && (
         <div className="action-panel__console">
           {hasOverlap && (
@@ -116,7 +213,7 @@ export default function ActionPanel() {
               <select
                 className="action-panel__overlap-select"
                 value={target.id}
-                onChange={handleOverlapChange}
+                onChange={(e) => { selectOverlapTarget(e.target.value); setCommand(""); }}
               >
                 {overlappingTargets.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -124,6 +221,19 @@ export default function ActionPanel() {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <div className="action-panel__console-results">
+              {results.map((r, i) => (
+                <div
+                  key={i}
+                  className={`action-panel__console-result action-panel__console-result--${r.ok ? "ok" : "err"}`}
+                >
+                  {r.text}
+                </div>
+              ))}
             </div>
           )}
 
@@ -135,8 +245,10 @@ export default function ActionPanel() {
               type="text"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              onKeyDown={handleCommandKey}
-              placeholder={hasOverlap ? "/select <index>" : "/commande..."}
+              onKeyDown={onKeyDown}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              placeholder={hasOverlap ? "/select <index>" : "/spawn goblin  /tp x y  /help"}
               spellCheck={false}
               autoComplete="off"
             />
@@ -144,17 +256,19 @@ export default function ActionPanel() {
         </div>
       )}
 
-      <div className="action-panel__actions">
-        {actions.map((action) => (
-          <button
-            key={action}
-            className="action-panel__button"
-            onClick={() => handleAction(action)}
-          >
-            {action}
-          </button>
-        ))}
-      </div>
+      {target.kind !== "player" && (
+        <div className="action-panel__actions">
+          {actions.map((action) => (
+            <button
+              key={action}
+              className="action-panel__button"
+              onClick={() => handleAction(action)}
+            >
+              {action}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

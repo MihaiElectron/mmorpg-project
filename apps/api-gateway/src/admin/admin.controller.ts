@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
@@ -24,5 +24,15 @@ export class AdminController {
   @Get('spawns')
   getSpawns() {
     return this.adminService.getSpawns();
+  }
+
+  @Patch('templates/:key')
+  async updateTemplate(
+    @Param('key') key: string,
+    @Body() fields: Record<string, number>,
+  ) {
+    const updated = await this.adminService.updateTemplate(key, fields);
+    if (!updated) throw new NotFoundException(`Template "${key}" introuvable.`);
+    return updated;
   }
 }

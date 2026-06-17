@@ -1,3 +1,5 @@
+import { getAdminStore } from "../../store/admin.store";
+
 export default class PlayerController {
   constructor(scene, player) {
     this.scene = scene;
@@ -109,14 +111,16 @@ export default class PlayerController {
   update() {
     const speed = this.player.speed;
 
-    // 1. CLAVIER
+    // 1. CLAVIER — désactivé quand la console admin a le focus
     let vx = 0;
     let vy = 0;
 
-    if (this.cursors.left.isDown) vx = -speed;
-    if (this.cursors.right.isDown) vx = speed;
-    if (this.cursors.up.isDown) vy = -speed;
-    if (this.cursors.down.isDown) vy = speed;
+    if (!getAdminStore().getState().isConsoleActive) {
+      if (this.cursors.left.isDown) vx = -speed;
+      if (this.cursors.right.isDown) vx = speed;
+      if (this.cursors.up.isDown) vy = -speed;
+      if (this.cursors.down.isDown) vy = speed;
+    }
 
     if (vx !== 0 || vy !== 0) {
       this.mouseActive = false;

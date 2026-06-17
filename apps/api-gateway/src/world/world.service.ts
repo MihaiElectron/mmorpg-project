@@ -207,6 +207,39 @@ export class WorldService implements OnModuleInit {
     return Array.from(playersByCharacter.values());
   }
 
+  getSocketIdByCharacterId(characterId: string): string | null {
+    for (const player of this.connectedPlayers.values()) {
+      if (player.characterId === characterId) return player.socketId;
+    }
+    return null;
+  }
+
+  async teleportCharacter(
+    characterId: string,
+    x: number,
+    y: number,
+    server: Server,
+  ): Promise<boolean> {
+    const rx = Math.round(x);
+    const ry = Math.round(y);
+
+    await this.characterRepository.update(characterId, {
+      positionX: rx,
+      positionY: ry,
+    });
+
+    for (const player of this.connectedPlayers.values()) {
+      if (player.characterId === characterId) {
+        player.x = rx;
+        player.y = ry;
+        server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   private findSocketIdByCharacterId(
     characterId: string,
     exceptSocketId: string,
