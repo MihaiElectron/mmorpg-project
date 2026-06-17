@@ -1,4 +1,4 @@
-import React from "react";
+import { useEffect, useRef } from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
 import HealthBar from "../HealthBar/HealthBar";
@@ -19,10 +19,24 @@ export default function ActionPanel() {
   const actions = useActionPanelStore((s) => s.actions);
   const closePanel = useActionPanelStore((s) => s.closePanel);
   const character = useCharacterStore((s) => s.character);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  if (!isOpen || !target) {
-    return null;
-  }
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      // Le canvas Phaser gère ses propres clics (WorldScene.pointerdown).
+      // Interférer ici provoquerait une fermeture immédiate après l'ouverture.
+      if (target.tagName === "CANVAS") return;
+      if (panelRef.current && !panelRef.current.contains(target)) {
+        closePanel();
+      }
+    }
+
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [closePanel]);
+
+  if (!isOpen || !target) return null;
 
   const handleAction = (action: string) => {
     const socket = (window as GameWindow).game?.socket;
@@ -41,9 +55,7 @@ export default function ActionPanel() {
 
     if (target.kind === "animal") {
       const scene = (window as any).game?.scene?.getScene?.("WorldScene");
-      if (scene?.startAutoAttack) {
-        scene.startAutoAttack(target.id);
-      }
+      if (scene?.startAutoAttack) scene.startAutoAttack(target.id);
     } else {
       socket.emit("interact_resource", {
         targetId: target.id,
@@ -55,7 +67,7 @@ export default function ActionPanel() {
   };
 
   return (
-    <div className="action-panel">
+    <div className="action-panel" ref={panelRef}>
       <div className="action-panel__title">
         {target.type.replace("_", " ").toUpperCase()}
       </div>
@@ -66,7 +78,7 @@ export default function ActionPanel() {
           <HealthBar health={target.health} maxHealth={target.maxHealth} />
         )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div className="action-panel__actions">
         {actions.map((action) => (
           <button
             key={action}
@@ -76,13 +88,6 @@ export default function ActionPanel() {
             {action}
           </button>
         ))}
-
-        <button
-          className="action-panel__button action-panel__button--cancel"
-          onClick={closePanel}
-        >
-          Cancel
-        </button>
       </div>
     </div>
   );

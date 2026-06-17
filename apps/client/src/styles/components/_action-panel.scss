@@ -28,12 +28,13 @@
     color: vars.$color-text-gold;
   }
 
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   &__button {
     @include m.btn-success;
-
-    &--cancel {
-      @include m.btn-danger;
-      margin-top: 5px;
-    }
   }
 }
