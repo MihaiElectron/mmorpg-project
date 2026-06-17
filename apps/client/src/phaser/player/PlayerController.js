@@ -65,6 +65,17 @@ export default class PlayerController {
   }
 
   // -------------------------------------------------------
+  // DÉPLACEMENT PROGRAMMATIQUE (auto-attaque, poursuite)
+  // -------------------------------------------------------
+  moveTo(x, y) {
+    this.mouseActive = true;
+    this.isDragging = true;
+    this.path = null;
+    this.currentPathIndex = 0;
+    this.target = { x, y };
+  }
+
+  // -------------------------------------------------------
   // PATHFINDING
   // -------------------------------------------------------
   calculatePath(targetX, targetY) {

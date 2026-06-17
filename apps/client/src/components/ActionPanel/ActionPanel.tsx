@@ -39,13 +39,17 @@ export default function ActionPanel() {
       return;
     }
 
-    const eventName =
-      target.kind === "animal" ? "attack_animal" : "interact_resource";
-
-    socket.emit(eventName, {
-      targetId: target.id,
-      characterId: character.id,
-    });
+    if (target.kind === "animal") {
+      const scene = (window as any).game?.scene?.getScene?.("WorldScene");
+      if (scene?.startAutoAttack) {
+        scene.startAutoAttack(target.id);
+      }
+    } else {
+      socket.emit("interact_resource", {
+        targetId: target.id,
+        characterId: character.id,
+      });
+    }
 
     closePanel();
   };

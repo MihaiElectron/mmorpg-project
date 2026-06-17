@@ -28,6 +28,54 @@ export default class WorldScene extends Phaser.Scene {
 
     // Indicateur visuel de récolte (local, visible uniquement par ce client).
     this.gatherIndicator = null;
+
+    this.autoAttackTargetId = null;
+    this.autoAttackInterval = null;
+  }
+
+  startAutoAttack(targetId) {
+    this.stopAutoAttack();
+    this.autoAttackTargetId = targetId;
+
+    let lastAttackEmitAt = 0;
+    const ATTACK_INTERVAL_MS = 750;
+
+    const tick = () => {
+      if (!this.socket || !this.autoAttackTargetId) return;
+      const character = getCharacterStore().getState().character;
+      if (!character?.id) { this.stopAutoAttack(); return; }
+
+      const entry = this.animalSprites.get(targetId);
+      if (!entry) return;
+
+      const dist = Math.hypot(
+        entry.animal.x - this.player.x,
+        entry.animal.y - this.player.y,
+      );
+
+      // Poursuite continue : replanifier vers la position actuelle de l'animal
+      if (dist > 60 && this.controller) {
+        this.controller.moveTo(entry.animal.x, entry.animal.y);
+      }
+
+      // Attaque toutes les 750 ms (le serveur vérifie aussi le cooldown)
+      const now = Date.now();
+      if (now - lastAttackEmitAt >= ATTACK_INTERVAL_MS) {
+        lastAttackEmitAt = now;
+        this.socket.emit("attack_animal", { targetId, characterId: character.id });
+      }
+    };
+
+    tick();
+    this.autoAttackInterval = setInterval(tick, 300);
+  }
+
+  stopAutoAttack() {
+    if (this.autoAttackInterval !== null) {
+      clearInterval(this.autoAttackInterval);
+      this.autoAttackInterval = null;
+    }
+    this.autoAttackTargetId = null;
   }
 
   create() {
@@ -97,6 +145,7 @@ export default class WorldScene extends Phaser.Scene {
       }
 
       getActionPanelStore().getState().closePanel();
+      this.stopAutoAttack();
       this.controller.startMouseMove(worldX, worldY);
     });
 
@@ -205,6 +254,9 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("animal_update", (animal) => {
       if (animal.state === "dead") {
         this.removeAnimal(animal.id);
+        if (this.autoAttackTargetId === animal.id) {
+          this.stopAutoAttack();
+        }
         const panelStore = getActionPanelStore();
         if (panelStore.getState().target?.id === animal.id) {
           panelStore.getState().closePanel();
