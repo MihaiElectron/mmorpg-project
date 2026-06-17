@@ -508,6 +508,35 @@ export class AnimalsService implements OnModuleInit {
     return toDto(animal);
   }
 
+  async forceRespawnAll(templateKey: string): Promise<number> {
+    let count = 0;
+    for (const animal of this.liveAnimals.values()) {
+      if (animal.spawn?.template?.key !== templateKey) continue;
+
+      const { template } = animal.spawn;
+      animal.state = 'alive';
+      animal.health = template.baseHealth;
+      animal.x = animal.spawn.spawnX;
+      animal.y = animal.spawn.spawnY;
+
+      this.patrolStates.delete(animal.id);
+      this.lastAnimalAutoAttackAt.delete(animal.id);
+
+      await this.animalRepository.update(animal.id, {
+        state: 'alive',
+        health: template.baseHealth,
+        x: animal.spawn.spawnX,
+        y: animal.spawn.spawnY,
+      });
+
+      if (this.server) {
+        this.server.emit('animal_update', toDto(animal));
+      }
+      count++;
+    }
+    return count;
+  }
+
   private async seedSpawns() {
     const template = await this.templateRepository.findOne({ where: { key: 'turkey' } });
     if (!template) return;

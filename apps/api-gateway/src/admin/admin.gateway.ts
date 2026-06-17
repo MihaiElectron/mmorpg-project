@@ -15,6 +15,7 @@ import { CLIENT_ORIGIN } from '../common/cors.constants';
 type SpawnPayload = { templateKey: string; x: number; y: number };
 type TeleportPayload = { characterId: string; x: number; y: number };
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
+type RespawnAllPayload = { templateKey: string };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -136,6 +137,29 @@ export class AdminGateway {
       success: true,
       message: `Template "${updated.name}" mis à jour : ${changes}.`,
       data: updated,
+    };
+  }
+
+  @SubscribeMessage('admin:respawn_all')
+  async onRespawnAll(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: RespawnAllPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') {
+      return { success: false, message: 'Non autorisé.' };
+    }
+
+    const { templateKey } = payload ?? {};
+    if (!templateKey) {
+      return { success: false, message: 'Payload invalide : templateKey requis.' };
+    }
+
+    const count = await this.animalsService.forceRespawnAll(templateKey);
+    return {
+      success: count > 0,
+      message: count > 0
+        ? `${count} "${templateKey}" réinitialisé(s) à leur position de spawn (state: alive, HP max).`
+        : `Aucun animal "${templateKey}" trouvé en mémoire.`,
     };
   }
 }

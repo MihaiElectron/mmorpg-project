@@ -1,4 +1,4 @@
-import { spawnCreature, teleportCharacter, updateTemplate } from "./admin.actions";
+import { spawnCreature, teleportCharacter, updateTemplate, respawnAll } from "./admin.actions";
 import type { ActionResult } from "./admin.actions";
 
 export type CommandContext = {
@@ -133,6 +133,22 @@ export const commandRegistry: Record<string, CommandDef> = {
         return { success: false, message: "Erreur : rayon doit être un entier >= 0." };
       }
       return updateTemplate(templateKey, { aggroRadius: value }, ctx.socket);
+    },
+  },
+
+  respawn: {
+    description: "Force le respawn de tous les animaux d'un template à leur position d'origine.",
+    usage: "/respawn all <template>",
+    argNames: ["all", "template"],
+    handler: async (args, _flags, ctx) => {
+      if (args[0] !== "all") {
+        return { success: false, message: "Syntaxe : /respawn all <template>. Ex: /respawn all turkey" };
+      }
+      const templateKey = args[1];
+      if (!templateKey) {
+        return { success: false, message: "Template requis. Ex: /respawn all turkey" };
+      }
+      return respawnAll(templateKey, ctx.socket);
     },
   },
 

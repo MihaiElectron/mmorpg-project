@@ -53,6 +53,11 @@ export function updateTemplate(
   return ackPromise(socket, "admin:update_template", { key, fields });
 }
 
+/** Force le respawn de tous les animaux d'un template. */
+export function respawnAll(templateKey: string, socket: any): Promise<ActionResult> {
+  return ackPromise(socket, 'admin:respawn_all', { templateKey });
+}
+
 /** Met à jour un template via HTTP PATCH (alternatif REST). */
 export async function updateTemplateHttp(
   key: string,
