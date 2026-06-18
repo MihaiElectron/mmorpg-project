@@ -420,32 +420,31 @@
     &--dead     { background: rgba(80, 80, 80, 0.2);     color: vars.$color-text-disabled; border: 1px solid vars.$panel-border-subtle; }
   }
 
-  // ── Bouton supprimer instance ─────────────────────────────────────────────
-  &__del-btn {
+  // ── Bouton toggle suppression (icône poubelle dans le header) ────────────
+  &__del-toggle {
     flex-shrink: 0;
     background: transparent;
     border: 1px solid transparent;
     border-radius: vars.$panel-radius-sm;
     color: vars.$color-text-disabled;
-    font-size: 0.7rem;
-    padding: 2px 5px;
+    font-size: 0.75rem;
+    padding: 2px 4px;
     cursor: pointer;
+    line-height: 1;
     transition: border-color 0.15s, color 0.15s;
 
-    &:hover {
-      border-color: vars.$btn-danger-bg;
-      color: vars.$btn-danger-bg;
-    }
+    &:hover { color: vars.$btn-danger-bg; }
 
-    &:disabled {
-      opacity: 0.4;
-      cursor: default;
+    &.is-active {
+      color: vars.$btn-danger-bg;
+      border-color: vars.$btn-danger-bg;
     }
   }
 
   // ── Bouton Appliquer ──────────────────────────────────────────────────────
   &__apply-btn {
     align-self: flex-end;
+    margin-top: -2px;
     @include m.btn-success;
     font-size: 0.78rem;
     padding: 4px 12px;
@@ -453,6 +452,17 @@
     &:disabled {
       opacity: 0.5;
       cursor: default;
+    }
+
+    &--danger {
+      background: vars.$btn-danger-bg;
+      border-color: vars.$btn-danger-bg;
+      color: #fff;
+
+      &:hover:not(:disabled) {
+        background: lighten(vars.$btn-danger-bg, 8%);
+        border-color: lighten(vars.$btn-danger-bg, 8%);
+      }
     }
   }
 

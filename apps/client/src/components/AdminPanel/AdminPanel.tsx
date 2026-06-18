@@ -502,9 +502,10 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
 
   useEffect(() => { pag.goToPage(1); }, [search]);
 
-  const groupDraft    = useDraft(config.groupFields);
-  const instDraft     = useDraft(config.instanceFields);
-  const [instDeleting, setInstDeleting] = useState<Record<string, boolean>>({});
+  const groupDraft      = useDraft(config.groupFields);
+  const instDraft       = useDraft(config.instanceFields);
+  const [pendingDelete, setPendingDelete] = useState<Record<string, boolean>>({});
+  const [instOperating, setInstOperating] = useState<Record<string, boolean>>({});
 
   function toggleGroup(key: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -530,28 +531,33 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
     if (result.success) { Object.assign(group, dirtyFields); groupDraft.clearDraft(gk); }
   }
 
-  async function applyInstance(inst: any) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const ik = config.getInstanceKey(inst);
-    const dirtyFields = instDraft.collectDirty(ik, inst);
-    if (!Object.keys(dirtyFields).length) return;
-    instDraft.setSaving((prev) => ({ ...prev, [ik]: true }));
-    const result = await ackPromise(socket, config.instanceSaveEvent, config.getInstanceSavePayload(inst, dirtyFields));
-    instDraft.setSaving((prev) => ({ ...prev, [ik]: false }));
-    onResult(result.message, result.success);
-    if (result.success) { Object.assign(inst, dirtyFields); instDraft.clearDraft(ik); }
+  function togglePendingDelete(ik: string) {
+    setPendingDelete((prev) => ({ ...prev, [ik]: !prev[ik] }));
   }
 
-  async function deleteInstance(inst: any) {
-    const socket = getSocket();
-    if (!socket?.connected || !config.instanceDeleteEvent || !config.getInstanceDeletePayload) return;
+  async function applyOrDelete(inst: any) {
     const ik = config.getInstanceKey(inst);
-    setInstDeleting((prev) => ({ ...prev, [ik]: true }));
-    const result = await ackPromise(socket, config.instanceDeleteEvent, config.getInstanceDeletePayload(inst));
-    setInstDeleting((prev) => ({ ...prev, [ik]: false }));
-    onResult(result.message, result.success);
-    if (result.success) onInstanceDeleted(ik);
+    setInstOperating((prev) => ({ ...prev, [ik]: true }));
+
+    if (pendingDelete[ik]) {
+      const socket = getSocket();
+      if (socket?.connected && config.instanceDeleteEvent && config.getInstanceDeletePayload) {
+        const result = await ackPromise(socket, config.instanceDeleteEvent, config.getInstanceDeletePayload(inst));
+        onResult(result.message, result.success);
+        if (result.success) onInstanceDeleted(ik);
+      }
+    } else {
+      const socket = getSocket();
+      if (!socket?.connected) { onResult("Socket non connecté.", false); setInstOperating((prev) => ({ ...prev, [ik]: false })); return; }
+      const dirtyFields = instDraft.collectDirty(ik, inst);
+      if (Object.keys(dirtyFields).length) {
+        const result = await ackPromise(socket, config.instanceSaveEvent, config.getInstanceSavePayload(inst, dirtyFields));
+        onResult(result.message, result.success);
+        if (result.success) { Object.assign(inst, dirtyFields); instDraft.clearDraft(ik); }
+      }
+    }
+
+    setInstOperating((prev) => ({ ...prev, [ik]: false }));
   }
 
   async function tpToInstance(inst: any) {
@@ -653,9 +659,10 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
                                   onClick={() => tpToInstance(inst)}>↓ Tp</button>
                               )}
                               {config.instanceDeleteEvent && (
-                                <button className="admin-panel__del-btn"
-                                  disabled={!!instDeleting[ik]}
-                                  onClick={() => deleteInstance(inst)}>✕</button>
+                                <button
+                                  className={`admin-panel__del-toggle${pendingDelete[ik] ? " is-active" : ""}`}
+                                  title={pendingDelete[ik] ? "Annuler" : "Supprimer"}
+                                  onClick={() => togglePendingDelete(ik)}>🗑</button>
                               )}
                             </div>
                             <div className="admin-panel__template-stats">
@@ -668,10 +675,12 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
                                 </label>
                               ))}
                             </div>
-                            {instDraft.hasAnyDirty(ik, inst) && (
-                              <button className="admin-panel__apply-btn"
-                                disabled={!!instDraft.saving[ik]} onClick={() => applyInstance(inst)}>
-                                {instDraft.saving[ik] ? "…" : "Appliquer"}
+                            {(instDraft.hasAnyDirty(ik, inst) || pendingDelete[ik]) && (
+                              <button
+                                className={`admin-panel__apply-btn${pendingDelete[ik] ? " admin-panel__apply-btn--danger" : ""}`}
+                                disabled={!!instOperating[ik]}
+                                onClick={() => applyOrDelete(inst)}>
+                                {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Appliquer"}
                               </button>
                             )}
                           </div>
