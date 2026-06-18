@@ -88,13 +88,19 @@ const SECTION_CONFIGS: SectionConfig[] = [
 // ── Drag-to-map ────────────────────────────────────────────────────────────────
 
 function toWorldPoint(clientX: number, clientY: number): { x: number; y: number } | null {
-  const canvas = document.querySelector("canvas");
+  const canvas = document.querySelector("canvas") as HTMLCanvasElement | null;
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
   const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
   if (!scene?.cameras?.main) return null;
-  return scene.cameras.main.getWorldPoint(clientX - rect.left, clientY - rect.top) as { x: number; y: number };
+  // Convertir CSS px → pixels internes Phaser (ratio ≠ 1 en mode EXPAND ou sur écran HiDPI)
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return scene.cameras.main.getWorldPoint(
+    (clientX - rect.left) * scaleX,
+    (clientY - rect.top)  * scaleY,
+  ) as { x: number; y: number };
 }
 
 function startDrag(
