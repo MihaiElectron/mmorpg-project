@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-19_
+_Dernière mise à jour : 2026-06-19_ (session 2026-06-18)
 
 ---
 
@@ -56,8 +56,12 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
   - **Hiérarchie deux niveaux** pour Créatures et Ressources :
     - Niveau 1 (groupe/template) : stats globales éditables + handle drag-and-drop
     - Niveau 2 (instances dans le monde) : dépliable au clic sur le titre du groupe.
-      Chaque instance expose ses propres champs éditables (HP/x/y ou x/y/loots),
-      un bouton ↓ Tp et un bouton ✕ supprimer.
+      Chaque instance expose ses propres champs éditables (état/HP/x/y ou
+      état/x/y/loots), un bouton ↓ Tp (toujours visible, même si dead) et un
+      bouton ✕ supprimer.
+  - **Sélecteur d'état** sur les instances : `alive/fighting/escaping/dead`
+      (créatures) et `alive/dead` (ressources) — passer à `alive` restaure
+      les HP au max pour les animaux.
   - Joueurs : section plate (liste unique, inchangée)
   - Filtre de recherche par nom dans chaque section
   - Pagination 20 groupes/page avec flèches + saisie directe
@@ -109,6 +113,7 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 | Sections admin groupées | `GroupedSectionConfig` + `GroupedSection` (créatures/ressources) — deux niveaux template→instances |
 | Sections admin plates | `SectionConfig` + `EntitySection` (joueurs) — liste simple |
 | Templates ressources | `ResourceTemplate` (DB) — `defaultRemainingLoots` éditable admin, utilisé au spawn |
+| Champs admin select | `FieldDef.options` → `<select>` ; dirty/collect gère string et number |
 | Drag admin → map | `startDrag()` vanilla DOM + ratio `canvas.width/rect.width` × `getWorldPoint()` pour conversion HiDPI-safe |
 | Suppression admin animal | `animalRepository.delete()` + `spawnRepository.delete()` si spawn admin — pas de résurrection au redémarrage |
 
