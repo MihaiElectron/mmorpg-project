@@ -133,7 +133,7 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     ],
     instanceSaveEvent: "admin:update_resource",
     getInstanceSavePayload: (r, fields) => ({ id: r.id, fields }),
-    getInstanceTpPosition: (r) => r.state === "alive" ? { x: r.x, y: r.y } : null,
+    getInstanceTpPosition: (r) => ({ x: r.x, y: r.y }),
     instanceDeleteEvent: "admin:delete_resource",
     getInstanceDeletePayload: (r) => ({ id: r.id }),
   },
