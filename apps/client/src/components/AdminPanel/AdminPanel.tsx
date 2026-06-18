@@ -121,23 +121,39 @@ type EntitySectionProps = {
   onResult: (text: string, ok: boolean) => void;
 };
 
-function EntitySection({ config, items, onResult }: EntitySectionProps) {
-  const [search, setSearch]   = useState("");
-  const [drafts, setDrafts]   = useState<Record<string, Record<string, string>>>({});
-  const [saving, setSaving]   = useState<Record<string, boolean>>({});
+const ITEMS_PER_PAGE = 20;
 
-  const filtered = items.filter((item) =>
+function EntitySection({ config, items, onResult }: EntitySectionProps) {
+  const [isOpen,     setIsOpen]     = useState(false);
+  const [search,     setSearch]     = useState("");
+  const [page,       setPage]       = useState(1);
+  const [pageInput,  setPageInput]  = useState("1");
+  const [drafts,     setDrafts]     = useState<Record<string, Record<string, string>>>({});
+  const [saving,     setSaving]     = useState<Record<string, boolean>>({});
+
+  const filtered   = items.filter((item) =>
     config.getName(item).toLowerCase().includes(search.toLowerCase())
   );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated  = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  useEffect(() => { setPage(1); setPageInput("1"); }, [search]);
+  useEffect(() => {
+    if (page > totalPages) goToPage(totalPages);
+  }, [totalPages]);
+
+  function goToPage(p: number) {
+    const clamped = Math.max(1, Math.min(p, totalPages));
+    setPage(clamped);
+    setPageInput(String(clamped));
+  }
 
   function getDisplay(item: any, field: string): string {
-    const dk = config.getDisplayKey(item);
-    return drafts[dk]?.[field] ?? String(item[field] ?? "");
+    return drafts[config.getDisplayKey(item)]?.[field] ?? String(item[field] ?? "");
   }
 
   function isDirty(item: any, field: string): boolean {
-    const dk = config.getDisplayKey(item);
-    const draft = drafts[dk]?.[field];
+    const draft = drafts[config.getDisplayKey(item)]?.[field];
     if (draft === undefined || draft === "") return false;
     return Number(draft) !== Number(item[field]);
   }
@@ -148,10 +164,7 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
 
   function onChange(item: any, field: string, value: string) {
     const dk = config.getDisplayKey(item);
-    setDrafts((prev) => ({
-      ...prev,
-      [dk]: { ...(prev[dk] ?? {}), [field]: value },
-    }));
+    setDrafts((prev) => ({ ...prev, [dk]: { ...(prev[dk] ?? {}), [field]: value } }));
   }
 
   async function onApply(item: any) {
@@ -170,7 +183,6 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
     setSaving((prev) => ({ ...prev, [dk]: true }));
 
     const result = await ackPromise(socket, config.saveEvent, {
-      // Creatures utilisent "key", les autres utilisent "id"
       ...(config.saveEvent === "admin:update_template"
         ? { key: config.getEntityKey(item) }
         : { id: config.getEntityKey(item) }),
@@ -181,7 +193,6 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
     onResult(result.message, result.success);
 
     if (result.success) {
-      // Mettre à jour l'item local
       Object.assign(item, dirtyFields);
       setDrafts((prev) => { const n = { ...prev }; delete n[dk]; return n; });
     }
@@ -189,56 +200,93 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
 
   return (
     <section className="admin-panel__section">
-      <input
-        className="admin-panel__search"
-        type="text"
-        placeholder={`Filtrer ${config.title.toLowerCase()}…`}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        {...kbHandlers}
-        spellCheck={false}
-      />
-      <h3 className="admin-panel__section-title">{config.title}</h3>
 
-      {items.length === 0 && (
-        <p className="admin-panel__loading">Chargement…</p>
-      )}
-      {items.length > 0 && filtered.length === 0 && (
-        <p className="admin-panel__loading">Aucun résultat.</p>
-      )}
+      {/* Header cliquable */}
+      <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
+        <span className="admin-panel__section-toggle">
+          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+          {config.title}
+        </span>
 
-      <div className="admin-panel__template-list">
-        {filtered.map((item) => (
-          <div key={config.getDisplayKey(item)} className="admin-panel__template-item">
-            <span className="admin-panel__template-name">{config.getName(item)}</span>
-            <div className="admin-panel__template-stats">
-              {config.fields.map(({ key, label, min, step }) => (
-                <label key={key} className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">{label}</span>
-                  <input
-                    className={`admin-panel__template-stat-input${isDirty(item, key) ? " is-dirty" : ""}`}
-                    type="number"
-                    min={min ?? 0}
-                    step={step ?? 1}
-                    value={getDisplay(item, key)}
-                    onChange={(e) => onChange(item, key, e.target.value)}
-                    {...kbHandlers}
-                  />
-                </label>
-              ))}
-            </div>
-            {hasAnyDirty(item) && (
-              <button
-                className="admin-panel__apply-btn"
-                disabled={!!saving[config.getDisplayKey(item)]}
-                onClick={() => onApply(item)}
-              >
-                {saving[config.getDisplayKey(item)] ? "…" : "Appliquer"}
-              </button>
-            )}
+        {isOpen && (
+          <div className="admin-panel__pagination" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="admin-panel__pagination-btn"
+              onClick={() => goToPage(page - 1)}
+              disabled={page === 1}
+            >‹</button>
+            <input
+              className="admin-panel__pagination-input"
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageInput}
+              onChange={(e) => setPageInput(e.target.value)}
+              onBlur={() => goToPage(Number(pageInput))}
+              onKeyDown={(e) => { if (e.key === "Enter") goToPage(Number(pageInput)); }}
+              {...kbHandlers}
+            />
+            <span className="admin-panel__pagination-sep">/ {totalPages}</span>
+            <button
+              className="admin-panel__pagination-btn"
+              onClick={() => goToPage(page + 1)}
+              disabled={page === totalPages}
+            >›</button>
           </div>
-        ))}
+        )}
       </div>
+
+      {/* Corps déroulable */}
+      {isOpen && (
+        <>
+          <input
+            className="admin-panel__search"
+            type="text"
+            placeholder={`Filtrer ${config.title.toLowerCase()}…`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            {...kbHandlers}
+            spellCheck={false}
+          />
+
+          {items.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
+          {items.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
+
+          <div className="admin-panel__template-list">
+            {paginated.map((item) => (
+              <div key={config.getDisplayKey(item)} className="admin-panel__template-item">
+                <span className="admin-panel__template-name">{config.getName(item)}</span>
+                <div className="admin-panel__template-stats">
+                  {config.fields.map(({ key, label, min, step }) => (
+                    <label key={key} className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">{label}</span>
+                      <input
+                        className={`admin-panel__template-stat-input${isDirty(item, key) ? " is-dirty" : ""}`}
+                        type="number"
+                        min={min ?? 0}
+                        step={step ?? 1}
+                        value={getDisplay(item, key)}
+                        onChange={(e) => onChange(item, key, e.target.value)}
+                        {...kbHandlers}
+                      />
+                    </label>
+                  ))}
+                </div>
+                {hasAnyDirty(item) && (
+                  <button
+                    className="admin-panel__apply-btn"
+                    disabled={!!saving[config.getDisplayKey(item)]}
+                    onClick={() => onApply(item)}
+                  >
+                    {saving[config.getDisplayKey(item)] ? "…" : "Appliquer"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }

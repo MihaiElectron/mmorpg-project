@@ -75,6 +75,88 @@
     gap: 8px;
   }
 
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+
+    &:hover .admin-panel__section-toggle {
+      color: vars.$color-metal-silver;
+    }
+  }
+
+  &__section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: color 0.15s;
+  }
+
+  &__section-chevron {
+    font-size: 0.65rem;
+    color: vars.$color-text-muted;
+  }
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+  &__pagination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__pagination-btn {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 1rem;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: border-color 0.15s;
+
+    &:hover:not(:disabled) { border-color: vars.$color-metal-silver; }
+    &:disabled { opacity: 0.35; cursor: default; }
+  }
+
+  &__pagination-input {
+    width: 32px;
+    background: vars.$panel-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-magic-amber;
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 2px 3px;
+    outline: none;
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button { appearance: none; }
+    &:focus { border-color: vars.$color-metal-silver; }
+  }
+
+  &__pagination-sep {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+  }
+
+  // ── (legacy — gardé pour Vue d'ensemble qui n'est pas une EntitySection) ──
   &__section-title {
     color: vars.$color-text-gold;
     font-size: 0.85rem;
