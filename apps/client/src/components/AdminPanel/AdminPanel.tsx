@@ -13,6 +13,7 @@ export type FieldDef = {
   label: string;
   min?: number;
   step?: number;
+  options?: string[];  // si défini → <select> à la place de <input number>
 };
 
 // Section plate (ex: Joueurs)
@@ -42,7 +43,7 @@ type GroupedSectionConfig = {
   getGroupName: (g: any) => string;
   groupFields:  FieldDef[];
   groupSaveEvent?:      string;
-  getGroupSavePayload?: (g: any, fields: Record<string, number>) => object;
+  getGroupSavePayload?: (g: any, fields: Record<string, number | string>) => object;
   dragEvent?:           string;
   getDragPayload?:      (g: any, x: number, y: number) => object;
 
@@ -52,7 +53,7 @@ type GroupedSectionConfig = {
   getInstanceBadge?: (i: any) => string;
   instanceFields:  FieldDef[];
   instanceSaveEvent: string;
-  getInstanceSavePayload: (i: any, fields: Record<string, number>) => object;
+  getInstanceSavePayload: (i: any, fields: Record<string, number | string>) => object;
   getInstanceTpPosition?: (i: any) => { x: number; y: number } | null;
   instanceDeleteEvent?:      string;
   getInstanceDeletePayload?: (i: any) => object;
@@ -95,9 +96,10 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceName: (a) => a.id.slice(0, 8),
     getInstanceBadge: (a) => a.state,
     instanceFields: [
-      { key: "health", label: "HP", min: 0 },
-      { key: "x",      label: "X",  min: 0 },
-      { key: "y",      label: "Y",  min: 0 },
+      { key: "state",  label: "État", options: ["alive", "fighting", "escaping", "dead"] },
+      { key: "health", label: "HP",   min: 0 },
+      { key: "x",      label: "X",    min: 0 },
+      { key: "y",      label: "Y",    min: 0 },
     ],
     instanceSaveEvent: "admin:update_animal",
     getInstanceSavePayload: (a, fields) => ({ id: a.id, fields }),
@@ -127,6 +129,7 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceName: (r) => r.id.slice(0, 8),
     getInstanceBadge: (r) => r.state,
     instanceFields: [
+      { key: "state",          label: "État",  options: ["alive", "dead"] },
       { key: "x",              label: "X",     min: 0 },
       { key: "y",              label: "Y",     min: 0 },
       { key: "remainingLoots", label: "Loots", min: 0 },
@@ -262,6 +265,8 @@ function useDraft(fields: FieldDef[]) {
   function isDirty(dk: string, field: string, item: any): boolean {
     const draft = drafts[dk]?.[field];
     if (draft === undefined || draft === "") return false;
+    const def = fields.find((f) => f.key === field);
+    if (def?.options) return draft !== String(item[field] ?? "");
     return Number(draft) !== Number(item[field]);
   }
 
@@ -277,12 +282,17 @@ function useDraft(fields: FieldDef[]) {
     setDrafts((prev) => { const n = { ...prev }; delete n[dk]; return n; });
   }
 
-  function collectDirty(dk: string, item: any): Record<string, number> {
-    const result: Record<string, number> = {};
-    for (const { key } of fields) {
-      if (!isDirty(dk, key, item)) continue;
-      const val = Number(drafts[dk]?.[key]);
-      if (!isNaN(val) && val >= 0) result[key] = val;
+  function collectDirty(dk: string, item: any): Record<string, number | string> {
+    const result: Record<string, number | string> = {};
+    for (const f of fields) {
+      if (!isDirty(dk, f.key, item)) continue;
+      const raw = drafts[dk]?.[f.key] ?? "";
+      if (f.options) {
+        result[f.key] = raw;
+      } else {
+        const val = Number(raw);
+        if (!isNaN(val) && val >= 0) result[f.key] = val;
+      }
     }
     return result;
   }
@@ -326,6 +336,32 @@ function PaginationControls({ page, pageInput, setPageInput, totalPages, goToPag
       <span className="admin-panel__pagination-sep">/ {totalPages}</span>
       <button className="admin-panel__pagination-btn" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>›</button>
     </div>
+  );
+}
+
+// ── StatField — input number ou select selon FieldDef ─────────────────────────
+
+type StatFieldProps = {
+  def: FieldDef;
+  dirty: boolean;
+  value: string;
+  onChange: (v: string) => void;
+};
+
+function StatField({ def, dirty, value, onChange }: StatFieldProps) {
+  const cls = `admin-panel__template-stat-input${dirty ? " is-dirty" : ""}`;
+  if (def.options) {
+    return (
+      <select className={cls} value={value} onChange={(e) => onChange(e.target.value)} {...kbHandlers}>
+        {def.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+    );
+  }
+  return (
+    <input className={cls} type="number"
+      min={def.min ?? 0} step={def.step ?? 1}
+      value={value} onChange={(e) => onChange(e.target.value)}
+      {...kbHandlers} />
   );
 }
 
@@ -418,15 +454,12 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
                     )}
                   </div>
                   <div className="admin-panel__template-stats">
-                    {config.fields.map(({ key, label, min, step }) => (
-                      <label key={key} className="admin-panel__template-stat">
-                        <span className="admin-panel__template-stat-label">{label}</span>
-                        <input
-                          className={`admin-panel__template-stat-input${draft.isDirty(dk, key, item) ? " is-dirty" : ""}`}
-                          type="number" min={min ?? 0} step={step ?? 1}
-                          value={draft.getDisplayField(dk, key, item)}
-                          onChange={(e) => draft.onChange(dk, key, e.target.value)}
-                          {...kbHandlers} />
+                    {config.fields.map((f) => (
+                      <label key={f.key} className="admin-panel__template-stat">
+                        <span className="admin-panel__template-stat-label">{f.label}</span>
+                        <StatField def={f} dirty={draft.isDirty(dk, f.key, item)}
+                          value={draft.getDisplayField(dk, f.key, item)}
+                          onChange={(v) => draft.onChange(dk, f.key, v)} />
                       </label>
                     ))}
                   </div>
@@ -576,15 +609,12 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
 
                     {config.groupFields.length > 0 && (
                       <div className="admin-panel__template-stats">
-                        {config.groupFields.map(({ key, label, min, step }) => (
-                          <label key={key} className="admin-panel__template-stat">
-                            <span className="admin-panel__template-stat-label">{label}</span>
-                            <input
-                              className={`admin-panel__template-stat-input${groupDraft.isDirty(gk, key, group) ? " is-dirty" : ""}`}
-                              type="number" min={min ?? 0} step={step ?? 1}
-                              value={groupDraft.getDisplayField(gk, key, group)}
-                              onChange={(e) => groupDraft.onChange(gk, key, e.target.value)}
-                              {...kbHandlers} />
+                        {config.groupFields.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={groupDraft.isDirty(gk, f.key, group)}
+                              value={groupDraft.getDisplayField(gk, f.key, group)}
+                              onChange={(v) => groupDraft.onChange(gk, f.key, v)} />
                           </label>
                         ))}
                       </div>
@@ -629,15 +659,12 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
                               )}
                             </div>
                             <div className="admin-panel__template-stats">
-                              {config.instanceFields.map(({ key, label, min, step }) => (
-                                <label key={key} className="admin-panel__template-stat">
-                                  <span className="admin-panel__template-stat-label">{label}</span>
-                                  <input
-                                    className={`admin-panel__template-stat-input${instDraft.isDirty(ik, key, inst) ? " is-dirty" : ""}`}
-                                    type="number" min={min ?? 0} step={step ?? 1}
-                                    value={instDraft.getDisplayField(ik, key, inst)}
-                                    onChange={(e) => instDraft.onChange(ik, key, e.target.value)}
-                                    {...kbHandlers} />
+                              {config.instanceFields.map((f) => (
+                                <label key={f.key} className="admin-panel__template-stat">
+                                  <span className="admin-panel__template-stat-label">{f.label}</span>
+                                  <StatField def={f} dirty={instDraft.isDirty(ik, f.key, inst)}
+                                    value={instDraft.getDisplayField(ik, f.key, inst)}
+                                    onChange={(v) => instDraft.onChange(ik, f.key, v)} />
                                 </label>
                               ))}
                             </div>

@@ -207,13 +207,20 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const allowed = ['health', 'x', 'y'];
-    const safe: Record<string, number> = {};
+    const numericAllowed = ['health', 'x', 'y'];
+    const validStates = ['alive', 'fighting', 'escaping', 'dead'];
+    const safe: Record<string, number | string> = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
-      const n = Number(v);
-      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
-      safe[k] = n;
+      if (k === 'state') {
+        if (!validStates.includes(String(v))) return { success: false, message: `État invalide : "${v}". Valeurs : ${validStates.join(', ')}.` };
+        safe[k] = String(v);
+      } else if (numericAllowed.includes(k)) {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+        safe[k] = n;
+      } else {
+        return { success: false, message: `Champ "${k}" non modifiable.` };
+      }
     }
 
     const dto = await this.animalsService.adminUpdateAnimal(id, safe as any);
@@ -344,13 +351,20 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const allowed = ['x', 'y', 'remainingLoots'];
-    const safe: Record<string, number> = {};
+    const numericAllowed = ['x', 'y', 'remainingLoots'];
+    const validResourceStates = ['alive', 'dead'];
+    const safe: Record<string, number | string> = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
-      const n = Number(v);
-      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
-      safe[k] = n;
+      if (k === 'state') {
+        if (!validResourceStates.includes(String(v))) return { success: false, message: `État invalide : "${v}". Valeurs : ${validResourceStates.join(', ')}.` };
+        safe[k] = String(v);
+      } else if (numericAllowed.includes(k)) {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+        safe[k] = n;
+      } else {
+        return { success: false, message: `Champ "${k}" non modifiable.` };
+      }
     }
 
     const updated = await this.adminService.updateResource(id, safe as any);

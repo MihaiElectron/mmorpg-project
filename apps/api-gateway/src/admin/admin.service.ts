@@ -91,13 +91,13 @@ export class AdminService {
 
   async updateResource(
     id: string,
-    fields: Partial<Pick<Resource, 'x' | 'y' | 'remainingLoots'>>,
+    fields: Partial<Pick<Resource, 'x' | 'y' | 'remainingLoots' | 'state'>>,
   ): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { id } });
     if (!resource) return null;
     Object.assign(resource, fields);
-    // Un déplacement admin remet la ressource en jeu
-    if ('x' in fields || 'y' in fields) {
+    // Un déplacement sans changement d'état explicite remet la ressource en jeu
+    if (('x' in fields || 'y' in fields) && !('state' in fields)) {
       resource.state = 'alive';
       if (resource.remainingLoots === 0) resource.remainingLoots = 5;
     }

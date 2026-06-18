@@ -295,8 +295,8 @@
       letter-spacing: 0.5px;
     }
 
-    &-input {
-      width: 52px;
+    &-input,
+    &-select {
       background: vars.$panel-bg;
       border: 1px solid vars.$panel-border-subtle;
       border-radius: vars.$panel-radius-sm;
@@ -305,11 +305,7 @@
       text-align: center;
       padding: 3px 4px;
       outline: none;
-      appearance: textfield;
       transition: color 0.2s, border-color 0.2s;
-
-      &::-webkit-inner-spin-button,
-      &::-webkit-outer-spin-button { appearance: none; }
 
       &:focus { border-color: vars.$color-metal-silver; }
 
@@ -317,6 +313,26 @@
         color: #f5c542;
         border-color: #f5c542;
       }
+    }
+
+    &-input {
+      width: 52px;
+      appearance: textfield;
+
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button { appearance: none; }
+    }
+
+    &-select {
+      width: auto;
+      min-width: 72px;
+      cursor: pointer;
+      appearance: none;
+      padding-right: 14px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 4px center;
+      text-align: left;
     }
   }
 

@@ -546,16 +546,22 @@ export class AnimalsService implements OnModuleInit {
 
   async adminUpdateAnimal(
     id: string,
-    fields: Partial<{ health: number; x: number; y: number }>,
+    fields: Partial<{ health: number; x: number; y: number; state: string }>,
   ): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(id);
-    if (!animal || animal.state === 'dead') return null;
+    if (!animal) return null;
 
     if (fields.health !== undefined) {
       animal.health = Math.max(0, Math.min(fields.health, animal.spawn.template.baseHealth));
     }
     if (fields.x !== undefined) animal.x = Math.round(fields.x);
     if (fields.y !== undefined) animal.y = Math.round(fields.y);
+    if (fields.state !== undefined) {
+      animal.state = fields.state as Animal['state'];
+      if (fields.state === 'alive') {
+        animal.health = animal.spawn.template.baseHealth;
+      }
+    }
 
     if (fields.x !== undefined || fields.y !== undefined) {
       this.patrolStates.delete(id);
