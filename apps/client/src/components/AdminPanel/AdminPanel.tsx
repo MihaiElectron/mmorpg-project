@@ -674,15 +674,15 @@ function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted
                                     onChange={(v) => instDraft.onChange(ik, f.key, v)} />
                                 </label>
                               ))}
+                              {(instDraft.hasAnyDirty(ik, inst) || pendingDelete[ik]) && (
+                                <button
+                                  className={`admin-panel__apply-btn${pendingDelete[ik] ? " admin-panel__apply-btn--danger" : ""}`}
+                                  disabled={!!instOperating[ik]}
+                                  onClick={() => applyOrDelete(inst)}>
+                                  {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Appliquer"}
+                                </button>
+                              )}
                             </div>
-                            {(instDraft.hasAnyDirty(ik, inst) || pendingDelete[ik]) && (
-                              <button
-                                className={`admin-panel__apply-btn${pendingDelete[ik] ? " admin-panel__apply-btn--danger" : ""}`}
-                                disabled={!!instOperating[ik]}
-                                onClick={() => applyOrDelete(inst)}>
-                                {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Appliquer"}
-                              </button>
-                            )}
                           </div>
                         );
                       })}
@@ -736,6 +736,61 @@ export default function AdminPanel() {
       }),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
+  }, [token]);
+
+  // ── Abonnements socket temps réel ─────────────────────────────────────────
+  const overviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleOverviewRefresh() {
+    if (overviewTimer.current) clearTimeout(overviewTimer.current);
+    overviewTimer.current = setTimeout(() => {
+      fetchAdmin<Overview>("/admin/overview", token).then(setOverview).catch(() => {});
+    }, 600);
+  }
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    function onAnimalUpdate(dto: any) {
+      setInstanceData((prev) => {
+        const list: any[] = prev.creatures ?? [];
+        const idx = list.findIndex((a) => a.id === dto.id);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = { ...next[idx], ...dto };
+          return { ...prev, creatures: next };
+        }
+        if (dto.state === 'dead') return prev;
+        scheduleOverviewRefresh();
+        return { ...prev, creatures: [...list, dto] };
+      });
+    }
+
+    function onResourceUpdate(data: any) {
+      setInstanceData((prev) => {
+        const list: any[] = prev.resources ?? [];
+        if (data.deleted) {
+          return { ...prev, resources: list.filter((r) => r.id !== data.id) };
+        }
+        const idx = list.findIndex((r) => r.id === data.id);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = { ...next[idx], ...data };
+          return { ...prev, resources: next };
+        }
+        if (!data.x || data.state === 'dead') return prev;
+        return { ...prev, resources: [...list, data] };
+      });
+    }
+
+    socket.on('animal_update', onAnimalUpdate);
+    socket.on('resource_update', onResourceUpdate);
+    return () => {
+      socket.off('animal_update', onAnimalUpdate);
+      socket.off('resource_update', onResourceUpdate);
+      if (overviewTimer.current) clearTimeout(overviewTimer.current);
+    };
   }, [token]);
 
   // Dériver les groupes depuis les instances quand pas de fetchGroupsPath

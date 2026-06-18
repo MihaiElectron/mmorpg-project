@@ -311,7 +311,7 @@ export class AdminGateway {
     const deleted = await this.adminService.deleteResource(id);
     if (!deleted) return { success: false, message: `Ressource "${id}" introuvable.` };
 
-    this.server.emit('resource_update', { id: deleted.id, state: 'dead' });
+    this.server.emit('resource_update', { id: deleted.id, state: 'dead', deleted: true });
     return { success: true, message: `Ressource "${deleted.type}" (${deleted.id}) supprimée.` };
   }
 

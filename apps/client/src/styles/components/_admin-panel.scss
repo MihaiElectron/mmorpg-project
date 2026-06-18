@@ -389,7 +389,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 5px 8px 4px;
+    padding: 5px 8px 5px;
     border-radius: vars.$panel-radius-sm;
     border: 1px solid vars.$panel-border-subtle;
     background: vars.$panel-header-bg;
@@ -397,9 +397,15 @@
 
     &:hover { border-color: vars.$panel-border; }
 
-    // Bouton Appliquer/Supprimer resserré aux stats de l'instance
+    // Stats + bouton Appliquer/Supprimer sur la même ligne
+    .admin-panel__template-stats {
+      align-items: flex-end;
+    }
+
     .admin-panel__apply-btn {
-      margin-top: -2px;
+      margin-left: auto;
+      align-self: flex-end;
+      flex-shrink: 0;
     }
   }
 
