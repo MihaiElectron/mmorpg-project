@@ -255,6 +255,25 @@
     font-weight: bold;
     color: vars.$color-text-primary;
     font-size: 0.9rem;
+    flex: 1;
+  }
+
+  &__tp-btn {
+    flex-shrink: 0;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-magic-amber;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+
+    &:hover {
+      border-color: vars.$color-magic-amber;
+      color: vars.$color-text-primary;
+    }
   }
 
   &__template-stats {

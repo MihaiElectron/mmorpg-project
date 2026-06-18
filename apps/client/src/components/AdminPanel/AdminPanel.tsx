@@ -20,10 +20,11 @@ type SectionConfig = {
   title: string;
   fetchPath: string;
   saveEvent: string;
-  getEntityKey: (item: any) => string;   // clé unique pour WS (ex: template.key, character.id)
-  getDisplayKey: (item: any) => string;  // clé pour indexer les drafts
+  getEntityKey: (item: any) => string;
+  getDisplayKey: (item: any) => string;
   getName: (item: any) => string;
   fields: FieldDef[];
+  getTpPosition?: (item: any) => { x: number; y: number } | null;
 };
 
 type GameWindow = Window &
@@ -78,10 +79,11 @@ const SECTION_CONFIGS: SectionConfig[] = [
     getDisplayKey: (r) => r.id,
     getName: (r) => r.type,
     fields: [
-      { key: "x",             label: "X",     min: 0 },
-      { key: "y",             label: "Y",     min: 0 },
+      { key: "x",              label: "X",     min: 0 },
+      { key: "y",              label: "Y",     min: 0 },
       { key: "remainingLoots", label: "Loots", min: 0 },
     ],
+    getTpPosition: (r) => (r.x != null && r.y != null ? { x: r.x, y: r.y } : null),
   },
 ];
 
@@ -222,6 +224,17 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
     setDrafts((prev) => ({ ...prev, [dk]: { ...(prev[dk] ?? {}), [field]: value } }));
   }
 
+  async function onTp(item: any) {
+    const socket = (window as GameWindow).game?.socket;
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const pos = config.getTpPosition?.(item);
+    if (!pos) return;
+    const characterId = (window as any).__GLOBAL_CHARACTER_STORE__?.getState?.()?.character?.id;
+    if (!characterId) { onResult("Personnage introuvable.", false); return; }
+    const result = await ackPromise(socket, "admin:teleport", { characterId, x: pos.x, y: pos.y });
+    onResult(result.message, result.success);
+  }
+
   async function onMapDrop(item: any, x: number, y: number) {
     const socket = (window as GameWindow).game?.socket;
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
@@ -351,6 +364,13 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
                     }
                   >⠿</span>
                   <span className="admin-panel__template-name">{config.getName(item)}</span>
+                  {config.getTpPosition?.(item) && (
+                    <button
+                      className="admin-panel__tp-btn"
+                      title={`Téléporter ici (${config.getTpPosition!(item)!.x}, ${config.getTpPosition!(item)!.y})`}
+                      onClick={() => onTp(item)}
+                    >↓ Tp</button>
+                  )}
                 </div>
                 <div className="admin-panel__template-stats">
                   {config.fields.map(({ key, label, min, step }) => (
