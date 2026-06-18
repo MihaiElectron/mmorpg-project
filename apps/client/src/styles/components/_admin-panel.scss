@@ -232,6 +232,25 @@
     &:hover { border-color: vars.$color-metal-silver; }
   }
 
+  &__item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__drag-handle {
+    cursor: grab;
+    color: vars.$color-text-disabled;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+    user-select: none;
+
+    &:hover { color: vars.$color-text-gold; }
+    &:active { cursor: grabbing; }
+  }
+
   &__template-name {
     font-weight: bold;
     color: vars.$color-text-primary;
@@ -309,5 +328,26 @@
     font-size: 0.85rem;
     text-align: center;
     padding: 8px;
+  }
+}
+
+// ── Ghost de drag (attaché au body) ──────────────────────────────────────────
+.admin-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: rgba(18, 12, 4, 0.92);
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+  padding: 4px 10px;
+  color: vars.$color-text-muted;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.1s, color 0.1s;
+
+  &--valid {
+    border-color: #7ecf7e;
+    color: #7ecf7e;
   }
 }

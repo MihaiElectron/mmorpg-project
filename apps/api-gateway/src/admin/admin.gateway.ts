@@ -245,6 +245,14 @@ export class AdminGateway {
     const updated = await this.adminService.updateResource(id, safe as any);
     if (!updated) return { success: false, message: `Ressource "${id}" introuvable.` };
 
+    this.server.emit('resource_update', {
+      id: updated.id,
+      x: updated.x,
+      y: updated.y,
+      state: updated.state,
+      remainingLoots: updated.remainingLoots,
+    });
+
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `Ressource "${updated.type}" mis à jour : ${changes}.`, data: updated };
   }

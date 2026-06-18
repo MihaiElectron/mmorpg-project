@@ -324,6 +324,13 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("resource_update", (data) => {
       if (data.state === "dead") {
         this.removeResource(data.id);
+        return;
+      }
+      if (data.x !== undefined && data.y !== undefined) {
+        const sprite = this.resourceSprites.get(data.id);
+        if (sprite) {
+          this.tweens.add({ targets: sprite, x: data.x, y: data.y, duration: 200, ease: "Linear" });
+        }
       }
     });
 

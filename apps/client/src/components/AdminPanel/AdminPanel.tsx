@@ -85,6 +85,55 @@ const SECTION_CONFIGS: SectionConfig[] = [
   },
 ];
 
+// ── Drag-to-map ────────────────────────────────────────────────────────────────
+
+function toWorldPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+  const canvas = document.querySelector("canvas");
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+  const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
+  if (!scene?.cameras?.main) return null;
+  return scene.cameras.main.getWorldPoint(clientX - rect.left, clientY - rect.top) as { x: number; y: number };
+}
+
+function startDrag(
+  e: React.MouseEvent,
+  label: string,
+  onDrop: (x: number, y: number) => void,
+) {
+  e.preventDefault();
+  const ghost = document.createElement("div");
+  ghost.className = "admin-drag-ghost";
+  ghost.textContent = label;
+  document.body.appendChild(ghost);
+  document.body.style.userSelect = "none";
+  document.body.style.cursor = "grabbing";
+
+  function onMove(me: MouseEvent) {
+    ghost.style.left = `${me.clientX + 14}px`;
+    ghost.style.top  = `${me.clientY + 14}px`;
+    const wp = toWorldPoint(me.clientX, me.clientY);
+    ghost.classList.toggle("admin-drag-ghost--valid", wp !== null);
+    ghost.textContent = wp
+      ? `${label}  →  (${Math.round(wp.x)}, ${Math.round(wp.y)})`
+      : label;
+  }
+
+  function onUp(me: MouseEvent) {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    ghost.remove();
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    const wp = toWorldPoint(me.clientX, me.clientY);
+    if (wp) onDrop(wp.x, wp.y);
+  }
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -165,6 +214,37 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
   function onChange(item: any, field: string, value: string) {
     const dk = config.getDisplayKey(item);
     setDrafts((prev) => ({ ...prev, [dk]: { ...(prev[dk] ?? {}), [field]: value } }));
+  }
+
+  async function onMapDrop(item: any, x: number, y: number) {
+    const socket = (window as GameWindow).game?.socket;
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+
+    let result: { success: boolean; message: string };
+
+    if (config.id === "creatures") {
+      result = await ackPromise(socket, "admin:spawn", {
+        templateKey: config.getEntityKey(item),
+        x: Math.round(x),
+        y: Math.round(y),
+      });
+    } else if (config.id === "players") {
+      result = await ackPromise(socket, "admin:teleport", {
+        characterId: config.getEntityKey(item),
+        x: Math.round(x),
+        y: Math.round(y),
+      });
+    } else if (config.id === "resources") {
+      result = await ackPromise(socket, "admin:update_resource", {
+        id: config.getEntityKey(item),
+        fields: { x: Math.round(x), y: Math.round(y) },
+      });
+      if (result.success) { item.x = Math.round(x); item.y = Math.round(y); }
+    } else {
+      return;
+    }
+
+    onResult(result.message, result.success);
   }
 
   async function onApply(item: any) {
@@ -256,7 +336,16 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
           <div className="admin-panel__template-list">
             {paginated.map((item) => (
               <div key={config.getDisplayKey(item)} className="admin-panel__template-item">
-                <span className="admin-panel__template-name">{config.getName(item)}</span>
+                <div className="admin-panel__item-header">
+                  <span
+                    className="admin-panel__drag-handle"
+                    title="Glisser sur la map"
+                    onMouseDown={(e) =>
+                      startDrag(e, config.getName(item), (x, y) => onMapDrop(item, x, y))
+                    }
+                  >⠿</span>
+                  <span className="admin-panel__template-name">{config.getName(item)}</span>
+                </div>
                 <div className="admin-panel__template-stats">
                   {config.fields.map(({ key, label, min, step }) => (
                     <label key={key} className="admin-panel__template-stat">
