@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-19_
+_Dernière mise à jour : 2026-06-18_
 
 ---
 
@@ -53,23 +53,30 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 
 - **Panneau Admin** (onglet dédié) :
   - Vue d'ensemble (templates, spawns, animaux actifs)
-  - Sections accordéon (fermées par défaut) : Créatures, Joueurs, Ressources
+  - **Hiérarchie deux niveaux** pour Créatures et Ressources :
+    - Niveau 1 (groupe/template) : stats globales éditables + handle drag-and-drop
+    - Niveau 2 (instances dans le monde) : dépliable au clic sur le titre du groupe.
+      Chaque instance expose ses propres champs éditables (HP/x/y ou x/y/loots),
+      un bouton ↓ Tp et un bouton ✕ supprimer.
+  - Joueurs : section plate (liste unique, inchangée)
   - Filtre de recherche par nom dans chaque section
-  - Pagination 20 items/page avec flèches + saisie directe
-  - Champs stats éditables inline (jaune = dirty), bouton "Appliquer" par entité
-  - Sauvegarde via WS (`admin:update_template`, `admin:update_character`, `admin:update_resource`)
-  - Architecture générique : `SECTION_CONFIGS` + composant `EntitySection` réutilisable
-  - **Drag-and-drop vers la map** : handle ⠿ sur chaque item, ghost DOM avec coords
+  - Pagination 20 groupes/page avec flèches + saisie directe
+  - Champs dirty en jaune, bouton "Appliquer" par niveau
+  - Badges état colorés sur les instances (alive/fighting/escaping/dead)
+  - Architecture : `GroupedSectionConfig` + `GroupedSection` (créatures/ressources),
+    `SectionConfig` + `EntitySection` (joueurs) ; ajouter un type = 1 entrée config
+  - **Drag-and-drop vers la map** : handle ⠿ sur chaque groupe, ghost DOM avec coords
     monde en temps réel. Créatures → `admin:spawn` (nouvel animal), Joueurs →
     `admin:teleport`, Ressources → `admin:spawn_resource` (nouvelle instance).
-  - **Bouton "supprimer"** dans l'ActionPanel (admin uniquement, cibles non-joueur) :
-    animaux supprimés définitivement en DB (+ spawn admin le cas échéant),
-    ressources passées en state=dead.
+  - **Bouton "supprimer"** : dans l'ActionPanel (cibles non-joueur) et dans la liste
+    d'instances du panneau admin. Animaux supprimés définitivement en DB
+    (+ spawn admin le cas échéant), ressources passées en state=dead.
 
 - **WS admin events** : `admin:spawn`, `admin:spawn_resource`, `admin:teleport`,
   `admin:move_animal`, `admin:update_template`, `admin:update_character`,
-  `admin:update_resource`, `admin:delete_animal`, `admin:delete_resource`,
-  `admin:respawn_all` — tous protégés par `client.data.role !== 'admin'`.
+  `admin:update_resource`, `admin:update_animal`, `admin:delete_animal`,
+  `admin:delete_resource`, `admin:respawn_all` — tous protégés par
+  `client.data.role !== 'admin'`.
 
 - **Téléportation** : `teleportCharacter` résout nom ou UUID avant tout accès DB ;
   broadcast `player_moved` à tous les autres clients après téléport.
@@ -96,7 +103,8 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 | Anti-cheat distance | `WorldService.checkInteraction` — à réutiliser pour toute nouvelle action |
 | TypeORM sync | `synchronize: true` en dev — colonnes NOT NULL nécessitent `{ default: x }` |
 | Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
-| Sections admin | `SECTION_CONFIGS` array + `EntitySection` générique — ajouter une section = 1 entrée config + 1 endpoint |
+| Sections admin groupées | `GroupedSectionConfig` + `GroupedSection` (créatures/ressources) — deux niveaux template→instances |
+| Sections admin plates | `SectionConfig` + `EntitySection` (joueurs) — liste simple |
 | Drag admin → map | `startDrag()` vanilla DOM + ratio `canvas.width/rect.width` × `getWorldPoint()` pour conversion HiDPI-safe |
 | Suppression admin animal | `animalRepository.delete()` + `spawnRepository.delete()` si spawn admin — pas de résurrection au redémarrage |
 
