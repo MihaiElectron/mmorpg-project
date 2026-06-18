@@ -59,13 +59,16 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
   - Champs stats éditables inline (jaune = dirty), bouton "Appliquer" par entité
   - Sauvegarde via WS (`admin:update_template`, `admin:update_character`, `admin:update_resource`)
   - Architecture générique : `SECTION_CONFIGS` + composant `EntitySection` réutilisable
-  - **Drag-and-drop vers la map** : handle ⠿ sur chaque item, ghost DOM qui suit
-    le curseur, coords monde affichées en temps réel au survol du canvas Phaser.
-    Créatures → spawn, Joueurs → téléport, Ressources → déplacement en BD +
-    broadcast `resource_update` → tween Phaser immédiat.
+  - **Drag-and-drop vers la map** : handle ⠿ sur chaque item, ghost DOM avec coords
+    monde en temps réel. Créatures → `admin:spawn` (nouvel animal), Joueurs →
+    `admin:teleport`, Ressources → `admin:spawn_resource` (nouvelle instance).
+  - **Bouton "supprimer"** dans l'ActionPanel (admin uniquement, cibles non-joueur) :
+    animaux supprimés définitivement en DB (+ spawn admin le cas échéant),
+    ressources passées en state=dead.
 
-- **WS admin events** : `admin:spawn`, `admin:teleport`, `admin:move_animal`,
-  `admin:update_template`, `admin:update_character`, `admin:update_resource`,
+- **WS admin events** : `admin:spawn`, `admin:spawn_resource`, `admin:teleport`,
+  `admin:move_animal`, `admin:update_template`, `admin:update_character`,
+  `admin:update_resource`, `admin:delete_animal`, `admin:delete_resource`,
   `admin:respawn_all` — tous protégés par `client.data.role !== 'admin'`.
 
 - **Téléportation** : `teleportCharacter` résout nom ou UUID avant tout accès DB ;
@@ -94,7 +97,8 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 | TypeORM sync | `synchronize: true` en dev — colonnes NOT NULL nécessitent `{ default: x }` |
 | Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
 | Sections admin | `SECTION_CONFIGS` array + `EntitySection` générique — ajouter une section = 1 entrée config + 1 endpoint |
-| Drag admin → map | `startDrag()` vanilla DOM + `cameras.main.getWorldPoint()` pour conversion coords écran → monde |
+| Drag admin → map | `startDrag()` vanilla DOM + ratio `canvas.width/rect.width` × `getWorldPoint()` pour conversion HiDPI-safe |
+| Suppression admin animal | `animalRepository.delete()` + `spawnRepository.delete()` si spawn admin — pas de résurrection au redémarrage |
 
 ---
 
@@ -116,7 +120,7 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 - [ ] Dégâts au joueur visibles (animation flash, son)
 - [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
 - [ ] Zones / rooms Socket.IO pour limiter les broadcasts
-- [ ] Section Décor dans le panneau admin (commande `/decor` à implémenter)
+- [ ] Section Décor dans le panneau admin (drag-and-drop + commande `/decor`)
 - [ ] PNJ / dialogues
 - [ ] Zones de map différenciées (forêt, village, donjon)
 - [ ] Audit log des actions admin (journalisation serveur)
