@@ -5,7 +5,13 @@ import { commandRegistry, autocompleteCommand } from "../../phaser/admin/command
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Overview = { templates: number; spawns: number; activeAnimals: number };
+type Overview = {
+  templates: number;
+  spawns: number;
+  activeAnimals: number;
+  connectedPlayers: number;
+  registeredCharacters: number;
+};
 type ConsoleLine = { text: string; ok: boolean };
 
 export type FieldDef = {
@@ -784,11 +790,22 @@ export default function AdminPanel() {
       });
     }
 
+    function onPlayerJoined() {
+      setOverview((prev) => prev ? { ...prev, connectedPlayers: prev.connectedPlayers + 1 } : prev);
+    }
+    function onPlayerLeft() {
+      setOverview((prev) => prev ? { ...prev, connectedPlayers: Math.max(0, prev.connectedPlayers - 1) } : prev);
+    }
+
     socket.on('animal_update', onAnimalUpdate);
     socket.on('resource_update', onResourceUpdate);
+    socket.on('player_joined', onPlayerJoined);
+    socket.on('player_left', onPlayerLeft);
     return () => {
       socket.off('animal_update', onAnimalUpdate);
       socket.off('resource_update', onResourceUpdate);
+      socket.off('player_joined', onPlayerJoined);
+      socket.off('player_left', onPlayerLeft);
       if (overviewTimer.current) clearTimeout(overviewTimer.current);
     };
   }, [token]);
@@ -907,9 +924,11 @@ export default function AdminPanel() {
         <section className="admin-panel__section">
           <h3 className="admin-panel__section-title">Vue d&apos;ensemble</h3>
           <div className="admin-panel__overview">
+            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.connectedPlayers}</span><span className="admin-panel__stat-label">Connectés</span></div>
+            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.registeredCharacters}</span><span className="admin-panel__stat-label">Personnages</span></div>
+            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeAnimals}</span><span className="admin-panel__stat-label">Animaux</span></div>
             <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.templates}</span><span className="admin-panel__stat-label">Templates</span></div>
             <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.spawns}</span><span className="admin-panel__stat-label">Spawns</span></div>
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeAnimals}</span><span className="admin-panel__stat-label">Animaux actifs</span></div>
           </div>
         </section>
       )}

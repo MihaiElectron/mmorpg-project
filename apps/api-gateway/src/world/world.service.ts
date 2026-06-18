@@ -195,6 +195,11 @@ export class WorldService implements OnModuleInit {
     return Array.from(this.connectedPlayers.values());
   }
 
+  getConnectedCount(): number {
+    const unique = new Set(Array.from(this.connectedPlayers.values()).map((p) => p.characterId));
+    return unique.size;
+  }
+
   getPlayersExcept(socketId: string): ConnectedPlayer[] {
     const playersByCharacter = new Map<string, ConnectedPlayer>();
 

@@ -7,6 +7,7 @@ import { Animal } from '../animals/entities/animal.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { WorldService } from '../world/world.service';
 
 @Injectable()
 export class AdminService {
@@ -23,6 +24,7 @@ export class AdminService {
     private readonly resourceRepo: Repository<Resource>,
     @InjectRepository(ResourceTemplate)
     private readonly resourceTemplateRepo: Repository<ResourceTemplate>,
+    private readonly worldService: WorldService,
   ) {}
 
   // ── Créatures ─────────────────────────────────────────────────────────────
@@ -121,12 +123,20 @@ export class AdminService {
 
   // ── Vue d'ensemble ────────────────────────────────────────────────────────
 
-  async getOverview(): Promise<{ templates: number; spawns: number; activeAnimals: number }> {
-    const [templates, spawns, activeAnimals] = await Promise.all([
+  async getOverview(): Promise<{
+    templates: number;
+    spawns: number;
+    activeAnimals: number;
+    connectedPlayers: number;
+    registeredCharacters: number;
+  }> {
+    const [templates, spawns, activeAnimals, registeredCharacters] = await Promise.all([
       this.templateRepo.count(),
       this.spawnRepo.count(),
       this.animalRepo.count({ where: { state: Not('dead') } }),
+      this.characterRepo.count(),
     ]);
-    return { templates, spawns, activeAnimals };
+    const connectedPlayers = this.worldService.getConnectedCount();
+    return { templates, spawns, activeAnimals, connectedPlayers, registeredCharacters };
   }
 }
