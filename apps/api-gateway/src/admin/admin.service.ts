@@ -115,9 +115,8 @@ export class AdminService {
   async deleteResource(id: string): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { id } });
     if (!resource) return null;
-    resource.state = 'dead';
-    resource.remainingLoots = 0;
-    return this.resourceRepo.save(resource);
+    await this.resourceRepo.delete(id);
+    return resource;
   }
 
   // ── Vue d'ensemble ────────────────────────────────────────────────────────

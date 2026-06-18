@@ -388,14 +388,19 @@
   &__instance-item {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding: 6px 8px;
+    gap: 4px;
+    padding: 5px 8px 4px;
     border-radius: vars.$panel-radius-sm;
     border: 1px solid vars.$panel-border-subtle;
     background: vars.$panel-header-bg;
     transition: border-color 0.15s;
 
     &:hover { border-color: vars.$panel-border; }
+
+    // Bouton Appliquer/Supprimer resserré aux stats de l'instance
+    .admin-panel__apply-btn {
+      margin-top: -2px;
+    }
   }
 
   &__instance-name {
@@ -444,7 +449,6 @@
   // ── Bouton Appliquer ──────────────────────────────────────────────────────
   &__apply-btn {
     align-self: flex-end;
-    margin-top: -2px;
     @include m.btn-success;
     font-size: 0.78rem;
     padding: 4px 12px;
