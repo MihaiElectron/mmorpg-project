@@ -1,144 +1,139 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-19_ (session 2026-06-18)
+_Dernière mise à jour : 2026-06-19_
+_Session : 2026-06-18 / 2026-06-19_
+_Branche : main_
+_État : développement local_
 
 ---
 
 ## État général
 
-Le projet tourne en développement local. Backend NestJS + PostgreSQL opérationnels,
-frontend React/Phaser connecté via Socket.IO. Deux types d'animaux (turkey, goblin)
-sont définis en template. La boucle combat complète fonctionne de bout en bout.
-Un système d'administration complet est en place pour l'utilisateur `semoa` (role=admin).
+Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté
+via Socket.IO. Combat animal complet. Panneau admin fonctionnel avec console de
+commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers la
+map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
+personnages enregistrés, animaux actifs, templates, spawns).
 
 ---
 
-## Fonctionnalités terminées
+## Derniers changements importants
 
-### Combat / Animaux
-- **Aggro / fuite** : turkey attaque à < 50 unités, fuit à < 75 % HP.
-  États DB : `alive | fighting | escaping | dead`.
-- **Auto-attaque et poursuite** : cliquer "attaquer" lance une boucle
-  (emit toutes les 750 ms, tick pursuit 300 ms) jusqu'à la mort de l'animal
-  ou clic map. `PlayerController.moveTo()` utilise le steering direct.
-- **Respawn animal** : 20 s après la mort, turkey réapparaît à sa position de spawn.
-- **Respawn personnage** : à 0 PV réapparition au point le plus proche (x=600, y=300).
-- **Barre de vie flottante** : au-dessus du joueur et des animaux en combat.
-  Rendu Phaser pur (Rectangle game objects), couleurs SCSS.
-
-### UI
-- **ActionPanel** : s'ouvre au clic sur ressource, animal ou joueur distant.
-  Se ferme au clic extérieur ou sur la map. Gestion des cibles superposées
-  (dropdown de sélection). Fermeture automatique à la mort de la cible.
-- **Panneau personnage** : se ferme au clic sur la map (via `pointerdown` Phaser).
-- **CharacterLayout** : onglets Perso / Inventaire / Admin (role=admin uniquement).
-
-### Système admin (role=admin)
-- **Console de commandes** dans l'ActionPanel et le panneau Admin :
-  - Syntaxe `/commande arg1 arg2 [--flag=valeur]`
-  - Historique ↑/↓, autocomplete Tab, retour ok/err coloré
-  - Phaser `disableGlobalCapture` au focus → espace et Tab fonctionnels
-  - Registre de commandes (`commandRegistry.ts`) extensible par config
-
-- **Commandes disponibles** :
-  | Commande | Description |
-  |---|---|
-  | `/spawn <template> [x] [y]` | Crée un animal au dernier clic ou aux coords données |
-  | `/tp [id\|nom] <x> <y>` | Téléporte un joueur (par nom, id ou cible sélectionnée) |
-  | `/tp <x> <y>` sur animal | Déplace l'animal sélectionné |
-  | `/sethp <template> <val>` | Modifie les PV max du template |
-  | `/aggro <template> <val>` | Modifie le rayon d'aggro du template |
-  | `/respawn all <template>` | Force le respawn de tous les animaux du template |
-  | `/help [commande]` | Liste les commandes ou détaille l'une d'elles |
-
-- **Panneau Admin** (onglet dédié) :
-  - Vue d'ensemble (templates, spawns, animaux actifs)
-  - **Hiérarchie deux niveaux** pour Créatures et Ressources :
-    - Niveau 1 (groupe/template) : stats globales éditables + handle drag-and-drop
-    - Niveau 2 (instances dans le monde) : dépliable au clic sur le titre du groupe.
-      Chaque instance expose ses propres champs éditables (état/HP/x/y ou
-      état/x/y/loots), un bouton ↓ Tp (toujours visible, même si dead) et un
-      bouton ✕ supprimer.
-  - **Sélecteur d'état** sur les instances : `alive/fighting/escaping/dead`
-      (créatures) et `alive/dead` (ressources) — passer à `alive` restaure
-      les HP au max pour les animaux.
-  - Joueurs : section plate (liste unique, inchangée)
-  - Filtre de recherche par nom dans chaque section
-  - Pagination 20 groupes/page avec flèches + saisie directe
-  - Champs dirty en jaune, bouton "Appliquer" par niveau
-  - Badges état colorés sur les instances (alive/fighting/escaping/dead)
-  - Architecture : `GroupedSectionConfig` + `GroupedSection` (créatures/ressources),
-    `SectionConfig` + `EntitySection` (joueurs) ; ajouter un type = 1 entrée config
-  - **Drag-and-drop vers la map** : handle ⠿ sur chaque groupe, ghost DOM avec coords
-    monde en temps réel. Créatures → `admin:spawn` (nouvel animal), Joueurs →
-    `admin:teleport`, Ressources → `admin:spawn_resource` (nouvelle instance).
-  - **Bouton "supprimer"** : dans l'ActionPanel (cibles non-joueur) et dans la liste
-    d'instances du panneau admin. Animaux supprimés définitivement en DB
-    (+ spawn admin le cas échéant), ressources passées en state=dead.
-
-- **WS admin events** : `admin:spawn`, `admin:spawn_resource`, `admin:teleport`,
-  `admin:move_animal`, `admin:update_template`, `admin:update_resource_template`,
-  `admin:update_character`, `admin:update_resource`, `admin:update_animal`,
-  `admin:delete_animal`, `admin:delete_resource`, `admin:respawn_all` — tous
-  protégés par `client.data.role !== 'admin'`.
-
-- **Téléportation** : `teleportCharacter` résout nom ou UUID avant tout accès DB ;
-  broadcast `player_moved` à tous les autres clients après téléport.
-  `AnimalsService.refreshTemplateInMemory` propage les stats modifiées aux
-  animaux vivants en mémoire immédiatement.
-
-### Infrastructure
-- Entité `RespawnPoint` seedée au démarrage.
-- `AnimalsService.seedTemplates()` upsert — turkey et goblin (textureKey: 'turkey' placeholder).
-- `ResourcesService.onModuleInit()` upsert — templates `dead_tree` et `ore`
-  (table `resource_templates`, `defaultRemainingLoots = 9999`).
-- `AdminModule` : gère `CreatureTemplate`, `CreatureSpawn`, `Animal`, `Character`,
-  `Resource`, `ResourceTemplate`.
-- 15 tests Jest pour `AnimalsService` (tous verts).
-- Store admin Zustand singleton `window.__GLOBAL_ADMIN_STORE__` (Phaser ↔ React).
+- **Vue d'ensemble admin** : ajout du nombre de joueurs connectés (temps réel via
+  `player_joined` / `player_left`) et du total de personnages enregistrés en DB.
+  `WorldService.getConnectedCount()` déduplique par `characterId`.
+- **Panneau admin — mises à jour temps réel** : souscriptions socket `animal_update`
+  et `resource_update` ; rafraîchissement de la vue d'ensemble après spawn (debounce
+  600 ms).
+- **Suppression admin** : animaux supprimés en DB (`animalRepository.delete()` +
+  spawn admin si applicable) ; ressources supprimées en DB (`resourceRepo.delete()`).
+- **Sélecteur d'état** sur les instances : `alive/fighting/escaping/dead` (créatures),
+  `alive/dead` (ressources) — passer à `alive` restaure les HP au max.
+- **Templates ressources** : entité `ResourceTemplate` seedée (`dead_tree`, `ore`,
+  `defaultRemainingLoots = 9999`), éditable depuis le panneau admin.
+- **Téléportation** : bouton ↓ Tp toujours visible sur les instances, même si `dead`.
 
 ---
 
-## Architecture / Décisions clés
+## Fonctionnalités actuellement opérationnelles
 
-| Sujet | Décision |
+| Domaine | Ce qui fonctionne |
 |---|---|
-| Socket unique | Créé dans `WorldPage.jsx`, partagé via `window.game.socket` |
-| Store Zustand | Singleton `window.__GLOBAL_*_STORE__` (Phaser ↔ React) |
-| Barre de vie UI | React `HealthBar` dans ActionPanel ; Phaser Rectangles dans le monde |
-| `moveTo()` | `isDragging=true` → steering direct, contourne le pathfinder |
-| Anti-cheat distance | `WorldService.checkInteraction` — à réutiliser pour toute nouvelle action |
-| TypeORM sync | `synchronize: true` en dev — colonnes NOT NULL nécessitent `{ default: x }` |
-| Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
-| Sections admin groupées | `GroupedSectionConfig` + `GroupedSection` (créatures/ressources) — deux niveaux template→instances |
-| Sections admin plates | `SectionConfig` + `EntitySection` (joueurs) — liste simple |
-| Templates ressources | `ResourceTemplate` (DB) — `defaultRemainingLoots` éditable admin, utilisé au spawn |
-| Champs admin select | `FieldDef.options` → `<select>` ; dirty/collect gère string et number |
-| Drag admin → map | `startDrag()` vanilla DOM + ratio `canvas.width/rect.width` × `getWorldPoint()` pour conversion HiDPI-safe |
-| Suppression admin animal | `animalRepository.delete()` + `spawnRepository.delete()` si spawn admin — pas de résurrection au redémarrage |
+| Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
+| Respawn | Animal (20 s) et personnage (point le plus proche à 0 PV) |
+| Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
+| UI | ActionPanel, barre de vie flottante, panneau personnage, onglets Perso/Inventaire/Admin |
+| Admin — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
+| Admin — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
+| Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
+| Tests | 15 tests Jest `AnimalsService` (verts) |
+
+---
+
+## Décisions et règles à ne pas oublier
+
+- Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
+  ownership — voir `docs/02_Security/client-server-trust.md`.
+- Les actions admin doivent être autorisées côté serveur. Les événements admin observés
+  vérifient `client.data.role`, mais l'authentification indépendante de `AdminGateway`
+  et la provenance garantie de `client.data.role` restent à auditer — voir
+  `docs/02_Security/admin-permissions.md`.
+- `WorldService.checkInteraction` est la barrière anti-cheat de distance ; toute
+  nouvelle interaction doit la réutiliser — voir `docs/01_Architecture/client-server-boundaries.md`.
+- `server.emit` broadcast à tous les clients (pas de rooms) — acceptable maintenant,
+  dette de scalabilité — voir `docs/01_Architecture/realtime-socketio.md`.
+- `synchronize: true` en développement local uniquement — colonnes NOT NULL
+  nécessitent `{ default: x }` — voir `docs/04_Server/typeorm.md`.
+- Le socket Socket.IO est un singleton créé dans `WorldPage.jsx`, partagé via
+  `window.game.socket`. Les stores Zustand sont des singletons `window.__GLOBAL_*_STORE__`.
 
 ---
 
 ## Dette technique connue
 
-- `server.emit` broadcast à **tous** les clients — prévoir rooms/zones en montée en charge.
-- Pathfinder peut échouer si l'animal est sur une tuile bloquante (contournement : steering direct).
-- Un seul RespawnPoint hardcodé ; pas d'UI de gestion.
-- `synchronize: true` convient en dev, migrations TypeORM à prévoir pour la prod.
-- Sprite goblin utilise `textureKey: 'turkey'` en placeholder — import sprite à faire.
+- `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
+- Pathfinder peut échouer si un animal est sur une tuile bloquante (contournement actuel : steering direct).
+- Un seul `RespawnPoint` hardcodé (x=600, y=300) ; pas d'UI de gestion.
+- `synchronize: true` — migrations TypeORM à prévoir pour la prod.
+- Sprite goblin utilise `textureKey: 'turkey'` en placeholder.
 
 ---
 
-## Prochaines étapes possibles
+## Prochaines priorités possibles
 
 - [ ] Import sprite goblin (textureKey propre)
-- [ ] Autres types d'animaux (loup, sanglier…) avec stats différentes
 - [ ] Système de loot sur les animaux tués
-- [ ] Dégâts au joueur visibles (animation flash, son)
 - [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
+- [ ] Dégâts au joueur visibles (animation flash, son)
 - [ ] Zones / rooms Socket.IO pour limiter les broadcasts
-- [ ] Section Décor dans le panneau admin (drag-and-drop + commande `/decor`)
-- [ ] PNJ / dialogues
-- [ ] Zones de map différenciées (forêt, village, donjon)
-- [ ] Audit log des actions admin (journalisation serveur)
+- [ ] Autres types d'animaux (loup, sanglier…)
+- [ ] Section Décor dans le panneau admin
 - [ ] Migrations TypeORM pour la prod
+- [ ] Audit log des actions admin
+
+---
+
+## Documents potentiellement impactés
+
+Cette liste indique les documents à vérifier après une session de code. Elle ne signifie pas qu'ils doivent tous être modifiés.
+
+- [ ] `docs/07_Admin/admin-tool.md`
+- [ ] `docs/02_Security/admin-permissions.md`
+- [ ] `docs/01_Architecture/realtime-socketio.md`
+- [ ] `docs/04_Server/websockets.md`
+- [ ] `docs/04_Server/modules.md`
+- [ ] `docs/03_Client/phaser-world.md`
+- [ ] `docs/03_Client/zustand-state.md`
+- [ ] `docs/06_Database/schema.md`
+- [ ] `docs/06_Database/postgresql.md`
+
+---
+
+## Règle de mise à jour
+
+Après une session de code :
+
+1. Mettre à jour `STATUS.md`.
+2. Résumer ce qui a changé.
+3. Ajouter ou retirer les dettes techniques.
+4. Lister les documents `docs/` potentiellement impactés.
+5. Ne modifier les documents `docs/` que si le changement affecte une règle, une architecture, une API, une sécurité, une base de données ou un workflow durable.
+
+---
+
+## Historique court des sessions
+
+### 2026-06-18 / 2026-06-19
+
+- Documentation projet restructurée et complétée dans `docs/`.
+- Documents client, serveur, sécurité, monde, base de données, admin et workflow complétés.
+- `STATUS.md` transformé en tableau de bord synthétique.
+- Vue d'ensemble admin enrichie : joueurs connectés (temps réel) et personnages enregistrés.
+- Panneau admin : mises à jour temps réel via socket, suppression définitive en DB,
+  sélecteur d'état sur les instances, templates ressources éditables.
+
+### 2026-06-17 et avant
+
+- Boucle combat complète (aggro, fuite, auto-attaque, respawn).
+- Panneau admin : hiérarchie deux niveaux, drag-and-drop map, console de commandes.
+- Entités `ResourceTemplate`, `CreatureTemplate`, `CreatureSpawn`, `RespawnPoint` seedées.
