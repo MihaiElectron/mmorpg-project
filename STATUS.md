@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-18_
+_Dernière mise à jour : 2026-06-19_
 
 ---
 
@@ -73,10 +73,10 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
     (+ spawn admin le cas échéant), ressources passées en state=dead.
 
 - **WS admin events** : `admin:spawn`, `admin:spawn_resource`, `admin:teleport`,
-  `admin:move_animal`, `admin:update_template`, `admin:update_character`,
-  `admin:update_resource`, `admin:update_animal`, `admin:delete_animal`,
-  `admin:delete_resource`, `admin:respawn_all` — tous protégés par
-  `client.data.role !== 'admin'`.
+  `admin:move_animal`, `admin:update_template`, `admin:update_resource_template`,
+  `admin:update_character`, `admin:update_resource`, `admin:update_animal`,
+  `admin:delete_animal`, `admin:delete_resource`, `admin:respawn_all` — tous
+  protégés par `client.data.role !== 'admin'`.
 
 - **Téléportation** : `teleportCharacter` résout nom ou UUID avant tout accès DB ;
   broadcast `player_moved` à tous les autres clients après téléport.
@@ -85,8 +85,11 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 
 ### Infrastructure
 - Entité `RespawnPoint` seedée au démarrage.
-- `seedTemplates()` upsert — turkey et goblin (textureKey: 'turkey' placeholder).
-- `AdminModule` : gère `CreatureTemplate`, `CreatureSpawn`, `Animal`, `Character`, `Resource`.
+- `AnimalsService.seedTemplates()` upsert — turkey et goblin (textureKey: 'turkey' placeholder).
+- `ResourcesService.onModuleInit()` upsert — templates `dead_tree` et `ore`
+  (table `resource_templates`, `defaultRemainingLoots = 9999`).
+- `AdminModule` : gère `CreatureTemplate`, `CreatureSpawn`, `Animal`, `Character`,
+  `Resource`, `ResourceTemplate`.
 - 15 tests Jest pour `AnimalsService` (tous verts).
 - Store admin Zustand singleton `window.__GLOBAL_ADMIN_STORE__` (Phaser ↔ React).
 
@@ -105,6 +108,7 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 | Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
 | Sections admin groupées | `GroupedSectionConfig` + `GroupedSection` (créatures/ressources) — deux niveaux template→instances |
 | Sections admin plates | `SectionConfig` + `EntitySection` (joueurs) — liste simple |
+| Templates ressources | `ResourceTemplate` (DB) — `defaultRemainingLoots` éditable admin, utilisé au spawn |
 | Drag admin → map | `startDrag()` vanilla DOM + ratio `canvas.width/rect.width` × `getWorldPoint()` pour conversion HiDPI-safe |
 | Suppression admin animal | `animalRepository.delete()` + `spawnRepository.delete()` si spawn admin — pas de résurrection au redémarrage |
 
