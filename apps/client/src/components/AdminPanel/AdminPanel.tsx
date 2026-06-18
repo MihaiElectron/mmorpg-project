@@ -108,21 +108,21 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
   {
     id: "resources",
     title: "Ressources",
-    fetchGroupsPath: null,
+    fetchGroupsPath: "/admin/resource-templates",
     fetchInstancesPath: "/admin/resources",
-    deriveGroups: (resources) => {
-      const types = [...new Set<string>(resources.map((r: any) => r.type))].sort();
-      return types.map((type) => ({ type }));
-    },
 
-    getGroupKey:  (g) => g.type,
-    getGroupName: (g) => g.type,
-    groupFields: [],
+    getGroupKey:  (t) => t.type,
+    getGroupName: (t) => t.type,
+    groupFields: [
+      { key: "defaultRemainingLoots", label: "Loots défaut", min: 0 },
+    ],
+    groupSaveEvent: "admin:update_resource_template",
+    getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
     dragEvent: "admin:spawn_resource",
-    getDragPayload: (g, x, y) => ({ type: g.type, x, y }),
+    getDragPayload: (t, x, y) => ({ type: t.type, x, y }),
 
-    getInstancesForGroup: (resources, group) =>
-      resources.filter((r) => r.type === group.type),
+    getInstancesForGroup: (resources, tpl) =>
+      resources.filter((r) => r.type === tpl.type),
     getInstanceKey:  (r) => r.id,
     getInstanceName: (r) => r.id.slice(0, 8),
     getInstanceBadge: (r) => r.state,

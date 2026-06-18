@@ -52,6 +52,9 @@ export class AdminController {
 
   // ── Ressources ────────────────────────────────────────────────────────────
 
+  @Get('resource-templates')
+  getResourceTemplates() { return this.adminService.getResourceTemplates(); }
+
   @Get('resources')
   getResources() { return this.adminService.getResources(); }
 

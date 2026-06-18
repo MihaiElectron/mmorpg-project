@@ -6,6 +6,7 @@ import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
 import { Animal } from '../animals/entities/animal.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
+import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 
 @Injectable()
 export class AdminService {
@@ -20,6 +21,8 @@ export class AdminService {
     private readonly characterRepo: Repository<Character>,
     @InjectRepository(Resource)
     private readonly resourceRepo: Repository<Resource>,
+    @InjectRepository(ResourceTemplate)
+    private readonly resourceTemplateRepo: Repository<ResourceTemplate>,
   ) {}
 
   // ── Créatures ─────────────────────────────────────────────────────────────
@@ -64,6 +67,22 @@ export class AdminService {
     return this.characterRepo.save(character);
   }
 
+  // ── Templates de ressources ───────────────────────────────────────────────
+
+  getResourceTemplates(): Promise<ResourceTemplate[]> {
+    return this.resourceTemplateRepo.find({ order: { type: 'ASC' } });
+  }
+
+  async updateResourceTemplate(
+    type: string,
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots'>>,
+  ): Promise<ResourceTemplate | null> {
+    const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
+    if (!tpl) return null;
+    Object.assign(tpl, fields);
+    return this.resourceTemplateRepo.save(tpl);
+  }
+
   // ── Ressources ────────────────────────────────────────────────────────────
 
   getResources(): Promise<Resource[]> {
@@ -86,8 +105,10 @@ export class AdminService {
   }
 
   async createResource(type: string, x: number, y: number): Promise<Resource> {
+    const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
+    const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
     return this.resourceRepo.save(
-      this.resourceRepo.create({ type, x: Math.round(x), y: Math.round(y) }),
+      this.resourceRepo.create({ type, x: Math.round(x), y: Math.round(y), remainingLoots }),
     );
   }
 

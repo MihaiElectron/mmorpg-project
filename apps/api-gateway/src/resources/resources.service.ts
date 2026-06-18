@@ -1,15 +1,32 @@
 // apps/api-gateway/src/resources/resources.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resource } from './entities/resource.entity';
+import { ResourceTemplate } from './entities/resource-template.entity';
+
+const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots'>[] = [
+  { type: 'dead_tree', defaultRemainingLoots: 9999 },
+  { type: 'ore',       defaultRemainingLoots: 9999 },
+];
 
 @Injectable()
-export class ResourcesService {
+export class ResourcesService implements OnModuleInit {
   constructor(
     @InjectRepository(Resource)
     private repo: Repository<Resource>,
+    @InjectRepository(ResourceTemplate)
+    private templateRepo: Repository<ResourceTemplate>,
   ) {}
+
+  async onModuleInit() {
+    await this.templateRepo.upsert(RESOURCE_TEMPLATES, ['type']);
+  }
+
+  async getDefaultRemainingLoots(type: string): Promise<number> {
+    const tpl = await this.templateRepo.findOne({ where: { type } });
+    return tpl?.defaultRemainingLoots ?? 9999;
+  }
 
   findAll() {
     return this.repo.find();

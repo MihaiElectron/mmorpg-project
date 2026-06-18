@@ -223,6 +223,31 @@ export class AdminGateway {
     return { success: true, message: `"${dto.name}" (${dto.id}) mis à jour : ${changes}.`, data: dto };
   }
 
+  @SubscribeMessage('admin:update_resource_template')
+  async onUpdateResourceTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { type: string; fields: Record<string, number> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { type, fields } = payload ?? {};
+    if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
+
+    const allowed = ['defaultRemainingLoots'];
+    const safe: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      const n = Number(v);
+      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      safe[k] = n;
+    }
+
+    const updated = await this.adminService.updateResourceTemplate(type, safe as any);
+    if (!updated) return { success: false, message: `Template ressource "${type}" introuvable.` };
+
+    return { success: true, message: `Template "${type}" mis à jour : loots défaut → ${updated.defaultRemainingLoots}.`, data: updated };
+  }
+
   @SubscribeMessage('admin:spawn_resource')
   async onSpawnResource(
     @ConnectedSocket() client: WorldSocket,
