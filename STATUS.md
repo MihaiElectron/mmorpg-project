@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-18_
+_Dernière mise à jour : 2026-06-19_
 
 ---
 
@@ -59,6 +59,10 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
   - Champs stats éditables inline (jaune = dirty), bouton "Appliquer" par entité
   - Sauvegarde via WS (`admin:update_template`, `admin:update_character`, `admin:update_resource`)
   - Architecture générique : `SECTION_CONFIGS` + composant `EntitySection` réutilisable
+  - **Drag-and-drop vers la map** : handle ⠿ sur chaque item, ghost DOM qui suit
+    le curseur, coords monde affichées en temps réel au survol du canvas Phaser.
+    Créatures → spawn, Joueurs → téléport, Ressources → déplacement en BD +
+    broadcast `resource_update` → tween Phaser immédiat.
 
 - **WS admin events** : `admin:spawn`, `admin:teleport`, `admin:move_animal`,
   `admin:update_template`, `admin:update_character`, `admin:update_resource`,
@@ -90,6 +94,7 @@ Un système d'administration complet est en place pour l'utilisateur `semoa` (ro
 | TypeORM sync | `synchronize: true` en dev — colonnes NOT NULL nécessitent `{ default: x }` |
 | Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
 | Sections admin | `SECTION_CONFIGS` array + `EntitySection` générique — ajouter une section = 1 entrée config + 1 endpoint |
+| Drag admin → map | `startDrag()` vanilla DOM + `cameras.main.getWorldPoint()` pour conversion coords écran → monde |
 
 ---
 
