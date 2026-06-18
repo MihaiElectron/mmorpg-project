@@ -197,6 +197,32 @@ export class AdminGateway {
     };
   }
 
+  @SubscribeMessage('admin:spawn_resource')
+  async onSpawnResource(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { type: string; x: number; y: number },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { type, x, y } = payload ?? {};
+    if (!type || typeof x !== 'number' || typeof y !== 'number')
+      return { success: false, message: 'Payload invalide : type, x, y requis.' };
+
+    const resource = await this.adminService.createResource(type, x, y);
+    this.server.emit('resource_update', {
+      id: resource.id,
+      type: resource.type,
+      x: resource.x,
+      y: resource.y,
+      state: resource.state,
+      remainingLoots: resource.remainingLoots,
+    });
+    return {
+      success: true,
+      message: `Ressource "${type}" créée en (${Math.round(x)}, ${Math.round(y)}). ID: ${resource.id}`,
+    };
+  }
+
   @SubscribeMessage('admin:delete_animal')
   async onDeleteAnimal(
     @ConnectedSocket() client: WorldSocket,
@@ -281,6 +307,7 @@ export class AdminGateway {
 
     this.server.emit('resource_update', {
       id: updated.id,
+      type: updated.type,
       x: updated.x,
       y: updated.y,
       state: updated.state,

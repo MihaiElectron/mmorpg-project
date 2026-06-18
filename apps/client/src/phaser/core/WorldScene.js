@@ -327,10 +327,7 @@ export default class WorldScene extends Phaser.Scene {
         return;
       }
       if (data.x !== undefined && data.y !== undefined) {
-        const sprite = this.resourceSprites.get(data.id);
-        if (sprite) {
-          this.tweens.add({ targets: sprite, x: data.x, y: data.y, duration: 200, ease: "Linear" });
-        }
+        this.upsertResource(data);
       }
     });
 
@@ -648,6 +645,31 @@ export default class WorldScene extends Phaser.Scene {
           actions: ["ramasser", "gathering"],
         });
       });
+  }
+
+  upsertResource(resource) {
+    const existing = this.resourceSprites.get(resource.id);
+    if (existing) {
+      this.tweens.add({ targets: existing, x: resource.x, y: resource.y, duration: 200, ease: "Linear" });
+      return;
+    }
+
+    const textureKey = this.textures.exists(resource.type) ? resource.type : "dead_tree";
+    const sprite = this.add.image(resource.x, resource.y, textureKey);
+    sprite.setDepth(10);
+    sprite.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    this.resourceSprites.set(resource.id, sprite);
+    this.interactionTargets.push({
+      sprite,
+      id: resource.id,
+      type: resource.type,
+      kind: "resource",
+      actions: ["ramasser", "gathering"],
+    });
   }
 
   renderAnimals(animals) {

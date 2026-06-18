@@ -235,11 +235,11 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
         y: Math.round(y),
       });
     } else if (config.id === "resources") {
-      result = await ackPromise(socket, "admin:update_resource", {
-        id: config.getEntityKey(item),
-        fields: { x: Math.round(x), y: Math.round(y) },
+      result = await ackPromise(socket, "admin:spawn_resource", {
+        type: item.type,
+        x: Math.round(x),
+        y: Math.round(y),
       });
-      if (result.success) { item.x = Math.round(x); item.y = Math.round(y); }
     } else {
       return;
     }

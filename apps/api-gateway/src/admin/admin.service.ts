@@ -71,7 +71,18 @@ export class AdminService {
     const resource = await this.resourceRepo.findOne({ where: { id } });
     if (!resource) return null;
     Object.assign(resource, fields);
+    // Un déplacement admin remet la ressource en jeu
+    if ('x' in fields || 'y' in fields) {
+      resource.state = 'alive';
+      if (resource.remainingLoots === 0) resource.remainingLoots = 5;
+    }
     return this.resourceRepo.save(resource);
+  }
+
+  async createResource(type: string, x: number, y: number): Promise<Resource> {
+    return this.resourceRepo.save(
+      this.resourceRepo.create({ type, x: Math.round(x), y: Math.round(y) }),
+    );
   }
 
   async deleteResource(id: string): Promise<Resource | null> {
