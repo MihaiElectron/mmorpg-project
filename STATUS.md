@@ -1,41 +1,80 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-17_
+_Dernière mise à jour : 2026-06-18_
 
 ---
 
 ## État général
 
 Le projet tourne en développement local. Backend NestJS + PostgreSQL opérationnels,
-frontend React/Phaser connecté via Socket.IO. Un seul type d'animal (turkey) est en
-jeu, la boucle combat complète fonctionne de bout en bout.
+frontend React/Phaser connecté via Socket.IO. Deux types d'animaux (turkey, goblin)
+sont définis en template. La boucle combat complète fonctionne de bout en bout.
+Un système d'administration complet est en place pour l'utilisateur `semoa` (role=admin).
 
 ---
 
-## Fonctionnalités terminées (session courante)
+## Fonctionnalités terminées
 
 ### Combat / Animaux
 - **Aggro / fuite** : turkey attaque à < 50 unités, fuit à < 75 % HP.
   États DB : `alive | fighting | escaping | dead`.
 - **Auto-attaque et poursuite** : cliquer "attaquer" lance une boucle
   (emit toutes les 750 ms, tick pursuit 300 ms) jusqu'à la mort de l'animal
-  ou clic map. `PlayerController.moveTo()` utilise le steering direct (pas de
-  pathfinding) pour garantir le déplacement.
+  ou clic map. `PlayerController.moveTo()` utilise le steering direct.
 - **Respawn animal** : 20 s après la mort, turkey réapparaît à sa position de spawn.
-- **Respawn personnage** : à 0 PV le personnage réapparaît au point de respawn le
-  plus proche (x=600, y=300, radius=20). `WorldService.onModuleInit` remet les
-  personnages morts à plein PV au redémarrage.
-- **Panneau action** : se ferme automatiquement à la mort de l'animal ciblé.
-- **Barre de vie flottante** : affichée au-dessus du joueur (pendant l'auto-attaque
-  ou si attaqué) et des animaux en `fighting | escaping`. Couleurs issues des
-  variables SCSS (`$hp-color-high/medium/low/critical`). Rendu Phaser pur
-  (Rectangle game objects), mise à jour chaque frame dans `update()`.
+- **Respawn personnage** : à 0 PV réapparition au point le plus proche (x=600, y=300).
+- **Barre de vie flottante** : au-dessus du joueur et des animaux en combat.
+  Rendu Phaser pur (Rectangle game objects), couleurs SCSS.
+
+### UI
+- **ActionPanel** : s'ouvre au clic sur ressource, animal ou joueur distant.
+  Se ferme au clic extérieur ou sur la map. Gestion des cibles superposées
+  (dropdown de sélection). Fermeture automatique à la mort de la cible.
+- **Panneau personnage** : se ferme au clic sur la map (via `pointerdown` Phaser).
+- **CharacterLayout** : onglets Perso / Inventaire / Admin (role=admin uniquement).
+
+### Système admin (role=admin)
+- **Console de commandes** dans l'ActionPanel et le panneau Admin :
+  - Syntaxe `/commande arg1 arg2 [--flag=valeur]`
+  - Historique ↑/↓, autocomplete Tab, retour ok/err coloré
+  - Phaser `disableGlobalCapture` au focus → espace et Tab fonctionnels
+  - Registre de commandes (`commandRegistry.ts`) extensible par config
+
+- **Commandes disponibles** :
+  | Commande | Description |
+  |---|---|
+  | `/spawn <template> [x] [y]` | Crée un animal au dernier clic ou aux coords données |
+  | `/tp [id\|nom] <x> <y>` | Téléporte un joueur (par nom, id ou cible sélectionnée) |
+  | `/tp <x> <y>` sur animal | Déplace l'animal sélectionné |
+  | `/sethp <template> <val>` | Modifie les PV max du template |
+  | `/aggro <template> <val>` | Modifie le rayon d'aggro du template |
+  | `/respawn all <template>` | Force le respawn de tous les animaux du template |
+  | `/help [commande]` | Liste les commandes ou détaille l'une d'elles |
+
+- **Panneau Admin** (onglet dédié) :
+  - Vue d'ensemble (templates, spawns, animaux actifs)
+  - Sections accordéon (fermées par défaut) : Créatures, Joueurs, Ressources
+  - Filtre de recherche par nom dans chaque section
+  - Pagination 20 items/page avec flèches + saisie directe
+  - Champs stats éditables inline (jaune = dirty), bouton "Appliquer" par entité
+  - Sauvegarde via WS (`admin:update_template`, `admin:update_character`, `admin:update_resource`)
+  - Architecture générique : `SECTION_CONFIGS` + composant `EntitySection` réutilisable
+
+- **WS admin events** : `admin:spawn`, `admin:teleport`, `admin:move_animal`,
+  `admin:update_template`, `admin:update_character`, `admin:update_resource`,
+  `admin:respawn_all` — tous protégés par `client.data.role !== 'admin'`.
+
+- **Téléportation** : `teleportCharacter` résout nom ou UUID avant tout accès DB ;
+  broadcast `player_moved` à tous les autres clients après téléport.
+  `AnimalsService.refreshTemplateInMemory` propage les stats modifiées aux
+  animaux vivants en mémoire immédiatement.
 
 ### Infrastructure
-- Entité `RespawnPoint` (table `respawn_point`) seedée au démarrage.
-- `seedTemplates()` upsert — turkey : aggroRadius=50, fleeThresholdPct=75,
-  pauseMinMs=2000, pauseMaxMs=12000, respawnDelayMs=20000.
+- Entité `RespawnPoint` seedée au démarrage.
+- `seedTemplates()` upsert — turkey et goblin (textureKey: 'turkey' placeholder).
+- `AdminModule` : gère `CreatureTemplate`, `CreatureSpawn`, `Animal`, `Character`, `Resource`.
 - 15 tests Jest pour `AnimalsService` (tous verts).
+- Store admin Zustand singleton `window.__GLOBAL_ADMIN_STORE__` (Phaser ↔ React).
 
 ---
 
@@ -44,11 +83,13 @@ jeu, la boucle combat complète fonctionne de bout en bout.
 | Sujet | Décision |
 |---|---|
 | Socket unique | Créé dans `WorldPage.jsx`, partagé via `window.game.socket` |
-| Store Zustand | Singleton `window.__GLOBAL_CHARACTER_STORE__` (Phaser ↔ React) |
+| Store Zustand | Singleton `window.__GLOBAL_*_STORE__` (Phaser ↔ React) |
 | Barre de vie UI | React `HealthBar` dans ActionPanel ; Phaser Rectangles dans le monde |
 | `moveTo()` | `isDragging=true` → steering direct, contourne le pathfinder |
 | Anti-cheat distance | `WorldService.checkInteraction` — à réutiliser pour toute nouvelle action |
 | TypeORM sync | `synchronize: true` en dev — colonnes NOT NULL nécessitent `{ default: x }` |
+| Admin clavier | `scene.input.keyboard.disableGlobalCapture()` au focus console |
+| Sections admin | `SECTION_CONFIGS` array + `EntitySection` générique — ajouter une section = 1 entrée config + 1 endpoint |
 
 ---
 
@@ -58,15 +99,20 @@ jeu, la boucle combat complète fonctionne de bout en bout.
 - Pathfinder peut échouer si l'animal est sur une tuile bloquante (contournement : steering direct).
 - Un seul RespawnPoint hardcodé ; pas d'UI de gestion.
 - `synchronize: true` convient en dev, migrations TypeORM à prévoir pour la prod.
+- Sprite goblin utilise `textureKey: 'turkey'` en placeholder — import sprite à faire.
 
 ---
 
 ## Prochaines étapes possibles
 
+- [ ] Import sprite goblin (textureKey propre)
 - [ ] Autres types d'animaux (loup, sanglier…) avec stats différentes
-- [ ] Dégâts au joueur visibles (animation flash, son)
-- [ ] Barre de vie des joueurs distants (nécessite d'envoyer le HP dans `player_moved`)
-- [ ] Zones / rooms Socket.IO pour limiter les broadcasts
 - [ ] Système de loot sur les animaux tués
+- [ ] Dégâts au joueur visibles (animation flash, son)
+- [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
+- [ ] Zones / rooms Socket.IO pour limiter les broadcasts
+- [ ] Section Décor dans le panneau admin (commande `/decor` à implémenter)
 - [ ] PNJ / dialogues
 - [ ] Zones de map différenciées (forêt, village, donjon)
+- [ ] Audit log des actions admin (journalisation serveur)
+- [ ] Migrations TypeORM pour la prod
