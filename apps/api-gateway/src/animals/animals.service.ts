@@ -508,6 +508,19 @@ export class AnimalsService implements OnModuleInit {
     return toDto(animal);
   }
 
+  refreshTemplateInMemory(key: string, fields: Partial<Record<string, number>>): void {
+    for (const animal of this.liveAnimals.values()) {
+      if (animal.spawn?.template?.key === key) {
+        Object.assign(animal.spawn.template, fields);
+        // Recalibrer les HP si baseHealth diminue sous le HP actuel
+        const newMax = (animal.spawn.template as any).baseHealth;
+        if (newMax !== undefined && animal.health > newMax) {
+          animal.health = newMax;
+        }
+      }
+    }
+  }
+
   async moveAnimal(animalId: string, x: number, y: number): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(animalId);
     if (!animal || animal.state === 'dead') return null;

@@ -138,6 +138,7 @@ export class AdminGateway {
       .map(([k, v]) => `${k} ${beforeValues[k]}→${v}`)
       .join(', ');
 
+    this.animalsService.refreshTemplateInMemory(key, safeFields);
     this.server.emit('category:updated', updated);
     return {
       success: true,

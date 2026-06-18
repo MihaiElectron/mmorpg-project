@@ -114,6 +114,22 @@
     }
   }
 
+  // ── Recherche créatures ───────────────────────────────────────────────────
+  &__search {
+    width: 100%;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    outline: none;
+    box-sizing: border-box;
+
+    &::placeholder { color: vars.$color-text-disabled; }
+    &:focus { border-color: vars.$color-metal-silver; }
+  }
+
   // ── Liste de templates ────────────────────────────────────────────────────
   &__template-list {
     display: flex;
@@ -123,21 +139,18 @@
 
   &__template-item {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 6px;
     background: vars.$panel-header-bg;
     border: 1px solid vars.$panel-border;
     border-radius: vars.$panel-radius-sm;
     padding: 8px 10px;
     transition: border-color 0.15s;
 
-    &:hover {
-      border-color: vars.$color-metal-silver;
-    }
+    &:hover { border-color: vars.$color-metal-silver; }
   }
 
   &__template-name {
-    flex: 1;
     font-weight: bold;
     color: vars.$color-text-primary;
     font-size: 0.9rem;
@@ -145,22 +158,58 @@
 
   &__template-stats {
     display: flex;
-    gap: 8px;
-    font-size: 0.75rem;
-    color: vars.$color-text-muted;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   &__template-stat {
     display: flex;
+    flex-direction: column;
+    gap: 2px;
     align-items: center;
-    gap: 3px;
 
-    span:first-child {
+    &-label {
+      font-size: 0.68rem;
       color: vars.$color-text-disabled;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
-    span:last-child {
+    &-input {
+      width: 52px;
+      background: vars.$panel-bg;
+      border: 1px solid vars.$panel-border-subtle;
+      border-radius: vars.$panel-radius-sm;
       color: vars.$color-magic-amber;
+      font-size: 0.8rem;
+      text-align: center;
+      padding: 3px 4px;
+      outline: none;
+      appearance: textfield;
+      transition: color 0.2s, border-color 0.2s;
+
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button { appearance: none; }
+
+      &:focus { border-color: vars.$color-metal-silver; }
+
+      &.is-dirty {
+        color: #f5c542;
+        border-color: #f5c542;
+      }
+    }
+  }
+
+  // ── Bouton Appliquer ──────────────────────────────────────────────────────
+  &__apply-btn {
+    align-self: flex-end;
+    @include m.btn-success;
+    font-size: 0.78rem;
+    padding: 4px 12px;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
   }
 
