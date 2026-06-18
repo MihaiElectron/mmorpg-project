@@ -17,6 +17,7 @@ type TeleportPayload = { characterId: string; x: number; y: number };
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
 type MoveAnimalPayload = { animalId: string; x: number; y: number };
+type UpdateEntityPayload = { id: string; fields: Record<string, number> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -194,5 +195,57 @@ export class AdminGateway {
         ? `${count} "${templateKey}" réinitialisé(s) à leur position de spawn (state: alive, HP max).`
         : `Aucun animal "${templateKey}" trouvé en mémoire.`,
     };
+  }
+
+  @SubscribeMessage('admin:update_character')
+  async onUpdateCharacter(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: UpdateEntityPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['level', 'health', 'maxHealth', 'attack', 'defense'];
+    const safe: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      const n = Number(v);
+      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      safe[k] = n;
+    }
+
+    const updated = await this.adminService.updateCharacter(id, safe as any);
+    if (!updated) return { success: false, message: `Personnage "${id}" introuvable.` };
+
+    const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
+    return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
+  }
+
+  @SubscribeMessage('admin:update_resource')
+  async onUpdateResource(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: UpdateEntityPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['x', 'y', 'remainingLoots'];
+    const safe: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      const n = Number(v);
+      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      safe[k] = n;
+    }
+
+    const updated = await this.adminService.updateResource(id, safe as any);
+    if (!updated) return { success: false, message: `Ressource "${id}" introuvable.` };
+
+    const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
+    return { success: true, message: `Ressource "${updated.type}" mis à jour : ${changes}.`, data: updated };
   }
 }

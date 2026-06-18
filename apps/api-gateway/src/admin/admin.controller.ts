@@ -12,27 +12,44 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('overview')
-  getOverview() {
-    return this.adminService.getOverview();
-  }
+  getOverview() { return this.adminService.getOverview(); }
+
+  // ── Créatures ─────────────────────────────────────────────────────────────
 
   @Get('templates')
-  getTemplates() {
-    return this.adminService.getTemplates();
-  }
+  getTemplates() { return this.adminService.getTemplates(); }
 
   @Get('spawns')
-  getSpawns() {
-    return this.adminService.getSpawns();
-  }
+  getSpawns() { return this.adminService.getSpawns(); }
 
   @Patch('templates/:key')
-  async updateTemplate(
-    @Param('key') key: string,
-    @Body() fields: Record<string, number>,
-  ) {
+  async updateTemplate(@Param('key') key: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateTemplate(key, fields);
     if (!updated) throw new NotFoundException(`Template "${key}" introuvable.`);
+    return updated;
+  }
+
+  // ── Joueurs ───────────────────────────────────────────────────────────────
+
+  @Get('characters')
+  getCharacters() { return this.adminService.getCharacters(); }
+
+  @Patch('characters/:id')
+  async updateCharacter(@Param('id') id: string, @Body() fields: Record<string, number>) {
+    const updated = await this.adminService.updateCharacter(id, fields);
+    if (!updated) throw new NotFoundException(`Personnage "${id}" introuvable.`);
+    return updated;
+  }
+
+  // ── Ressources ────────────────────────────────────────────────────────────
+
+  @Get('resources')
+  getResources() { return this.adminService.getResources(); }
+
+  @Patch('resources/:id')
+  async updateResource(@Param('id') id: string, @Body() fields: Record<string, number>) {
+    const updated = await this.adminService.updateResource(id, fields);
+    if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
     return updated;
   }
 }

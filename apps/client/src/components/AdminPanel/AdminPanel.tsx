@@ -2,24 +2,29 @@ import { useEffect, useState, useRef } from "react";
 import { getAdminStore } from "../../store/admin.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
-import { updateTemplate } from "../../phaser/admin/admin.actions";
 
-type CreatureTemplate = {
-  id: number;
-  key: string;
-  name: string;
-  baseHealth: number;
-  baseAttack: number;
-  baseArmor: number;
-  aggroRadius: number;
-  fleeThresholdPct: number;
-  patrolRadius: number;
-  speedMin: number;
-  speedMax: number;
-};
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type Overview = { templates: number; spawns: number; activeAnimals: number };
 type ConsoleLine = { text: string; ok: boolean };
+
+export type FieldDef = {
+  key: string;
+  label: string;
+  min?: number;
+  step?: number;
+};
+
+type SectionConfig = {
+  id: string;
+  title: string;
+  fetchPath: string;
+  saveEvent: string;
+  getEntityKey: (item: any) => string;   // clé unique pour WS (ex: template.key, character.id)
+  getDisplayKey: (item: any) => string;  // clé pour indexer les drafts
+  getName: (item: any) => string;
+  fields: FieldDef[];
+};
 
 type GameWindow = Window &
   typeof globalThis & {
@@ -29,15 +34,60 @@ type GameWindow = Window &
     };
   };
 
-const API = import.meta.env.VITE_API_URL as string;
+// ── Section configs ────────────────────────────────────────────────────────────
 
-const STAT_FIELDS: { key: keyof CreatureTemplate; label: string }[] = [
-  { key: "baseHealth",       label: "PV"     },
-  { key: "baseAttack",       label: "ATK"    },
-  { key: "baseArmor",        label: "ARM"    },
-  { key: "aggroRadius",      label: "Aggro"  },
-  { key: "fleeThresholdPct", label: "Fuite%" },
+const SECTION_CONFIGS: SectionConfig[] = [
+  {
+    id: "creatures",
+    title: "Créatures",
+    fetchPath: "/admin/templates",
+    saveEvent: "admin:update_template",
+    getEntityKey: (t) => t.key,
+    getDisplayKey: (t) => t.key,
+    getName: (t) => t.name,
+    fields: [
+      { key: "baseHealth",       label: "PV",     min: 1 },
+      { key: "baseAttack",       label: "ATK",    min: 0 },
+      { key: "baseArmor",        label: "ARM",    min: 0 },
+      { key: "aggroRadius",      label: "Aggro",  min: 0 },
+      { key: "fleeThresholdPct", label: "Fuite%", min: 0 },
+    ],
+  },
+  {
+    id: "players",
+    title: "Joueurs",
+    fetchPath: "/admin/characters",
+    saveEvent: "admin:update_character",
+    getEntityKey: (c) => c.id,
+    getDisplayKey: (c) => c.id,
+    getName: (c) => c.name,
+    fields: [
+      { key: "level",     label: "Niv",    min: 1 },
+      { key: "health",    label: "HP",     min: 0 },
+      { key: "maxHealth", label: "HP max", min: 1 },
+      { key: "attack",    label: "ATK",    min: 0 },
+      { key: "defense",   label: "DEF",    min: 0 },
+    ],
+  },
+  {
+    id: "resources",
+    title: "Ressources",
+    fetchPath: "/admin/resources",
+    saveEvent: "admin:update_resource",
+    getEntityKey: (r) => r.id,
+    getDisplayKey: (r) => r.id,
+    getName: (r) => r.type,
+    fields: [
+      { key: "x",             label: "X",     min: 0 },
+      { key: "y",             label: "Y",     min: 0 },
+      { key: "remainingLoots", label: "Loots", min: 0 },
+    ],
+  },
 ];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+const API = import.meta.env.VITE_API_URL as string;
 
 function fetchAdmin<T>(path: string, token: string): Promise<T> {
   return fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } })
@@ -50,33 +100,172 @@ function getPhaserKeyboard() {
 
 const kbHandlers = {
   onFocus: () => { getAdminStore().getState().setConsoleActive(true);  getPhaserKeyboard()?.disableGlobalCapture(); },
-  onBlur:  () => { getAdminStore().getState().setConsoleActive(false); getPhaserKeyboard()?.enableGlobalCapture();  },
+  onBlur:  () => { getAdminStore().getState().setConsoleActive(false); getPhaserKeyboard()?.enableGlobalCapture(); },
 };
+
+function ackPromise(socket: any, event: string, payload: unknown): Promise<{ success: boolean; message: string }> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ success: false, message: "Timeout." }), 5000);
+    socket.emit(event, payload, (res: any) => {
+      clearTimeout(timer);
+      resolve(res ?? { success: false, message: "Réponse vide." });
+    });
+  });
+}
+
+// ── EntitySection ──────────────────────────────────────────────────────────────
+
+type EntitySectionProps = {
+  config: SectionConfig;
+  items: any[];
+  onResult: (text: string, ok: boolean) => void;
+};
+
+function EntitySection({ config, items, onResult }: EntitySectionProps) {
+  const [search, setSearch]   = useState("");
+  const [drafts, setDrafts]   = useState<Record<string, Record<string, string>>>({});
+  const [saving, setSaving]   = useState<Record<string, boolean>>({});
+
+  const filtered = items.filter((item) =>
+    config.getName(item).toLowerCase().includes(search.toLowerCase())
+  );
+
+  function getDisplay(item: any, field: string): string {
+    const dk = config.getDisplayKey(item);
+    return drafts[dk]?.[field] ?? String(item[field] ?? "");
+  }
+
+  function isDirty(item: any, field: string): boolean {
+    const dk = config.getDisplayKey(item);
+    const draft = drafts[dk]?.[field];
+    if (draft === undefined || draft === "") return false;
+    return Number(draft) !== Number(item[field]);
+  }
+
+  function hasAnyDirty(item: any): boolean {
+    return config.fields.some(({ key }) => isDirty(item, key));
+  }
+
+  function onChange(item: any, field: string, value: string) {
+    const dk = config.getDisplayKey(item);
+    setDrafts((prev) => ({
+      ...prev,
+      [dk]: { ...(prev[dk] ?? {}), [field]: value },
+    }));
+  }
+
+  async function onApply(item: any) {
+    const socket = (window as GameWindow).game?.socket;
+    if (!socket?.connected) { onResult("Erreur : socket non connecté.", false); return; }
+
+    const dirtyFields: Record<string, number> = {};
+    for (const { key } of config.fields) {
+      if (!isDirty(item, key)) continue;
+      const val = Number(drafts[config.getDisplayKey(item)]?.[key]);
+      if (!isNaN(val) && val >= 0) dirtyFields[key] = val;
+    }
+    if (!Object.keys(dirtyFields).length) return;
+
+    const dk = config.getDisplayKey(item);
+    setSaving((prev) => ({ ...prev, [dk]: true }));
+
+    const result = await ackPromise(socket, config.saveEvent, {
+      // Creatures utilisent "key", les autres utilisent "id"
+      ...(config.saveEvent === "admin:update_template"
+        ? { key: config.getEntityKey(item) }
+        : { id: config.getEntityKey(item) }),
+      fields: dirtyFields,
+    });
+
+    setSaving((prev) => ({ ...prev, [dk]: false }));
+    onResult(result.message, result.success);
+
+    if (result.success) {
+      // Mettre à jour l'item local
+      Object.assign(item, dirtyFields);
+      setDrafts((prev) => { const n = { ...prev }; delete n[dk]; return n; });
+    }
+  }
+
+  return (
+    <section className="admin-panel__section">
+      <input
+        className="admin-panel__search"
+        type="text"
+        placeholder={`Filtrer ${config.title.toLowerCase()}…`}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        {...kbHandlers}
+        spellCheck={false}
+      />
+      <h3 className="admin-panel__section-title">{config.title}</h3>
+
+      {items.length === 0 && (
+        <p className="admin-panel__loading">Chargement…</p>
+      )}
+      {items.length > 0 && filtered.length === 0 && (
+        <p className="admin-panel__loading">Aucun résultat.</p>
+      )}
+
+      <div className="admin-panel__template-list">
+        {filtered.map((item) => (
+          <div key={config.getDisplayKey(item)} className="admin-panel__template-item">
+            <span className="admin-panel__template-name">{config.getName(item)}</span>
+            <div className="admin-panel__template-stats">
+              {config.fields.map(({ key, label, min, step }) => (
+                <label key={key} className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">{label}</span>
+                  <input
+                    className={`admin-panel__template-stat-input${isDirty(item, key) ? " is-dirty" : ""}`}
+                    type="number"
+                    min={min ?? 0}
+                    step={step ?? 1}
+                    value={getDisplay(item, key)}
+                    onChange={(e) => onChange(item, key, e.target.value)}
+                    {...kbHandlers}
+                  />
+                </label>
+              ))}
+            </div>
+            {hasAnyDirty(item) && (
+              <button
+                className="admin-panel__apply-btn"
+                disabled={!!saving[config.getDisplayKey(item)]}
+                onClick={() => onApply(item)}
+              >
+                {saving[config.getDisplayKey(item)] ? "…" : "Appliquer"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── AdminPanel ────────────────────────────────────────────────────────────────
 
 export default function AdminPanel() {
   const token = localStorage.getItem("token") ?? "";
-  const [overview,   setOverview]   = useState<Overview | null>(null);
-  const [templates,  setTemplates]  = useState<CreatureTemplate[]>([]);
-  const [error,      setError]      = useState<string | null>(null);
-  const [command,    setCommand]    = useState("");
-  const [results,    setResults]    = useState<ConsoleLine[]>([]);
-  const [search,     setSearch]     = useState("");
-  // drafts: templateKey → { field → string value }
-  const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
-  // applying: templateKey → bool
-  const [applying, setApplying] = useState<Record<string, boolean>>({});
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [sectionData, setSectionData] = useState<Record<string, any[]>>({});
+  const [error,   setError]   = useState<string | null>(null);
+  const [command, setCommand] = useState("");
+  const [results, setResults] = useState<ConsoleLine[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetchAdmin<Overview>("/admin/overview", token),
-      fetchAdmin<CreatureTemplate[]>("/admin/templates", token),
-    ])
-      .then(([ov, tpl]) => { setOverview(ov); setTemplates(tpl); })
-      .catch(() => setError("Impossible de charger les données admin."));
+    const fetches = [
+      fetchAdmin<Overview>("/admin/overview", token).then((ov) => setOverview(ov)),
+      ...SECTION_CONFIGS.map((cfg) =>
+        fetchAdmin<any[]>(cfg.fetchPath, token).then((data) =>
+          setSectionData((prev) => ({ ...prev, [cfg.id]: data }))
+        )
+      ),
+    ];
+    Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
 
-  // ── Console ───────────────────────────────────────────────────────────────
   function pushResult(text: string, ok: boolean) {
     setResults((prev) => [{ text, ok }, ...prev].slice(0, 5));
   }
@@ -102,7 +291,7 @@ export default function AdminPanel() {
       getTarget: () => null,
       getCharacterPos: () => null,
       getLastClickedPos: () => getAdminStore().getState().lastClickedPos,
-      getTemplateKeys: () => templates.map((t) => t.key),
+      getTemplateKeys: () => (sectionData["creatures"] ?? []).map((t: any) => t.key),
     };
     const result = await def.handler(parsed.args, parsed.flags, ctx);
     pushResult(result.message, result.success);
@@ -130,65 +319,6 @@ export default function AdminPanel() {
       }
     }
   }
-
-  // ── Édition inline des stats ──────────────────────────────────────────────
-  function getDisplayValue(t: CreatureTemplate, field: keyof CreatureTemplate): string {
-    return drafts[t.key]?.[field as string] ?? String(t[field]);
-  }
-
-  function isDirty(t: CreatureTemplate, field: keyof CreatureTemplate): boolean {
-    const draft = drafts[t.key]?.[field as string];
-    if (draft === undefined || draft === "") return false;
-    // Comparaison numérique explicite
-    const draftNum = Number(draft);
-    const origNum  = Number(t[field]);
-    return !isNaN(draftNum) && draftNum !== origNum;
-  }
-
-  function hasAnyDirty(t: CreatureTemplate): boolean {
-    return STAT_FIELDS.some(({ key }) => isDirty(t, key));
-  }
-
-  function handleStatChange(templateKey: string, field: string, value: string) {
-    setDrafts((prev) => ({
-      ...prev,
-      [templateKey]: { ...(prev[templateKey] ?? {}), [field]: value },
-    }));
-  }
-
-  async function applyChanges(t: CreatureTemplate) {
-    const dirtyFields: Record<string, number> = {};
-    for (const { key } of STAT_FIELDS) {
-      if (!isDirty(t, key)) continue;
-      const val = Number(drafts[t.key]?.[key as string]);
-      if (!isNaN(val) && val >= 0) dirtyFields[key as string] = val;
-    }
-    if (Object.keys(dirtyFields).length === 0) return;
-
-    const socket = (window as GameWindow).game?.socket;
-    if (!socket?.connected) { pushResult("Erreur : socket non connecté.", false); return; }
-
-    setApplying((prev) => ({ ...prev, [t.key]: true }));
-    const result = await updateTemplate(t.key, dirtyFields, socket);
-    setApplying((prev) => ({ ...prev, [t.key]: false }));
-
-    pushResult(result.message, result.success);
-
-    if (result.success) {
-      setTemplates((prev) =>
-        prev.map((tmpl) => tmpl.key === t.key ? { ...tmpl, ...dirtyFields } : tmpl)
-      );
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[t.key];
-        return next;
-      });
-    }
-  }
-
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <div className="admin-panel">
@@ -233,60 +363,15 @@ export default function AdminPanel() {
         </section>
       )}
 
-      {/* Créatures */}
-      <section className="admin-panel__section">
-        <h3 className="admin-panel__section-title">Créatures</h3>
-
-        <input
-          className="admin-panel__search"
-          type="text"
-          placeholder="Filtrer… (ex: Tu)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          {...kbHandlers}
-          spellCheck={false}
+      {/* Sections génériques */}
+      {SECTION_CONFIGS.map((cfg) => (
+        <EntitySection
+          key={cfg.id}
+          config={cfg}
+          items={sectionData[cfg.id] ?? []}
+          onResult={pushResult}
         />
-
-        {filteredTemplates.length === 0 && !error && (
-          <p className="admin-panel__loading">
-            {templates.length === 0 ? "Chargement…" : "Aucun résultat."}
-          </p>
-        )}
-
-        <div className="admin-panel__template-list">
-          {filteredTemplates.map((t) => (
-            <div key={t.id} className="admin-panel__template-item">
-              <span className="admin-panel__template-name">{t.name}</span>
-
-              <div className="admin-panel__template-stats">
-                {STAT_FIELDS.map(({ key, label }) => (
-                  <label key={key as string} className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">{label}</span>
-                    <input
-                      className={`admin-panel__template-stat-input${isDirty(t, key) ? " is-dirty" : ""}`}
-                      type="number"
-                      min={0}
-                      value={getDisplayValue(t, key)}
-                      onChange={(e) => handleStatChange(t.key, key as string, e.target.value)}
-                      {...kbHandlers}
-                    />
-                  </label>
-                ))}
-              </div>
-
-              {hasAnyDirty(t) && (
-                <button
-                  className="admin-panel__apply-btn"
-                  disabled={!!applying[t.key]}
-                  onClick={() => applyChanges(t)}
-                >
-                  {applying[t.key] ? "…" : "Appliquer"}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+      ))}
     </div>
   );
 }
