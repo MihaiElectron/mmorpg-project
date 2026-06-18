@@ -177,6 +177,18 @@ export default function ActionPanel() {
     }
   }
 
+  // ── Suppression admin ─────────────────────────────────────────────────────
+  function handleAdminDelete() {
+    const socket = (window as GameWindow).game?.socket;
+    if (!socket?.connected || !target) return;
+
+    const event = target.kind === "animal" ? "admin:delete_animal" : "admin:delete_resource";
+    socket.emit(event, { id: target.id }, (res: any) => {
+      if (!res?.success) console.warn("[admin delete]", res?.message);
+    });
+    closePanel();
+  }
+
   // ── Actions gameplay ──────────────────────────────────────────────────────
   function handleAction(action: string) {
     const socket = (window as GameWindow).game?.socket;
@@ -267,6 +279,14 @@ export default function ActionPanel() {
               {action}
             </button>
           ))}
+          {isAdmin && (
+            <button
+              className="action-panel__button action-panel__button--danger"
+              onClick={() => handleAdminDelete()}
+            >
+              supprimer
+            </button>
+          )}
         </div>
       )}
     </div>

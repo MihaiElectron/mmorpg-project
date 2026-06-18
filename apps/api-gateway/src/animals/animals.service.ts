@@ -521,6 +521,28 @@ export class AnimalsService implements OnModuleInit {
     }
   }
 
+  async adminDeleteAnimal(id: string): Promise<AnimalDto | null> {
+    const animal = this.liveAnimals.get(id);
+    if (!animal) return null;
+
+    const dto = toDto(animal);
+    const spawnId = animal.spawn?.id;
+    const spawnKey = animal.spawn?.key ?? '';
+
+    this.liveAnimals.delete(id);
+    this.patrolStates.delete(id);
+
+    // Supprimer la ligne Animal — le startup ne pourra plus la ressusciter
+    await this.animalRepository.delete(id);
+
+    // Supprimer aussi le spawn si créé par admin (pas de seed à conserver)
+    if (spawnKey.startsWith('admin-') && spawnId) {
+      await this.spawnRepository.delete(spawnId);
+    }
+
+    return dto;
+  }
+
   async moveAnimal(animalId: string, x: number, y: number): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(animalId);
     if (!animal || animal.state === 'dead') return null;

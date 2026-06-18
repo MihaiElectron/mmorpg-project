@@ -197,6 +197,40 @@ export class AdminGateway {
     };
   }
 
+  @SubscribeMessage('admin:delete_animal')
+  async onDeleteAnimal(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id } = payload ?? {};
+    if (!id) return { success: false, message: 'Payload invalide : id requis.' };
+
+    const dto = await this.animalsService.adminDeleteAnimal(id);
+    if (!dto) return { success: false, message: `Animal "${id}" introuvable en mémoire.` };
+
+    this.server.emit('animal_update', { ...dto, state: 'dead' });
+    return { success: true, message: `"${dto.name}" (${dto.id}) supprimé.` };
+  }
+
+  @SubscribeMessage('admin:delete_resource')
+  async onDeleteResource(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id } = payload ?? {};
+    if (!id) return { success: false, message: 'Payload invalide : id requis.' };
+
+    const deleted = await this.adminService.deleteResource(id);
+    if (!deleted) return { success: false, message: `Ressource "${id}" introuvable.` };
+
+    this.server.emit('resource_update', { id: deleted.id, state: 'dead' });
+    return { success: true, message: `Ressource "${deleted.type}" (${deleted.id}) supprimée.` };
+  }
+
   @SubscribeMessage('admin:update_character')
   async onUpdateCharacter(
     @ConnectedSocket() client: WorldSocket,
