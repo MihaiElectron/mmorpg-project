@@ -41,6 +41,7 @@ function toDto(animal: Animal): AnimalDto {
   const t = animal.spawn.template;
   return {
     id: animal.id,
+    templateKey: t.key,
     type: t.textureKey,
     name: t.name,
     x: animal.x,
@@ -540,6 +541,30 @@ export class AnimalsService implements OnModuleInit {
       await this.spawnRepository.delete(spawnId);
     }
 
+    return dto;
+  }
+
+  async adminUpdateAnimal(
+    id: string,
+    fields: Partial<{ health: number; x: number; y: number }>,
+  ): Promise<AnimalDto | null> {
+    const animal = this.liveAnimals.get(id);
+    if (!animal || animal.state === 'dead') return null;
+
+    if (fields.health !== undefined) {
+      animal.health = Math.max(0, Math.min(fields.health, animal.spawn.template.baseHealth));
+    }
+    if (fields.x !== undefined) animal.x = Math.round(fields.x);
+    if (fields.y !== undefined) animal.y = Math.round(fields.y);
+
+    if (fields.x !== undefined || fields.y !== undefined) {
+      this.patrolStates.delete(id);
+    }
+
+    await this.animalRepository.save(animal);
+
+    const dto = toDto(animal);
+    if (this.server) this.server.emit('animal_update', dto);
     return dto;
   }
 

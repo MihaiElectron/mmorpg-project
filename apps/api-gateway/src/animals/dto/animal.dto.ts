@@ -1,5 +1,6 @@
 export type AnimalDto = {
   id: string;
+  templateKey: string;
   type: string;
   name: string;
   x: number;

@@ -320,6 +320,113 @@
     }
   }
 
+  // ── Groupes (deux niveaux : template → instances) ─────────────────────────
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    overflow: hidden;
+    transition: border-color 0.15s;
+
+    &:hover { border-color: vars.$color-metal-silver; }
+  }
+
+  &__group-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  &__group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
+
+    &:hover .admin-panel__template-name {
+      color: vars.$color-metal-silver;
+    }
+  }
+
+  &__instance-count {
+    font-size: 0.75rem;
+    color: vars.$color-text-disabled;
+    margin-left: 2px;
+  }
+
+  &__instance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: vars.$panel-bg;
+    border-top: 1px solid vars.$panel-border;
+    padding: 6px 8px;
+  }
+
+  &__instance-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 8px;
+    border-radius: vars.$panel-radius-sm;
+    border: 1px solid vars.$panel-border-subtle;
+    background: vars.$panel-header-bg;
+    transition: border-color 0.15s;
+
+    &:hover { border-color: vars.$panel-border; }
+  }
+
+  &__instance-name {
+    font-size: 0.8rem;
+    color: vars.$color-text-muted;
+    font-family: 'Courier New', Courier, monospace;
+    flex: 1;
+  }
+
+  // ── Badges état ───────────────────────────────────────────────────────────
+  &__badge {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+
+    &--alive    { background: rgba(126, 207, 126, 0.15); color: #7ecf7e; border: 1px solid rgba(126, 207, 126, 0.3); }
+    &--fighting { background: rgba(207, 126, 126, 0.15); color: #cf7e7e; border: 1px solid rgba(207, 126, 126, 0.3); }
+    &--escaping { background: rgba(245, 197, 66,  0.15); color: #f5c542; border: 1px solid rgba(245, 197, 66,  0.3); }
+    &--dead     { background: rgba(80, 80, 80, 0.2);     color: vars.$color-text-disabled; border: 1px solid vars.$panel-border-subtle; }
+  }
+
+  // ── Bouton supprimer instance ─────────────────────────────────────────────
+  &__del-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-disabled;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+
+    &:hover {
+      border-color: vars.$btn-danger-bg;
+      color: vars.$btn-danger-bg;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
   // ── Bouton Appliquer ──────────────────────────────────────────────────────
   &__apply-btn {
     align-self: flex-end;

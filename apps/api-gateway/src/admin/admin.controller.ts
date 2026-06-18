@@ -1,5 +1,6 @@
 import { Controller, Get, Patch, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AnimalsService } from '../animals/animals.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -9,10 +10,18 @@ import { UserRole } from '../users/entities/user.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly animalsService: AnimalsService,
+  ) {}
 
   @Get('overview')
   getOverview() { return this.adminService.getOverview(); }
+
+  // ── Animaux (instances vivantes) ─────────────────────────────────────────
+
+  @Get('animals')
+  getAnimals() { return this.animalsService.findAll(); }
 
   // ── Créatures ─────────────────────────────────────────────────────────────
 

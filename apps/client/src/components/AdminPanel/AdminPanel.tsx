@@ -15,6 +15,7 @@ export type FieldDef = {
   step?: number;
 };
 
+// Section plate (ex: Joueurs)
 type SectionConfig = {
   id: string;
   title: string;
@@ -25,6 +26,36 @@ type SectionConfig = {
   getName: (item: any) => string;
   fields: FieldDef[];
   getTpPosition?: (item: any) => { x: number; y: number } | null;
+  dragEvent?: string;
+  getDragPayload?: (item: any, x: number, y: number) => object;
+};
+
+// Section groupée deux niveaux (ex: Créatures, Ressources)
+type GroupedSectionConfig = {
+  id: string;
+  title: string;
+  fetchGroupsPath: string | null;         // null → groupes dérivés des instances
+  fetchInstancesPath: string;
+  deriveGroups?: (instances: any[]) => any[];
+
+  getGroupKey:  (g: any) => string;
+  getGroupName: (g: any) => string;
+  groupFields:  FieldDef[];
+  groupSaveEvent?:      string;
+  getGroupSavePayload?: (g: any, fields: Record<string, number>) => object;
+  dragEvent?:           string;
+  getDragPayload?:      (g: any, x: number, y: number) => object;
+
+  getInstancesForGroup: (instances: any[], group: any) => any[];
+  getInstanceKey:  (i: any) => string;
+  getInstanceName: (i: any) => string;
+  getInstanceBadge?: (i: any) => string;
+  instanceFields:  FieldDef[];
+  instanceSaveEvent: string;
+  getInstanceSavePayload: (i: any, fields: Record<string, number>) => object;
+  getInstanceTpPosition?: (i: any) => { x: number; y: number } | null;
+  instanceDeleteEvent?:      string;
+  getInstanceDeletePayload?: (i: any) => object;
 };
 
 type GameWindow = Window &
@@ -35,26 +66,80 @@ type GameWindow = Window &
     };
   };
 
-// ── Section configs ────────────────────────────────────────────────────────────
+// ── Configs ────────────────────────────────────────────────────────────────────
 
-const SECTION_CONFIGS: SectionConfig[] = [
+const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
   {
     id: "creatures",
     title: "Créatures",
-    fetchPath: "/admin/templates",
-    saveEvent: "admin:update_template",
-    getEntityKey: (t) => t.key,
-    getDisplayKey: (t) => t.key,
-    getName: (t) => t.name,
-    fields: [
+    fetchGroupsPath: "/admin/templates",
+    fetchInstancesPath: "/admin/animals",
+
+    getGroupKey:  (t) => t.key,
+    getGroupName: (t) => t.name,
+    groupFields: [
       { key: "baseHealth",       label: "PV",     min: 1 },
       { key: "baseAttack",       label: "ATK",    min: 0 },
       { key: "baseArmor",        label: "ARM",    min: 0 },
       { key: "aggroRadius",      label: "Aggro",  min: 0 },
       { key: "fleeThresholdPct", label: "Fuite%", min: 0 },
     ],
-    getTpPosition: (t) => t.spawnX != null ? { x: t.spawnX, y: t.spawnY } : null,
+    groupSaveEvent: "admin:update_template",
+    getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
+    dragEvent: "admin:spawn",
+    getDragPayload: (t, x, y) => ({ templateKey: t.key, x, y }),
+
+    getInstancesForGroup: (animals, template) =>
+      animals.filter((a) => a.templateKey === template.key),
+    getInstanceKey:  (a) => a.id,
+    getInstanceName: (a) => a.id.slice(0, 8),
+    getInstanceBadge: (a) => a.state,
+    instanceFields: [
+      { key: "health", label: "HP", min: 0 },
+      { key: "x",      label: "X",  min: 0 },
+      { key: "y",      label: "Y",  min: 0 },
+    ],
+    instanceSaveEvent: "admin:update_animal",
+    getInstanceSavePayload: (a, fields) => ({ id: a.id, fields }),
+    getInstanceTpPosition: (a) => ({ x: a.x, y: a.y }),
+    instanceDeleteEvent: "admin:delete_animal",
+    getInstanceDeletePayload: (a) => ({ id: a.id }),
   },
+  {
+    id: "resources",
+    title: "Ressources",
+    fetchGroupsPath: null,
+    fetchInstancesPath: "/admin/resources",
+    deriveGroups: (resources) => {
+      const types = [...new Set<string>(resources.map((r: any) => r.type))].sort();
+      return types.map((type) => ({ type }));
+    },
+
+    getGroupKey:  (g) => g.type,
+    getGroupName: (g) => g.type,
+    groupFields: [],
+    dragEvent: "admin:spawn_resource",
+    getDragPayload: (g, x, y) => ({ type: g.type, x, y }),
+
+    getInstancesForGroup: (resources, group) =>
+      resources.filter((r) => r.type === group.type),
+    getInstanceKey:  (r) => r.id,
+    getInstanceName: (r) => r.id.slice(0, 8),
+    getInstanceBadge: (r) => r.state,
+    instanceFields: [
+      { key: "x",              label: "X",     min: 0 },
+      { key: "y",              label: "Y",     min: 0 },
+      { key: "remainingLoots", label: "Loots", min: 0 },
+    ],
+    instanceSaveEvent: "admin:update_resource",
+    getInstanceSavePayload: (r, fields) => ({ id: r.id, fields }),
+    getInstanceTpPosition: (r) => r.state === "alive" ? { x: r.x, y: r.y } : null,
+    instanceDeleteEvent: "admin:delete_resource",
+    getInstanceDeletePayload: (r) => ({ id: r.id }),
+  },
+];
+
+const SECTION_CONFIGS: SectionConfig[] = [
   {
     id: "players",
     title: "Joueurs",
@@ -71,21 +156,8 @@ const SECTION_CONFIGS: SectionConfig[] = [
       { key: "defense",   label: "DEF",    min: 0 },
     ],
     getTpPosition: (c) => c.positionX != null ? { x: c.positionX, y: c.positionY } : null,
-  },
-  {
-    id: "resources",
-    title: "Ressources",
-    fetchPath: "/admin/resources",
-    saveEvent: "admin:update_resource",
-    getEntityKey: (r) => r.id,
-    getDisplayKey: (r) => r.id,
-    getName: (r) => r.type,
-    fields: [
-      { key: "x",              label: "X",     min: 0 },
-      { key: "y",              label: "Y",     min: 0 },
-      { key: "remainingLoots", label: "Loots", min: 0 },
-    ],
-    getTpPosition: (r) => (r.x != null && r.y != null ? { x: r.x, y: r.y } : null),
+    dragEvent: "admin:teleport",
+    getDragPayload: (c, x, y) => ({ characterId: c.id, x, y }),
   },
 ];
 
@@ -98,7 +170,6 @@ function toWorldPoint(clientX: number, clientY: number): { x: number; y: number 
   if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
   const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
   if (!scene?.cameras?.main) return null;
-  // Convertir CSS px → pixels internes Phaser (ratio ≠ 1 en mode EXPAND ou sur écran HiDPI)
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
   return scene.cameras.main.getWorldPoint(
@@ -107,11 +178,7 @@ function toWorldPoint(clientX: number, clientY: number): { x: number; y: number 
   ) as { x: number; y: number };
 }
 
-function startDrag(
-  e: React.MouseEvent,
-  label: string,
-  onDrop: (x: number, y: number) => void,
-) {
+function startDrag(e: React.MouseEvent, label: string, onDrop: (x: number, y: number) => void) {
   e.preventDefault();
   const ghost = document.createElement("div");
   ghost.className = "admin-drag-ghost";
@@ -125,9 +192,7 @@ function startDrag(
     ghost.style.top  = `${me.clientY + 14}px`;
     const wp = toWorldPoint(me.clientX, me.clientY);
     ghost.classList.toggle("admin-drag-ghost--valid", wp !== null);
-    ghost.textContent = wp
-      ? `${label}  →  (${Math.round(wp.x)}, ${Math.round(wp.y)})`
-      : label;
+    ghost.textContent = wp ? `${label}  →  (${Math.round(wp.x)}, ${Math.round(wp.y)})` : label;
   }
 
   function onUp(me: MouseEvent) {
@@ -172,7 +237,99 @@ function ackPromise(socket: any, event: string, payload: unknown): Promise<{ suc
   });
 }
 
-// ── EntitySection ──────────────────────────────────────────────────────────────
+function getSocket() { return (window as GameWindow).game?.socket; }
+
+function getAdminCharacterId(): string | null {
+  return (window as any).__GLOBAL_CHARACTER_STORE__?.getState?.()?.character?.id ?? null;
+}
+
+// ── Réutilisables — gestion de draft ──────────────────────────────────────────
+
+type DraftState = Record<string, Record<string, string>>;
+
+function useDraft(fields: FieldDef[]) {
+  const [drafts, setDrafts] = useState<DraftState>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  function getDisplay(key: string, item: any) {
+    return drafts[key]?.[item] ?? "";
+  }
+
+  function getDisplayField(dk: string, field: string, item: any): string {
+    return drafts[dk]?.[field] ?? String(item[field] ?? "");
+  }
+
+  function isDirty(dk: string, field: string, item: any): boolean {
+    const draft = drafts[dk]?.[field];
+    if (draft === undefined || draft === "") return false;
+    return Number(draft) !== Number(item[field]);
+  }
+
+  function hasAnyDirty(dk: string, item: any): boolean {
+    return fields.some(({ key }) => isDirty(dk, key, item));
+  }
+
+  function onChange(dk: string, field: string, value: string) {
+    setDrafts((prev) => ({ ...prev, [dk]: { ...(prev[dk] ?? {}), [field]: value } }));
+  }
+
+  function clearDraft(dk: string) {
+    setDrafts((prev) => { const n = { ...prev }; delete n[dk]; return n; });
+  }
+
+  function collectDirty(dk: string, item: any): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const { key } of fields) {
+      if (!isDirty(dk, key, item)) continue;
+      const val = Number(drafts[dk]?.[key]);
+      if (!isNaN(val) && val >= 0) result[key] = val;
+    }
+    return result;
+  }
+
+  return { drafts, saving, setSaving, getDisplayField, isDirty, hasAnyDirty, onChange, clearDraft, collectDirty };
+}
+
+// ── Pagination ─────────────────────────────────────────────────────────────────
+
+const ITEMS_PER_PAGE = 20;
+
+function usePagination(total: number) {
+  const [page, setPage]         = useState(1);
+  const [pageInput, setPageInput] = useState("1");
+  const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+
+  useEffect(() => { if (page > totalPages) goToPage(totalPages); }, [totalPages]);
+
+  function goToPage(p: number) {
+    const c = Math.max(1, Math.min(p, totalPages));
+    setPage(c);
+    setPageInput(String(c));
+  }
+
+  return { page, pageInput, setPageInput, totalPages, goToPage };
+}
+
+function PaginationControls({ page, pageInput, setPageInput, totalPages, goToPage }: ReturnType<typeof usePagination>) {
+  return (
+    <div className="admin-panel__pagination" onClick={(e) => e.stopPropagation()}>
+      <button className="admin-panel__pagination-btn" onClick={() => goToPage(page - 1)} disabled={page === 1}>‹</button>
+      <input
+        className="admin-panel__pagination-input"
+        type="number" min={1} max={totalPages}
+        value={pageInput}
+        onChange={(e) => setPageInput(e.target.value)}
+        onBlur={() => goToPage(Number(pageInput))}
+        onKeyDown={(e) => { if (e.key === "Enter") goToPage(Number(pageInput)); }}
+        {...kbHandlers}
+      />
+      <span className="admin-panel__pagination-sep">/ {totalPages}</span>
+      <button className="admin-panel__pagination-btn" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>›</button>
+    </div>
+  );
+}
+
+// ── EntitySection (section plate — Joueurs) ────────────────────────────────────
 
 type EntitySectionProps = {
   config: SectionConfig;
@@ -180,227 +337,324 @@ type EntitySectionProps = {
   onResult: (text: string, ok: boolean) => void;
 };
 
-const ITEMS_PER_PAGE = 20;
-
 function EntitySection({ config, items, onResult }: EntitySectionProps) {
-  const [isOpen,     setIsOpen]     = useState(false);
-  const [search,     setSearch]     = useState("");
-  const [page,       setPage]       = useState(1);
-  const [pageInput,  setPageInput]  = useState("1");
-  const [drafts,     setDrafts]     = useState<Record<string, Record<string, string>>>({});
-  const [saving,     setSaving]     = useState<Record<string, boolean>>({});
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const filtered   = items.filter((item) =>
+  const filtered = items.filter((item) =>
     config.getName(item).toLowerCase().includes(search.toLowerCase())
   );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated  = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const pag = usePagination(filtered.length);
+  const paginated = filtered.slice((pag.page - 1) * ITEMS_PER_PAGE, pag.page * ITEMS_PER_PAGE);
 
-  useEffect(() => { setPage(1); setPageInput("1"); }, [search]);
-  useEffect(() => {
-    if (page > totalPages) goToPage(totalPages);
-  }, [totalPages]);
+  useEffect(() => { pag.goToPage(1); }, [search]);
 
-  function goToPage(p: number) {
-    const clamped = Math.max(1, Math.min(p, totalPages));
-    setPage(clamped);
-    setPageInput(String(clamped));
-  }
-
-  function getDisplay(item: any, field: string): string {
-    return drafts[config.getDisplayKey(item)]?.[field] ?? String(item[field] ?? "");
-  }
-
-  function isDirty(item: any, field: string): boolean {
-    const draft = drafts[config.getDisplayKey(item)]?.[field];
-    if (draft === undefined || draft === "") return false;
-    return Number(draft) !== Number(item[field]);
-  }
-
-  function hasAnyDirty(item: any): boolean {
-    return config.fields.some(({ key }) => isDirty(item, key));
-  }
-
-  function onChange(item: any, field: string, value: string) {
-    const dk = config.getDisplayKey(item);
-    setDrafts((prev) => ({ ...prev, [dk]: { ...(prev[dk] ?? {}), [field]: value } }));
-  }
+  const draft = useDraft(config.fields);
 
   async function onTp(item: any) {
-    const socket = (window as GameWindow).game?.socket;
+    const socket = getSocket();
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
     const pos = config.getTpPosition?.(item);
     if (!pos) return;
-    const characterId = (window as any).__GLOBAL_CHARACTER_STORE__?.getState?.()?.character?.id;
+    const characterId = getAdminCharacterId();
     if (!characterId) { onResult("Personnage introuvable.", false); return; }
     const result = await ackPromise(socket, "admin:teleport", { characterId, x: pos.x, y: pos.y });
     onResult(result.message, result.success);
   }
 
-  async function onMapDrop(item: any, x: number, y: number) {
-    const socket = (window as GameWindow).game?.socket;
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-
-    let result: { success: boolean; message: string };
-
-    if (config.id === "creatures") {
-      result = await ackPromise(socket, "admin:spawn", {
-        templateKey: config.getEntityKey(item),
-        x: Math.round(x),
-        y: Math.round(y),
-      });
-    } else if (config.id === "players") {
-      result = await ackPromise(socket, "admin:teleport", {
-        characterId: config.getEntityKey(item),
-        x: Math.round(x),
-        y: Math.round(y),
-      });
-    } else if (config.id === "resources") {
-      result = await ackPromise(socket, "admin:spawn_resource", {
-        type: item.type,
-        x: Math.round(x),
-        y: Math.round(y),
-      });
-    } else {
-      return;
-    }
-
-    onResult(result.message, result.success);
-  }
-
   async function onApply(item: any) {
-    const socket = (window as GameWindow).game?.socket;
-    if (!socket?.connected) { onResult("Erreur : socket non connecté.", false); return; }
-
-    const dirtyFields: Record<string, number> = {};
-    for (const { key } of config.fields) {
-      if (!isDirty(item, key)) continue;
-      const val = Number(drafts[config.getDisplayKey(item)]?.[key]);
-      if (!isNaN(val) && val >= 0) dirtyFields[key] = val;
-    }
-    if (!Object.keys(dirtyFields).length) return;
-
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
     const dk = config.getDisplayKey(item);
-    setSaving((prev) => ({ ...prev, [dk]: true }));
-
-    const result = await ackPromise(socket, config.saveEvent, {
-      ...(config.saveEvent === "admin:update_template"
-        ? { key: config.getEntityKey(item) }
-        : { id: config.getEntityKey(item) }),
-      fields: dirtyFields,
-    });
-
-    setSaving((prev) => ({ ...prev, [dk]: false }));
+    const dirtyFields = draft.collectDirty(dk, item);
+    if (!Object.keys(dirtyFields).length) return;
+    draft.setSaving((prev) => ({ ...prev, [dk]: true }));
+    const result = await ackPromise(socket, config.saveEvent, { id: config.getEntityKey(item), fields: dirtyFields });
+    draft.setSaving((prev) => ({ ...prev, [dk]: false }));
     onResult(result.message, result.success);
-
-    if (result.success) {
-      Object.assign(item, dirtyFields);
-      setDrafts((prev) => { const n = { ...prev }; delete n[dk]; return n; });
-    }
+    if (result.success) { Object.assign(item, dirtyFields); draft.clearDraft(dk); }
   }
 
   return (
     <section className="admin-panel__section">
-
-      {/* Header cliquable */}
       <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
         <span className="admin-panel__section-toggle">
           <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
           {config.title}
         </span>
-
-        {isOpen && (
-          <div className="admin-panel__pagination" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="admin-panel__pagination-btn"
-              onClick={() => goToPage(page - 1)}
-              disabled={page === 1}
-            >‹</button>
-            <input
-              className="admin-panel__pagination-input"
-              type="number"
-              min={1}
-              max={totalPages}
-              value={pageInput}
-              onChange={(e) => setPageInput(e.target.value)}
-              onBlur={() => goToPage(Number(pageInput))}
-              onKeyDown={(e) => { if (e.key === "Enter") goToPage(Number(pageInput)); }}
-              {...kbHandlers}
-            />
-            <span className="admin-panel__pagination-sep">/ {totalPages}</span>
-            <button
-              className="admin-panel__pagination-btn"
-              onClick={() => goToPage(page + 1)}
-              disabled={page === totalPages}
-            >›</button>
-          </div>
-        )}
+        {isOpen && <PaginationControls {...pag} />}
       </div>
 
-      {/* Corps déroulable */}
       {isOpen && (
         <>
-          <input
-            className="admin-panel__search"
-            type="text"
+          <input className="admin-panel__search" type="text"
             placeholder={`Filtrer ${config.title.toLowerCase()}…`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            {...kbHandlers}
-            spellCheck={false}
-          />
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()} {...kbHandlers} spellCheck={false} />
 
           {items.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
           {items.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
 
           <div className="admin-panel__template-list">
-            {paginated.map((item) => (
-              <div key={config.getDisplayKey(item)} className="admin-panel__template-item">
-                <div className="admin-panel__item-header">
-                  <span
-                    className="admin-panel__drag-handle"
-                    title="Glisser sur la map"
-                    onMouseDown={(e) =>
-                      startDrag(e, config.getName(item), (x, y) => onMapDrop(item, x, y))
-                    }
-                  >⠿</span>
-                  <span className="admin-panel__template-name">{config.getName(item)}</span>
-                  {config.getTpPosition?.(item) && (
-                    <button
-                      className="admin-panel__tp-btn"
-                      title={`Téléporter ici (${config.getTpPosition!(item)!.x}, ${config.getTpPosition!(item)!.y})`}
-                      onClick={() => onTp(item)}
-                    >↓ Tp</button>
+            {paginated.map((item) => {
+              const dk = config.getDisplayKey(item);
+              return (
+                <div key={dk} className="admin-panel__template-item">
+                  <div className="admin-panel__item-header">
+                    {config.dragEvent && (
+                      <span className="admin-panel__drag-handle" title="Glisser sur la map"
+                        onMouseDown={(e) => startDrag(e, config.getName(item), (x, y) => {
+                          const socket = getSocket();
+                          if (!socket?.connected || !config.getDragPayload) return;
+                          ackPromise(socket, config.dragEvent!, config.getDragPayload(item, Math.round(x), Math.round(y)))
+                            .then((r) => onResult(r.message, r.success));
+                        })}>⠿</span>
+                    )}
+                    <span className="admin-panel__template-name">{config.getName(item)}</span>
+                    {config.getTpPosition?.(item) && (
+                      <button className="admin-panel__tp-btn"
+                        title={`Tp (${config.getTpPosition!(item)!.x}, ${config.getTpPosition!(item)!.y})`}
+                        onClick={() => onTp(item)}>↓ Tp</button>
+                    )}
+                  </div>
+                  <div className="admin-panel__template-stats">
+                    {config.fields.map(({ key, label, min, step }) => (
+                      <label key={key} className="admin-panel__template-stat">
+                        <span className="admin-panel__template-stat-label">{label}</span>
+                        <input
+                          className={`admin-panel__template-stat-input${draft.isDirty(dk, key, item) ? " is-dirty" : ""}`}
+                          type="number" min={min ?? 0} step={step ?? 1}
+                          value={draft.getDisplayField(dk, key, item)}
+                          onChange={(e) => draft.onChange(dk, key, e.target.value)}
+                          {...kbHandlers} />
+                      </label>
+                    ))}
+                  </div>
+                  {draft.hasAnyDirty(dk, item) && (
+                    <button className="admin-panel__apply-btn"
+                      disabled={!!draft.saving[dk]} onClick={() => onApply(item)}>
+                      {draft.saving[dk] ? "…" : "Appliquer"}
+                    </button>
                   )}
                 </div>
-                <div className="admin-panel__template-stats">
-                  {config.fields.map(({ key, label, min, step }) => (
-                    <label key={key} className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">{label}</span>
-                      <input
-                        className={`admin-panel__template-stat-input${isDirty(item, key) ? " is-dirty" : ""}`}
-                        type="number"
-                        min={min ?? 0}
-                        step={step ?? 1}
-                        value={getDisplay(item, key)}
-                        onChange={(e) => onChange(item, key, e.target.value)}
-                        {...kbHandlers}
-                      />
-                    </label>
-                  ))}
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── GroupedSection (créatures, ressources) ─────────────────────────────────────
+
+type GroupedSectionProps = {
+  config: GroupedSectionConfig;
+  groups: any[];
+  instances: any[];
+  onResult: (text: string, ok: boolean) => void;
+  onInstanceDeleted: (instanceKey: string) => void;
+};
+
+function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted }: GroupedSectionProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const filtered = groups.filter((g) =>
+    config.getGroupName(g).toLowerCase().includes(search.toLowerCase())
+  );
+  const pag = usePagination(filtered.length);
+  const paginated = filtered.slice((pag.page - 1) * ITEMS_PER_PAGE, pag.page * ITEMS_PER_PAGE);
+
+  useEffect(() => { pag.goToPage(1); }, [search]);
+
+  const groupDraft    = useDraft(config.groupFields);
+  const instDraft     = useDraft(config.instanceFields);
+  const [instDeleting, setInstDeleting] = useState<Record<string, boolean>>({});
+
+  function toggleGroup(key: string) {
+    setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }
+
+  async function onGroupDrop(group: any, x: number, y: number) {
+    const socket = getSocket();
+    if (!socket?.connected || !config.dragEvent || !config.getDragPayload) return;
+    const result = await ackPromise(socket, config.dragEvent, config.getDragPayload(group, Math.round(x), Math.round(y)));
+    onResult(result.message, result.success);
+  }
+
+  async function applyGroup(group: any) {
+    const socket = getSocket();
+    if (!socket?.connected || !config.groupSaveEvent || !config.getGroupSavePayload) return;
+    const gk = config.getGroupKey(group);
+    const dirtyFields = groupDraft.collectDirty(gk, group);
+    if (!Object.keys(dirtyFields).length) return;
+    groupDraft.setSaving((prev) => ({ ...prev, [gk]: true }));
+    const result = await ackPromise(socket, config.groupSaveEvent, config.getGroupSavePayload(group, dirtyFields));
+    groupDraft.setSaving((prev) => ({ ...prev, [gk]: false }));
+    onResult(result.message, result.success);
+    if (result.success) { Object.assign(group, dirtyFields); groupDraft.clearDraft(gk); }
+  }
+
+  async function applyInstance(inst: any) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const ik = config.getInstanceKey(inst);
+    const dirtyFields = instDraft.collectDirty(ik, inst);
+    if (!Object.keys(dirtyFields).length) return;
+    instDraft.setSaving((prev) => ({ ...prev, [ik]: true }));
+    const result = await ackPromise(socket, config.instanceSaveEvent, config.getInstanceSavePayload(inst, dirtyFields));
+    instDraft.setSaving((prev) => ({ ...prev, [ik]: false }));
+    onResult(result.message, result.success);
+    if (result.success) { Object.assign(inst, dirtyFields); instDraft.clearDraft(ik); }
+  }
+
+  async function deleteInstance(inst: any) {
+    const socket = getSocket();
+    if (!socket?.connected || !config.instanceDeleteEvent || !config.getInstanceDeletePayload) return;
+    const ik = config.getInstanceKey(inst);
+    setInstDeleting((prev) => ({ ...prev, [ik]: true }));
+    const result = await ackPromise(socket, config.instanceDeleteEvent, config.getInstanceDeletePayload(inst));
+    setInstDeleting((prev) => ({ ...prev, [ik]: false }));
+    onResult(result.message, result.success);
+    if (result.success) onInstanceDeleted(ik);
+  }
+
+  async function tpToInstance(inst: any) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const pos = config.getInstanceTpPosition?.(inst);
+    if (!pos) return;
+    const characterId = getAdminCharacterId();
+    if (!characterId) { onResult("Personnage introuvable.", false); return; }
+    const result = await ackPromise(socket, "admin:teleport", { characterId, x: pos.x, y: pos.y });
+    onResult(result.message, result.success);
+  }
+
+  return (
+    <section className="admin-panel__section">
+      <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
+        <span className="admin-panel__section-toggle">
+          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+          {config.title}
+        </span>
+        {isOpen && <PaginationControls {...pag} />}
+      </div>
+
+      {isOpen && (
+        <>
+          <input className="admin-panel__search" type="text"
+            placeholder={`Filtrer ${config.title.toLowerCase()}…`}
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()} {...kbHandlers} spellCheck={false} />
+
+          {groups.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
+          {groups.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
+
+          <div className="admin-panel__template-list">
+            {paginated.map((group) => {
+              const gk = config.getGroupKey(group);
+              const isExpanded = expanded.has(gk);
+              const groupInstances = config.getInstancesForGroup(instances, group);
+
+              return (
+                <div key={gk} className="admin-panel__group">
+                  {/* ── En-tête du groupe (template) ── */}
+                  <div className="admin-panel__group-header">
+                    <div className="admin-panel__item-header">
+                      {config.dragEvent && (
+                        <span className="admin-panel__drag-handle" title="Glisser sur la map"
+                          onMouseDown={(e) => startDrag(e, config.getGroupName(group), (x, y) => onGroupDrop(group, x, y))}>⠿</span>
+                      )}
+                      <span className="admin-panel__group-toggle" onClick={() => toggleGroup(gk)}>
+                        <span className="admin-panel__section-chevron">{isExpanded ? "▼" : "▶"}</span>
+                        <span className="admin-panel__template-name">{config.getGroupName(group)}</span>
+                        <span className="admin-panel__instance-count">({groupInstances.length})</span>
+                      </span>
+                    </div>
+
+                    {config.groupFields.length > 0 && (
+                      <div className="admin-panel__template-stats">
+                        {config.groupFields.map(({ key, label, min, step }) => (
+                          <label key={key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{label}</span>
+                            <input
+                              className={`admin-panel__template-stat-input${groupDraft.isDirty(gk, key, group) ? " is-dirty" : ""}`}
+                              type="number" min={min ?? 0} step={step ?? 1}
+                              value={groupDraft.getDisplayField(gk, key, group)}
+                              onChange={(e) => groupDraft.onChange(gk, key, e.target.value)}
+                              {...kbHandlers} />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {groupDraft.hasAnyDirty(gk, group) && (
+                      <button className="admin-panel__apply-btn"
+                        disabled={!!groupDraft.saving[gk]} onClick={() => applyGroup(group)}>
+                        {groupDraft.saving[gk] ? "…" : "Appliquer"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* ── Liste des instances ── */}
+                  {isExpanded && (
+                    <div className="admin-panel__instance-list">
+                      {groupInstances.length === 0 && (
+                        <p className="admin-panel__loading">Aucune instance dans le monde.</p>
+                      )}
+                      {groupInstances.map((inst) => {
+                        const ik = config.getInstanceKey(inst);
+                        const badge = config.getInstanceBadge?.(inst);
+                        const tpPos = config.getInstanceTpPosition?.(inst);
+                        return (
+                          <div key={ik} className="admin-panel__instance-item">
+                            <div className="admin-panel__item-header">
+                              <span className="admin-panel__instance-name">
+                                {config.getInstanceName(inst)}
+                              </span>
+                              {badge && (
+                                <span className={`admin-panel__badge admin-panel__badge--${badge}`}>{badge}</span>
+                              )}
+                              {tpPos && (
+                                <button className="admin-panel__tp-btn"
+                                  title={`Tp (${tpPos.x}, ${tpPos.y})`}
+                                  onClick={() => tpToInstance(inst)}>↓ Tp</button>
+                              )}
+                              {config.instanceDeleteEvent && (
+                                <button className="admin-panel__del-btn"
+                                  disabled={!!instDeleting[ik]}
+                                  onClick={() => deleteInstance(inst)}>✕</button>
+                              )}
+                            </div>
+                            <div className="admin-panel__template-stats">
+                              {config.instanceFields.map(({ key, label, min, step }) => (
+                                <label key={key} className="admin-panel__template-stat">
+                                  <span className="admin-panel__template-stat-label">{label}</span>
+                                  <input
+                                    className={`admin-panel__template-stat-input${instDraft.isDirty(ik, key, inst) ? " is-dirty" : ""}`}
+                                    type="number" min={min ?? 0} step={step ?? 1}
+                                    value={instDraft.getDisplayField(ik, key, inst)}
+                                    onChange={(e) => instDraft.onChange(ik, key, e.target.value)}
+                                    {...kbHandlers} />
+                                </label>
+                              ))}
+                            </div>
+                            {instDraft.hasAnyDirty(ik, inst) && (
+                              <button className="admin-panel__apply-btn"
+                                disabled={!!instDraft.saving[ik]} onClick={() => applyInstance(inst)}>
+                                {instDraft.saving[ik] ? "…" : "Appliquer"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                {hasAnyDirty(item) && (
-                  <button
-                    className="admin-panel__apply-btn"
-                    disabled={!!saving[config.getDisplayKey(item)]}
-                    onClick={() => onApply(item)}
-                  >
-                    {saving[config.getDisplayKey(item)] ? "…" : "Appliquer"}
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -412,24 +666,65 @@ function EntitySection({ config, items, onResult }: EntitySectionProps) {
 
 export default function AdminPanel() {
   const token = localStorage.getItem("token") ?? "";
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [sectionData, setSectionData] = useState<Record<string, any[]>>({});
+  const [overview,      setOverview]      = useState<Overview | null>(null);
+  const [sectionData,   setSectionData]   = useState<Record<string, any[]>>({});
+  const [groupData,     setGroupData]     = useState<Record<string, any[]>>({});
+  const [instanceData,  setInstanceData]  = useState<Record<string, any[]>>({});
   const [error,   setError]   = useState<string | null>(null);
   const [command, setCommand] = useState("");
   const [results, setResults] = useState<ConsoleLine[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetches = [
-      fetchAdmin<Overview>("/admin/overview", token).then((ov) => setOverview(ov)),
+    const fetches: Promise<any>[] = [
+      fetchAdmin<Overview>("/admin/overview", token).then(setOverview),
       ...SECTION_CONFIGS.map((cfg) =>
         fetchAdmin<any[]>(cfg.fetchPath, token).then((data) =>
           setSectionData((prev) => ({ ...prev, [cfg.id]: data }))
         )
       ),
+      ...GROUPED_SECTION_CONFIGS.flatMap((cfg) => {
+        const f: Promise<any>[] = [
+          fetchAdmin<any[]>(cfg.fetchInstancesPath, token).then((data) =>
+            setInstanceData((prev) => ({ ...prev, [cfg.id]: data }))
+          ),
+        ];
+        if (cfg.fetchGroupsPath) {
+          f.push(
+            fetchAdmin<any[]>(cfg.fetchGroupsPath, token).then((data) =>
+              setGroupData((prev) => ({ ...prev, [cfg.id]: data }))
+            )
+          );
+        }
+        return f;
+      }),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
+
+  // Dériver les groupes depuis les instances quand pas de fetchGroupsPath
+  const resolvedGroups: Record<string, any[]> = {};
+  for (const cfg of GROUPED_SECTION_CONFIGS) {
+    if (cfg.fetchGroupsPath) {
+      resolvedGroups[cfg.id] = groupData[cfg.id] ?? [];
+    } else if (cfg.deriveGroups && instanceData[cfg.id]) {
+      resolvedGroups[cfg.id] = cfg.deriveGroups(instanceData[cfg.id]);
+    } else {
+      resolvedGroups[cfg.id] = [];
+    }
+  }
+
+  function handleInstanceDeleted(sectionId: string, instanceKey: string) {
+    setInstanceData((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).filter(
+        (i) => {
+          const cfg = GROUPED_SECTION_CONFIGS.find((c) => c.id === sectionId)!;
+          return cfg.getInstanceKey(i) !== instanceKey;
+        }
+      ),
+    }));
+  }
 
   function pushResult(text: string, ok: boolean) {
     setResults((prev) => [{ text, ok }, ...prev].slice(0, 5));
@@ -449,14 +744,14 @@ export default function AdminPanel() {
       pushResult("Commande destructive — ajoutez --confirm pour l'exécuter.", false);
       return;
     }
-    const socket = (window as GameWindow).game?.socket;
+    const socket = getSocket();
     if (!socket?.connected) { pushResult("Erreur : socket non connecté.", false); return; }
     const ctx = {
       socket, token,
       getTarget: () => null,
       getCharacterPos: () => null,
       getLastClickedPos: () => getAdminStore().getState().lastClickedPos,
-      getTemplateKeys: () => (sectionData["creatures"] ?? []).map((t: any) => t.key),
+      getTemplateKeys: () => (groupData["creatures"] ?? []).map((t: any) => t.key),
     };
     const result = await def.handler(parsed.args, parsed.flags, ctx);
     pushResult(result.message, result.success);
@@ -528,7 +823,19 @@ export default function AdminPanel() {
         </section>
       )}
 
-      {/* Sections génériques */}
+      {/* Sections groupées (créatures, ressources) */}
+      {GROUPED_SECTION_CONFIGS.map((cfg) => (
+        <GroupedSection
+          key={cfg.id}
+          config={cfg}
+          groups={resolvedGroups[cfg.id] ?? []}
+          instances={instanceData[cfg.id] ?? []}
+          onResult={pushResult}
+          onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
+        />
+      ))}
+
+      {/* Sections plates (joueurs) */}
       {SECTION_CONFIGS.map((cfg) => (
         <EntitySection
           key={cfg.id}

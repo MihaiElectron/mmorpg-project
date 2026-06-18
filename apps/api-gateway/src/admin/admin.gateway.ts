@@ -197,6 +197,32 @@ export class AdminGateway {
     };
   }
 
+  @SubscribeMessage('admin:update_animal')
+  async onUpdateAnimal(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: UpdateEntityPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['health', 'x', 'y'];
+    const safe: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      const n = Number(v);
+      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      safe[k] = n;
+    }
+
+    const dto = await this.animalsService.adminUpdateAnimal(id, safe as any);
+    if (!dto) return { success: false, message: `Animal "${id}" introuvable ou mort.` };
+
+    const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
+    return { success: true, message: `"${dto.name}" (${dto.id}) mis à jour : ${changes}.`, data: dto };
+  }
+
   @SubscribeMessage('admin:spawn_resource')
   async onSpawnResource(
     @ConnectedSocket() client: WorldSocket,
