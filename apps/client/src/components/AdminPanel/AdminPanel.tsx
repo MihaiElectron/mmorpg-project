@@ -53,6 +53,7 @@ const SECTION_CONFIGS: SectionConfig[] = [
       { key: "aggroRadius",      label: "Aggro",  min: 0 },
       { key: "fleeThresholdPct", label: "Fuite%", min: 0 },
     ],
+    getTpPosition: (t) => t.spawnX != null ? { x: t.spawnX, y: t.spawnY } : null,
   },
   {
     id: "players",
@@ -69,6 +70,7 @@ const SECTION_CONFIGS: SectionConfig[] = [
       { key: "attack",    label: "ATK",    min: 0 },
       { key: "defense",   label: "DEF",    min: 0 },
     ],
+    getTpPosition: (c) => c.positionX != null ? { x: c.positionX, y: c.positionY } : null,
   },
   {
     id: "resources",

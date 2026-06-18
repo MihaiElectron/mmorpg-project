@@ -24,8 +24,14 @@ export class AdminService {
 
   // ── Créatures ─────────────────────────────────────────────────────────────
 
-  getTemplates(): Promise<CreatureTemplate[]> {
-    return this.templateRepo.find({ order: { name: 'ASC' } });
+  async getTemplates(): Promise<(CreatureTemplate & { spawnX?: number; spawnY?: number })[]> {
+    const templates = await this.templateRepo.find({ order: { name: 'ASC' } });
+    const spawns    = await this.spawnRepo.find({ relations: ['template'] });
+
+    return templates.map((t) => {
+      const spawn = spawns.find((s) => s.template?.id === t.id);
+      return Object.assign(t, { spawnX: spawn?.spawnX, spawnY: spawn?.spawnY });
+    });
   }
 
   async updateTemplate(
