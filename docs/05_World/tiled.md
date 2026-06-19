@@ -4,15 +4,33 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
+- Last updated: 2026-06-19
 - Depends on: docs/README.md, docs/05_World/maps-and-collisions.md, docs/03_Client/phaser-world.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
 ## Scope
 
-This document describes observed Tiled-related files, exported map or tileset artifacts, Phaser integration points, collision data, asset workflow gaps, and server authority implications.
+This document describes Tiled format decisions, observed Tiled-related files, exported map or tileset artifacts, Phaser integration points, collision data, asset workflow gaps, and server authority implications.
 
-It covers only what was found in the repository. It does not define a final Tiled workflow.
+## Official format decisions
+
+These decisions are final and apply to all maps and tilesets in this project.
+
+| Asset type | Official format | Extension | Notes |
+|------------|----------------|-----------|-------|
+| Maps | Tiled Map JSON | `.tmj` | Native Tiled JSON format — saved directly from Tiled |
+| Tilesets | Tiled Tileset XML | `.tsx` | Native Tiled tileset format |
+
+Rules:
+- No custom TMX → JSON converters exist or are allowed in this project.
+- No project-generated JSON map files are allowed.
+- Maps are authored in Tiled and saved as TMJ.
+- TMJ files for runtime use are placed in `apps/client/public/assets/maps/`.
+- TSX files are Tiled authoring artifacts; Phaser does not load them at runtime.
+- Tileset images are placed in `apps/client/public/assets/maps/tilesets/`.
+- Phaser loads TMJ files via `this.load.tilemapTiledJSON()` and tileset images via `this.load.image()`.
+
+Tileset name resolution: when a TMJ references an external TSX tileset, Phaser uses the basename of the source filename as the tileset name. For `"source": "grass.tsx"`, the name is `"grass"`. Pass this name to `map.addTilesetImage('grass', phaserTextureKey)`.
 
 ## Verification labels
 
@@ -209,8 +227,8 @@ Large Tiled maps can increase preload time, memory usage, collision processing, 
 
 ## Open questions
 
-- Should `world.json` become the active Phaser map source?
-- Should TSX descriptors remain in `src/phaser/world` or move to public assets with the map files?
+- Should `world.json` be replaced by a proper TMJ export or removed?
+- Should TSX descriptors remain in `src/phaser/world` or be kept only as Tiled project files outside the runtime tree?
 - Should collision indexes be generated from Tiled properties or maintained manually?
 - Should the server receive a generated authoritative map representation?
 - Should map versioning be tied to asset versioning or a separate world-data version?

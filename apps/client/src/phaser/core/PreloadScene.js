@@ -21,12 +21,20 @@ export default class PreloadScene extends Phaser.Scene {
       progressBar.width = 300 * value;
     });
 
+    this.load.on("loaderror", (file) => {
+      console.warn("[PreloadScene] asset failed to load:", file.key, file.url);
+    });
+
     this.add
       .text(width / 2, height / 2 - 40, "Chargement du monde...", {
         fontSize: "20px",
         color: "#ffffff",
       })
       .setOrigin(0.5);
+
+    // Terrain pipeline test — requires terrain_pipeline_test.tmj exported from Tiled
+    this.load.tilemapTiledJSON("terrain_pipeline_test", "/assets/maps/terrain_pipeline_test.tmj");
+    this.load.image("tileset_grass", "/assets/maps/tilesets/grass_01.png");
 
     this.load.image("player_male_32x64", "/assets/player/player_male_32x64.png");
     this.load.image(
