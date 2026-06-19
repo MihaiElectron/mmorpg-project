@@ -44,7 +44,7 @@ A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines
 | `WorldScene` | `phaser/core/WorldScene.js` | Render world entities, register socket listeners, emit join and movement events, handle interactions | Emits and listens through the socket attached by React | Implemented |
 | `Player` | `phaser/player/Player.js` | Local player sprite, physics body, speed, direction, and movement helpers | Reads scene socket reference but does not emit directly in inspected code | Implemented |
 | `PlayerController` | `phaser/player/PlayerController.js` | Keyboard, pointer, direct steering, and path fallback movement | Movement is later synchronized by `WorldScene` | Implemented |
-| `MapLoader` | `phaser/map/MapLoader.js` | Helper for tilemap and collision setup | None observed | Implemented / Not verified |
+| `MapLoader` | `phaser/world/MapLoader.js` | Helper for tilemap and collision setup | None observed | Implemented / Not verified |
 | `Pathfinder` | `phaser/utils/pathfinding.js` | Grid-based client path search helper | None observed | Implemented / Not verified |
 | Admin command helpers | `phaser/admin/*.ts` | Parse admin commands and call socket acknowledgement actions | Emits admin socket actions and has an HTTP helper for template update | Implemented |
 
@@ -57,7 +57,7 @@ A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines
 | Static world sprite | `/assets/sprites/fire_camp.png` | `PreloadScene` | Campfire visual in `WorldScene` | Implemented |
 | Animal sprite | `/assets/bestiary/turkey_32.png` | `PreloadScene` | Animal rendering fallback and turkey display | Implemented |
 | Item sprite | `/assets/images/items/wooden_stick.png` | `PreloadScene` and inventory update paths | Loot or inventory display | Implemented |
-| Map assets | `public/assets/maps` and `src/phaser/map` | Helper code exists; active scene loading is Not verified | Map and collision support | Not verified |
+| Map assets | `public/assets/maps` and `src/phaser/world` | Helper code exists; active scene loading is Not verified | Map and collision support | Not verified |
 
 ## Map and collision loading
 

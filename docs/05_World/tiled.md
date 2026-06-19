@@ -31,13 +31,13 @@ This document prevents a common mistake: treating a client-exported Tiled file a
 
 Observed Tiled-related files:
 
-- `apps/client/src/phaser/map/tiles.tsx`;
-- `apps/client/src/phaser/map/tileset_spawn.tsx`;
+- `apps/client/src/phaser/world/tiles.tsx`;
+- `apps/client/src/phaser/world/tileset_spawn.tsx`;
 - `apps/client/public/assets/maps/world.json`;
 - `apps/client/public/assets/maps/Grass_03_64w.webp`;
 - `apps/client/public/assets/maps/collisions.json`;
-- `apps/client/src/phaser/map/collisions.json`;
-- `apps/client/src/phaser/map/MapLoader.js`.
+- `apps/client/src/phaser/world/collisions.json`;
+- `apps/client/src/phaser/world/MapLoader.js`.
 
 These files show that Tiled-style assets and helpers are present. A complete active Tiled map pipeline was Not verified.
 
@@ -74,12 +74,12 @@ Final map orientation, final tile size, final multi-tileset strategy, and active
 
 | Exported file | Format | Produced by | Consumed by | Status |
 |---|---|---|---|---|
-| `apps/client/src/phaser/map/tiles.tsx` | TSX XML tileset descriptor | Tiled or compatible editor is implied by file format; exact export step Not verified | No active import observed | Not verified |
-| `apps/client/src/phaser/map/tileset_spawn.tsx` | TSX XML tileset descriptor | Tiled or compatible editor is implied by file format; exact export step Not verified | No active import observed | Not verified |
+| `apps/client/src/phaser/world/tiles.tsx` | TSX XML tileset descriptor | Tiled or compatible editor is implied by file format; exact export step Not verified | No active import observed | Not verified |
+| `apps/client/src/phaser/world/tileset_spawn.tsx` | TSX XML tileset descriptor | Tiled or compatible editor is implied by file format; exact export step Not verified | No active import observed | Not verified |
 | `apps/client/public/assets/maps/world.json` | JSON map file, currently empty | Export source Not verified | No active loader observed | Not verified |
 | `apps/client/public/assets/maps/Grass_03_64w.webp` | WebP image | Export or asset source Not verified | No active loader observed | Not verified |
 | `apps/client/public/assets/maps/collisions.json` | JSON array | Export or manual source Not verified | No active consumer observed | Not verified |
-| `apps/client/src/phaser/map/collisions.json` | JSON array | Export or manual source Not verified | `MapLoader` imports it | Implemented / Not verified |
+| `apps/client/src/phaser/world/collisions.json` | JSON array | Export or manual source Not verified | `MapLoader` imports it | Implemented / Not verified |
 
 ## Integration with Phaser
 
@@ -100,7 +100,7 @@ Current active Phaser world behavior is therefore direct scene rendering, not ve
 Two collision JSON files are present:
 
 - `apps/client/public/assets/maps/collisions.json` contains a short array of tile indexes.
-- `apps/client/src/phaser/map/collisions.json` contains a larger array and is imported by `MapLoader`.
+- `apps/client/src/phaser/world/collisions.json` contains a larger array and is imported by `MapLoader`.
 
 `Pathfinder` uses a grid convention where `0` means walkable and `1` means blocked. Generation of that grid from Tiled exports was Not verified.
 
@@ -141,7 +141,7 @@ No real secret, token, password, hash, or copied environment value is documented
 
 ## Verified behavior
 
-- Tiled TSX descriptor files exist under `apps/client/src/phaser/map`.
+- Tiled TSX descriptor files exist under `apps/client/src/phaser/world`.
 - `tiles.tsx` declares a `32` by `32` tileset named `tiles`.
 - `tileset_spawn.tsx` declares a `64` by `64` tileset named `tileset_spawn`.
 - `world.json` exists under public map assets and is empty.
@@ -210,7 +210,7 @@ Large Tiled maps can increase preload time, memory usage, collision processing, 
 ## Open questions
 
 - Should `world.json` become the active Phaser map source?
-- Should TSX descriptors remain in `src/phaser/map` or move to public assets with the map files?
+- Should TSX descriptors remain in `src/phaser/world` or move to public assets with the map files?
 - Should collision indexes be generated from Tiled properties or maintained manually?
 - Should the server receive a generated authoritative map representation?
 - Should map versioning be tied to asset versioning or a separate world-data version?

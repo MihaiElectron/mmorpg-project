@@ -28,13 +28,25 @@ Phaser
 
 ## Subfolders
 
-| Folder | Purpose |
-|--------|---------|
-| `templates/` | Official GIMP templates, diamond masks, SVG vector source, and geometry guides |
-| `textures/` | AI-generated high-resolution textures, organized by category |
-| `prompts/` | Versioned AI prompts per asset |
-| `exports/` | Final PNG files ready for Tiled and Phaser |
-| `concepts/` | Exploratory graphic research and unvalidated visual trials |
+| Folder | Git tracked | Purpose |
+|--------|-------------|---------|
+| `templates/` | Yes | Official GIMP templates, diamond masks, SVG vector source, and geometry guides |
+| `textures/` | Yes | AI-generated high-resolution textures, organized by category |
+| `prompts/` | Yes | Versioned AI prompts per asset |
+| `concepts/` | Yes | Exploratory graphic research and unvalidated visual trials |
+| `exports/` | **No** | Temporary PNG exports — gitignored, not committed |
+| `work/` | **No** | Work-in-progress files — gitignored, not committed |
+| `tests/` | **No** | Tiled pipeline tests and graphic experiments — gitignored, not committed |
+
+## Git-ignored folders
+
+Three subfolders are listed in `.gitignore` and are never committed:
+
+- `work/` — in-progress files, scratch files, and intermediate exports that are not yet validated.
+- `tests/` — Tiled map tests, pipeline experiments, and non-validated graphic trials.
+- `exports/` — temporary PNG exports. Only final, validated assets should be moved to `apps/client/public/assets/`.
+
+Validated and approved assets must always be placed in `apps/client/public/assets/` to be available at runtime.
 
 ## Geometry source of truth
 

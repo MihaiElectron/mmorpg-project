@@ -113,3 +113,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 script_copilot.txt
 
+# -------------------------
+# Graphic production workspace
+# -------------------------
+apps/client/src/assets/source/work/
+apps/client/src/assets/source/tests/
+apps/client/src/assets/source/exports/
+

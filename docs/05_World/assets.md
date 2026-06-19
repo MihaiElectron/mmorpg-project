@@ -40,7 +40,7 @@ Observed asset groups:
 - Resource and static world sprites are stored under `apps/client/public/assets/sprites`.
 - Item images are stored under `apps/client/public/assets/images/items`.
 - Map-related files are stored under `apps/client/public/assets/maps`.
-- Phaser map helper files also exist under `apps/client/src/phaser/map`.
+- Phaser map helper files also exist under `apps/client/src/phaser/world`.
 
 The active world scene mainly renders direct Phaser objects. Full tilemap rendering from the observed map files is Not verified.
 
@@ -56,8 +56,8 @@ The active world scene mainly renders direct Phaser objects. Full tilemap render
 | Map image | `apps/client/public/assets/maps/Grass_03_64w.webp` | No active loader observed in `PreloadScene` | Possible map or tileset image asset | Not verified |
 | Map JSON | `apps/client/public/assets/maps/world.json` | No active loader observed; file exists and is empty | Possible exported world map placeholder | Not verified |
 | Public collision JSON | `apps/client/public/assets/maps/collisions.json` | No active loader observed in `WorldScene` | Possible public collision data | Not verified |
-| Phaser collision JSON | `apps/client/src/phaser/map/collisions.json` | `MapLoader` imports it | Collision index list for helper-based tilemap setup | Implemented / Not verified |
-| Tileset descriptors | `apps/client/src/phaser/map/tiles.tsx`, `apps/client/src/phaser/map/tileset_spawn.tsx` | No active import observed | Tiled tileset descriptor files | Not verified |
+| Phaser collision JSON | `apps/client/src/phaser/world/collisions.json` | `MapLoader` imports it | Collision index list for helper-based tilemap setup | Implemented / Not verified |
+| Tileset descriptors | `apps/client/src/phaser/world/tiles.tsx`, `apps/client/src/phaser/world/tileset_spawn.tsx` | No active import observed | Tiled tileset descriptor files | Not verified |
 
 ## Asset locations
 
@@ -68,7 +68,7 @@ The active world scene mainly renders direct Phaser objects. Full tilemap render
 | `apps/client/public/assets/sprites/` | PNG sprites | `PreloadScene.load.image`; `WorldScene` creates images | Contains `fire_camp.png` and `dead_tree.png` | Implemented |
 | `apps/client/public/assets/images/items/` | PNG item images | `PreloadScene.load.image` for `wooden_stick`; loot display may use item image paths | Contains `casque`, `earring`, and `wooden_stick` images | Implemented / Not verified |
 | `apps/client/public/assets/maps/` | WebP and JSON map files | Active runtime loading was not observed | `world.json` is present but empty; collision JSON exists | Not verified |
-| `apps/client/src/phaser/map/` | JS helper, JSON, TSX descriptors | `MapLoader` consumes local collision JSON | Helper exists, but active `WorldScene` use is Not verified | Implemented / Not verified |
+| `apps/client/src/phaser/world/` | JS helper, JSON, TSX descriptors | `MapLoader` consumes local collision JSON | Helper exists, but active `WorldScene` use is Not verified | Implemented / Not verified |
 
 ## Phaser loading
 
@@ -90,14 +90,14 @@ Player, animal, resource, item, and campfire images are used as direct Phaser im
 Tileset-related files are present:
 
 - `apps/client/public/assets/maps/Grass_03_64w.webp`;
-- `apps/client/src/phaser/map/tiles.tsx`;
-- `apps/client/src/phaser/map/tileset_spawn.tsx`.
+- `apps/client/src/phaser/world/tiles.tsx`;
+- `apps/client/src/phaser/world/tileset_spawn.tsx`.
 
 The active `WorldPage.jsx` scene list uses `PreloadScene` and `WorldScene`. Active loading of tilesets, active Tiled layer rendering, and active use of these tileset descriptors were Not verified.
 
 ## Generated and hand-made assets
 
-The repository contains static asset files committed under `apps/client/public/assets` and static map helper files under `apps/client/src/phaser/map`.
+The repository contains static asset files committed under `apps/client/public/assets` and static map helper files under `apps/client/src/phaser/world`.
 
 Final asset authorship, generated-versus-hand-made classification, source image ownership, export automation, compression policy, atlas generation, and production cache versioning are Not verified.
 

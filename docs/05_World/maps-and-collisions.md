@@ -33,7 +33,7 @@ The current repository contains map-related files and helper code, but a complet
 
 The active `WorldScene` renders a direct Phaser scene with a green background, a `2000` by `2000` world bound, a campfire image, player sprites, remote player sprites, resources, animals, labels, and bars.
 
-Static map files exist under `apps/client/public/assets/maps`, and helper files exist under `apps/client/src/phaser/map`. Active tilemap rendering from `world.json` was not observed in the active scene list.
+Static map files exist under `apps/client/public/assets/maps`, and helper files exist under `apps/client/src/phaser/world`. Active tilemap rendering from `world.json` was not observed in the active scene list.
 
 `apps/client/public/assets/maps/world.json` exists but is empty.
 
@@ -43,16 +43,16 @@ Static map files exist under `apps/client/public/assets/maps`, and helper files 
 |---|---|---|---|---|
 | `apps/client/public/assets/maps/world.json` | JSON file, currently empty | No active loader observed | Possible exported map placeholder | Not verified |
 | `apps/client/public/assets/maps/Grass_03_64w.webp` | WebP image | No active loader observed | Possible map or tileset image | Not verified |
-| `apps/client/src/phaser/map/tiles.tsx` | Tiled TSX XML descriptor | No active import observed | Tileset descriptor named `tiles`, tile size 32x32 | Not verified |
-| `apps/client/src/phaser/map/tileset_spawn.tsx` | Tiled TSX XML descriptor | No active import observed | Tileset descriptor named `tileset_spawn`, tile size 64x64 | Not verified |
-| `apps/client/src/phaser/map/MapLoader.js` | JavaScript helper | No active `WorldScene` use observed | Helper to create tilemaps, tilesets, layers, and collisions | Implemented / Not verified |
+| `apps/client/src/phaser/world/tiles.tsx` | Tiled TSX XML descriptor | No active import observed | Tileset descriptor named `tiles`, tile size 32x32 | Not verified |
+| `apps/client/src/phaser/world/tileset_spawn.tsx` | Tiled TSX XML descriptor | No active import observed | Tileset descriptor named `tileset_spawn`, tile size 64x64 | Not verified |
+| `apps/client/src/phaser/world/MapLoader.js` | JavaScript helper | No active `WorldScene` use observed | Helper to create tilemaps, tilesets, layers, and collisions | Implemented / Not verified |
 
 ## Collision data inventory
 
 | Collision source | Location | Consumer | Authority level | Status |
 |---|---|---|---|---|
 | Public collision JSON | `apps/client/public/assets/maps/collisions.json` | No active consumer observed | Client file only; not authoritative | Not verified |
-| Phaser map collision JSON | `apps/client/src/phaser/map/collisions.json` | `MapLoader` imports it | Client helper data only; not authoritative | Implemented / Not verified |
+| Phaser map collision JSON | `apps/client/src/phaser/world/collisions.json` | `MapLoader` imports it | Client helper data only; not authoritative | Implemented / Not verified |
 | Phaser world bounds | `WorldScene` physics and camera bounds | Phaser physics and camera | Client visual and local physics constraint only | Implemented / Not verified |
 | Player body hitbox | `Player.setupPhysics` | Phaser Arcade body | Client local physics body only | Implemented |
 | Pathfinder grid values | `Pathfinder` class comments and logic | `PlayerController` if `scene.pathfinder` exists | Client pathing only | Implemented / Not verified |
@@ -109,14 +109,14 @@ No authoritative server map, server collision grid, blocked-zone model, or serve
 | World bounds `2000` by `2000` | `WorldScene` | Yes, via Phaser world bounds | Server-side bounds check is Not verified | Implemented / Not verified |
 | Player hitbox `20` by `16` | `Player.setupPhysics` | Yes, local Phaser body | Not relevant as server authority unless mirrored server-side; not verified | Implemented / Not verified |
 | Pathfinder tile size `32` | `PlayerController` and `MapLoader` | Only if pathfinder exists on scene | No server use verified | Implemented / Not verified |
-| Collision indexes `[1..16]` | `apps/client/src/phaser/map/collisions.json` | Only through helper path; active use Not verified | No server use verified | Not verified |
+| Collision indexes `[1..16]` | `apps/client/src/phaser/world/collisions.json` | Only through helper path; active use Not verified | No server use verified | Not verified |
 | Public collision indexes `[1..5]` | `apps/client/public/assets/maps/collisions.json` | No active use observed | No server use verified | Not verified |
 | Walkable grid `0` and blocked grid `1` | `Pathfinder` helper | Only if provided grid is wired | No server use verified | Implemented / Not verified |
 | Blocked zones | No active zone model observed | Not verified | Not verified | Not verified |
 
 ## Tiled properties
 
-Tiled descriptor files exist under `apps/client/src/phaser/map`, but no custom Tiled properties such as `walkable` were observed in those descriptors during inspection.
+Tiled descriptor files exist under `apps/client/src/phaser/world`, but no custom Tiled properties such as `walkable` were observed in those descriptors during inspection.
 
 `Pathfinder` uses a grid convention where `0` means walkable and `1` means blocked, but active generation of that grid from Tiled data was Not verified.
 
