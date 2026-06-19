@@ -132,10 +132,14 @@ export default class WorldScene extends Phaser.Scene {
 
     // TERRAIN TILEMAP — pipeline test (isometric 128×64, TMJ format)
     if (this.cache.tilemap.has("terrain_pipeline_test")) {
-      const map = this.make.tilemap({ key: "terrain_pipeline_test" });
-      const tileset = map.addTilesetImage("grass", "tileset_grass");
-      if (tileset) {
-        map.createLayer("Calque de Tuiles 1", tileset, 0, 0);
+      try {
+        const map = this.make.tilemap({ key: "terrain_pipeline_test" });
+        const tileset = map.addTilesetImage("grass", "tileset_grass");
+        if (tileset) {
+          map.createLayer("Calque de Tuiles 1", tileset, 0, 0);
+        }
+      } catch (e) {
+        console.warn("[WorldScene] tilemap load failed:", e.message);
       }
     }
 
