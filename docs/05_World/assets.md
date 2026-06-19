@@ -120,13 +120,15 @@ Final exported PNG files are the only output of this workspace that enters the r
 ### Production workflow
 
 ```
-AI
+AI Texture
 ↓
 High-resolution texture
 ↓
-GIMP template
+Official GIMP template (copy)
 ↓
 Official diamond mask
+↓
+Artistic retouching
 ↓
 PNG export
 ↓
@@ -138,16 +140,37 @@ Phaser
 The AI generates surface material — color, grain, roughness, and variation.
 The AI does not determine the final tile geometry.
 
-The official isometric template and diamond mask define the tile shape.
-All terrain tiles use the same isometric mask.
-Only the PNG files placed in `apps/client/public/assets` are used at runtime.
+The official GIMP template (`templates/gimp/terrain_tile_128x64.xcf`) must never be used
+directly. Every tile is produced from a copy of that file.
+
+The template organises layers into two groups:
+
+| Group | Layers |
+|-------|--------|
+| **Artwork** | Texture, Shadows, Highlights, Details |
+| **Technical** | Diamond Mask |
+
+The Technical group contains reusable technical elements. The Artwork group is replaced
+for each new tile.
+
+### Geometry source of truth
+
+`apps/client/src/assets/source/templates/vectors/iso_diamond.svg` is the canonical
+isometric diamond shape for this project. All PNG masks are exports derived from this file.
 
 ### Prompt versioning
 
 Each asset under `prompts/` has its own subfolder.
 Draft versions are stored as `v1.md`, `v2.md`, and so on.
 The validated and approved prompt is stored as `approved.md`.
-This history allows prompt iteration without losing previous attempts.
+
+A prompt must describe material, scale relative to the reference character height (64 px),
+and artistic style. It must never describe tile geometry or isometric shape.
+
+### Art direction
+
+Scale and style rules are documented in:
+`apps/client/src/assets/source/art-direction.md`
 
 ## Official terrain tile specification
 
