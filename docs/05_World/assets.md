@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
+- Last updated: 2026-06-19
 - Depends on: docs/README.md, docs/03_Client/phaser-world.md, docs/05_World/maps-and-collisions.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -12,9 +12,11 @@
 
 This document describes world-facing client assets observed in `apps/client/public/assets` and related Phaser loading code under `apps/client/src/phaser`.
 
-It covers player sprites, animal sprites, resource sprites, item images used by world events, map-related static files, Phaser preload behavior, runtime usage, trust boundaries, and known production gaps.
+It also documents the official graphic production pipeline for this project, based in `apps/client/src/assets/source`.
 
-It does not define a new asset pipeline and does not treat client assets as gameplay authority.
+It covers player sprites, animal sprites, resource sprites, item images used by world events, map-related static files, Phaser preload behavior, runtime usage, trust boundaries, the production pipeline workflow, the official terrain tile geometry specification, and known production gaps.
+
+It does not treat client assets as gameplay authority.
 
 ## Verification labels
 
@@ -99,6 +101,81 @@ The repository contains static asset files committed under `apps/client/public/a
 
 Final asset authorship, generated-versus-hand-made classification, source image ownership, export automation, compression policy, atlas generation, and production cache versioning are Not verified.
 
+## Asset production pipeline
+
+`apps/client/src/assets/source` is the graphic production workspace for this project.
+It is not used directly by the runtime client and is not served by Vite.
+Final exported PNG files are the only output of this workspace that enters the runtime path under `apps/client/public/assets`.
+
+### Source workspace layout
+
+| Subfolder | Purpose |
+|-----------|---------|
+| `templates/` | GIMP editable templates, reusable isometric diamond masks, and geometry guides |
+| `textures/` | AI-generated high-resolution texture sources, organized by category |
+| `prompts/` | Versioned AI prompts per asset, including draft versions and the approved prompt |
+| `exports/` | Final PNG files ready to be imported into Tiled and loaded by Phaser |
+| `concepts/` | Exploratory graphic research and unvalidated visual trials |
+
+### Production workflow
+
+```
+AI
+↓
+High-resolution texture
+↓
+GIMP template
+↓
+Official diamond mask
+↓
+PNG export
+↓
+Tiled
+↓
+Phaser
+```
+
+The AI generates surface material — color, grain, roughness, and variation.
+The AI does not determine the final tile geometry.
+
+The official isometric template and diamond mask define the tile shape.
+All terrain tiles use the same isometric mask.
+Only the PNG files placed in `apps/client/public/assets` are used at runtime.
+
+### Prompt versioning
+
+Each asset under `prompts/` has its own subfolder.
+Draft versions are stored as `v1.md`, `v2.md`, and so on.
+The validated and approved prompt is stored as `approved.md`.
+This history allows prompt iteration without losing previous attempts.
+
+## Official terrain tile specification
+
+All terrain tiles produced for this project must conform to the following geometry.
+
+| Property | Value |
+|----------|-------|
+| Canvas size | 128×64 pixels |
+| Isometric ratio | 2:1 (width:height) |
+| Canvas background | Transparent |
+| Visible shape | Diamond centered in the canvas |
+
+The four diamond points touch exactly the four sides of the canvas:
+
+| Point | X | Y |
+|-------|---|---|
+| Top | 64 | 0 |
+| Right | 127 | 32 |
+| Bottom | 64 | 63 |
+| Left | 0 | 32 |
+
+No visible border. No margin. The PNG canvas contains only the diamond shape and transparency.
+
+All terrain tiles use this geometry regardless of surface type.
+Larger masks preserve the 2:1 ratio and scale the anchor points proportionally.
+
+The full geometry reference is in `apps/client/src/assets/source/templates/guides/iso_measurements.md`.
+
 ## Runtime usage
 
 | Runtime usage | Asset source | Client behavior observed | Server authority implication | Status |
@@ -167,7 +244,7 @@ Rendering uses individual Phaser images and sprites for resources, animals, remo
 
 ## Non-goals
 
-- This document does not define a final art pipeline.
+- This document does not replace `iso_measurements.md` as the canonical tile geometry reference.
 - This document does not define Tiled map editing rules.
 - This document does not define authoritative movement or collision rules.
 - This document does not document backend persistence internals.
