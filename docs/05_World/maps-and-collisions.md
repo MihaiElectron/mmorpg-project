@@ -33,7 +33,11 @@ The current repository contains map-related files and helper code, but a complet
 
 The active `WorldScene` renders a direct Phaser scene with a green background, a `2000` by `2000` world bound, a campfire image, player sprites, remote player sprites, resources, animals, labels, and bars.
 
-Static map files exist under `apps/client/public/assets/maps`, and helper files exist under `apps/client/src/phaser/world`. Active tilemap rendering from `world.json` was not observed in the active scene list.
+`terrain_pipeline_test.tmj` is the first active tilemap. It is a 64×64 isometric grass map rendered in `WorldScene` with `TILEMAP_TEST_OFFSET_X = 936` to center the north vertex of the isometric diamond at world x=1000. This offset is a **temporary display alignment for the terrain pipeline test**. It does not represent a final world coordinate system.
+
+Server logical coordinates (stored in `WorldService` memory and the database) are numeric `x`, `y` values. Sprites use these values directly as Phaser pixel positions. The isometric tilemap uses tile column and row converted to screen pixels via the origin offset. These two coordinate spaces are not aligned. A conversion layer between server coordinates, tile coordinates, and Phaser screen coordinates must be defined before the tilemap can serve as a production world layer.
+
+Other static map files exist under `apps/client/public/assets/maps`, and helper files exist under `apps/client/src/phaser/world`. Active tilemap rendering from `world.json` was not observed.
 
 `apps/client/public/assets/maps/world.json` exists but is empty.
 
@@ -41,6 +45,8 @@ Static map files exist under `apps/client/public/assets/maps`, and helper files 
 
 | File or path | Format | Loaded by | Purpose | Status |
 |---|---|---|---|---|
+| `apps/client/public/assets/maps/terrain_pipeline_test.tmj` | Tiled TMJ (native JSON) | `PreloadScene` via `tilemapTiledJSON`; rendered in `WorldScene` | Terrain pipeline test — 64×64 isometric grass map | Implemented |
+| `apps/client/public/assets/maps/tilesets/grass_01.png` | PNG image, 128×64 px | `PreloadScene` via `load.image("tileset_grass", ...)` | Grass tile texture for terrain pipeline test | Implemented |
 | `apps/client/public/assets/maps/world.json` | JSON file, currently empty | No active loader observed | Possible exported map placeholder | Not verified |
 | `apps/client/public/assets/maps/Grass_03_64w.webp` | WebP image | No active loader observed | Possible map or tileset image | Not verified |
 | `apps/client/src/phaser/world/tiles.tsx` | Tiled TSX XML descriptor | No active import observed | Tileset descriptor named `tiles`, tile size 32x32 | Not verified |
@@ -163,7 +169,8 @@ Performance of a large map, active tile layers, collision layers, pathfinding gr
 - Collision tests: Not verified.
 - Final Tiled pipeline: Not verified.
 - Large-map performance: Not verified.
-- Active tilemap rendering: Not verified.
+- Active tilemap rendering: Implemented for terrain pipeline test (`terrain_pipeline_test.tmj`). Production world map: Not verified.
+- Coordinate conversion between server logical coordinates, tile coordinates, and Phaser screen coordinates: Not verified.
 
 ## Review checklist
 

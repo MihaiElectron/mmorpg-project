@@ -130,35 +130,18 @@ export default class WorldScene extends Phaser.Scene {
     this.input.setPollAlways();
     this.input.topOnly = false;
 
-    // TERRAIN TILEMAP — pipeline test (isométrique 128×64, format TMJ natif)
-    //
-    // Système de coordonnées :
-    //   Le monde Phaser utilise des coordonnées cartésiennes (x, y).
-    //   La tilemap Tiled utilise des coordonnées isométriques :
-    //     screenX = originX + (col - row) * 64
-    //     screenY = originY + (col + row) * 32
-    //   Un écart visuel résiduel entre les sprites et les tiles est attendu
-    //   tant que les positions serveur restent en coordonnées cartésiennes.
-    //
-    // Origine retenue :
-    //   Le sommet "nord" du diamant isométrique est placé à (1000, 0),
-    //   ce qui centre la map horizontalement dans le monde 2000×2000.
-    //   TILEMAP_ORIGIN_X = worldWidth/2 - halfTileWidth = 1000 - 64 = 936
-    //   TILEMAP_ORIGIN_Y = 0 (sommet nord en haut du monde)
-    //
-    // Conversion tile → world :
-    //   worldX = 936 + (col - row) * 64
-    //   worldY =   0 + (col + row) * 32
+    // TERRAIN TILEMAP — pipeline test (isométrique 128×64, TMJ natif)
+    // Temporary visual offset for the terrain pipeline test. Not the final world coordinate system.
     if (this.cache.tilemap.has("terrain_pipeline_test")) {
       try {
-        const TILEMAP_ORIGIN_X = 936; // sommet nord centré horizontalement (worldWidth/2 - halfTileW)
-        const TILEMAP_ORIGIN_Y = 0;   // sommet nord aligné en haut du monde
+        const TILEMAP_TEST_OFFSET_X = 936; // centres north vertex at world x=1000
+        const TILEMAP_TEST_OFFSET_Y = 0;
 
         const map = this.make.tilemap({ key: "terrain_pipeline_test" });
         const tileset = map.addTilesetImage("grass", "tileset_grass");
         if (tileset && map.layers.length > 0) {
-          const layer = map.createLayer(map.layers[0].name, tileset, TILEMAP_ORIGIN_X, TILEMAP_ORIGIN_Y);
-          if (layer) layer.setDepth(0); // sous tous les sprites (depth 10+)
+          const layer = map.createLayer(map.layers[0].name, tileset, TILEMAP_TEST_OFFSET_X, TILEMAP_TEST_OFFSET_Y);
+          if (layer) layer.setDepth(0);
         }
       } catch (e) {
         console.warn("[WorldScene] tilemap load failed:", e.message);

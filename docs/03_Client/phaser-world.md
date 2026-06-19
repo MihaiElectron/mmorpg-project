@@ -57,15 +57,33 @@ A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines
 | Static world sprite | `/assets/sprites/fire_camp.png` | `PreloadScene` | Campfire visual in `WorldScene` | Implemented |
 | Animal sprite | `/assets/bestiary/turkey_32.png` | `PreloadScene` | Animal rendering fallback and turkey display | Implemented |
 | Item sprite | `/assets/images/items/wooden_stick.png` | `PreloadScene` and inventory update paths | Loot or inventory display | Implemented |
-| Map assets | `public/assets/maps` and `src/phaser/world` | Helper code exists; active scene loading is Not verified | Map and collision support | Not verified |
+| Terrain tilemap | `public/assets/maps/terrain_pipeline_test.tmj` | `PreloadScene` via `tilemapTiledJSON` | Isometric terrain pipeline test | Implemented |
+| Grass tileset image | `public/assets/maps/tilesets/grass_01.png` | `PreloadScene` via `load.image("tileset_grass", ...)` | Grass tile texture for terrain test | Implemented |
+| Other map assets | `public/assets/maps` and `src/phaser/world` | Helper code exists; active scene loading beyond terrain test is Not verified | Map and collision support | Not verified |
 
 ## Map and collision loading
 
 `MapLoader.js` exists and imports local collision data. It can create a tilemap from a cache key, add a tileset, set collision indexes, and create layers.
 
-Active use of `MapLoader` from `WorldScene` was not observed. Active loading of the public world map files by `PreloadScene` was not observed. `PlayerController` checks `this.scene.pathfinder`; when absent, it falls back to direct movement.
+Active use of `MapLoader` from `WorldScene` was not observed. `PlayerController` checks `this.scene.pathfinder`; when absent, it falls back to direct movement.
+
+`PreloadScene` loads `terrain_pipeline_test.tmj` and `tileset_grass` as part of the terrain pipeline test. `WorldScene` creates the corresponding isometric tilemap layer at runtime.
 
 Client-side collision data is not authoritative. Modifying client map or collision files must not allow gameplay bypasses.
+
+## Coordinate systems
+
+Server coordinates and Phaser screen coordinates are distinct spaces. Conflating them leads to rendering misalignment.
+
+| Coordinate space | Description | Authority |
+|---|---|---|
+| Server logical coordinates | Numeric `x`, `y` stored in `WorldService` memory and in the database; used for range checks, interaction, and combat | Server |
+| Phaser screen coordinates | Pixel positions in the Phaser 2000×2000 world; used to position sprites and the camera | Client rendering only |
+| Tiled isometric coordinates | Tile column and row; Phaser converts them to screen pixels at render time using the tile origin offset | Client rendering only |
+
+The active terrain pipeline test uses `TILEMAP_TEST_OFFSET_X = 936` to center the isometric diamond visually. This is a temporary display offset with no relation to server coordinates. Sprites continue to use server logical coordinates directly as Phaser pixel positions, which causes a visual gap between sprites and tiles.
+
+**Technical debt**: a conversion between server logical coordinates, tile column/row, and Phaser screen position must be defined before the tilemap can be used in a production world. See `docs/05_World/chunks.md` and `docs/05_World/maps-and-collisions.md`.
 
 ## Player rendering
 

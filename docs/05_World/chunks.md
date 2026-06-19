@@ -31,7 +31,9 @@ In the inspected code, a complete chunk system was not verified. This document r
 
 ## Chunk overview
 
-The active world client sets a Phaser world and camera bound of `2000` by `2000` pixels. Player movement is rendered locally and synchronized to the server through `player_move`.
+The active world client sets a Phaser world and camera bound of `2000` by `2000` logical units. Player movement is rendered locally and synchronized to the server through `player_move`.
+
+Server coordinates (`x`, `y`) represent the logical world position. Phaser uses these values directly as screen pixel positions for sprites. The terrain pipeline test tilemap uses a separate isometric coordinate system (tile column and row) with a temporary display offset. These coordinate spaces are not aligned. A conversion between server logical coordinates, tile coordinates, and Phaser pixel positions must be defined before the isometric tilemap can serve as a production world layer.
 
 The server keeps connected player positions in memory and broadcasts movement to other sockets. No chunk key, zone id, room id, chunk loading window, server-side chunk membership, or authoritative chunk transition validation was observed.
 
@@ -54,10 +56,11 @@ Chunks are therefore a future design area or a known gap, not an implemented gam
 
 | Concept | Observed value or rule | Source | Status |
 |---|---|---|---|
-| Active client world size | `2000` by `2000` pixels | `WorldScene` physics and camera bounds | Implemented |
-| Player coordinate unit | Pixel-like numeric `x` and `y` values rounded before `player_move` emit | `WorldScene.syncLocalPlayer` | Implemented |
+| Active client world size | `2000` by `2000` logical units | `WorldScene` physics and camera bounds | Implemented |
+| Player coordinate unit | Numeric `x` and `y` values rounded before `player_move` emit; these are server logical coordinates, not guaranteed pixel-exact screen positions | `WorldScene.syncLocalPlayer` | Implemented |
 | Server movement coordinate storage | Numeric `x` and `y` copied from accepted payload into memory | `WorldService.updatePlayer` | Implemented |
-| Tile size in client path helper | `32` pixels | `PlayerController.calculatePath` and `MapLoader.tileSize` | Implemented / Not verified |
+| Tile size in client path helper | `32` logical units | `PlayerController.calculatePath` and `MapLoader.tileSize` | Implemented / Not verified |
+| Isometric tile size (terrain pipeline test) | `128×64` pixels per tile, offset `TILEMAP_TEST_OFFSET_X=936` — temporary display alignment only | `WorldScene` terrain pipeline block | Implemented / temporary |
 | Chunk size | No implemented chunk size found | Search of client and server chunk-related code | Not verified |
 | `64x64` chunk rule | No coded rule found | Repository inspection | TBD / Not verified |
 | Chunk coordinate key | No implemented key format found | Repository inspection | Not verified |
