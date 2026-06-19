@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use '../abstracts/variables' as vars;
 @use '../abstracts/mixins' as m;
 
@@ -470,8 +471,8 @@
       color: #fff;
 
       &:hover:not(:disabled) {
-        background: lighten(vars.$btn-danger-bg, 8%);
-        border-color: lighten(vars.$btn-danger-bg, 8%);
+        background: color.adjust(vars.$btn-danger-bg, $lightness: 8%);
+        border-color: color.adjust(vars.$btn-danger-bg, $lightness: 8%);
       }
     }
   }
