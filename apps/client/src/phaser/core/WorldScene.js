@@ -135,8 +135,8 @@ export default class WorldScene extends Phaser.Scene {
       try {
         const map = this.make.tilemap({ key: "terrain_pipeline_test" });
         const tileset = map.addTilesetImage("grass", "tileset_grass");
-        if (tileset) {
-          map.createLayer("Calque de Tuiles 1", tileset, 0, 0);
+        if (tileset && map.layers.length > 0) {
+          map.createLayer(map.layers[0].name, tileset, 0, 0);
         }
       } catch (e) {
         console.warn("[WorldScene] tilemap load failed:", e.message);
