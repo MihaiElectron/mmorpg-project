@@ -29,7 +29,7 @@
 
 ## Context
 
-ADR-0001 defines the world coordinate system (`worldTileX / worldTileY`,
+ADR-0001 defines the world coordinate system (`worldX / worldY`,
 `mapId`). ADR-0002 defines how entities store and transmit those coordinates.
 Neither ADR defines who is authoritative for computing and validating positions
 at runtime.
@@ -200,13 +200,13 @@ order before accepting a position:
 
 2. **Map bounds check**: the reported position must satisfy:
    ```
-   0 ≤ worldTileX < mapWidthChunks × CHUNK_SIZE
-   0 ≤ worldTileY < mapHeightChunks × CHUNK_SIZE
+   0 ≤ worldX < mapWidthChunks × CHUNK_SIZE
+   0 ≤ worldY < mapHeightChunks × CHUNK_SIZE
    ```
    A position outside these bounds is rejected. The character remains at its
    last validated position.
 
-3. **Walkability check**: the tile at `(floor(worldTileX), floor(worldTileY))`
+3. **Walkability check**: the tile at `(floor(worldX), floor(worldY))`
    must be walkable. If it is blocked, the position is rejected.
 
 4. **Distance gate**: the Euclidean distance between the reported position and
@@ -243,7 +243,7 @@ but the server enforces the value.
 
 The current client-side `Player.speed = 100` is an implicit claim that the
 server currently cannot verify. After migration, `baseSpeed` must be defined
-in tile units and stored or computed server-side.
+in logical units and stored or computed server-side.
 
 ### 4. Client behavior (prediction and display)
 
@@ -272,22 +272,22 @@ replaced. The target payload is:
 ```
 player_move: {
   mapId:       string,
-  worldTileX:  number,  // tile units, fractional
-  worldTileY:  number,  // tile units, fractional
+  worldX:  number,  // logical units, fractional
+  worldY:  number,  // logical units, fractional
   direction:   string   // optional, display hint
 }
 ```
 
-The client converts pointer input from screen coordinates to `worldTileX /
-worldTileY` using the inverse projection formula from ADR-0001 before sending.
+The client converts pointer input from screen coordinates to `worldX /
+worldY` using the inverse projection formula from ADR-0001 before sending.
 
 The server responds to a validated event by broadcasting:
 
 ```
 player_moved: {
   mapId:       string,
-  worldTileX:  number,
-  worldTileY:  number,
+  worldX:  number,
+  worldY:  number,
   direction:   string,
   characterId: string,
   name:        string,
@@ -300,8 +300,8 @@ On rejection, the server sends to the originating client only:
 ```
 player_position_correction: {
   mapId:      string,
-  worldTileX: number,
-  worldTileY: number
+  worldX: number,
+  worldY: number
 }
 ```
 
@@ -444,8 +444,8 @@ These items are not defined by this ADR but block its implementation.
 |---|---|---|
 | 0.1 | Resolve ADR-0001 storage type and conversion factor | ADR-0001 open questions |
 | 0.2 | Add `mapId` to all position-bearing entities | ADR-0001, ADR-0002 |
-| 0.3 | Rename entity columns to `worldTileX / worldTileY` | 0.1, 0.2 |
-| 0.4 | Migrate WebSocket payloads to `{ mapId, worldTileX, worldTileY }` | 0.3 |
+| 0.3 | Rename entity columns to `worldX / worldY` | 0.1, 0.2 |
+| 0.4 | Migrate WebSocket payloads to `{ mapId, worldX, worldY }` | 0.3 |
 | 0.5 | Convert speed and range constants to tile units | 0.1 |
 
 ### Phase 1 — Server validation (this ADR)
@@ -467,7 +467,7 @@ These items are not defined by this ADR but block its implementation.
 |---|---|---|
 | 2.1 | Rebuild client pathfinder grid using `localTileX / localTileY` | 0.4 |
 | 2.2 | Remap keyboard input to isometric diagonal axes | 0.4 |
-| 2.3 | Convert pointer input to `worldTileX / worldTileY` before sending | 0.4 |
+| 2.3 | Convert pointer input to `worldX / worldY` before sending | 0.4 |
 
 ### Phase 3 — Future (not in scope of this ADR)
 
@@ -513,7 +513,7 @@ The following questions are not resolved by this ADR.
    export, a separate collision file, or a database column on tile records?
 
 8. **Migration DB strategy.** How are existing pixel-equivalent `positionX /
-   positionY` values converted to `worldTileX / worldTileY` for live
+   positionY` values converted to `worldX / worldY` for live
    characters in the database? What happens to positions that fall in
    blocked tiles after conversion?
 
@@ -629,6 +629,7 @@ rooms (future) will reduce the broadcast cost independently of this ADR.
 - [Movement Authority Audit](../../08_Gameplay/movement-authority-audit.md)
 - [Movement Model](../../08_Gameplay/movement-model.md)
 - [Movement Study](../../08_Gameplay/movement-study.md)
+- [World Units Study](../../08_Gameplay/world-units-study.md)
 - [Client Server Boundaries](../client-server-boundaries.md)
 - [Client Server Trust](../../02_Security/client-server-trust.md)
 - [Server WebSockets](../../04_Server/websockets.md)

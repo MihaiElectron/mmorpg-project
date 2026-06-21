@@ -34,14 +34,15 @@ These constraints are not open questions. They frame every analysis below.
 - Tiles serve the logical world: collisions, resource placement, pathfinding
   grid, chunk boundaries. They do not constrain the physical position of entities.
 - Every entity has a continuous logical position expressed in
-  `worldTileX / worldTileY` (ADR-0001). The unit is one tile. The fractional
-  part represents sub-tile offset.
+  `worldX / worldY` (ADR-0001). The logical unit is an open question — see
+  `docs/08_Gameplay/world-units-study.md`. The integer part identifies a tile;
+  the fractional part represents the sub-unit offset within that tile.
 - The server is authoritative. Client-reported positions are intentions. The
   server validates and corrects them.
 - Phaser pixel coordinates are never the source of truth. `screenX / screenY`
-  are derived from `worldTileX / worldTileY` using the isometric projection
+  are derived from `worldX / worldY` using the isometric projection
   formula defined in ADR-0001.
-- The coordinate system must respect ADR-0001 (world tile coordinates) and
+- The coordinate system must respect ADR-0001 (world coordinate system) and
   ADR-0002 (entity column naming and WebSocket payloads).
 - Current speed values must be preserved at the start of migration.
 - The movement model must anticipate future speed modifiers: stealth, sprint,
@@ -70,7 +71,7 @@ velocity per second).
 Position is synchronized to the server at most every 80 ms
 (`WorldScene.syncLocalPlayer`), but only when position or direction has
 changed. The payload currently uses `{ x, y, direction }` in pixel-equivalent
-units (ADR-0002 target: `{ mapId, worldTileX, worldTileY, direction }`).
+units (ADR-0002 target: `{ mapId, worldX, worldY, direction }`).
 
 The pathfinding grid uses `tileSize = 32` px, which is not the isometric tile
 size (128 × 64 px). This is a known mismatch: the grid does not yet correspond
@@ -82,7 +83,7 @@ Animals use continuous movement driven by a server tick. Speed is applied as:
 
 ```
 newX = animal.x + dirX * speed * dt
-newY = animal.y + animal.y + dirY * speed * dt
+newY = animal.y + dirY * speed * dt
 ```
 
 Current seed values (pixel-equivalent units):
@@ -93,17 +94,17 @@ Current seed values (pixel-equivalent units):
 | Goblin | 40 | 80 | 150 | 120 |
 
 These constants have no defined unit beyond pixel-equivalence. ADR-0001 marks
-them as an open question (speed and distance in tile units TBD).
+them as an open question (speed and distance in logical units TBD).
 
 ### Known technical debt
 
 - The client pathfinder grid uses 32 px tiles, not the logical
-  `worldTileX / worldTileY` grid. This will diverge once the isometric
+  `worldX / worldY` grid. This will diverge once the isometric
   coordinate system is fully active.
-- All speeds and ranges are in pixel-equivalent units. No conversion to tile
+- All speeds and ranges are in pixel-equivalent units. No conversion to logical
   units has been performed.
 - The client sync payload sends `{ x, y }`. ADR-0002 requires
-  `{ mapId, worldTileX, worldTileY }`.
+  `{ mapId, worldX, worldY }`.
 - There is no client prediction. There is no server reconciliation. The client
   receives server-broadcasted positions and moves locally between syncs.
 - The keyboard mode moves in screen-space axes (cartesian), not in world-tile
@@ -121,7 +122,7 @@ level after each step. It simplifies collision checks and pathfinding but
 removes sub-tile precision and makes smooth animation impossible without client
 interpolation at every frame.
 
-A continuous movement model stores `worldTileX` and `worldTileY` as fractional
+A continuous movement model stores `worldX` and `worldY` as fractional
 values (ADR-0001, Option B). The server integrates speed × dt at each tick.
 The isometric projection formula produces `screenX / screenY` directly from
 the fractional position.
@@ -131,7 +132,7 @@ substrate for collision lookups and pathfinding, but the position of an entity
 is not snapped to it at runtime.
 
 Consequence: the server must integrate movement at every tick (or on every
-validated client event) and must store fractional `worldTileX / worldTileY`.
+validated client event) and must store fractional `worldX / worldY`.
 The ADR-0001 open question on storage type (FLOAT vs fixed-precision INT) must
 be resolved before implementation.
 
@@ -142,9 +143,9 @@ precision:
 
 | Role | Mechanism |
 |---|---|
-| **Walkability** | The tile at `floor(worldTileX), floor(worldTileY)` is looked up in the collision layer. If blocked, the movement is rejected or redirected. |
-| **Pathfinding grid** | A\* or equivalent operates on integer tile coordinates. The start and end positions are converted from `worldTileX / worldTileY` to `floor()` integers before the search. |
-| **Chunk membership** | `chunkX = floor(worldTileX / CHUNK_SIZE)`. Used for Socket.IO rooms, interest management, and chunk loading. |
+| **Walkability** | The tile at `floor(worldX), floor(worldY)` is looked up in the collision layer. If blocked, the movement is rejected or redirected. |
+| **Pathfinding grid** | A\* or equivalent operates on integer tile coordinates. The start and end positions are converted from `worldX / worldY` to `floor()` integers before the search. |
+| **Chunk membership** | `chunkX = floor(worldX / CHUNK_SIZE)`. Used for Socket.IO rooms, interest management, and chunk loading. |
 | **Terrain properties** | Speed modifiers, damage zones, resource triggers. A tile can carry gameplay properties that apply to any entity whose center is within it. |
 
 The tile grid does not constrain where an entity stands. It constrains what
@@ -156,8 +157,8 @@ The pathfinder receives integer start and end tile coordinates derived from the
 entity's continuous position:
 
 ```
-startTileX = floor(worldTileX)
-startTileY = floor(worldTileY)
+startTileX = floor(worldX)
+startTileY = floor(worldY)
 ```
 
 It returns a list of integer waypoints `[tileX, tileY]`. The entity moves
@@ -178,7 +179,7 @@ continuous speed.
 
 **Current mismatch**: the client pathfinder uses `tileSize = 32` px and
 converts `player.x / 32` to get the tile index. After the isometric coordinate
-migration, the conversion becomes `floor(worldTileX)` directly. The grid
+migration, the conversion becomes `floor(worldX)` directly. The grid
 dimensions must also match `localTileX / localTileY` within the current chunk.
 
 ### 4. Direct continuous order (drag mode)
@@ -241,13 +242,13 @@ intentions; the server validates and broadcasts the resulting position.
 
 **Player movement flow (target state):**
 
-1. Client sends `player_move` with `{ mapId, worldTileX, worldTileY, direction }`.
+1. Client sends `player_move` with `{ mapId, worldX, worldY, direction }`.
 2. Server validates:
    - `mapId` matches the character's current map.
-   - `worldTileX / worldTileY` are within map bounds.
+   - `worldX / worldY` are within map bounds.
    - The claimed position is reachable from the last known server position given
      the player's speed and the elapsed time (distance gate).
-   - The tile at `floor(worldTileX), floor(worldTileY)` is walkable.
+   - The tile at `floor(worldX), floor(worldY)` is walkable.
 3. Server accepts the position, updates its in-memory state, and broadcasts
    `player_moved` to other clients.
 4. If the position is rejected, the server sends a correction event to the
@@ -264,37 +265,39 @@ the coordinate migration.
 
 ### 8. Speed in logical units
 
-After migration to ADR-0001 coordinates, speed must be expressed in tiles per
-second.
+After migration to ADR-0001 coordinates, speed must be expressed in **logical
+units per second** (WU/s). The exact numerical value depends on the logical
+unit choice — see `docs/08_Gameplay/world-units-study.md`.
 
-Current pixel-equivalent speeds and their approximate tile equivalents depend
-on the ADR-0001 conversion factor (open question). For reference, using the
-isometric tile formula where `HALF_TILE_W = 64` and `HALF_TILE_H = 32`:
+Current pixel-equivalent speeds and their approximate WU equivalents depend
+on the ADR-0001 unit choice (open question). For reference, using the
+isometric formula where `HALF_TILE_W = 64` and `HALF_TILE_H = 32`, if 1 WU = 1 tile:
 
-- A horizontal movement of 1 tile corresponds to 64 screen pixels in X and 32
+- A horizontal movement of 1 WU corresponds to 64 screen pixels in X and 32
   screen pixels in Y (via projection).
-- `player.speed = 100` px/s is approximately `100 / 64 ≈ 1.56` tile/s
-  horizontally, or `100 / 32 ≈ 3.1` tile/s vertically.
-- The isometric projection makes cartesian-to-tile conversion direction-dependent.
+- `player.speed = 100` px/s is approximately `100 / 64 ≈ 1.56` WU/s
+  horizontally, or `100 / 32 ≈ 3.1` WU/s vertically.
+- The isometric projection makes this conversion direction-dependent; there is
+  no single scalar factor — see `docs/08_Gameplay/world-units-study.md`.
 
-The correct approach: define `speed` in tile units (e.g., `1.5 tile/s`), apply
-it to the `worldTileX / worldTileY` delta at each tick, and let the projection
-formula produce the screen velocity automatically.
+The correct approach: define `speed` in logical units per second (e.g.,
+`1.5 WU/s`), apply it to the `worldX / worldY` delta at each tick, and let
+the projection formula produce the screen velocity automatically.
 
 Speed integration at the server level:
 
 ```
-worldTileX += dirX * speed * dt   // speed in tile/s, dt in seconds
-worldTileY += dirY * speed * dt
+worldX += dirX * speed * dt   // speed in WU/s, dt in seconds
+worldY += dirY * speed * dt
 ```
 
 At the client level for local prediction:
 
 ```
-worldTileX += dirX * speed * dt
-worldTileY += dirY * speed * dt
-screenX = origin.x + (worldTileX − worldTileY) × HALF_TILE_W
-screenY = origin.y + (worldTileX + worldTileY) × HALF_TILE_H
+worldX += dirX * speed * dt
+worldY += dirY * speed * dt
+screenX = origin.x + (worldX − worldY) × HALF_TILE_W
+screenY = origin.y + (worldX + worldY) × HALF_TILE_H
 ```
 
 ### 9. Speed modifiers
@@ -329,7 +332,7 @@ tile walkability; terrain speed modifiers extend the same mechanism.
 ### 10. Collisions
 
 Collisions are checked against the logical tile grid. An entity's center tile
-is `floor(worldTileX), floor(worldTileY)`. A blocked tile at those coordinates
+is `floor(worldX), floor(worldY)`. A blocked tile at those coordinates
 means the entity cannot occupy that position.
 
 Two levels of collision:
@@ -361,7 +364,7 @@ the sprite between the last known position and the newly received position over
 the network interval.
 
 For this project's 80 ms sync interval, linear interpolation of
-`worldTileX / worldTileY` between two received values produces acceptable
+`worldX / worldY` between two received values produces acceptable
 smoothness at current network latencies.
 
 Implementation: maintain a target position per remote entity. Each frame,
@@ -369,7 +372,7 @@ advance the sprite toward the target at the estimated speed. On receiving a new
 position, update the target. No complex buffer is required at this scale.
 
 The isometric projection is applied after interpolation: `screenX / screenY`
-are derived from the interpolated `worldTileX / worldTileY`.
+are derived from the interpolated `worldX / worldY`.
 
 ### 12. Client prediction
 
@@ -420,8 +423,8 @@ anti-cheat measure for speed hacking.
 
 ### 14. Shared movement model for players, animals, and NPCs
 
-All moving entities share the same position representation (`worldTileX`,
-`worldTileY`, `mapId`) and the same speed integration formula. What differs is
+All moving entities share the same position representation (`worldX`,
+`worldY`, `mapId`) and the same speed integration formula. What differs is
 who drives the movement:
 
 | Entity | Movement driver | Path source | Speed authority |
@@ -469,7 +472,7 @@ write to it, without those systems being implemented now.
 
 Attack and interaction ranges will depend on weapon type. A dagger, a sword, a
 spear, a bow, and a spell each have different effective ranges. The combat
-system will consume the entity's `worldTileX / worldTileY` to compute
+system will consume the entity's `worldX / worldY` to compute
 the distance between attacker and target.
 
 Requirement: the movement model must expose a reliable, up-to-date logical
@@ -501,7 +504,7 @@ at each step.
 
 ### Approach A — Minimal migration (coordinate rename only)
 
-Rename `x / y` to `worldTileX / worldTileY`. Apply the ADR-0001 conversion
+Rename `x / y` to `worldX / worldY`. Apply the ADR-0001 conversion
 factor to existing values. Preserve all current movement logic. Add `mapId`
 to payloads.
 
@@ -509,13 +512,13 @@ This closes the coordinate debt without touching movement semantics. Speed
 validation, reconciliation, and terrain modifiers are deferred.
 
 **Suitable for**: reaching ADR-0001 and ADR-0002 compliance with minimal risk.
-**Deferred**: server-side validation, collision in drag mode, speed in tile
+**Deferred**: server-side validation, collision in drag mode, speed in logical
 units.
 
 ### Approach B — Coordinate migration + server validation
 
 Approach A plus: implement server-side distance validation on `player_move`.
-Convert all speed and range constants to tile units. Enforce tile walkability
+Convert all speed and range constants to logical units. Enforce tile walkability
 on server.
 
 This closes the primary anti-cheat gap. Client prediction remains implicit
@@ -544,11 +547,11 @@ introduced before the simpler approaches are stable.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Partial migration: some entities in pixel units, others in tile units | High | Migration must be atomic per entity type (ADR-0002). Never mix coordinate spaces in a single calculation. |
+| Partial migration: some entities in pixel units, others in logical units | High | Migration must be atomic per entity type (ADR-0002). Never mix coordinate spaces in a single calculation. |
 | Pathfinder grid mismatch after isometric migration | Medium | The pathfinder grid must be rebuilt to match `localTileX / localTileY` during the migration. |
 | No server validation of player positions allows speed hacking | Medium | Implement distance gate as part of Approach B before the game is multi-player. |
 | Drag mode allows wall crossing on client | Low (server corrects) | Server tile check prevents the position from being accepted. Client visual glitch only until reconciliation is implemented. |
-| Speed constants not yet defined in tile units | Medium | Must be resolved before any server-side movement integration uses them. |
+| Speed constants not yet defined in logical units | Medium | Must be resolved before any server-side movement integration uses them. |
 | ADR-0001 storage type unresolved | Blocking | Float vs integer split must be decided before implementing server-side movement. |
 | Terrain modifier lookup adds cost per tick per entity | Low | At current entity counts, one tile lookup per tick is negligible. Must be cached when chunk-wide lookups are needed. |
 
@@ -589,7 +592,7 @@ Proceed in two phases.
 **Phase 1 — Coordinate compliance (Approach A)**
 
 Implement the ADR-0001 and ADR-0002 coordinate migration. Rename columns and
-payloads. Convert existing speed and range constants to tile units once the
+payloads. Convert existing speed and range constants to logical units once the
 conversion factor is decided. Rebuild the pathfinder grid to use
 `localTileX / localTileY`. This phase does not change movement behavior; it
 aligns the codebase with the defined coordinate system.
@@ -610,7 +613,7 @@ current implementation is acceptable for a single-player or small-scale
 experience.
 
 The keyboard movement mode must be adapted to produce isometric directions
-(movements along `worldTileX` and `worldTileY` axes) rather than screen-space
+(movements along `worldX` and `worldY` axes) rather than screen-space
 directions (movements along screen X and Y). This is a client-only change and
 should be included in Phase 1.
 
@@ -620,6 +623,8 @@ should be included in Phase 1.
 
 - [ADR-0001 — World Coordinate System](../01_Architecture/adr/ADR-0001-world-coordinate-system.md)
 - [ADR-0002 — Entity Positioning](../01_Architecture/adr/ADR-0002-entity-positioning.md)
+- [ADR-0003 — Movement Authority](../01_Architecture/adr/ADR-0003-movement-authority.md)
+- [World Units Study](world-units-study.md)
 - [World Model](world-model.md)
 - [Entity Model](entity-model.md)
 - [Gameplay README](README.md)

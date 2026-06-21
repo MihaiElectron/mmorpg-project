@@ -61,9 +61,17 @@ Continue using numeric `x`, `y` values that correspond 1:1 to Phaser pixel posit
 
 Rejected because: the coupling is implicit; the server would depend on client screen resolution to produce correct gameplay results; it cannot be extended to multiple maps or different tile sizes without large rewrites.
 
-### Option B — Tile-first world coordinates with sub-tile precision
+### Option B — Logical world coordinates with sub-unit precision (selected)
 
-The server stores world positions as tile coordinates with sub-tile precision. The integer part identifies the tile; the fractional part represents the sub-tile offset within the tile. Screen positions are derived from these values using the isometric projection formula. This is the selected option. The physical storage mechanism (float, double, split integer columns, fixed precision) is a separate open question; see Open questions.
+The server stores world positions in a logical coordinate system where the
+integer part of each coordinate identifies a tile and the fractional part
+represents sub-unit precision. Screen positions are derived from these values
+using the isometric projection formula. The coordinate names are `worldX` and
+`worldY`. The exact unit of measure (tile float, WU, sub-tile integer, or
+another equivalent representation) and the physical storage mechanism (FLOAT,
+DOUBLE PRECISION, split integer columns) are both open questions — see Open
+questions. This option is selected because it decouples coordinate semantics
+(tile-relative, map-scoped, screen-independent) from physical representation.
 
 ### Option C — Separate integer tile index and sub-tile offset columns
 

@@ -41,9 +41,11 @@ Reference document for the analysis that preceded this model:
 Movement in this game is **continuous**.
 
 An entity does not move tile by tile. It occupies a fractional position in the
-world grid at all times. Its position is expressed as `worldTileX` and
-`worldTileY` as defined by ADR-0001. The unit is one tile. The fractional part
-represents the sub-tile offset within the occupied tile.
+world grid at all times. Its position is expressed as `worldX` and `worldY` as defined by ADR-0001.
+The logical unit of `worldX` and `worldY` is an open question — see
+`docs/08_Gameplay/world-units-study.md`. The integer part of each coordinate
+identifies a tile; the fractional part represents the sub-unit offset within
+that tile.
 
 Tiles do not constrain where an entity stands. They govern what happens to an
 entity based on where it stands: whether it can walk there, what speed applies,
@@ -59,7 +61,7 @@ as a source of truth for gameplay.
 
 In a continuous movement world, tiles serve four distinct purposes.
 
-**Walkability.** The tile at `(floor(worldTileX), floor(worldTileY))` is the
+**Walkability.** The tile at `(floor(worldX), floor(worldY))` is the
 entity's current tile. If that tile is marked as blocked in the collision layer,
 the entity cannot occupy it. The server enforces this.
 
@@ -71,8 +73,8 @@ that the entity follows continuously at its current speed.
 **Chunk membership.** An entity's chunk is derived from its tile position:
 
 ```
-chunkX = floor(worldTileX / CHUNK_SIZE)
-chunkY = floor(worldTileY / CHUNK_SIZE)
+chunkX = floor(worldX / CHUNK_SIZE)
+chunkY = floor(worldY / CHUNK_SIZE)
 ```
 
 Chunk membership drives interest management and future Socket.IO room scoping.
@@ -97,8 +99,8 @@ mapHeightTiles = mapHeightChunks × CHUNK_SIZE
 A valid entity position satisfies:
 
 ```
-0 ≤ worldTileX < mapWidthTiles
-0 ≤ worldTileY < mapHeightTiles
+0 ≤ worldX < mapWidthTiles
+0 ≤ worldY < mapHeightTiles
 ```
 
 The server validates these bounds on every position that is stored, broadcast,
@@ -191,18 +193,18 @@ and are applied unconditionally.
 
 ### Base speed
 
-Every entity has a `baseSpeed` expressed in **tiles per second**.
+Every entity has a `baseSpeed` expressed in **logical units per second** (WU/s).
 
 The numerical value of `baseSpeed` for each entity type is an open question
-pending the validation of the ADR-0001 coordinate conversion factor. Current
+pending the resolution of the ADR-0001 logical unit choice. Current
 pixel-equivalent speed values are preserved temporarily and must be converted
-to tile units before server-side movement integration is implemented.
+to logical units before server-side movement integration is implemented.
 
 Speed integration follows:
 
 ```
-worldTileX += dirX × effectiveSpeed × dt
-worldTileY += dirY × effectiveSpeed × dt
+worldX += dirX × effectiveSpeed × dt
+worldY += dirY × effectiveSpeed × dt
 ```
 
 Where `dirX` and `dirY` form a unit direction vector and `dt` is the elapsed
@@ -240,7 +242,7 @@ A modifier of × 0 (immobilization) prevents all movement integration. The
 entity does not move regardless of input.
 
 Terrain modifiers are applied per tick, based on the tile property at
-`(floor(worldTileX), floor(worldTileY))`. The server reads this property from
+`(floor(worldX), floor(worldY))`. The server reads this property from
 the same tile data used for walkability.
 
 ---
@@ -250,7 +252,7 @@ the same tile data used for walkability.
 ### Server-side collision (mandatory)
 
 The server validates walkability before accepting any position. The tile at
-`(floor(worldTileX), floor(worldTileY))` must be walkable. If it is blocked,
+`(floor(worldX), floor(worldY))` must be walkable. If it is blocked,
 the movement is rejected and the entity remains at its last valid position.
 The server may send a position correction to the originating client.
 
@@ -279,8 +281,8 @@ destination tile, both expressed as integer coordinates derived from continuous
 positions:
 
 ```
-startTileX = floor(worldTileX)
-startTileY = floor(worldTileY)
+startTileX = floor(worldX)
+startTileY = floor(worldY)
 ```
 
 The output is a sequence of waypoint tiles. The entity follows these waypoints
@@ -292,7 +294,7 @@ waypointCenterY = waypointTileY + 0.5
 ```
 
 Once within the arrival threshold of a waypoint center, the entity advances to
-the next waypoint. The arrival threshold is expressed in tile units. Its exact
+the next waypoint. The arrival threshold is expressed in logical units. Its exact
 value is an open question.
 
 If pathfinding fails (no path found, destination blocked, destination out of
@@ -343,7 +345,7 @@ correction is received.
 
 **Interpolation.** The client may interpolate the displayed position of remote
 entities between received server updates. Interpolation is applied to
-`worldTileX / worldTileY`; the isometric projection is derived from the
+`worldX / worldY`; the isometric projection is derived from the
 interpolated values. Interpolation is a rendering technique and has no gameplay
 effect.
 
@@ -353,12 +355,12 @@ The client must be designed so that a reconciliation mechanism can be added
 without restructuring the movement pipeline.
 
 **Coordinate conversion.** The client converts all pointer input from screen
-coordinates to `worldTileX / worldTileY` using the inverse projection formula
+coordinates to `worldX / worldY` using the inverse projection formula
 defined in ADR-0001 before transmitting any position to the server. Screen
 coordinates are never sent to the server.
 
 **Keyboard direction mapping.** Keyboard input must map to the world-tile axes
-(`worldTileX` and `worldTileY`), not to screen-space axes. In an isometric
+(`worldX` and `worldY`), not to screen-space axes. In an isometric
 view, pressing a directional key moves the entity along a world-tile diagonal,
 not horizontally or vertically on screen.
 
@@ -374,7 +376,7 @@ the server from validating the position independently.
 
 The combat system will determine whether an attack or interaction is valid based
 on the distance between attacker and target. Distance is computed from their
-`worldTileX / worldTileY` positions.
+`worldX / worldY` positions.
 
 The movement model's obligation to the combat system: maintain a reliable,
 up-to-date authoritative position for every entity on the server at all times,
@@ -402,17 +404,17 @@ The following questions are not resolved by this model. They must be answered
 before the corresponding behavior can be implemented.
 
 1. **Coordinate conversion factor.** What is the factor to convert existing
-   pixel-equivalent positions to `worldTileX / worldTileY` values? This
+   pixel-equivalent positions to `worldX / worldY` values? This
    unblocks all numerical speed and distance decisions.
 
-2. **Exact speed values in tile units.** What is `baseSpeed` for the player?
+2. **Exact speed values in logical units.** What is `baseSpeed` for the player?
    What are `speedMin`, `speedMax`, `patrolRadius`, and `aggroRadius` for each
    animal template? Depends on question 1.
 
-3. **Exact distance and range values in tile units.** `RESOURCE_INTERACT_RANGE`
+3. **Exact distance and range values in logical units.** `RESOURCE_INTERACT_RANGE`
    and similar constants. Depends on question 1.
 
-4. **DB storage type for `worldTileX / worldTileY`.** FLOAT, DOUBLE PRECISION,
+4. **DB storage type for `worldX / worldY`.** FLOAT, DOUBLE PRECISION,
    or split integer columns? Deferred to ADR-0001.
 
 5. **Sub-tile collision strategy.** When is a tile-level check insufficient?
@@ -430,7 +432,7 @@ before the corresponding behavior can be implemented.
    entity is following a path, does the path recompute automatically, or does
    the entity stop and wait for a new order?
 
-9. **Arrival threshold in tile units.** What sub-tile distance is close enough
+9. **Arrival threshold in logical units.** What sub-tile distance is close enough
    to a waypoint to count as arrival? Depends on question 1.
 
 10. **Pathfinding authority for players.** Does pathfinding run on the client
@@ -448,6 +450,8 @@ before the corresponding behavior can be implemented.
 - [Gameplay README](README.md)
 - [ADR-0001 — World Coordinate System](../01_Architecture/adr/ADR-0001-world-coordinate-system.md)
 - [ADR-0002 — Entity Positioning](../01_Architecture/adr/ADR-0002-entity-positioning.md)
+- [ADR-0003 — Movement Authority](../01_Architecture/adr/ADR-0003-movement-authority.md)
+- [World Units Study](world-units-study.md)
 - [Client Server Boundaries](../01_Architecture/client-server-boundaries.md)
 - [Client Server Trust](../02_Security/client-server-trust.md)
 - [Phaser World](../03_Client/phaser-world.md)

@@ -19,7 +19,7 @@
 
 ## Context
 
-ADR-0001 defines the official world coordinate system: all positions are expressed as `mapId`, `worldTileX`, and `worldTileY`. It establishes that screen coordinates are never persisted and that the server is fully independent of Phaser.
+ADR-0001 defines the official world coordinate system: all positions are expressed as `mapId`, `worldX`, and `worldY`. The logical unit of `worldX` and `worldY` is an open question — see `docs/08_Gameplay/world-units-study.md`. It establishes that screen coordinates are never persisted and that the server is fully independent of Phaser.
 
 At the time this ADR is written, five entity types carry world positions:
 
@@ -31,7 +31,7 @@ At the time this ADR is written, five entity types carry world positions:
 | `creature_spawn` | `spawnX INT`, `spawnY INT` | Static | Tile-exact |
 | `respawn_point` | `x INT`, `y INT` | Static | Tile-exact |
 
-None of these entities carry a `mapId`. Column naming is inconsistent (`positionX`, `x`, `spawnX`). No entity references `worldTileX` or `worldTileY`.
+None of these entities carry a `mapId`. Column naming is inconsistent (`positionX`, `x`, `spawnX`). No entity references `worldX` or `worldY`.
 
 This ADR defines how each entity type stores and uses coordinates under ADR-0001.
 
@@ -51,27 +51,27 @@ Without a defined entity positioning policy:
 - `mapId` must be added to every entity that carries a world position.
 - Static entities (no runtime movement) should use tile-exact integer positions for schema clarity.
 - Dynamic entities (server-driven or player-driven movement) require sub-tile precision.
-- WebSocket payloads must carry `mapId`, `worldTileX`, `worldTileY` for all position updates.
+- WebSocket payloads must carry `mapId`, `worldX`, `worldY` for all position updates.
 - The server remains authoritative: positions received from the client are intentions, not facts.
-- The actual DB column type for `worldTileX`/`worldTileY` is deferred to the storage type decision from ADR-0001.
+- The actual DB column type for `worldX`/`worldY` is deferred to the storage type decision from ADR-0001.
 
 ## Considered options
 
 ### Option A — Uniform schema for all entities
 
-All entities use the same column names (`mapId`, `worldTileX`, `worldTileY`) with the same type regardless of whether they move. Static entities would carry unused fractional precision.
+All entities use the same column names (`mapId`, `worldX`, `worldY`) with the same type regardless of whether they move. Static entities would carry unused fractional precision.
 
 Simpler to implement and query uniformly. Slight schema waste for static entities.
 
 ### Option B — Differentiated schema by movement class
 
-Static entities use integer tile columns (`mapId`, `tileX INT`, `tileY INT`). Dynamic entities use continuous tile columns (`mapId`, `worldTileX`, `worldTileY`).
+Static entities use integer tile columns (`mapId`, `tileX INT`, `tileY INT`). Dynamic entities use continuous tile columns (`mapId`, `worldX`, `worldY`).
 
 More semantically precise. Introduces two column sets to maintain, and a conversion step when a static entity reference is compared to a dynamic entity position.
 
 ### Option C — Uniform column names, type varies by entity
 
-All entities use `mapId`, `worldTileX`, `worldTileY`. Static entities store integer values; dynamic entities store float values. The column type is the same (decided by ADR-0001 storage resolution) and the fractional part is simply zero for static entities.
+All entities use `mapId`, `worldX`, `worldY`. Static entities store integer values; dynamic entities store float values. The column type is the same (decided by ADR-0001 storage resolution) and the fractional part is simply zero for static entities.
 
 This is the selected option. It preserves uniform naming while naturally encoding the static/dynamic distinction through the stored value.
 
@@ -84,14 +84,14 @@ All position-bearing entities adopt the following columns:
 | Column | Type | Description |
 |---|---|---|
 | `mapId` | `INT` (FK to future `map` entity, or string identifier) | Map the entity belongs to |
-| `worldTileX` | TBD (see ADR-0001 open storage question) | X position in world-tile space |
-| `worldTileY` | TBD (see ADR-0001 open storage question) | Y position in world-tile space |
+| `worldX` | TBD (see ADR-0001 open storage question) | X position in logical world space |
+| `worldY` | TBD (see ADR-0001 open storage question) | Y position in logical world space |
 
-The column type for `worldTileX` and `worldTileY` is not decided in this ADR. It will be determined when the ADR-0001 storage type question is resolved.
+The column type for `worldX` and `worldY` is not decided in this ADR. It will be determined when the ADR-0001 storage type question is resolved.
 
 ### Entity classification
 
-| Entity | Movement class | `worldTileX/Y` value | Notes |
+| Entity | Movement class | `worldX/Y` value | Notes |
 |---|---|---|---|
 | `character` | Dynamic | Continuous (sub-tile fractional) | Controlled by player input; server validates |
 | `animal` | Dynamic | Continuous (sub-tile fractional) | Driven by server AI; always authoritative |
@@ -99,27 +99,27 @@ The column type for `worldTileX` and `worldTileY` is not decided in this ADR. It
 | `creature_spawn` | Static | Integer (whole tile) | Spawn point; never moves at runtime |
 | `respawn_point` | Static | Integer (whole tile) | Respawn anchor; never moves at runtime |
 
-Static entities store whole-tile values (`worldTileX = 12.0`, `worldTileY = 7.0`). No fractional part is ever set for them at authoring time. This allows uniform column names while preserving the semantic distinction.
+Static entities store whole-tile values (`worldX = 12.0`, `worldY = 7.0`). No fractional part is ever set for them at authoring time. This allows uniform column names while preserving the semantic distinction.
 
 ### WebSocket payload contract
 
-All socket events that carry a world position must include `mapId`, `worldTileX`, and `worldTileY`. Events that currently use `x` and `y` must be updated.
+All socket events that carry a world position must include `mapId`, `worldX`, and `worldY`. Events that currently use `x` and `y` must be updated.
 
 | Event | Direction | Current payload | Target payload |
 |---|---|---|---|
-| `player_move` | Client → Server | `{ x, y, direction }` | `{ mapId, worldTileX, worldTileY, direction }` |
-| `player_moved` | Server → Client | `{ x, y, direction, ... }` | `{ mapId, worldTileX, worldTileY, direction, ... }` |
-| `world_joined` | Server → Client | `{ x, y, ... }` | `{ mapId, worldTileX, worldTileY, ... }` |
-| `character_teleport` | Server → Client | `{ x, y }` | `{ mapId, worldTileX, worldTileY }` |
-| `character_respawn` | Server → Client | `{ x, y, ... }` | `{ mapId, worldTileX, worldTileY, ... }` |
-| `animals` / `animal_update` | Server → Client | `{ x, y, ... }` | `{ mapId, worldTileX, worldTileY, ... }` |
-| `resources` | Server → Client | `{ x, y, ... }` | `{ mapId, worldTileX, worldTileY, ... }` |
+| `player_move` | Client → Server | `{ x, y, direction }` | `{ mapId, worldX, worldY, direction }` |
+| `player_moved` | Server → Client | `{ x, y, direction, ... }` | `{ mapId, worldX, worldY, direction, ... }` |
+| `world_joined` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
+| `character_teleport` | Server → Client | `{ x, y }` | `{ mapId, worldX, worldY }` |
+| `character_respawn` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
+| `animals` / `animal_update` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
+| `resources` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
 
 `mapId` is mandatory in every position-carrying payload. A client must not infer map context from connection state alone.
 
 ### Server authority
 
-- All incoming position values (`worldTileX`, `worldTileY`) are client intentions. They must be validated server-side before producing gameplay effects.
+- All incoming position values (`worldX`, `worldY`) are client intentions. They must be validated server-side before producing gameplay effects.
 - The server must reject or correct positions outside the bounds of the declared `mapId`.
 - `mapId` must be validated: a character cannot report a position on a map it has not legitimately entered.
 - Dynamic entity positions are authoritative only when set by the server (AI-driven animals, admin teleport, respawn). Client-reported positions are inputs to server validation.
@@ -128,7 +128,7 @@ All socket events that carry a world position must include `mapId`, `worldTileX`
 
 Option C (uniform naming, value distinguishes static/dynamic) avoids introducing two parallel column sets while keeping schema and query patterns consistent across all entity types. Static entities naturally store integer tile values; the column names remain identical to dynamic entities, which simplifies generic position queries and future chunk-based interest management.
 
-Defining the WebSocket payload contract in this ADR ensures that the coordinate rename (`x/y` → `worldTileX/worldTileY`) happens consistently across all events rather than being patched event by event.
+Defining the WebSocket payload contract in this ADR ensures that the coordinate rename (`x/y` → `worldX/worldY`) happens consistently across all events rather than being patched event by event.
 
 Keeping the actual column type deferred maintains consistency with ADR-0001. The type decision must precede implementation of either this ADR or ADR-0001.
 
@@ -136,7 +136,7 @@ Keeping the actual column type deferred maintains consistency with ADR-0001. The
 
 ### Positive
 
-- Uniform column naming across all entities: `mapId`, `worldTileX`, `worldTileY`.
+- Uniform column naming across all entities: `mapId`, `worldX`, `worldY`.
 - Multi-map support is structurally ready: every position already carries `mapId`.
 - WebSocket payloads carry explicit map context, enabling future chunk-scoped room filtering.
 - Static and dynamic entities share the same query patterns.
@@ -151,22 +151,22 @@ Keeping the actual column type deferred maintains consistency with ADR-0001. The
 
 - Mixed-state migration: if some entities are migrated and others are not, gameplay logic comparing positions across entity types will produce incorrect results. Migration must be atomic per entity type.
 - `mapId` dependency: until a `map` table or entity is defined, `mapId` cannot be a foreign key with referential integrity. Using a nullable or unconstrained column is a temporary compromise.
-- Client and server payload changes must be deployed together. A mismatch between client sending `{ x, y }` and server expecting `{ worldTileX, worldTileY }` would break all position events.
+- Client and server payload changes must be deployed together. A mismatch between client sending `{ x, y }` and server expecting `{ worldX, worldY }` would break all position events.
 
 ### Impacted components
 
 | Component | Impact |
 |---|---|
-| `character` entity | Rename `positionX/Y` → `worldTileX/Y`; add `mapId` |
-| `animal` entity | Rename `x/y` → `worldTileX/Y`; add `mapId` |
-| `resource` entity | Rename `x/y` → `worldTileX/Y`; add `mapId` |
-| `creature_spawn` entity | Rename `spawnX/Y` → `worldTileX/Y`; add `mapId` |
-| `respawn_point` entity | Rename `x/y` → `worldTileX/Y`; add `mapId` |
+| `character` entity | Rename `positionX/Y` → `worldX/Y`; add `mapId` |
+| `animal` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
+| `resource` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
+| `creature_spawn` entity | Rename `spawnX/Y` → `worldX/Y`; add `mapId` |
+| `respawn_point` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
 | `WorldService` | Update all position reads/writes; add `mapId` validation |
 | `AnimalsService` | Update AI movement; rename `x/y` fields; add `mapId` context |
-| `ResourcesGateway` | Update range check to use `worldTileX/Y`; validate `mapId` |
+| `ResourcesGateway` | Update range check to use `worldX/Y`; validate `mapId` |
 | `WorldGateway` | Update `player_move` and join handlers; broadcast `mapId` |
-| WebSocket payloads | All position events: `x/y` → `worldTileX/Y`, add `mapId` |
+| WebSocket payloads | All position events: `x/y` → `worldX/Y`, add `mapId` |
 | Phaser client | All sprite positioning: use projection formula from ADR-0001 |
 | Admin tool | `/tp` and coordinate display: tile units, `mapId` required |
 | Seeds | Hardcoded positions must be expressed in tile units with `mapId` |
@@ -177,7 +177,7 @@ Adding `mapId` to payloads introduces a new gameplay-sensitive value. The server
 
 - Validate that the character is present on the claimed `mapId` before processing any position.
 - Never trust `mapId` from the client as authorization to access a map. Map access must be granted server-side (zone entry, login placement, teleport).
-- Validate `worldTileX` and `worldTileY` ranges against the declared map bounds.
+- Validate `worldX` and `worldY` ranges against the declared map bounds.
 
 The coordinate rename does not weaken the existing trust model. Client-reported positions remain intentions that the server validates.
 
@@ -232,7 +232,7 @@ No mixed-state operation: during migration of a given entity type, all code path
 
 `mapId` is gameplay-sensitive. It must be validated server-side on every position event. A client cannot declare itself on an arbitrary map.
 
-Position values (`worldTileX`, `worldTileY`) remain client intentions for dynamic entities. Static entity positions are set by server-side seeds or admin tools only and are not accepted from regular clients.
+Position values (`worldX`, `worldY`) remain client intentions for dynamic entities. Static entity positions are set by server-side seeds or admin tools only and are not accepted from regular clients.
 
 No real secret, token, password, hash, or private user data is documented here.
 
@@ -252,6 +252,7 @@ Position columns are read and written on every movement event and every AI tick.
 - [Phaser World](../../03_Client/phaser-world.md)
 - [Server WebSockets](../../04_Server/websockets.md)
 - [Database Schema](../../06_Database/schema.md)
+- [World Units Study](../../08_Gameplay/world-units-study.md)
 - [STATUS.md](../../../STATUS.md)
 
 ## TODO
