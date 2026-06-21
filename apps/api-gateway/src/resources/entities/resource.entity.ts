@@ -15,6 +15,16 @@ export class Resource {
   @Column('int')
   y: number;
 
+  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  @Column({ type: 'int', nullable: true })
+  worldX: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  worldY: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  mapId: number | null;
+
   @Column({ default: 'alive' })
   state: 'alive' | 'dead';
 

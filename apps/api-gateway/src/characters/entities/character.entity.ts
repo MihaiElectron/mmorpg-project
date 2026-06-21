@@ -51,6 +51,16 @@ export class Character {
   @Column({ default: 300 })
   positionY: number;
 
+  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  @Column({ type: 'int', nullable: true })
+  worldX: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  worldY: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  mapId: number | null;
+
   @ManyToOne(() => User, (user) => user.characters, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;

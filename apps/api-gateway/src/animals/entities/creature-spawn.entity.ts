@@ -25,6 +25,16 @@ export class CreatureSpawn {
   @Column('int')
   spawnY: number;
 
+  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  @Column({ type: 'int', nullable: true })
+  worldX: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  worldY: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  mapId: number | null;
+
   @Column('int', { default: 30000 })
   respawnDelayMs: number;
 }
