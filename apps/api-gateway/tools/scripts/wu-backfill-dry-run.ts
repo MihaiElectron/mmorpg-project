@@ -23,10 +23,15 @@ try {
 }
 
 import { Character } from '../../src/characters/entities/character.entity';
+import { CharacterEquipment } from '../../src/characters/entities/character-equipment.entity';
 import { Animal } from '../../src/animals/entities/animal.entity';
-import { Resource } from '../../src/resources/entities/resource.entity';
 import { CreatureSpawn } from '../../src/animals/entities/creature-spawn.entity';
+import { CreatureTemplate } from '../../src/animals/entities/creature-template.entity';
+import { Resource } from '../../src/resources/entities/resource.entity';
 import { RespawnPoint } from '../../src/world/entities/respawn-point.entity';
+import { User } from '../../src/users/entities/user.entity';
+import { Inventory } from '../../src/inventory/entities/inventory.entity';
+import { Item } from '../../src/items/entities/item.entity';
 import {
   generateEntityReport,
   generateDryRunReport,
@@ -55,7 +60,17 @@ function buildDataSource(): DataSource {
     username,
     password,
     database,
-    entities: [Character, Animal, Resource, CreatureSpawn, RespawnPoint],
+    // Toutes les entités du graphe de relations doivent être déclarées,
+    // même celles qu'on ne lit pas directement.
+    entities: [
+      Character, CharacterEquipment,
+      Animal, CreatureSpawn, CreatureTemplate,
+      Resource,
+      RespawnPoint,
+      User,
+      Inventory,
+      Item,
+    ],
     // synchronize: false — ce script ne modifie jamais le schéma
     synchronize: false,
     logging: false,
