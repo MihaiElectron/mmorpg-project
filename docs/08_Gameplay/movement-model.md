@@ -115,7 +115,7 @@ on the client is still subject to server validation.
 |---|---|
 | Click outside map bounds | Refused or clamped to the nearest valid tile. The exact behavior (refuse vs clamp) is an open question. |
 | Pathfinding destination outside bounds | The destination is rejected before the pathfinding search begins. The path is not computed. |
-| Drag toward the edge | Movement stops at the boundary. The server clips the movement vector to the last valid position inside the map. |
+| Direct steering toward the edge | Movement stops at the boundary. The server clips the movement vector to the last valid position inside the map. |
 | Knockback or charge effect | The resulting position is clamped to the map boundary before being applied. The entity stops at the edge; it does not leave the map. |
 | Teleportation (admin or gameplay) | The target position is validated against the bounds of the target map before the teleport is applied. A teleport to an out-of-bounds position is rejected. |
 | Spawn and respawn | Spawn and respawn points are authored within map bounds. If a stored spawn point falls outside the current map dimensions (e.g., after a map resize), the server must detect and reject it at startup. |
@@ -148,22 +148,24 @@ If an obstacle appears mid-route, the path may be recomputed from the current
 position, or the entity may stop and wait for a new order. The exact behavior
 is an open question.
 
-### Mode 2 — Hold (direct steering)
+### Mode 2 — Direct steering (hold or keyboard)
 
-The player holds the pointer down and the entity moves continuously toward the
-current cursor position.
+The player either holds the pointer down toward a position, or presses a
+directional key. In both cases, the entity moves continuously in the indicated
+direction at its current `effectiveSpeed`. No path is computed.
 
-No path is computed. The entity moves in a straight line toward the cursor at
-its current `effectiveSpeed`. The direction updates every frame as the cursor
-moves.
+When driven by pointer hold, the direction updates every frame as the cursor
+moves. When driven by keyboard, the direction is determined by the key pressed,
+mapped to the world-tile axes (see Client responsibilities).
 
-This mode interrupts any active pathfinding. When the hold begins, any
-in-progress route is discarded. The entity does not resume the route when the
-hold ends. The player must issue a new click to start a new pathfinding order.
+This mode interrupts any active pathfinding. When direct steering begins, any
+in-progress route is discarded immediately. The route is not resumed when
+steering ends. The player must issue a new click to start a new pathfinding
+order.
 
-Hold mode is compatible with server collision and boundary validation. The
-server clips the movement to the last valid position if the trajectory would
-enter a blocked tile or reach a map boundary.
+Direct steering is compatible with server collision and boundary validation.
+The server clips the movement to the last valid position if the trajectory
+would enter a blocked tile or reach a map boundary.
 
 ---
 
@@ -173,7 +175,7 @@ When multiple movement modes are active simultaneously, the following priority
 applies:
 
 ```
-direct order (hold) active  >  pathfinding route active  >  idle
+direct steering (keyboard or hold) active  >  pathfinding route active  >  idle
 ```
 
 Any higher-priority input cancels all lower-priority state immediately. There
@@ -350,10 +352,10 @@ numbers and server reconciliation is not yet decided. It is a future option.
 The client must be designed so that a reconciliation mechanism can be added
 without restructuring the movement pipeline.
 
-**Coordinate conversion.** The client converts all pointer input from Phaser
-screen coordinates to `worldTileX / worldTileY` using the inverse projection
-formula defined in ADR-0001 before transmitting any position to the server.
-Screen coordinates are never sent to the server.
+**Coordinate conversion.** The client converts all pointer input from screen
+coordinates to `worldTileX / worldTileY` using the inverse projection formula
+defined in ADR-0001 before transmitting any position to the server. Screen
+coordinates are never sent to the server.
 
 **Keyboard direction mapping.** Keyboard input must map to the world-tile axes
 (`worldTileX` and `worldTileY`), not to screen-space axes. In an isometric
