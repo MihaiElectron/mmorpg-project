@@ -5,7 +5,7 @@
 - Status: Draft
 - Decision status: Proposed
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-22
 - Date proposed: 2026-06-21
 - Date accepted: N/A
 - Approved by: TBD
@@ -92,13 +92,15 @@ World
         └── Tile  (addressed by localTileX, localTileY within the chunk)
 ```
 
-### Constant
+### Constants
 
 ```
-CHUNK_SIZE = 64   // tiles per side — invariant of the project
+CHUNK_SIZE    = 64       // tiles per side per chunk — invariant of the project
+TILE_SIZE_WU  = 1024     // World Units per tile (2^10) — invariant of the project
+CHUNK_SIZE_WU = 65 536   // World Units per chunk side (CHUNK_SIZE × TILE_SIZE_WU)
 ```
 
-This constant never changes without a new ADR superseding this one.
+These constants never change without a new ADR superseding this one. `TILE_SIZE_WU` is a power of 2 (2^10), which enables efficient extraction of tile and chunk indices from a coordinate integer via bit operations.
 
 ### Official coordinates
 
@@ -107,48 +109,83 @@ These are the coordinates the server stores and reasons about.
 | Name | Description | Persisted |
 |---|---|---|
 | `mapId` | Identifier of the map the entity belongs to | Yes |
-| `worldX` | Position along the world X axis; integer part = tile column index, fractional part = sub-tile offset within the tile. The logical unit is an open question — see below. | Yes |
-| `worldY` | Position along the world Y axis; integer part = tile row index, fractional part = sub-tile offset within the tile. The logical unit is an open question — see below. | Yes |
+| `worldX` | Position along the world X axis. Signed integer in **World Units (WU)**. `1 tile = 1024 WU = TILE_SIZE_WU`. | Yes |
+| `worldY` | Position along the world Y axis. Signed integer in **World Units (WU)**. `1 tile = 1024 WU = TILE_SIZE_WU`. | Yes |
 
-**The logical unit of `worldX` and `worldY` is not fixed by this ADR.**
+**The official logical unit is the World Unit (WU). `1 tile logique = 1024 WU`.**
 
-The coordinate names are stable. The unit — tile float, World Unit (WU), fixed-point sub-tile integer, or another equivalent representation — is an open question to be resolved before migration begins. The document `docs/08_Gameplay/world-units-study.md` provides the analysis needed to make that decision.
+`worldX` and `worldY` are **signed integers**. The architectural rationale for this choice (determinism, interoperability, bit-field spatial hierarchy) is documented in `docs/08_Gameplay/world-units-study.md`.
 
-What is fixed by this ADR: the integer part of `worldX` identifies a tile column index; the integer part of `worldY` identifies a tile row index. The fractional part represents the sub-tile offset within that tile, regardless of the chosen unit.
+The bit layout of a WU coordinate encodes the full spatial hierarchy:
+
+```
+tileIndex   = worldX >> 10              // global tile column index
+chunkIndex  = worldX >> 16              // chunk column index (since 2^10 × 2^6 = 2^16)
+localTile   = (worldX >> 10) & 63       // tile within chunk [0, CHUNK_SIZE − 1]
+subTile     = worldX & 1023             // sub-tile offset [0, TILE_SIZE_WU − 1]
+```
+
+These bit operations must not be inlined in application code. See **Warning: magic constants** below.
 
 ### Derived coordinates
 
 These are computed from the official coordinates when needed. They are never persisted.
 
-| Name | Formula | Used by |
+| Name | Formula (WU) | Used by |
 |---|---|---|
-| `chunkX` | `floor(worldX / CHUNK_SIZE)` | Server (chunk membership, rooms), client (chunk loading) |
-| `chunkY` | `floor(worldY / CHUNK_SIZE)` | Same |
-| `localTileX` | `floor(worldX) % CHUNK_SIZE` | Server (Tiled layer lookup), client (tile addressing) |
-| `localTileY` | `floor(worldY) % CHUNK_SIZE` | Same |
-| `screenX` | `origin.x + (worldX − worldY) × HALF_TILE_W` | Client only |
-| `screenY` | `origin.y + (worldX + worldY) × HALF_TILE_H` | Client only |
+| `tileX` | `worldX >> 10` | Server and client — global tile column index |
+| `tileY` | `worldY >> 10` | Same — global tile row index |
+| `chunkX` | `worldX >> 16` | Server (chunk membership, rooms), client (chunk loading) |
+| `chunkY` | `worldY >> 16` | Same |
+| `localTileX` | `(worldX >> 10) & (CHUNK_SIZE − 1)` | Server (Tiled layer lookup), client (tile addressing) |
+| `localTileY` | `(worldY >> 10) & (CHUNK_SIZE − 1)` | Same |
+| `subTileX` | `worldX & (TILE_SIZE_WU − 1)` | Server simulation — sub-tile offset [0, 1023] |
+| `subTileY` | `worldY & (TILE_SIZE_WU − 1)` | Same |
+| `screenX` | `origin.x + (worldX − worldY) / 16` | Client only (Phaser world pixels) |
+| `screenY` | `origin.y + (worldX + worldY) / 32` | Client only (Phaser world pixels) |
 | `camera` | Phaser camera following the player sprite at `(screenX, screenY)` | Client only |
 
-Where `HALF_TILE_W = 64` and `HALF_TILE_H = 32` for the current 128×64 isometric tile format.
+Where the pixel factor per WU is `HALF_TILE_W / TILE_SIZE_WU = 64 / 1024 = 1/16` on the X axis and `HALF_TILE_H / TILE_SIZE_WU = 32 / 1024 = 1/32` on the Y axis, for the current 128×64 isometric tile format.
 
 ### Projection formula
 
-**World position → isometric screen (client only)**
+**World position (WU) → isometric screen (client only)**
 
 ```
-screenX = origin.x + (worldX − worldY) × HALF_TILE_W
-screenY = origin.y + (worldX + worldY) × HALF_TILE_H
+screenX = origin.x + (worldX − worldY) × (HALF_TILE_W / TILE_SIZE_WU)
+        = origin.x + (worldX − worldY) / 16
+
+screenY = origin.y + (worldX + worldY) × (HALF_TILE_H / TILE_SIZE_WU)
+        = origin.y + (worldX + worldY) / 32
 ```
 
-**Isometric screen → world position (client only, for pointer input)**
+**Isometric screen → world position in WU (client only, for pointer input)**
 
 ```
-worldX = ( (screenX − origin.x) / HALF_TILE_W  +  (screenY − origin.y) / HALF_TILE_H ) / 2
-worldY = ( (screenY − origin.y) / HALF_TILE_H  −  (screenX − origin.x) / HALF_TILE_W ) / 2
+worldX = round( 8 × (screenX − origin.x) + 16 × (screenY − origin.y) )
+worldY = round( −8 × (screenX − origin.x) + 16 × (screenY − origin.y) )
 ```
 
-These formulas are valid regardless of the chosen logical unit for `worldX` / `worldY`. They express a geometric relationship between the world position and the isometric screen position. The conversion constants `HALF_TILE_W = 64` and `HALF_TILE_H = 32` are derived from the tile visual dimensions (128 × 64 px) and do not depend on the unit choice.
+The coefficients 8 and 16 are `TILE_SIZE_WU / HALF_TILE_W / 2 = 1024 / 64 / 2` and `TILE_SIZE_WU / HALF_TILE_H / 2 = 1024 / 32 / 2` respectively. `round()` is applied because pointer input in Phaser world pixels rarely falls exactly on a WU boundary.
+
+`HALF_TILE_W = 64` and `HALF_TILE_H = 32` are derived from the tile visual dimensions (128 × 64 px).
+
+### Unit domains
+
+Four unit domains coexist in this system. They must not be conflated.
+
+| Domain | Unit | Where | Status |
+|---|---|---|---|
+| **Server logic** | World Unit (WU) — signed integer, `1 tile = 1024 WU` | `worldX`, `worldY`, `mapId` | **Decided — this ADR** |
+| **Logical tile grid** | Tile — integer index | Derived: `tileX = worldX >> 10` | Derived from WU |
+| **Client rendering** | Phaser world pixel | `screenX`, `screenY` — never persisted | Derived via projection formula |
+| **Map editing (Tiled)** | Tile index (integer) | `localTileX = (worldX >> 10) & 63` | Compatible with tile grid |
+
+A fifth domain — **gameplay distance metric** — is not decided by this ADR. The choice between Euclidean WU distance, Euclidean pixel distance (projected), Chebyshev, or Manhattan determines the effective shape of range checks (melee, gathering, aggro). This decision is deferred to gameplay calibration.
+
+### Warning: magic constants
+
+The constants derived from `TILE_SIZE_WU = 1024` — specifically the bit operations `>> 10`, `& 1023`, `>> 16`, and the projection scalars `1/16` and `1/32` — must **not** be inlined in application code. When migration begins, all conversions between WU, tile, and chunk spaces must be centralized in a dedicated world-coordinates module. Application code must call named functions (`tileXFromWU`, `chunkXFromWU`, `wuToScreenX`, etc.) rather than operating on the bit representation directly.
 
 ### Origin
 
@@ -181,13 +218,22 @@ There is no global origin constant in the engine. Each map defines its own origi
 
 ## Rationale
 
-The logical coordinate system eliminates the implicit coupling between server values and Phaser pixels. By expressing positions as `(worldX, worldY, mapId)` in a stable logical unit independent of screen resolution, the server can:
+The logical coordinate system eliminates the implicit coupling between server values and Phaser pixels. Positions expressed as `(worldX, worldY, mapId)` in World Units are stable: their value does not depend on Phaser scene bounds, screen resolution, or tile visual dimensions.
 
+World Units (1 tile = 1024 WU = 2^10) were selected for their architectural properties:
+
+- **Determinism**: integer arithmetic is identical across all platforms, compilers, and languages. Unlike IEEE 754 floating-point, the result of `worldX + 112` is always the same regardless of environment.
+- **Interoperability**: integer values transfer without precision loss across JSON, binary protocols, and database engines.
+- **Spatial hierarchy**: bit operations expose the full hierarchy without division: `tileX = worldX >> 10`, `chunkX = worldX >> 16`.
+- **Absence of NaN/Infinity**: these pathological floating-point states cannot occur in integer arithmetic.
+- **Compact storage**: int32 (4 bytes) versus float64 (8 bytes).
+
+The supporting analysis is in `docs/08_Gameplay/world-units-study.md`.
+
+The server can:
 - Determine chunk membership without any client involvement.
-- Apply range checks and movement rules in units that are directly meaningful in the map grid.
+- Apply range checks and movement rules in units directly meaningful in the map grid.
 - Support multiple maps by adding `mapId` to every position.
-
-The choice of logical unit (tile float, WU, sub-tile integer, or another representation) is an open question documented in `docs/08_Gameplay/world-units-study.md`. The rationale above holds regardless of that choice: the key property is that the unit is defined relative to the tile grid, not relative to screen pixels.
 
 The isometric projection is placed entirely on the client. This respects the existing client-server trust boundary: the server is the authority on position, and the client is responsible only for rendering.
 
@@ -206,13 +252,13 @@ Keeping `origin` per-map rather than as a global constant ensures the engine doe
 
 ### Negative
 
-- All existing entity positions stored as pixel-equivalent values must be migrated or reinterpreted. The migration strategy is an open question.
-- Range constants (`RESOURCE_INTERACT_RANGE`, `patrolRadius`, speed values) are currently expressed in pixel-equivalent units and must be redefined in the chosen logical unit. Their conversion depends on the unit decision, which is an open question.
+- All existing entity positions stored as pixel-equivalent values must be converted to World Units using the inverse projection formula × `TILE_SIZE_WU`. The conversion is not a scalar — it varies by direction (see `docs/08_Gameplay/world-units-study.md`). The migration strategy is defined in ADR-0003.
+- Range constants (`RESOURCE_INTERACT_RANGE`, `patrolRadius`, speed values) are currently in pixel-equivalent units and must be recalibrated in WU. Their numerical values are not decided yet (deferred to gameplay calibration).
 - The client must perform the projection conversion on every rendered entity every frame. This is not new work, but it must be done correctly and consistently.
 
 ### Risks
 
-- If the migration is partial, some entities may use old pixel coordinates and others tile coordinates simultaneously, causing incorrect gameplay calculations.
+- If the migration is partial, some entities may use old pixel coordinates and others WU simultaneously, causing incorrect gameplay calculations.
 - If `origin` is defined inconsistently across map loaders, tile and sprite positions will diverge visually even though the formula is correct.
 - If the server performs range checks before coordinates are migrated, interaction ranges will be incorrect for any entity whose coordinate space has changed.
 
@@ -226,8 +272,8 @@ Keeping `origin` per-map rather than as a global constant ensures the engine doe
 | Tiled pipeline | No format change; TMJ chunk files map directly to `localTileX`, `localTileY` grids |
 | Admin tool | Coordinate display and `/tp` command must use `worldX`, `worldY` |
 | Pathfinding (`MapLoader`, `Pathfinder`) | Grid tile size must match `CHUNK_SIZE`; grid coordinates become `localTileX`, `localTileY` |
-| Animal AI | Movement, aggro, fuite, and patrol logic must operate in the chosen logical unit; speed and radius constants must be rescaled |
-| Resources | Resource positions and interaction range must be expressed in the chosen logical unit |
+| Animal AI | Movement, aggro, fuite, and patrol logic must operate in WU; speed (WU/s) and radius (WU) constants must be recalibrated |
+| Resources | Resource positions and interaction range must be expressed in WU |
 | NPCs (future) | Must use `mapId`, `worldX`, `worldY` from the start |
 | Players | `syncLocalPlayer` must emit `worldX`, `worldY`; `world_joined` must return `worldX`, `worldY` |
 
@@ -243,8 +289,8 @@ Screen coordinates and camera state are client-only. They must never influence s
 
 ## Performance impact
 
-- Deriving `chunkX`, `chunkY` from `worldX`, `worldY` is two integer divisions per position update: negligible.
-- Deriving `localTileX`, `localTileY` adds two modulo operations: negligible.
+- Deriving `chunkX`, `chunkY` from `worldX`, `worldY` is two right-shifts per position update: negligible.
+- Deriving `localTileX`, `localTileY` is one right-shift plus one bitwise AND per axis: negligible.
 - The projection formula is two additions, two subtractions, and two multiplications per entity per frame on the client: negligible at current entity counts.
 - Adding `mapId` to socket payloads adds one field per movement event: negligible.
 - Future chunk-scoped Socket.IO rooms will reduce broadcast fanout, improving performance at scale. This is a consequence, not a cost.
@@ -253,7 +299,7 @@ Screen coordinates and camera state are client-only. They must never influence s
 
 Migration strategy is an open question. See Open questions below.
 
-Until migration is complete, the existing `x`, `y` columns and pixel-equivalent values remain operative. No gameplay logic must mix migrated tile coordinates with unmigrated pixel coordinates in the same calculation.
+Until migration is complete, the existing `x`, `y` columns and pixel-equivalent values remain operative. No gameplay logic must mix migrated WU coordinates with unmigrated pixel coordinates in the same calculation.
 
 Code using the new coordinate system must be isolated from code using the old system until a full cutover is validated.
 
@@ -269,17 +315,15 @@ Code using the new coordinate system must be isolated from code using the old sy
 
 ## Open questions
 
-- **Logical unit choice**: what is the logical unit of `worldX` and `worldY`? The candidates are: tile float (one tile = 1.0), World Units (WU, a named alias for the chosen scale), fixed-point sub-tile integer (e.g. 1/16 tile = 1 integer unit), or another equivalent. This is the primary open question that blocks all numerical migration work. The analysis is in `docs/08_Gameplay/world-units-study.md`.
+- **Storage column type**: `worldX` and `worldY` are signed integers. The target DB type is `INTEGER` (int32) by default, which supports maps up to 2 097 151 tiles per axis (int32 max / TILE_SIZE_WU ≈ 2 147 483 647 / 1024). `BIGINT` (int64) is the fallback for worlds exceeding that range. The exact type is confirmed at migration time.
 
-- **Storage type**: should `worldX`, `worldY` be stored as `FLOAT`, `DOUBLE PRECISION`, a fixed-precision integer, or a pair of integer tile index plus sub-tile offset columns? This question is downstream of the logical unit choice. Each storage strategy has trade-offs in schema clarity, query performance, and migration cost. This decision is deferred until the unit is chosen.
+- **Migration strategy**: how should existing pixel-equivalent positions be converted to WU? The conversion uses the inverse projection formula × `TILE_SIZE_WU`. It requires the final per-map origin offset (currently `TILEMAP_TEST_OFFSET_X = 936`, which is temporary). Existing gameplay constants (range, speed, radius) must be recalibrated in WU — their new values are not decided yet.
 
-- **Migration strategy**: how should existing `positionX`/`positionY` pixel values be converted to `worldX`/`worldY` values? What is the conversion factor? Must existing gameplay constants (range, speed, radius) be rescaled, and by how much? Depends on the unit choice.
+- **Speed and range constants in WU**: `RESOURCE_INTERACT_RANGE = 100`, `MELEE_RANGE = 60`, animal `patrolRadius`, `speedMax` are in pixel-equivalent units. Their WU equivalents require calibration using the inverse projection (not a scalar — see `docs/08_Gameplay/world-units-study.md`) and gameplay validation.
 
-- **Speed and distance units**: `RESOURCE_INTERACT_RANGE = 100`, animal `patrolRadius`, and `speedMax` are currently in pixel-equivalent units. What are their values in the chosen logical unit?
+- **Gameplay distance metric**: the shape of range checks (melee, gathering, aggro) depends on whether distance is computed as Euclidean WU, Euclidean pixel (projected), Chebyshev, or Manhattan. This decision is deferred to gameplay calibration after the WU migration.
 
-- **Sub-tile precision**: is sub-tile movement required at the server simulation level, or can movement be snapped to discrete tiles at the server and interpolated only on the client?
-
-- **Official conversion constant**: if a pixel-to-WU conversion factor is needed during migration, what is its value? Note that the isometric projection does not produce a single scalar: the conversion factor varies by direction. See `docs/08_Gameplay/world-units-study.md` for the mathematical analysis.
+- **Tilemap origin offset**: `TILEMAP_TEST_OFFSET_X = 936` is temporary. The final per-map origin must be defined before any px → WU conversion can be applied.
 
 ## Non-goals
 
@@ -289,7 +333,8 @@ Code using the new coordinate system must be isolated from code using the old sy
 - This ADR does not specify how Tiled chunk files are named or stored.
 - This ADR does not define multi-instance or sharding architecture.
 - This ADR does not document gameplay mechanics beyond coordinate semantics.
-- This ADR does not resolve the open storage type question.
+- This ADR does not define the gameplay distance metric (Euclidean WU, pixel, Chebyshev, Manhattan).
+- This ADR does not calibrate speed or range constants in WU.
 
 ## Security notes
 
@@ -326,5 +371,6 @@ Chunk-scoped Socket.IO rooms are a future consequence of this system. Their desi
 - [ ] Update `docs/05_World/maps-and-collisions.md` to reference this ADR for coordinate authority.
 - [ ] Update `docs/03_Client/phaser-world.md` to document the projection formula as the official conversion.
 - [ ] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`.
-- [ ] Update `docs/06_Database/schema.md` when the storage type question is resolved.
-- [ ] Resolve open questions in a follow-up session before implementation begins.
+- [ ] Update `docs/06_Database/schema.md` when the DB column type (`INTEGER` vs `BIGINT`) is confirmed.
+- [ ] Resolve remaining open questions (migration strategy, distance metric, origin offset) before implementation begins.
+- [ ] Update `docs/05_World/chunks.md` to document `TILE_SIZE_WU = 1024` and the bit-field derivations.

@@ -243,7 +243,7 @@ but the server enforces the value.
 
 The current client-side `Player.speed = 100` is an implicit claim that the
 server currently cannot verify. After migration, `baseSpeed` must be defined
-in logical units and stored or computed server-side.
+in World Units per second (WU/s) and stored or computed server-side.
 
 ### 4. Client behavior (prediction and display)
 
@@ -272,8 +272,8 @@ replaced. The target payload is:
 ```
 player_move: {
   mapId:       string,
-  worldX:  number,  // logical units, fractional
-  worldY:  number,  // logical units, fractional
+  worldX:  number,  // WU, signed integer (1 tile = 1024 WU)
+  worldY:  number,  // WU, signed integer (1 tile = 1024 WU)
   direction:   string   // optional, display hint
 }
 ```
@@ -415,8 +415,8 @@ without the full complexity of server-side movement integration.
 
 - **Partial migration**: if the distance gate is added before the coordinate
   migration (ADR-0001, ADR-0002), the gate operates in pixel-equivalent units.
-  Speed values are not yet defined in tile units. The gate cannot be correctly
-  calibrated until speed units are resolved.
+  Speed values are not yet calibrated in World Units. The gate cannot be correctly
+  calibrated until speed constants are expressed in WU/s.
 - **Tile collision data availability**: the server does not currently have
   access to the collision grid. Building and serving this data server-side is a
   prerequisite for the walkability check.
@@ -442,11 +442,11 @@ These items are not defined by this ADR but block its implementation.
 
 | Step | What | Depends on |
 |---|---|---|
-| 0.1 | Resolve ADR-0001 storage type and conversion factor | ADR-0001 open questions |
+| 0.1 | Confirm DB column type (`INTEGER` vs `BIGINT`) and finalize per-map origin offset | ADR-0001 remaining open questions |
 | 0.2 | Add `mapId` to all position-bearing entities | ADR-0001, ADR-0002 |
-| 0.3 | Rename entity columns to `worldX / worldY` | 0.1, 0.2 |
+| 0.3 | Rename entity columns to `worldX / worldY` (signed integer, WU) | 0.1, 0.2 |
 | 0.4 | Migrate WebSocket payloads to `{ mapId, worldX, worldY }` | 0.3 |
-| 0.5 | Convert speed and range constants to tile units | 0.1 |
+| 0.5 | Calibrate speed and range constants in World Units (WU/s) via gameplay validation | 0.1 |
 
 ### Phase 1 — Server validation (this ADR)
 
@@ -588,7 +588,8 @@ with ADR-0002.
 - This ADR does not define the map entity or zone transition mechanics.
 - This ADR does not define the `effectiveSpeed` modifier pipeline beyond
   naming it as a server-owned value.
-- This ADR does not resolve the ADR-0001 storage type or conversion factor.
+- This ADR does not calibrate speed or range constants in WU (deferred to gameplay calibration).
+- This ADR does not define the gameplay distance metric (Euclidean WU, projected pixel, Chebyshev, Manhattan).
 - This ADR does not define database migration scripts.
 
 ---

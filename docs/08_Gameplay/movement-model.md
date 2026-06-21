@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-22
 - Depends on: docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md,
   docs/01_Architecture/adr/ADR-0002-entity-positioning.md,
   docs/08_Gameplay/world-model.md,
@@ -25,7 +25,7 @@ not how they are implemented.
 
 The numerical values of speed, radius, and range constants are intentionally
 left as open questions. The rules that govern them are fixed. The values will
-be specified once the coordinate conversion factor from ADR-0001 is validated.
+be calibrated in World Units once gameplay testing determines the correct feel.
 
 This document supersedes any earlier, implicit movement behavior. When this
 document and the current implementation disagree, this document is the intended
@@ -40,12 +40,10 @@ Reference document for the analysis that preceded this model:
 
 Movement in this game is **continuous**.
 
-An entity does not move tile by tile. It occupies a fractional position in the
-world grid at all times. Its position is expressed as `worldX` and `worldY` as defined by ADR-0001.
-The logical unit of `worldX` and `worldY` is an open question — see
-`docs/08_Gameplay/world-units-study.md`. The integer part of each coordinate
-identifies a tile; the fractional part represents the sub-unit offset within
-that tile.
+An entity does not move tile by tile. It occupies a continuous position in the
+world grid at all times. Its position is expressed as `worldX` and `worldY` as defined by ADR-0001
+— signed integers in World Units (WU), where `1 tile = 1024 WU`. The tile index is `worldX >> 10`;
+the sub-tile offset is `worldX & 1023`.
 
 Tiles do not constrain where an entity stands. They govern what happens to an
 entity based on where it stands: whether it can walk there, what speed applies,
@@ -61,7 +59,7 @@ as a source of truth for gameplay.
 
 In a continuous movement world, tiles serve four distinct purposes.
 
-**Walkability.** The tile at `(floor(worldX), floor(worldY))` is the
+**Walkability.** The tile at `(worldX >> 10, worldY >> 10)` is the
 entity's current tile. If that tile is marked as blocked in the collision layer,
 the entity cannot occupy it. The server enforces this.
 
@@ -70,11 +68,11 @@ coordinates. An entity's continuous position is converted to integer tile
 indices before the search begins. The result is a list of integer waypoints
 that the entity follows continuously at its current speed.
 
-**Chunk membership.** An entity's chunk is derived from its tile position:
+**Chunk membership.** An entity's chunk is derived from its WU position:
 
 ```
-chunkX = floor(worldX / CHUNK_SIZE)
-chunkY = floor(worldY / CHUNK_SIZE)
+chunkX = worldX >> 16    // CHUNK_SIZE_WU = 65536 = 2^16
+chunkY = worldY >> 16
 ```
 
 Chunk membership drives interest management and future Socket.IO room scoping.
@@ -92,15 +90,15 @@ An entity can never exist outside its Map.
 A Map has a finite extent defined by the number of chunks it contains:
 
 ```
-mapWidthTiles  = mapWidthChunks  × CHUNK_SIZE
-mapHeightTiles = mapHeightChunks × CHUNK_SIZE
+mapWidthWU  = mapWidthChunks  × CHUNK_SIZE_WU   // = mapWidthChunks × 65536
+mapHeightWU = mapHeightChunks × CHUNK_SIZE_WU
 ```
 
 A valid entity position satisfies:
 
 ```
-0 ≤ worldX < mapWidthTiles
-0 ≤ worldY < mapHeightTiles
+0 ≤ worldX < mapWidthWU
+0 ≤ worldY < mapHeightWU
 ```
 
 The server validates these bounds on every position that is stored, broadcast,
@@ -193,22 +191,22 @@ and are applied unconditionally.
 
 ### Base speed
 
-Every entity has a `baseSpeed` expressed in **logical units per second** (WU/s).
+Every entity has a `baseSpeed` expressed in **World Units per second (WU/s)**.
 
 The numerical value of `baseSpeed` for each entity type is an open question
-pending the resolution of the ADR-0001 logical unit choice. Current
-pixel-equivalent speed values are preserved temporarily and must be converted
-to logical units before server-side movement integration is implemented.
+pending gameplay calibration. Current pixel-equivalent speed values are preserved
+temporarily and must be recalibrated in WU/s before server-side movement
+integration is implemented.
 
 Speed integration follows:
 
 ```
-worldX += dirX × effectiveSpeed × dt
-worldY += dirY × effectiveSpeed × dt
+worldX += round(dirX × effectiveSpeed × dt)    // result in WU, signed integer
+worldY += round(dirY × effectiveSpeed × dt)
 ```
 
 Where `dirX` and `dirY` form a unit direction vector and `dt` is the elapsed
-time in seconds.
+time in seconds. `round()` preserves integer invariant after fractional multiplication.
 
 ### Effective speed
 
@@ -281,21 +279,21 @@ destination tile, both expressed as integer coordinates derived from continuous
 positions:
 
 ```
-startTileX = floor(worldX)
-startTileY = floor(worldY)
+startTileX = worldX >> 10
+startTileY = worldY >> 10
 ```
 
 The output is a sequence of waypoint tiles. The entity follows these waypoints
 continuously at `effectiveSpeed`, moving toward the center of each waypoint:
 
 ```
-waypointCenterX = waypointTileX + 0.5
-waypointCenterY = waypointTileY + 0.5
+waypointCenterX = (waypointTileX << 10) + 512   // tile center in WU
+waypointCenterY = (waypointTileY << 10) + 512
 ```
 
 Once within the arrival threshold of a waypoint center, the entity advances to
-the next waypoint. The arrival threshold is expressed in logical units. Its exact
-value is an open question.
+the next waypoint. The arrival threshold is expressed in World Units. Its exact
+value is an open question (gameplay calibration).
 
 If pathfinding fails (no path found, destination blocked, destination out of
 bounds), the entity stops. The player must issue a new order.
@@ -403,19 +401,20 @@ inventory capacity.
 The following questions are not resolved by this model. They must be answered
 before the corresponding behavior can be implemented.
 
-1. **Coordinate conversion factor.** What is the factor to convert existing
-   pixel-equivalent positions to `worldX / worldY` values? This
-   unblocks all numerical speed and distance decisions.
+1. **Per-map origin offset.** The final value of `TILEMAP_TEST_OFFSET_X/Y` is
+   currently temporary. The WU origin for each map must be defined before any
+   px → WU conversion can produce stable values.
 
-2. **Exact speed values in logical units.** What is `baseSpeed` for the player?
+2. **Exact speed values in WU/s.** What is `baseSpeed` for the player?
    What are `speedMin`, `speedMax`, `patrolRadius`, and `aggroRadius` for each
-   animal template? Depends on question 1.
+   animal template? Requires gameplay calibration after per-map origin is fixed.
 
-3. **Exact distance and range values in logical units.** `RESOURCE_INTERACT_RANGE`
-   and similar constants. Depends on question 1.
+3. **Exact distance and range values in WU.** `RESOURCE_INTERACT_RANGE`
+   and similar constants. Requires calibration.
 
-4. **DB storage type for `worldX / worldY`.** FLOAT, DOUBLE PRECISION,
-   or split integer columns? Deferred to ADR-0001.
+4. **Gameplay distance metric.** Euclidean WU, projected Euclidean pixel,
+   Chebyshev, or Manhattan? Determines the effective shape of range checks.
+   Deferred to ADR-0001 and gameplay validation.
 
 5. **Sub-tile collision strategy.** When is a tile-level check insufficient?
    Does the project need bounding-box collision? Entity-to-entity collision?
@@ -432,8 +431,8 @@ before the corresponding behavior can be implemented.
    entity is following a path, does the path recompute automatically, or does
    the entity stop and wait for a new order?
 
-9. **Arrival threshold in logical units.** What sub-tile distance is close enough
-   to a waypoint to count as arrival? Depends on question 1.
+9. **Arrival threshold in WU.** What sub-tile distance is close enough
+   to a waypoint to count as arrival? Requires gameplay calibration.
 
 10. **Pathfinding authority for players.** Does pathfinding run on the client
     (result sent to server as waypoints) or on the server (client receives

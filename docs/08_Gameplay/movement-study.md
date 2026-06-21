@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-22
 - Depends on: docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md,
   docs/01_Architecture/adr/ADR-0002-entity-positioning.md,
   docs/08_Gameplay/entity-model.md, docs/08_Gameplay/world-model.md,
@@ -34,9 +34,9 @@ These constraints are not open questions. They frame every analysis below.
 - Tiles serve the logical world: collisions, resource placement, pathfinding
   grid, chunk boundaries. They do not constrain the physical position of entities.
 - Every entity has a continuous logical position expressed in
-  `worldX / worldY` (ADR-0001). The logical unit is an open question — see
-  `docs/08_Gameplay/world-units-study.md`. The integer part identifies a tile;
-  the fractional part represents the sub-unit offset within that tile.
+  `worldX / worldY` (ADR-0001) — signed integers in World Units (WU), `1 tile = 1024 WU`.
+  The tile index is `worldX >> 10`; the sub-tile offset is `worldX & 1023`.
+  The architectural rationale is in `docs/08_Gameplay/world-units-study.md`.
 - The server is authoritative. Client-reported positions are intentions. The
   server validates and corrects them.
 - Phaser pixel coordinates are never the source of truth. `screenX / screenY`
@@ -93,8 +93,10 @@ Current seed values (pixel-equivalent units):
 | Turkey | 25 | 60 | 200 | 50 |
 | Goblin | 40 | 80 | 150 | 120 |
 
-These constants have no defined unit beyond pixel-equivalence. ADR-0001 marks
-them as an open question (speed and distance in logical units TBD).
+These constants are in pixel-equivalent units. They must be recalibrated in
+World Units (WU/s for speeds, WU for distances) before server-side movement
+integration is implemented. The numerical recalibration requires gameplay
+validation after per-map origins are finalized — see ADR-0001 open questions.
 
 ### Known technical debt
 
@@ -133,8 +135,8 @@ is not snapped to it at runtime.
 
 Consequence: the server must integrate movement at every tick (or on every
 validated client event) and must store fractional `worldX / worldY`.
-The ADR-0001 open question on storage type (FLOAT vs fixed-precision INT) must
-be resolved before implementation.
+The unit is World Units (WU, signed integer, `1 tile = 1024 WU`) as decided in ADR-0001.
+The DB column type (`INTEGER` vs `BIGINT`) must be confirmed at migration time based on world size.
 
 ### 2. Role of tiles in a continuous movement world
 
@@ -263,41 +265,34 @@ currently accepts the client's `x / y` values without distance or walkability
 validation. This is a known security gap that must be closed during or after
 the coordinate migration.
 
-### 8. Speed in logical units
+### 8. Speed in World Units
 
-After migration to ADR-0001 coordinates, speed must be expressed in **logical
-units per second** (WU/s). The exact numerical value depends on the logical
-unit choice — see `docs/08_Gameplay/world-units-study.md`.
+After migration to ADR-0001 coordinates, speed must be expressed in **World
+Units per second (WU/s)**. The official unit is `1 tile = 1024 WU` as decided in ADR-0001.
 
-Current pixel-equivalent speeds and their approximate WU equivalents depend
-on the ADR-0001 unit choice (open question). For reference, using the
-isometric formula where `HALF_TILE_W = 64` and `HALF_TILE_H = 32`, if 1 WU = 1 tile:
+Current pixel-equivalent speeds must be recalibrated via gameplay testing.
+The isometric projection makes the conversion direction-dependent; there is
+no single scalar factor from pixels to WU — see `docs/08_Gameplay/world-units-study.md`.
 
-- A horizontal movement of 1 WU corresponds to 64 screen pixels in X and 32
-  screen pixels in Y (via projection).
-- `player.speed = 100` px/s is approximately `100 / 64 ≈ 1.56` WU/s
-  horizontally, or `100 / 32 ≈ 3.1` WU/s vertically.
-- The isometric projection makes this conversion direction-dependent; there is
-  no single scalar factor — see `docs/08_Gameplay/world-units-study.md`.
-
-The correct approach: define `speed` in logical units per second (e.g.,
-`1.5 WU/s`), apply it to the `worldX / worldY` delta at each tick, and let
-the projection formula produce the screen velocity automatically.
+The correct approach: define `speed` in WU/s, apply it to the `worldX / worldY`
+delta at each tick, and let the projection formula produce the screen velocity
+automatically. Note that since `worldX/worldY` are integers, the integration
+result must be rounded:
 
 Speed integration at the server level:
 
 ```
-worldX += dirX * speed * dt   // speed in WU/s, dt in seconds
-worldY += dirY * speed * dt
+worldX += round(dirX * speed * dt)   // speed in WU/s, dt in seconds, result in WU
+worldY += round(dirY * speed * dt)
 ```
 
 At the client level for local prediction:
 
 ```
-worldX += dirX * speed * dt
-worldY += dirY * speed * dt
-screenX = origin.x + (worldX − worldY) × HALF_TILE_W
-screenY = origin.y + (worldX + worldY) × HALF_TILE_H
+worldX += round(dirX * speed * dt)
+worldY += round(dirY * speed * dt)
+screenX = origin.x + (worldX − worldY) / 16    // HALF_TILE_W / TILE_SIZE_WU = 64/1024
+screenY = origin.y + (worldX + worldY) / 32    // HALF_TILE_H / TILE_SIZE_WU = 32/1024
 ```
 
 ### 9. Speed modifiers
@@ -518,7 +513,7 @@ units.
 ### Approach B — Coordinate migration + server validation
 
 Approach A plus: implement server-side distance validation on `player_move`.
-Convert all speed and range constants to logical units. Enforce tile walkability
+Convert all speed and range constants to World Units (WU/s, WU). Enforce tile walkability
 on server.
 
 This closes the primary anti-cheat gap. Client prediction remains implicit
@@ -547,20 +542,21 @@ introduced before the simpler approaches are stable.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Partial migration: some entities in pixel units, others in logical units | High | Migration must be atomic per entity type (ADR-0002). Never mix coordinate spaces in a single calculation. |
+| Partial migration: some entities in pixel units, others in WU | High | Migration must be atomic per entity type (ADR-0002). Never mix coordinate spaces in a single calculation. |
 | Pathfinder grid mismatch after isometric migration | Medium | The pathfinder grid must be rebuilt to match `localTileX / localTileY` during the migration. |
 | No server validation of player positions allows speed hacking | Medium | Implement distance gate as part of Approach B before the game is multi-player. |
 | Drag mode allows wall crossing on client | Low (server corrects) | Server tile check prevents the position from being accepted. Client visual glitch only until reconciliation is implemented. |
-| Speed constants not yet defined in logical units | Medium | Must be resolved before any server-side movement integration uses them. |
-| ADR-0001 storage type unresolved | Blocking | Float vs integer split must be decided before implementing server-side movement. |
+| Speed constants not yet calibrated in WU/s | Medium | Must be resolved before any server-side movement integration uses them. |
+| DB column type (`INTEGER` vs `BIGINT`) unconfirmed | Low | Choose `INTEGER` by default; upgrade to `BIGINT` only if world exceeds 2 097 151 tiles per axis. |
 | Terrain modifier lookup adds cost per tick per entity | Low | At current entity counts, one tile lookup per tick is negligible. Must be cached when chunk-wide lookups are needed. |
 
 ---
 
 ## Open questions
 
-1. **What is the tile-unit value of `player.speed = 100` px/s?** This requires
-   the ADR-0001 conversion factor, which is not yet decided.
+1. **What is the WU/s value of `player.speed = 100` px/s?** The unit is decided
+   (WU, `1 tile = 1024 WU`), but the numerical calibration requires gameplay
+   testing and the final per-map origin offset.
 2. **Should the server integrate player movement per tick, or validate
    client-reported positions?** Per-tick server integration is more authoritative
    but requires the server to receive inputs rather than positions. Validating
@@ -592,13 +588,13 @@ Proceed in two phases.
 **Phase 1 — Coordinate compliance (Approach A)**
 
 Implement the ADR-0001 and ADR-0002 coordinate migration. Rename columns and
-payloads. Convert existing speed and range constants to logical units once the
-conversion factor is decided. Rebuild the pathfinder grid to use
-`localTileX / localTileY`. This phase does not change movement behavior; it
-aligns the codebase with the defined coordinate system.
+payloads. Calibrate speed and range constants in WU/s and WU once per-map
+origins are finalized. Rebuild the pathfinder grid to use
+`localTileX / localTileY` (`worldX >> 10`). This phase does not change movement
+behavior; it aligns the codebase with the defined coordinate system.
 
-Priority: resolve the ADR-0001 storage type open question first, as it blocks
-every migration step.
+Priority: finalize the per-map origin offset (`TILEMAP_TEST_OFFSET_X/Y`), as
+it is required to convert existing pixel-equivalent seed positions to WU.
 
 **Phase 2 — Server authority (Approach B)**
 

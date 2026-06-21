@@ -5,7 +5,7 @@
 - Status: Draft
 - Decision status: Proposed
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-22
 - Date proposed: 2026-06-21
 - Date accepted: N/A
 - Approved by: TBD
@@ -19,7 +19,7 @@
 
 ## Context
 
-ADR-0001 defines the official world coordinate system: all positions are expressed as `mapId`, `worldX`, and `worldY`. The logical unit of `worldX` and `worldY` is an open question — see `docs/08_Gameplay/world-units-study.md`. It establishes that screen coordinates are never persisted and that the server is fully independent of Phaser.
+ADR-0001 defines the official world coordinate system: all positions are expressed as `mapId`, `worldX`, and `worldY`. The official unit is the World Unit (WU), where `1 tile = 1024 WU`. `worldX` and `worldY` are signed integers. The architectural rationale is in `docs/08_Gameplay/world-units-study.md`. Screen coordinates are never persisted and the server is fully independent of Phaser.
 
 At the time this ADR is written, five entity types carry world positions:
 
@@ -42,7 +42,7 @@ Without a defined entity positioning policy:
 - `mapId` cannot be added consistently to entities because there is no column naming convention.
 - Static and dynamic entities have different precision requirements, but no rule separates them.
 - WebSocket payloads carry `x` and `y` without a defined unit or map scope.
-- Server-side gameplay logic (`checkInteraction`, `patrolRadius`, `speedMax`) cannot be migrated to tile units without knowing which entities use which precision level.
+- Server-side gameplay logic (`checkInteraction`, `patrolRadius`, `speedMax`) cannot be migrated to World Units (WU) without knowing which entities use which precision level.
 - It is not clear which entity types need continuous sub-tile positions and which can use integer tile positions.
 
 ## Decision drivers
@@ -53,7 +53,7 @@ Without a defined entity positioning policy:
 - Dynamic entities (server-driven or player-driven movement) require sub-tile precision.
 - WebSocket payloads must carry `mapId`, `worldX`, `worldY` for all position updates.
 - The server remains authoritative: positions received from the client are intentions, not facts.
-- The actual DB column type for `worldX`/`worldY` is deferred to the storage type decision from ADR-0001.
+- The DB column type for `worldX`/`worldY` is a signed integer (`INTEGER` by default, `BIGINT` for very large worlds) as decided in ADR-0001.
 
 ## Considered options
 
@@ -84,22 +84,22 @@ All position-bearing entities adopt the following columns:
 | Column | Type | Description |
 |---|---|---|
 | `mapId` | `INT` (FK to future `map` entity, or string identifier) | Map the entity belongs to |
-| `worldX` | TBD (see ADR-0001 open storage question) | X position in logical world space |
-| `worldY` | TBD (see ADR-0001 open storage question) | Y position in logical world space |
+| `worldX` | Signed integer — `INTEGER` (int32) by default; `BIGINT` (int64) if world exceeds 2 097 151 tiles per axis | X position in **World Units (WU)**, `1 tile = 1024 WU` |
+| `worldY` | Signed integer — `INTEGER` (int32) by default; `BIGINT` (int64) if world exceeds 2 097 151 tiles per axis | Y position in **World Units (WU)**, `1 tile = 1024 WU` |
 
-The column type for `worldX` and `worldY` is not decided in this ADR. It will be determined when the ADR-0001 storage type question is resolved.
+`worldX` and `worldY` are signed integers in World Units (WU) as defined by ADR-0001. The exact column type (`INTEGER` vs `BIGINT`) is confirmed at migration time based on world size.
 
 ### Entity classification
 
 | Entity | Movement class | `worldX/Y` value | Notes |
 |---|---|---|---|
-| `character` | Dynamic | Continuous (sub-tile fractional) | Controlled by player input; server validates |
-| `animal` | Dynamic | Continuous (sub-tile fractional) | Driven by server AI; always authoritative |
+| `character` | Dynamic | Continuous WU integer (sub-tile via `& 1023`) | Controlled by player input; server validates |
+| `animal` | Dynamic | Continuous WU integer (sub-tile via `& 1023`) | Driven by server AI; always authoritative |
 | `resource` | Static | Integer (whole tile) | Placed at map authoring time; never moves |
 | `creature_spawn` | Static | Integer (whole tile) | Spawn point; never moves at runtime |
 | `respawn_point` | Static | Integer (whole tile) | Respawn anchor; never moves at runtime |
 
-Static entities store whole-tile values (`worldX = 12.0`, `worldY = 7.0`). No fractional part is ever set for them at authoring time. This allows uniform column names while preserving the semantic distinction.
+Static entities store whole-tile values (`worldX = 12 × 1024 = 12288`, `worldY = 7 × 1024 = 7168`). Their sub-tile offset is always zero. This allows uniform column names while preserving the semantic distinction between static and dynamic entities.
 
 ### WebSocket payload contract
 
@@ -130,7 +130,7 @@ Option C (uniform naming, value distinguishes static/dynamic) avoids introducing
 
 Defining the WebSocket payload contract in this ADR ensures that the coordinate rename (`x/y` → `worldX/worldY`) happens consistently across all events rather than being patched event by event.
 
-Keeping the actual column type deferred maintains consistency with ADR-0001. The type decision must precede implementation of either this ADR or ADR-0001.
+Uniform naming with a signed integer column type (decided in ADR-0001) avoids introducing two parallel column sets while keeping query patterns consistent across all entity types.
 
 ## Consequences
 
@@ -168,8 +168,8 @@ Keeping the actual column type deferred maintains consistency with ADR-0001. The
 | `WorldGateway` | Update `player_move` and join handlers; broadcast `mapId` |
 | WebSocket payloads | All position events: `x/y` → `worldX/Y`, add `mapId` |
 | Phaser client | All sprite positioning: use projection formula from ADR-0001 |
-| Admin tool | `/tp` and coordinate display: tile units, `mapId` required |
-| Seeds | Hardcoded positions must be expressed in tile units with `mapId` |
+| Admin tool | `/tp` and coordinate display: WU (`1 tile = 1024 WU`), `mapId` required |
+| Seeds | Hardcoded positions must be expressed in WU with `mapId` |
 
 ## Security impact
 
@@ -192,10 +192,10 @@ The coordinate rename does not weaken the existing trust model. Client-reported 
 
 Migration order is an open question. A safe approach:
 
-1. Resolve the ADR-0001 storage type question first.
+1. Confirm DB column type (`INTEGER` vs `BIGINT`) based on planned world size.
 2. Migrate entities one type at a time, starting with static entities (resources, spawns, respawn points) where no in-memory state is affected.
 3. Migrate dynamic entities (characters, animals) with a cutover that updates both entity columns and WebSocket payloads simultaneously.
-4. Seed data must be updated to use tile coordinates before or at migration time.
+4. Seed data must be updated to use WU values before or at migration time.
 
 No mixed-state operation: during migration of a given entity type, all code paths that read or write its position must be updated atomically.
 
@@ -213,10 +213,9 @@ No mixed-state operation: during migration of a given entity type, all code path
 
 - **`mapId` type and FK target**: should `mapId` be an integer FK to a future `map` entity, or a string identifier? The `map` entity does not yet exist.
 - **Migration order**: in what order should the five entity types be migrated? What handles the transition period where some code uses old columns and some uses new?
-- **Seed data**: how should existing hardcoded seed positions (e.g., respawn point at x=600, y=300) be converted to tile units? This depends on the ADR-0001 conversion factor.
+- **Seed data**: how should existing hardcoded seed positions (e.g., respawn point at x=600, y=300) be converted to WU? This requires the final per-map origin offset (currently `TILEMAP_TEST_OFFSET_X = 936`, temporary) and the inverse projection formula from ADR-0001.
 - **`mapId` default value during migration**: what `mapId` value is assigned to all existing entities that have no map concept yet?
 - **Payload backward compatibility**: should a transition period with dual-format payloads be supported, or is a hard cutover required?
-- **Column type**: deferred to ADR-0001 storage type resolution.
 
 ## Non-goals
 
@@ -225,8 +224,9 @@ No mixed-state operation: during migration of a given entity type, all code path
 - This ADR does not define the DB migration scripts.
 - This ADR does not define how `mapId` is assigned at player login or world join.
 - This ADR does not define zone transition mechanics.
-- This ADR does not resolve the ADR-0001 storage type question.
-- This ADR does not define the conversion factor between current pixel values and tile units.
+- This ADR does not define the gameplay distance metric.
+- This ADR does not calibrate speed or range constants in WU.
+- This ADR does not define the migration conversion formula (see ADR-0001 and ADR-0003).
 
 ## Security notes
 
@@ -260,9 +260,9 @@ Position columns are read and written on every movement event and every AI tick.
 - [ ] Obtain human approval and record it in `Approved by` and `Approval reference`.
 - [ ] Set `Decision status` to `Accepted` after human validation.
 - [ ] Set `Date accepted` after human validation.
-- [ ] Resolve ADR-0001 storage type question before implementation.
+- [ ] Confirm DB column type (`INTEGER` vs `BIGINT`) before implementation.
 - [ ] Define `mapId` type and FK target (requires a `map` entity ADR or decision).
 - [ ] Define migration order and transition strategy.
 - [ ] Update `docs/04_Server/websockets.md` to document the new payload format.
 - [ ] Update `docs/06_Database/schema.md` after the migration is implemented.
-- [ ] Update seed files when tile coordinate values are defined.
+- [ ] Update seed files to use WU values once per-map origins are finalized.
