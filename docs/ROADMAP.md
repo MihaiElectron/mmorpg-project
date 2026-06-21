@@ -123,8 +123,9 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] Collision
 - [ ] Resources
 - [ ] NPC
-- [ ] Animals
-- [ ] Combat
+- [x] Aggro animal (détection, poursuite, fuite, auto-attaque, riposte)
+- [ ] Animals (système complet)
+- [ ] Combat (système complet)
 
 ---
 
