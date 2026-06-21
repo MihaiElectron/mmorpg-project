@@ -7,6 +7,8 @@ import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { RespawnPoint } from './entities/respawn-point.entity';
+import { readWorldPosition } from '../common/world-position.adapter';
+import { wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 
 export type ConnectedPlayer = {
   socketId: string;
@@ -132,13 +134,29 @@ export class WorldService implements OnModuleInit {
     // Le personnage doit appartenir à l'utilisateur authentifié sur ce socket.
     if (character.userId !== client.data.userId) return null;
 
+    // Lire la position depuis les colonnes WU (priorité) ou les pixels legacy (fallback).
+    // Conversion WU → pixels Phaser ici : le protocole WebSocket reste inchangé.
+    let playerX: number;
+    let playerY: number;
+    try {
+      const wuPos = readWorldPosition(character, (c) => ({
+        x: (c as unknown as Character).positionX,
+        y: (c as unknown as Character).positionY,
+      }));
+      playerX = Math.round(wuToIsoScreenX(wuPos.worldX, wuPos.worldY));
+      playerY = Math.round(wuToIsoScreenY(wuPos.worldX, wuPos.worldY));
+    } catch {
+      playerX = character.positionX ?? payload.x ?? 400;
+      playerY = character.positionY ?? payload.y ?? 300;
+    }
+
     const player: ConnectedPlayer = {
       socketId: client.id,
       characterId: payload.characterId,
       name: character.name,
       sex: character.sex,
-      x: character.positionX ?? payload.x ?? 400,
-      y: character.positionY ?? payload.y ?? 300,
+      x: playerX,
+      y: playerY,
       direction: payload.direction ?? 'down',
     };
 
