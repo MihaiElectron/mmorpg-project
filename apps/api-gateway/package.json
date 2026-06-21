@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "make:entity": "ts-node tools/cli/index.ts"
+    "make:entity": "ts-node tools/cli/index.ts",
+    "wu:dry-run": "ts-node tools/scripts/wu-backfill-dry-run.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
