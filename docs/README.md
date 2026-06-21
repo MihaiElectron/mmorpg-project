@@ -29,6 +29,7 @@ sources should be checked when documentation and implementation disagree.
 05_World
 06_Database
 07_Admin
+08_Gameplay
 09_Workflow
 10_AI
 ```
@@ -41,6 +42,7 @@ sources should be checked when documentation and implementation disagree.
 - `05_World`: assets, Tiled maps, collisions, chunks, and world structure.
 - `06_Database`: PostgreSQL, schema, and migration documentation.
 - `07_Admin`: admin tooling and admin-specific documentation.
+- `08_Gameplay`: game concepts, entity model, world model, and gameplay rules — technology-independent.
 - `09_Workflow`: development, documentation, review, and Codex workflow.
 - `10_AI`: general rules for ChatGPT, Codex, and other AI assistants.
 
@@ -116,6 +118,12 @@ If a contradiction is found:
 ### 07_Admin
 
 - [Admin Tool](07_Admin/admin-tool.md) - Status: Draft - Documentation planned for the admin tool.
+
+### 08_Gameplay
+
+- [Gameplay README](08_Gameplay/README.md) - Status: Draft - Role of the gameplay documentation domain.
+- [World Model](08_Gameplay/world-model.md) - Status: Draft - World, Map, Chunk, and Tile concepts — technology-independent.
+- [Entity Model](08_Gameplay/entity-model.md) - Status: Draft - Entity concept and specialized entity types.
 
 ### 09_Workflow
 
