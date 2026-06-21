@@ -12,6 +12,7 @@ import {
   wuToIsoScreenX,
   wuToIsoScreenY,
   isoScreenToWorldWU,
+  chebyshevDistanceWU,
   DEFAULT_MAP_ID,
 } from '../common/world-coordinates';
 
@@ -78,38 +79,86 @@ export class WorldService implements OnModuleInit {
     const points = await this.respawnPointRepository.find();
     if (points.length === 0) return;
 
-    // Trouver le point le plus proche de la position persistée du personnage
-    let nearest = points[0];
-    let minDist = Math.hypot(nearest.x - character.positionX, nearest.y - character.positionY);
-    for (const p of points) {
-      const d = Math.hypot(p.x - character.positionX, p.y - character.positionY);
-      if (d < minDist) { minDist = d; nearest = p; }
+    // Position WU du personnage (fallback vers les pixels legacy si non backfillé)
+    let charWU: { worldX: number; worldY: number; mapId: number };
+    try {
+      charWU = readWorldPosition(character, (c) => ({
+        x: (c as unknown as Character).positionX,
+        y: (c as unknown as Character).positionY,
+      }));
+    } catch {
+      charWU = { worldX: 0, worldY: 0, mapId: DEFAULT_MAP_ID };
     }
 
-    // Position aléatoire dans le radius
+    // Trouver le respawn point le plus proche sur la même map, en distance Chebyshev WU
+    let nearest = points[0];
+    let nearestWU: { worldX: number; worldY: number; mapId: number } | null = null;
+    let minDist = Infinity;
+
+    for (const p of points) {
+      let pWU: { worldX: number; worldY: number; mapId: number };
+      try {
+        pWU = readWorldPosition(p, (rp) => ({
+          x: (rp as unknown as RespawnPoint).x,
+          y: (rp as unknown as RespawnPoint).y,
+        }));
+      } catch { continue; }
+      if (pWU.mapId !== charWU.mapId) continue;
+      const d = chebyshevDistanceWU(charWU, pWU);
+      if (d < minDist) { minDist = d; nearest = p; nearestWU = pWU; }
+    }
+
+    // Fallback : aucun point sur la même map → premier point valide disponible
+    if (nearestWU === null) {
+      for (const p of points) {
+        try {
+          nearestWU = readWorldPosition(p, (rp) => ({
+            x: (rp as unknown as RespawnPoint).x,
+            y: (rp as unknown as RespawnPoint).y,
+          }));
+          nearest = p;
+          break;
+        } catch { continue; }
+      }
+    }
+    if (nearestWU === null) return;
+
+    // Position de respawn : base WU officielle du point, offset aléatoire en pixels
+    const baseX = Math.round(wuToIsoScreenX(nearestWU.worldX, nearestWU.worldY));
+    const baseY = Math.round(wuToIsoScreenY(nearestWU.worldX, nearestWU.worldY));
     const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * nearest.radius;
-    const newX = Math.round(nearest.x + Math.cos(angle) * dist);
-    const newY = Math.round(nearest.y + Math.sin(angle) * dist);
+    const drift = Math.random() * nearest.radius;
+    const newX = Math.round(baseX + Math.cos(angle) * drift);
+    const newY = Math.round(baseY + Math.sin(angle) * drift);
+
+    // Convertir la position finale en WU pour la vérité serveur
+    let newWX = nearestWU.worldX;
+    let newWY = nearestWU.worldY;
+    try {
+      const wu = isoScreenToWorldWU(newX, newY);
+      newWX = wu.worldX;
+      newWY = wu.worldY;
+    } catch { /* position hors isométrie : conserver la WU du point */ }
+
     const newHealth = character.maxHealth;
 
     await this.characterRepository.update(characterId, {
       health: newHealth,
       positionX: newX,
       positionY: newY,
+      worldX: newWX,
+      worldY: newWY,
+      mapId: nearestWU.mapId,
     });
 
     // Mettre à jour la position en mémoire et notifier le joueur
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
-        player.x = newX;
-        player.y = newY;
-        // Mettre à jour la vérité serveur WU depuis la position de respawn pixel
-        try {
-          const wu = isoScreenToWorldWU(newX, newY);
-          player.worldX = wu.worldX;
-          player.worldY = wu.worldY;
-        } catch { /* position hors isométrie : worldX/Y conservent leur valeur précédente */ }
+        player.x       = newX;
+        player.y       = newY;
+        player.worldX  = newWX;
+        player.worldY  = newWY;
+        player.mapId   = nearestWU.mapId;
         server.to(player.socketId).emit('character_respawn', {
           characterId,
           x: newX,
