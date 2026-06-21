@@ -238,10 +238,33 @@ export class WorldService implements OnModuleInit {
   }
 
   async persistPlayerPosition(player: ConnectedPlayer): Promise<void> {
-    // Persiste encore les pixels legacy (positionX/Y) — à migrer vers worldX/Y en Phase 5
+    // Résolution des coordonnées WU à persister
+    let wuX    = player.worldX;
+    let wuY    = player.worldY;
+    let wuMap  = player.mapId;
+
+    // Fallback défensif : si worldX/Y sont NaN/Infinity (ne devrait pas arriver),
+    // recalculer depuis les pixels du cache de rendu
+    if (!Number.isFinite(wuX) || !Number.isFinite(wuY)) {
+      try {
+        const wu = isoScreenToWorldWU(player.x, player.y);
+        wuX   = wu.worldX;
+        wuY   = wu.worldY;
+      } catch {
+        wuX   = 0;
+        wuY   = 0;
+      }
+      wuMap = DEFAULT_MAP_ID;
+    }
+
+    // Double-écriture : pixels legacy + WU.
+    // Les colonnes pixel (positionX/Y) restent jusqu'à suppression explicite des colonnes legacy.
     await this.characterRepository.update(player.characterId, {
       positionX: Math.round(player.x),
       positionY: Math.round(player.y),
+      worldX: wuX,
+      worldY: wuY,
+      mapId: wuMap,
     });
   }
 
