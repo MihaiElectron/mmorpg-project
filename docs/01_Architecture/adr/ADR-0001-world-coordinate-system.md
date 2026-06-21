@@ -1,4 +1,4 @@
-# ADR-0002 — World coordinate system
+# ADR-0001 — World coordinate system
 
 ## Metadata
 
