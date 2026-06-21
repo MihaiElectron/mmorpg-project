@@ -370,12 +370,32 @@ export class WorldService implements OnModuleInit {
         player.x = rx;
         player.y = ry;
         // Mettre à jour la vérité serveur WU depuis la position de téléportation
+        let teleportWorldX = player.worldX;
+        let teleportWorldY = player.worldY;
+        const teleportMapId = player.mapId;
         try {
           const wu = isoScreenToWorldWU(rx, ry);
-          player.worldX = wu.worldX;
-          player.worldY = wu.worldY;
+          if (Number.isFinite(wu.worldX) && Number.isFinite(wu.worldY)) {
+            teleportWorldX = wu.worldX;
+            teleportWorldY = wu.worldY;
+          }
         } catch { /* position hors isométrie : worldX/Y conservent leur valeur précédente */ }
-        await this.characterRepository.update(characterId, { positionX: rx, positionY: ry });
+
+        const positionUpdate: Partial<Character> = { positionX: rx, positionY: ry };
+        if (
+          Number.isFinite(teleportWorldX) &&
+          Number.isFinite(teleportWorldY) &&
+          Number.isFinite(teleportMapId)
+        ) {
+          player.worldX = teleportWorldX;
+          player.worldY = teleportWorldY;
+          player.mapId = teleportMapId;
+          positionUpdate.worldX = teleportWorldX;
+          positionUpdate.worldY = teleportWorldY;
+          positionUpdate.mapId = teleportMapId;
+        }
+
+        await this.characterRepository.update(characterId, positionUpdate);
         server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
         server.except(player.socketId).emit('player_moved', player);
         return player;
