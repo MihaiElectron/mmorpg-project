@@ -10,13 +10,31 @@
 
 ## Purpose
 
-This document describes what has been validated and what remains to be done.
+This document is the primary entry point for any new development session.
+
+It describes what has been validated, what remains to be done, and the current active milestone.
 
 It does not describe the current implementation state — see `STATUS.md` for that.
 
 It does not describe architecture decisions in detail — see `docs/01_Architecture/adr/` for those.
 
-It does not replace any existing document. It adds a single view of remaining work and current priority.
+It does not replace any existing document. It provides a single view of priority, validated decisions, and remaining work.
+
+---
+
+# Reading Order
+
+Every new session — human or AI — must begin with this order:
+
+1. **`docs/ROADMAP.md`** (ce document) — comprendre la priorité active, les décisions figées et le travail restant.
+2. **`STATUS.md`** — vérifier l'état d'implémentation réel : ce qui fonctionne, la dette technique connue, les derniers changements.
+3. **ADR concernés** (`docs/01_Architecture/adr/`) — lire les décisions d'architecture impactées par la tâche en cours avant d'agir.
+4. **Documentation du domaine** (`docs/`) — consulter les documents du domaine concerné (monde, client, serveur, sécurité…) pour ne pas contredire l'architecture existante.
+5. **Code** — lire le code ciblé uniquement après avoir compris le contexte ci-dessus.
+
+Ne jamais commencer par le code. Ne jamais ignorer les ADR lors d'une implémentation qui touche aux coordonnées, au réseau, à la base de données ou à la sécurité.
+
+---
 
 ## Legend
 
@@ -29,19 +47,43 @@ It does not replace any existing document. It adds a single view of remaining wo
 
 ---
 
+# Frozen Decisions
+
+Ces décisions sont officiellement actées. Elles ne peuvent pas être remises en question sans créer un nouvel ADR qui supersède le précédent.
+
+## Architecture
+
+- [x] World → Map → Chunk → Tile (hiérarchie officielle — ADR-0001)
+- [x] `CHUNK_SIZE = 64` tiles par côté — constante invariante du projet (ADR-0001)
+- [x] Tile terrain = 128×64 px (isométrique, format actuel du pipeline)
+- [x] Pipeline IA → GIMP → Tiled → Phaser
+
+## Format des maps et tilesets
+
+- [x] TMJ comme format officiel des cartes (natif Tiled JSON)
+- [x] TSX comme format officiel des tilesets d'édition (artefact d'authoring uniquement)
+- [x] Runtime basé sur TMJ + PNG (aucune référence TSX externe à l'exécution)
+
+## ADR
+
+- [x] ADR-0001 — World Coordinate System (`mapId`, `worldTileX`, `worldTileY`, `CHUNK_SIZE=64`) — **Draft / Proposed** (en attente de validation humaine)
+- [x] ADR-0002 — Entity Positioning (convention de nommage, classification statique/dynamique, contrat WebSocket) — **Draft / Proposed** (en attente de validation humaine)
+
+---
+
 # 1. Architecture
 
 ## World coordinate system
 
-- [x] ADR-0001 — World Coordinate System (`mapId`, `worldTileX`, `worldTileY`, `CHUNK_SIZE=64`)
-- [x] ADR-0002 — Entity Positioning (column naming, static/dynamic classification, WebSocket contract)
+- [x] ADR-0001 — World Coordinate System
+- [x] ADR-0002 — Entity Positioning
 
 À venir :
 
 - [ ] Chunk Streaming
 - [ ] Interest Management
 - [ ] Collision Architecture
-- [ ] Persistence Strategy (résoudre la question ouverte du type de stockage ADR-0001)
+- [ ] Persistence Strategy (résoudre la question ouverte du type de stockage — ADR-0001)
 
 ---
 
@@ -127,33 +169,59 @@ It does not replace any existing document. It adds a single view of remaining wo
 
 ---
 
-# Current Focus
+# Current Milestone
 
-➡️ Déplacement isométrique du joueur basé sur ADR-0001.
+➡️ **Le joueur se déplace sur une carte isométrique.**
 
----
+**Objectif** : implémenter le déplacement du joueur dans le système de coordonnées défini par ADR-0001, avec une projection isométrique correcte côté client et une synchronisation serveur en tile units.
 
-# Next Milestone
+**Critères de validation** :
 
-**Le joueur peut marcher sur une carte isométrique.**
-
-Critères :
-
-- [ ] Coordonnées joueur cohérentes avec ADR-0001 (`worldTileX`, `worldTileY`)
-- [ ] Projection isométrique appliquée : sprite aligné sur les tiles
-- [ ] Caméra correcte (suit le sprite sans décalage)
-- [ ] Synchronisation serveur (`player_move` en tile units)
-- [ ] Aucun offset visuel résiduel entre sprite et tilemap
+- [ ] Coordonnées joueur exprimées en `worldTileX`, `worldTileY` (ADR-0001)
+- [ ] Projection isométrique appliquée : sprite aligné sur les tiles sans offset résiduel
+- [ ] Caméra qui suit le sprite correctement dans l'espace isométrique
+- [ ] `player_move` émis en tile units, reçu et validé par le serveur
 - [ ] Aucune dette technique supplémentaire introduite
 
+**Checklist avant clôture** :
+
+- [ ] Build frontend sans erreur
+- [ ] Test manuel en navigateur : déplacement, camera, alignement
+- [ ] STATUS.md mis à jour
+- [ ] ROADMAP.md : item `[>]` déplacé en `[x]`, nouveau milestone défini
+
 ---
 
-## Règle de mise à jour
+# Parking Lot
 
-Ce document est mis à jour uniquement quand :
+Idées retenues mais non prioritaires. Elles n'ont pas de date ni de rang dans la roadmap actuelle.
 
-- un item change de statut (`[ ]` → `[x]`, `[ ]` → `[>]`, etc.) ;
-- un nouveau domaine majeur est identifié ;
-- le focus ou le milestone change.
+- Météo dynamique
+- Saisons
+- Montures
+- Housing (construction de maisons)
+- Guildes
+- Quêtes dynamiques
+- Artisanat avancé
 
-Ne jamais y ajouter de journal, de détail d'implémentation ou de duplication de STATUS.md.
+Cette section ne représente pas les priorités du projet. Ces sujets ne seront traités qu'après stabilisation des fondations (coordonnées, chunks, gameplay de base).
+
+---
+
+# Update Rules
+
+Ce document est mis à jour uniquement dans les cas suivants :
+
+- Un item change de statut (`[ ]` → `[x]`, `[ ]` → `[>]`, `[>]` → `[x]`, etc.).
+- Un nouveau domaine majeur est identifié et doit être tracé.
+- Le milestone actuel est atteint et un nouveau milestone est défini.
+- Une décision est officiellement validée et doit être ajoutée à **Frozen Decisions**.
+
+Règles strictes :
+
+- Ne jamais utiliser ROADMAP.md comme journal de développement.
+- Ne jamais dupliquer STATUS.md (pas de détails d'implémentation, pas de liste de commits).
+- Conserver un seul bloc **Current Milestone** à la fois.
+- Déplacer les tâches terminées vers `[x]` dans leur section respective.
+- N'ajouter un ADR dans **Frozen Decisions** qu'après validation humaine explicite (Decision status: Accepted).
+- Mettre à jour `Last updated` dans les métadonnées à chaque modification.
