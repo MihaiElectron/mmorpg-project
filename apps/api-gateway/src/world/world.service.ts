@@ -256,17 +256,21 @@ export class WorldService implements OnModuleInit {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
 
-    player.x = payload.x;
-    player.y = payload.y;
     player.direction = payload.direction ?? player.direction;
 
-    // Mettre à jour la vérité serveur WU depuis les pixels reçus du client
-    try {
-      const wu = isoScreenToWorldWU(payload.x, payload.y);
-      player.worldX = wu.worldX;
-      player.worldY = wu.worldY;
-      // player.mapId reste inchangé : le client ne transmet pas de mapId
-    } catch { /* payload invalide : worldX/Y conservent leur valeur précédente */ }
+    // Garde-fous : coordonnées non finies ignorées, ancienne position conservée
+    if (Number.isFinite(payload.x) && Number.isFinite(payload.y)) {
+      // Conversion WU prioritaire — vérité serveur
+      try {
+        const wu = isoScreenToWorldWU(payload.x, payload.y);
+        player.worldX = wu.worldX;
+        player.worldY = wu.worldY;
+        // player.mapId reste inchangé : le client ne transmet pas de mapId
+        // Cache de rendu pixels mis à jour uniquement si la conversion WU réussit
+        player.x = payload.x;
+        player.y = payload.y;
+      } catch { /* position hors isométrie : worldX/Y et x/y conservent leur valeur précédente */ }
+    }
 
     client.data.player = {
       characterId: player.characterId,
