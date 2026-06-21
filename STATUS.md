@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-19_
-_Session : 2026-06-19 (suite)_
+_Dernière mise à jour : 2026-06-21_
+_Session : 2026-06-21_
 _Branche : main_
 _État : développement local_
 
@@ -19,6 +19,17 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Derniers changements importants
 
+- **ADR-0002** : système de coordonnées monde défini (Draft/Proposed) —
+  hiérarchie World → Map → Chunk → Tile, `CHUNK_SIZE=64`, coordonnées officielles
+  `mapId / worldTileX / worldTileY`, formules de projection isométrique client,
+  responsabilités serveur / client / Tiled. Questions ouvertes : type de stockage,
+  migration, unités des vitesses et distances.
+- **Documentation coordonnées** : `phaser-world.md` (section Coordinate systems),
+  `maps-and-collisions.md`, `chunks.md` mis à jour pour documenter la dette de
+  conversion et la distinction entre espaces logique / tile / pixel.
+- **WorldScene.js** : commentaire tilemap simplifié, constantes renommées
+  `TILEMAP_TEST_OFFSET_X / TILEMAP_TEST_OFFSET_Y` — offset clairement marqué
+  comme temporaire.
 - **Pipeline graphique isométrique** : workspace `apps/client/src/assets/source/`
   créé avec templates GIMP, masques PNG, vecteurs SVG (`iso_diamond.svg`), guides
   et documentation de pipeline (`art-direction.md`).
@@ -50,6 +61,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Décisions et règles à ne pas oublier
 
+- **Système de coordonnées (ADR-0002, Draft/Proposed)** : coordonnées officielles
+  `mapId / worldTileX / worldTileY` (unité = 1 tile). `CHUNK_SIZE = 64`. Projection
+  isométrique cliente uniquement. Pixels jamais persistés. Questions ouvertes : type
+  de stockage, migration, unités des constantes gameplay — voir
+  `docs/01_Architecture/adr/ADR-0002-world-coordinate-system.md`.
 - Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
   ownership — voir `docs/02_Security/client-server-trust.md`.
 - Les actions admin doivent être autorisées côté serveur. Les événements admin observés
@@ -74,6 +90,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Dette technique connue
 
+- **Coordonnées** : entités serveur encore en unités pixel-équivalentes ; migration
+  vers `worldTileX/worldTileY` (ADR-0002) non encore implémentée. Type de stockage
+  et facteur de conversion non décidés.
+- **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` —
+  à remplacer par l'origin par-map défini dans ADR-0002 après validation.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante (contournement actuel : steering direct).
 - Un seul `RespawnPoint` hardcodé (x=600, y=300) ; pas d'UI de gestion.
@@ -88,6 +109,7 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Prochaines priorités possibles
 
+- [ ] Valider ADR-0002 (approbation humaine) puis implémenter la migration de coordonnées
 - [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
 - [ ] Import sprite goblin (textureKey propre)
 - [ ] Système de loot sur les animaux tués
@@ -105,9 +127,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 Cette liste indique les documents à vérifier après une session de code. Elle ne signifie pas qu'ils doivent tous être modifiés.
 
-- [ ] `docs/05_World/tiled.md` ✓ mis à jour (décision TMJ/TSX documentée)
-- [ ] `docs/05_World/assets.md`
-- [ ] `docs/03_Client/phaser-world.md`
+- [ ] `docs/05_World/chunks.md` — à mettre à jour après validation ADR-0002
+- [ ] `docs/05_World/maps-and-collisions.md` — à mettre à jour après validation ADR-0002
+- [ ] `docs/03_Client/phaser-world.md` — à mettre à jour après validation ADR-0002
+- [ ] `docs/04_Server/websockets.md` — payloads `mapId/worldTileX/worldTileY` à documenter
+- [ ] `docs/06_Database/schema.md` — après décision du type de stockage
 
 ---
 
@@ -124,6 +148,16 @@ Après une session de code :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-21
+
+- ADR-0002 créé (Draft/Proposed) : système de coordonnées monde tile-first,
+  `CHUNK_SIZE=64`, formules de projection isométrique, responsabilités par couche.
+- Relecture ADR-0002 : contradiction option B / question ouverte corrigée.
+- Documentation coordonnées mise à jour : `phaser-world.md`, `maps-and-collisions.md`,
+  `chunks.md` — dette de conversion documentée.
+- `WorldScene.js` : constantes renommées `TILEMAP_TEST_OFFSET_X/Y`, commentaire
+  simplifié.
 
 ### 2026-06-19 (suite)
 
