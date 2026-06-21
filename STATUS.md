@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-21 (session 2)_
-_Session : 2026-06-21_
+_Dernière mise à jour : 2026-06-22_
+_Session : 2026-06-22_
 _Branche : main_
 _État : développement local_
 
@@ -19,26 +19,19 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Derniers changements importants
 
-- **Migration WU — world.service.ts** : `ConnectedPlayer` porte désormais
-  `worldX/worldY/mapId` (vérité serveur) + `x/y` (cache pixel Phaser). Fonctions
-  migrées : `joinPlayer()`, `updatePlayer()`, `persistPlayerPosition()`,
-  `respawnCharacter()`. Double-écriture active sur `character` (pixels + WU).
-- **world-coordinates.ts** : module central WU — constantes (`TILE_SIZE_WU=1024`,
-  `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`), projections iso (`wuToIsoScreenX/Y`,
-  `isoScreenToWorldWU`), métriques (`chebyshevDistanceWU`, `euclideanDistanceWU`).
-- **world-position.adapter.ts** : lecture position serveur avec fallback legacy pixels
-  (`readWorldPosition`), gestion PARTIAL_WU / MISSING_LEGACY / INVALID_LEGACY, 32 tests.
-- **Scripts backfill** : `wu-backfill-dry-run.ts` (lecture seule, 6 anomalies détectées
-  dont OUT_OF_MAP_BOUNDS) et `wu-backfill-real.ts` (idempotent, arrêt sur anomalie).
-  Commandes : `npm run wu:dry-run` / `npm run wu:backfill`.
-- **wu-backfill-report.ts** : rapport dry-run avec détection MISSING_PIXEL_COORDS,
-  NON_FINITE_PIXEL, PARTIAL_WU_FILL, MAPID_MISSING_FOR_WU, OUT_OF_INT32,
-  OUT_OF_MAP_BOUNDS. 36 tests.
+- **`updatePlayer()` WU-first** : `player_move` convertit désormais les pixels en WU
+  en priorité (`isoScreenToWorldWU`) ; `player.x/y` ne sont mis à jour que si la
+  conversion réussit. Garde-fous NaN/Infinity : position conservée sans mutation.
+  16 tests (`world.service.spec.ts`).
+- **`teleportCharacter()` double-écriture** : DB écrit `positionX/Y` + `worldX/Y/mapId`
+  (conditionnel sur validité de la conversion WU). Bug CRITIQUE soldé (`b751bad`).
+- **Migration WU — world.service.ts** : `ConnectedPlayer` porte `worldX/worldY/mapId`
+  (vérité serveur) + `x/y` (cache pixel Phaser). Toutes les fonctions runtime migrées :
+  `joinPlayer`, `updatePlayer`, `persistPlayerPosition`, `respawnCharacter`, `teleportCharacter`.
+- **Infrastructure WU** : `world-coordinates.ts`, `world-position.adapter.ts` (32 tests),
+  `wu-backfill-report.ts` (36 tests), scripts `wu:dry-run` / `wu:backfill`.
 - **Audit WU** : `docs/01_Architecture/wu-migration-audit.md` — état complet de la
-  migration (~25-30% global), dette classée CRITIQUE/IMPORTANT/OPTIONNEL, checklist
-  ordonnée des prochaines étapes.
-- **ADR-0001** : système de coordonnées monde défini (Draft/Proposed) —
-  `CHUNK_SIZE=64`, `TILE_SIZE_WU=1024`, projection isométrique, responsabilités par couche.
+  migration, checklist ordonnée.
 
 ---
 
@@ -54,8 +47,8 @@ personnages enregistrés, animaux actifs, templates, spawns).
 | Admin — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 15 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` (182/183 verts — 1 préexistant KO sans lien WU) |
-| Migration WU | `world.service.ts` migré ; scripts backfill prêts (anomalies à corriger avant exécution) |
+| Tests | 15 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 16 `world.service` (198/199 verts — 1 préexistant KO sans lien WU) |
+| Migration WU | `world.service.ts` entièrement migré (joinPlayer, updatePlayer, persist, respawn, teleport) ; scripts backfill prêts (anomalies OUT_OF_MAP_BOUNDS à corriger avant exécution) |
 
 ---
 
@@ -92,9 +85,6 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Dette technique connue
 
-- **[CRITIQUE] `teleportCharacter()` double-écriture manquante** : `world.service.ts:378`
-  met à jour `player.worldX/Y` en mémoire mais n'écrit que `positionX/Y` en DB.
-  Divergence après redémarrage serveur pour un joueur téléporté.
 - **[CRITIQUE] `animals.service.ts` entièrement en pixels** : boucle IA/combat complète
   (aggro, patrol, pursuit, escape, leash, MELEE_RANGE=60, patrolRadius, aggroRadius)
   non migrée vers WU. Bloc le plus large restant.
@@ -120,7 +110,8 @@ personnages enregistrés, animaux actifs, templates, spawns).
 ## Prochaines priorités possibles
 
 ### Migration WU (en cours)
-- [ ] Fix `teleportCharacter()` : ajouter `worldX/Y/mapId` au `characterRepository.update()` (~3 lignes)
+- [x] Fix `teleportCharacter()` double-écriture (`b751bad`)
+- [x] `updatePlayer()` WU-first + garde-fous NaN/Infinity (`9bdd4b3`)
 - [ ] Corriger les anomalies OUT_OF_MAP_BOUNDS (entités hors [0, 65536)) puis `npm run wu:backfill`
 - [ ] Migrer `animals.service.ts` vers WU (aggroRadius, patrolRadius, MELEE_RANGE, Math.hypot → chebyshev)
 - [ ] Double-écriture animaux : `worldX/Y/mapId` dans les `animalRepository.update()`
@@ -165,19 +156,25 @@ Après une session de code :
 
 ## Historique court des sessions
 
+### 2026-06-22
+
+- **`updatePlayer()` WU-first** : pixels → WU en priorité, x/y mis à jour seulement
+  si conversion réussit, garde-fous NaN/Infinity. 16 tests (`world.service.spec.ts`).
+- **`teleportCharacter()` double-écriture** : bug CRITIQUE soldé — DB écrit désormais
+  `positionX/Y` + `worldX/Y/mapId` sur téléportation.
+- **STATUS.md** mis à jour.
+
 ### 2026-06-21 (session 2)
 
 - **Migration WU — infrastructure** : `world-coordinates.ts` (module central),
   `legacy-pixel-position.adapter.ts`, `world-position.adapter.ts` (32 tests),
   `wu-backfill-report.ts` (36 tests, 6 anomalies dont OUT_OF_MAP_BOUNDS).
 - **Scripts backfill** : `wu-backfill-dry-run.ts` et `wu-backfill-real.ts`
-  (`npm run wu:dry-run` / `npm run wu:backfill`). Entités TypeORM complètes
-  (Character, Animal, Resource, CreatureSpawn, RespawnPoint + relations).
+  (`npm run wu:dry-run` / `npm run wu:backfill`). Entités TypeORM complètes.
 - **Migration WU — world.service.ts** : `ConnectedPlayer` avec `worldX/Y/mapId`
   requis + `x/y` cache pixel. `joinPlayer`, `updatePlayer`, `persistPlayerPosition`
   (double-écriture), `respawnCharacter` (Chebyshev WU + filtre mapId) migrés.
-- **Audit** : `docs/01_Architecture/wu-migration-audit.md` — état ~25-30% global,
-  dette CRITIQUE/IMPORTANT/OPTIONNEL, bug `teleportCharacter()` identifié.
+- **Audit** : `docs/01_Architecture/wu-migration-audit.md` créé.
 
 ### 2026-06-21 (session 1)
 
