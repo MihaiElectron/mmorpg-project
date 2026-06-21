@@ -37,6 +37,7 @@ import {
   generateDryRunReport,
   formatReport,
   PositionedRecord,
+  DEFAULT_MAP_BOUNDS,
 } from '../../src/common/wu-backfill-report';
 
 // ─── Connexion DB ─────────────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ async function main() {
         const c = r as unknown as Character;
         return { x: c.positionX, y: c.positionY };
       },
+      3,
+      DEFAULT_MAP_BOUNDS,
     ),
 
     generateEntityReport(
@@ -115,6 +118,8 @@ async function main() {
         const a = r as unknown as Animal;
         return { x: a.x, y: a.y };
       },
+      3,
+      DEFAULT_MAP_BOUNDS,
     ),
 
     generateEntityReport(
@@ -124,6 +129,8 @@ async function main() {
         const res = r as unknown as Resource;
         return { x: res.x, y: res.y };
       },
+      3,
+      DEFAULT_MAP_BOUNDS,
     ),
 
     generateEntityReport(
@@ -133,6 +140,8 @@ async function main() {
         const s = r as unknown as CreatureSpawn;
         return { x: s.spawnX, y: s.spawnY };
       },
+      3,
+      DEFAULT_MAP_BOUNDS,
     ),
 
     generateEntityReport(
@@ -144,6 +153,8 @@ async function main() {
       },
       // Note : respawn_point.radius n'est pas inclus dans ce dry-run.
       // Il sera traité séparément lors de la calibration gameplay (Phase 8).
+      3,
+      DEFAULT_MAP_BOUNDS,
     ),
 
   ];

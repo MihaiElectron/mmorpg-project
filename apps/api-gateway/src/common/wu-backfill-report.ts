@@ -11,6 +11,7 @@
  *   console.log(formatReport(generateDryRunReport([report])));
  */
 
+import { CHUNK_SIZE_WU } from './world-coordinates';
 import { pixelToWUWithMap } from './legacy-pixel-position.adapter';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -43,7 +44,24 @@ export type AnomalyKind =
   | 'NON_FINITE_PIXEL'
   | 'PARTIAL_WU_FILL'
   | 'MAPID_MISSING_FOR_WU'
-  | 'OUT_OF_INT32';
+  | 'OUT_OF_INT32'
+  | 'OUT_OF_MAP_BOUNDS';
+
+/** Bornes logiques d'une map en WU (min inclusif, max exclusif). */
+export interface MapBounds {
+  minWorldX: number;
+  maxWorldX: number;
+  minWorldY: number;
+  maxWorldY: number;
+}
+
+/** Bornes de la map actuelle : 64×64 tiles, 1 chunk. */
+export const DEFAULT_MAP_BOUNDS: MapBounds = {
+  minWorldX: 0,
+  maxWorldX: CHUNK_SIZE_WU,
+  minWorldY: 0,
+  maxWorldY: CHUNK_SIZE_WU,
+};
 
 export interface BackfillAnomaly {
   id: string | number;
@@ -77,12 +95,15 @@ export interface WuBackfillDryRunReport {
  * @param getLegacy    Fonction qui extrait (x, y) pixel depuis un record,
  *                     ou null si les coordonnées sont absentes.
  * @param maxSamples   Nombre maximum d'exemples avant/après à inclure.
+ * @param bounds       Bornes logiques de la map en WU. Si fourni, signale
+ *                     les entités converties hors limites (OUT_OF_MAP_BOUNDS).
  */
 export function generateEntityReport(
   entityName: string,
   records: PositionedRecord[],
   getLegacy: (r: PositionedRecord) => { x: number; y: number } | null,
   maxSamples: number = DEFAULT_MAX_SAMPLES,
+  bounds?: MapBounds,
 ): EntityBackfillReport {
   let alreadyFilled = 0;
   let toBackfill = 0;
@@ -154,6 +175,22 @@ export function generateEntityReport(
         kind: 'OUT_OF_INT32',
         detail: `worldX=${converted.worldX} worldY=${converted.worldY}`,
       });
+    }
+
+    // Vérification bornes logiques de map
+    if (bounds) {
+      const xOob = converted.worldX < bounds.minWorldX || converted.worldX >= bounds.maxWorldX;
+      const yOob = converted.worldY < bounds.minWorldY || converted.worldY >= bounds.maxWorldY;
+      if (xOob || yOob) {
+        const violations: string[] = [];
+        if (xOob) violations.push(`worldX=${converted.worldX} hors [${bounds.minWorldX}, ${bounds.maxWorldX})`);
+        if (yOob) violations.push(`worldY=${converted.worldY} hors [${bounds.minWorldY}, ${bounds.maxWorldY})`);
+        anomalies.push({
+          id: record.id,
+          kind: 'OUT_OF_MAP_BOUNDS',
+          detail: `${violations.join(', ')} — pixel(${legacy.x}, ${legacy.y}) → WU(${converted.worldX}, ${converted.worldY})`,
+        });
+      }
     }
 
     toBackfill++;

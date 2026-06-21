@@ -3,6 +3,8 @@ import {
   generateDryRunReport,
   formatReport,
   PositionedRecord,
+  MapBounds,
+  DEFAULT_MAP_BOUNDS,
 } from './wu-backfill-report';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -198,6 +200,74 @@ describe('anomaly: OUT_OF_INT32', () => {
     expect(report.anomalies.find(a => a.kind === 'OUT_OF_INT32')).toBeDefined();
     // Still counted in toBackfill (conversion was attempted)
     expect(report.toBackfill).toBe(1);
+  });
+});
+
+// ─── generateEntityReport — anomaly: OUT_OF_MAP_BOUNDS ───────────────────────
+
+describe('anomaly: OUT_OF_MAP_BOUNDS', () => {
+  // DEFAULT_MAP_BOUNDS : 64×64 tiles → [0, 65536) × [0, 65536)
+  const bounds: MapBounds = DEFAULT_MAP_BOUNDS;
+
+  it('pixel(140, 365) → WU(-1040, 12720): worldX négatif → OUT_OF_MAP_BOUNDS', () => {
+    // worldX = 8*(-860) + 16*365 = -6880 + 5840 = -1040  (hors bornes)
+    // worldY = -8*(-860) + 16*365 = 6880 + 5840 = 12720  (dans bornes)
+    const report = generateEntityReport('test', [makeRecord('a1')], () => ({ x: 140, y: 365 }), 3, bounds);
+    const oob = report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS');
+    expect(oob).toBeDefined();
+    expect(oob!.id).toBe('a1');
+    expect(oob!.detail).toContain('worldX=-1040');
+    expect(oob!.detail).toContain('pixel(140, 365)');
+    expect(oob!.detail).toContain('WU(-1040, 12720)');
+  });
+
+  it('worldX hors bornes → seul worldX mentionné dans le détail', () => {
+    const report = generateEntityReport('test', [makeRecord('a2')], () => ({ x: 140, y: 365 }), 3, bounds);
+    const oob = report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS');
+    expect(oob!.detail).toContain('[0, 65536)');
+    expect(oob!.detail).not.toContain('worldY=');
+  });
+
+  it('pixel(600, 300) → WU(1600, 8000) : dans les bornes → pas d\'OUT_OF_MAP_BOUNDS', () => {
+    const report = generateEntityReport('test', [makeRecord('b1')], () => ({ x: 600, y: 300 }), 3, bounds);
+    expect(report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS')).toBeUndefined();
+    expect(report.anomalies).toHaveLength(0);
+  });
+
+  it('worldX = maxWorldX (65536) est exclu → OUT_OF_MAP_BOUNDS', () => {
+    // pixel(5096, 2048) → worldX = 8*4096 + 16*2048 = 32768 + 32768 = 65536, worldY = -32768 + 32768 = 0
+    const report = generateEntityReport('test', [makeRecord('c1')], () => ({ x: 5096, y: 2048 }), 3, bounds);
+    const oob = report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS');
+    expect(oob).toBeDefined();
+    expect(oob!.detail).toContain('worldX=65536');
+  });
+
+  it('worldY hors bornes (> 65535) → OUT_OF_MAP_BOUNDS avec worldY dans le détail', () => {
+    // pixel(600, 4096) → worldX = 8*(-400) + 16*4096 = -3200 + 65536 = 62336 (ok)
+    //                     worldY = -8*(-400) + 16*4096 = 3200 + 65536 = 68736  (hors bornes)
+    const report = generateEntityReport('test', [makeRecord('d1')], () => ({ x: 600, y: 4096 }), 3, bounds);
+    const oob = report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS');
+    expect(oob).toBeDefined();
+    expect(oob!.detail).toContain('worldY=68736');
+    expect(oob!.detail).toContain('pixel(600, 4096)');
+  });
+
+  it('sans bounds → pas d\'OUT_OF_MAP_BOUNDS même pour pixel(140, 365)', () => {
+    const report = generateEntityReport('test', [makeRecord('e1')], () => ({ x: 140, y: 365 }));
+    expect(report.anomalies.find(a => a.kind === 'OUT_OF_MAP_BOUNDS')).toBeUndefined();
+  });
+
+  it('OUT_OF_MAP_BOUNDS est compté dans toBackfill', () => {
+    const report = generateEntityReport('test', [makeRecord('f1')], () => ({ x: 140, y: 365 }), 3, bounds);
+    expect(report.toBackfill).toBe(1);
+    expect(report.alreadyFilled).toBe(0);
+  });
+
+  it('DEFAULT_MAP_BOUNDS : bornes = [0, 65536) × [0, 65536)', () => {
+    expect(DEFAULT_MAP_BOUNDS.minWorldX).toBe(0);
+    expect(DEFAULT_MAP_BOUNDS.maxWorldX).toBe(65536);
+    expect(DEFAULT_MAP_BOUNDS.minWorldY).toBe(0);
+    expect(DEFAULT_MAP_BOUNDS.maxWorldY).toBe(65536);
   });
 });
 
