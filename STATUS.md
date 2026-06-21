@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-21_
+_Dernière mise à jour : 2026-06-21 (session 2)_
 _Session : 2026-06-21_
 _Branche : main_
 _État : développement local_
@@ -19,27 +19,26 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Derniers changements importants
 
+- **Migration WU — world.service.ts** : `ConnectedPlayer` porte désormais
+  `worldX/worldY/mapId` (vérité serveur) + `x/y` (cache pixel Phaser). Fonctions
+  migrées : `joinPlayer()`, `updatePlayer()`, `persistPlayerPosition()`,
+  `respawnCharacter()`. Double-écriture active sur `character` (pixels + WU).
+- **world-coordinates.ts** : module central WU — constantes (`TILE_SIZE_WU=1024`,
+  `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`), projections iso (`wuToIsoScreenX/Y`,
+  `isoScreenToWorldWU`), métriques (`chebyshevDistanceWU`, `euclideanDistanceWU`).
+- **world-position.adapter.ts** : lecture position serveur avec fallback legacy pixels
+  (`readWorldPosition`), gestion PARTIAL_WU / MISSING_LEGACY / INVALID_LEGACY, 32 tests.
+- **Scripts backfill** : `wu-backfill-dry-run.ts` (lecture seule, 6 anomalies détectées
+  dont OUT_OF_MAP_BOUNDS) et `wu-backfill-real.ts` (idempotent, arrêt sur anomalie).
+  Commandes : `npm run wu:dry-run` / `npm run wu:backfill`.
+- **wu-backfill-report.ts** : rapport dry-run avec détection MISSING_PIXEL_COORDS,
+  NON_FINITE_PIXEL, PARTIAL_WU_FILL, MAPID_MISSING_FOR_WU, OUT_OF_INT32,
+  OUT_OF_MAP_BOUNDS. 36 tests.
+- **Audit WU** : `docs/01_Architecture/wu-migration-audit.md` — état complet de la
+  migration (~25-30% global), dette classée CRITIQUE/IMPORTANT/OPTIONNEL, checklist
+  ordonnée des prochaines étapes.
 - **ADR-0001** : système de coordonnées monde défini (Draft/Proposed) —
-  hiérarchie World → Map → Chunk → Tile, `CHUNK_SIZE=64`, coordonnées officielles
-  `mapId / worldTileX / worldTileY`, formules de projection isométrique client,
-  responsabilités serveur / client / Tiled. Questions ouvertes : type de stockage,
-  migration, unités des vitesses et distances.
-- **Documentation coordonnées** : `phaser-world.md` (section Coordinate systems),
-  `maps-and-collisions.md`, `chunks.md` mis à jour pour documenter la dette de
-  conversion et la distinction entre espaces logique / tile / pixel.
-- **WorldScene.js** : commentaire tilemap simplifié, constantes renommées
-  `TILEMAP_TEST_OFFSET_X / TILEMAP_TEST_OFFSET_Y` — offset clairement marqué
-  comme temporaire.
-- **Pipeline graphique isométrique** : workspace `apps/client/src/assets/source/`
-  créé avec templates GIMP, masques PNG, vecteurs SVG (`iso_diamond.svg`), guides
-  et documentation de pipeline (`art-direction.md`).
-- **Format Tiled officiel** : décision d'architecture — maps en TMJ, tilesets en TSX,
-  aucun convertisseur autorisé. Documenté dans `docs/05_World/tiled.md`.
-- **Tilemap terrain test** : `terrain_pipeline_test.tmj` intégré dans Phaser
-  (`public/assets/maps/`), tileset `grass` inliné, chargement via `tilemapTiledJSON`.
-  Layer chargé dynamiquement (`map.layers[0].name`) pour résister aux renommages Tiled.
-- **Correction SCSS** : `lighten()` déprécié remplacé par `color.adjust()` dans
-  `_admin-panel.scss`.
+  `CHUNK_SIZE=64`, `TILE_SIZE_WU=1024`, projection isométrique, responsabilités par couche.
 
 ---
 
@@ -55,17 +54,20 @@ personnages enregistrés, animaux actifs, templates, spawns).
 | Admin — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 15 tests Jest `AnimalsService` (verts) |
+| Tests | 15 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` (182/183 verts — 1 préexistant KO sans lien WU) |
+| Migration WU | `world.service.ts` migré ; scripts backfill prêts (anomalies à corriger avant exécution) |
 
 ---
 
 ## Décisions et règles à ne pas oublier
 
-- **Système de coordonnées (ADR-0001, Draft/Proposed)** : coordonnées officielles
-  `mapId / worldTileX / worldTileY` (unité = 1 tile). `CHUNK_SIZE = 64`. Projection
-  isométrique cliente uniquement. Pixels jamais persistés. Questions ouvertes : type
-  de stockage, migration, unités des constantes gameplay — voir
-  `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md`.
+- **Système de coordonnées WU** : `1 tile = 1024 WU`, `CHUNK_SIZE=64`,
+  `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`. Projection isométrique :
+  `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`.
+  Inverse : `worldX = 8*(sx−1000) + 16*sy`, `worldY = −8*(sx−1000) + 16*sy`.
+  Pixels jamais persistés comme vérité (double-écriture = transitoire).
+  Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
+  `docs/01_Architecture/wu-migration-audit.md`.
 - Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
   ownership — voir `docs/02_Security/client-server-trust.md`.
 - Les actions admin doivent être autorisées côté serveur. Les événements admin observés
@@ -90,36 +92,50 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Dette technique connue
 
-- **Coordonnées** : entités serveur encore en unités pixel-équivalentes ; migration
-  vers `worldTileX/worldTileY` (ADR-0001) non encore implémentée. Type de stockage
-  et facteur de conversion non décidés.
-- **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` —
-  à remplacer par l'origin par-map défini dans ADR-0001 après validation.
+- **[CRITIQUE] `teleportCharacter()` double-écriture manquante** : `world.service.ts:378`
+  met à jour `player.worldX/Y` en mémoire mais n'écrit que `positionX/Y` en DB.
+  Divergence après redémarrage serveur pour un joueur téléporté.
+- **[CRITIQUE] `animals.service.ts` entièrement en pixels** : boucle IA/combat complète
+  (aggro, patrol, pursuit, escape, leash, MELEE_RANGE=60, patrolRadius, aggroRadius)
+  non migrée vers WU. Bloc le plus large restant.
+- **[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS** : entités avec pixel(140, 365) → WU(-1040, 12720)
+  (worldX < 0). Bloquent l'exécution du backfill réel.
+- **[CRITIQUE] `resources.gateway.ts` range check en pixels** : `RESOURCE_INTERACT_RANGE=100`
+  px + `Math.hypot` — anti-cheat gathering non migré.
+- **[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime** : colonnes présentes mais
+  non maintenues par `animals.service.ts` (mouvements, respawns).
+- **[IMPORTANT] `client.data.player` sans worldX/Y** : `AnimalsGateway` et
+  `ResourcesGateway` utilisent `player.x/y` (pixels) pour les range checks.
+- **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
+  `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
+- **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
-- Pathfinder peut échouer si un animal est sur une tuile bloquante (contournement actuel : steering direct).
-- Un seul `RespawnPoint` hardcodé (x=600, y=300) ; pas d'UI de gestion.
+- Pathfinder peut échouer si un animal est sur une tuile bloquante.
 - `synchronize: true` — migrations TypeORM à prévoir pour la prod.
 - Sprite goblin utilise `textureKey: 'turkey'` en placeholder.
-- Le tileset grass ne contient qu'une seule tuile (tilecount=1) — variété visuelle
-  à construire avec d'autres tiles.
-- `assets/source/work/`, `tests/`, `exports/` gitignorés — la tuile grass validée
-  est dans `public/assets/maps/tilesets/grass_01.png`.
+- Le tileset grass ne contient qu'une seule tuile — variété visuelle à construire.
 
 ---
 
 ## Prochaines priorités possibles
 
-- [ ] Valider ADR-0001 (approbation humaine) puis implémenter la migration de coordonnées
-- [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
-- [ ] Import sprite goblin (textureKey propre)
+### Migration WU (en cours)
+- [ ] Fix `teleportCharacter()` : ajouter `worldX/Y/mapId` au `characterRepository.update()` (~3 lignes)
+- [ ] Corriger les anomalies OUT_OF_MAP_BOUNDS (entités hors [0, 65536)) puis `npm run wu:backfill`
+- [ ] Migrer `animals.service.ts` vers WU (aggroRadius, patrolRadius, MELEE_RANGE, Math.hypot → chebyshev)
+- [ ] Double-écriture animaux : `worldX/Y/mapId` dans les `animalRepository.update()`
+- [ ] Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE` + range check en WU
+- [ ] Exposer `worldX/Y/mapId` dans `client.data.player`
+- [ ] Migrer `player_move` client→serveur vers `{ worldX, worldY, direction }`
+
+### Gameplay / contenu
 - [ ] Système de loot sur les animaux tués
 - [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
-- [ ] Dégâts au joueur visibles (animation flash, son)
-- [ ] Zones / rooms Socket.IO pour limiter les broadcasts
+- [ ] Import sprite goblin (textureKey propre)
+- [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
 - [ ] Autres types d'animaux (loup, sanglier…)
 - [ ] Section Décor dans le panneau admin
 - [ ] Migrations TypeORM pour la prod
-- [ ] Audit log des actions admin
 
 ---
 
@@ -127,11 +143,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 Cette liste indique les documents à vérifier après une session de code. Elle ne signifie pas qu'ils doivent tous être modifiés.
 
-- [ ] `docs/05_World/chunks.md` — à mettre à jour après validation ADR-0001
-- [ ] `docs/05_World/maps-and-collisions.md` — à mettre à jour après validation ADR-0001
-- [ ] `docs/03_Client/phaser-world.md` — à mettre à jour après validation ADR-0001
-- [ ] `docs/04_Server/websockets.md` — payloads `mapId/worldTileX/worldTileY` à documenter
-- [ ] `docs/06_Database/schema.md` — après décision du type de stockage
+- [ ] `docs/04_Server/websockets.md` — documenter les payloads WU (`world_joined` inclut `worldX/Y/mapId`)
+- [ ] `docs/06_Database/schema.md` — colonnes WU ajoutées aux 5 entités (character, animal, resource, creature_spawn, respawn_point)
+- [ ] `docs/05_World/chunks.md` — après validation ADR-0001
+- [ ] `docs/05_World/maps-and-collisions.md` — après validation ADR-0001
+- [ ] `docs/03_Client/phaser-world.md` — après migration protocole player_move
 
 ---
 
@@ -149,7 +165,21 @@ Après une session de code :
 
 ## Historique court des sessions
 
-### 2026-06-21
+### 2026-06-21 (session 2)
+
+- **Migration WU — infrastructure** : `world-coordinates.ts` (module central),
+  `legacy-pixel-position.adapter.ts`, `world-position.adapter.ts` (32 tests),
+  `wu-backfill-report.ts` (36 tests, 6 anomalies dont OUT_OF_MAP_BOUNDS).
+- **Scripts backfill** : `wu-backfill-dry-run.ts` et `wu-backfill-real.ts`
+  (`npm run wu:dry-run` / `npm run wu:backfill`). Entités TypeORM complètes
+  (Character, Animal, Resource, CreatureSpawn, RespawnPoint + relations).
+- **Migration WU — world.service.ts** : `ConnectedPlayer` avec `worldX/Y/mapId`
+  requis + `x/y` cache pixel. `joinPlayer`, `updatePlayer`, `persistPlayerPosition`
+  (double-écriture), `respawnCharacter` (Chebyshev WU + filtre mapId) migrés.
+- **Audit** : `docs/01_Architecture/wu-migration-audit.md` — état ~25-30% global,
+  dette CRITIQUE/IMPORTANT/OPTIONNEL, bug `teleportCharacter()` identifié.
+
+### 2026-06-21 (session 1)
 
 - ADR-0001 créé (Draft/Proposed) : système de coordonnées monde tile-first,
   `CHUNK_SIZE=64`, formules de projection isométrique, responsabilités par couche.
