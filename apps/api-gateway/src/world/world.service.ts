@@ -8,15 +8,26 @@ import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import { readWorldPosition } from '../common/world-position.adapter';
-import { wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
+import {
+  wuToIsoScreenX,
+  wuToIsoScreenY,
+  isoScreenToWorldWU,
+  DEFAULT_MAP_ID,
+} from '../common/world-coordinates';
 
 export type ConnectedPlayer = {
   socketId: string;
   characterId: string;
   name: string;
   sex?: string;
+  // ── Vérité serveur — coordonnées WU ──────────────────────────────────────
+  worldX: number;
+  worldY: number;
+  mapId: number;
+  // ── Cache de rendu — pixels Phaser, destinés uniquement au frontend ───────
   x: number;
   y: number;
+  // ─────────────────────────────────────────────────────────────────────────
   direction?: string;
 };
 
@@ -93,6 +104,12 @@ export class WorldService implements OnModuleInit {
       if (player.characterId === characterId) {
         player.x = newX;
         player.y = newY;
+        // Mettre à jour la vérité serveur WU depuis la position de respawn pixel
+        try {
+          const wu = isoScreenToWorldWU(newX, newY);
+          player.worldX = wu.worldX;
+          player.worldY = wu.worldY;
+        } catch { /* position hors isométrie : worldX/Y conservent leur valeur précédente */ }
         server.to(player.socketId).emit('character_respawn', {
           characterId,
           x: newX,
@@ -134,8 +151,11 @@ export class WorldService implements OnModuleInit {
     // Le personnage doit appartenir à l'utilisateur authentifié sur ce socket.
     if (character.userId !== client.data.userId) return null;
 
-    // Lire la position depuis les colonnes WU (priorité) ou les pixels legacy (fallback).
-    // Conversion WU → pixels Phaser ici : le protocole WebSocket reste inchangé.
+    // Lire la position officielle WU (priorité) ou fallback legacy pixels.
+    // Conversion WU → pixels Phaser pour alimenter le cache de rendu uniquement.
+    let playerWX = 0;
+    let playerWY = 0;
+    let playerMapId = DEFAULT_MAP_ID;
     let playerX: number;
     let playerY: number;
     try {
@@ -143,9 +163,13 @@ export class WorldService implements OnModuleInit {
         x: (c as unknown as Character).positionX,
         y: (c as unknown as Character).positionY,
       }));
-      playerX = Math.round(wuToIsoScreenX(wuPos.worldX, wuPos.worldY));
-      playerY = Math.round(wuToIsoScreenY(wuPos.worldX, wuPos.worldY));
+      playerWX    = wuPos.worldX;
+      playerWY    = wuPos.worldY;
+      playerMapId = wuPos.mapId;
+      playerX = Math.round(wuToIsoScreenX(playerWX, playerWY));
+      playerY = Math.round(wuToIsoScreenY(playerWX, playerWY));
     } catch {
+      // Entité sans coordonnées valides : fallback pixels directs, worldX/Y à zéro
       playerX = character.positionX ?? payload.x ?? 400;
       playerY = character.positionY ?? payload.y ?? 300;
     }
@@ -155,6 +179,9 @@ export class WorldService implements OnModuleInit {
       characterId: payload.characterId,
       name: character.name,
       sex: character.sex,
+      worldX: playerWX,
+      worldY: playerWY,
+      mapId: playerMapId,
       x: playerX,
       y: playerY,
       direction: payload.direction ?? 'down',
@@ -184,6 +211,14 @@ export class WorldService implements OnModuleInit {
     player.y = payload.y;
     player.direction = payload.direction ?? player.direction;
 
+    // Mettre à jour la vérité serveur WU depuis les pixels reçus du client
+    try {
+      const wu = isoScreenToWorldWU(payload.x, payload.y);
+      player.worldX = wu.worldX;
+      player.worldY = wu.worldY;
+      // player.mapId reste inchangé : le client ne transmet pas de mapId
+    } catch { /* payload invalide : worldX/Y conservent leur valeur précédente */ }
+
     client.data.player = {
       characterId: player.characterId,
       name: player.name,
@@ -203,6 +238,7 @@ export class WorldService implements OnModuleInit {
   }
 
   async persistPlayerPosition(player: ConnectedPlayer): Promise<void> {
+    // Persiste encore les pixels legacy (positionX/Y) — à migrer vers worldX/Y en Phase 5
     await this.characterRepository.update(player.characterId, {
       positionX: Math.round(player.x),
       positionY: Math.round(player.y),
@@ -261,6 +297,12 @@ export class WorldService implements OnModuleInit {
       if (player.characterId === characterId) {
         player.x = rx;
         player.y = ry;
+        // Mettre à jour la vérité serveur WU depuis la position de téléportation
+        try {
+          const wu = isoScreenToWorldWU(rx, ry);
+          player.worldX = wu.worldX;
+          player.worldY = wu.worldY;
+        } catch { /* position hors isométrie : worldX/Y conservent leur valeur précédente */ }
         await this.characterRepository.update(characterId, { positionX: rx, positionY: ry });
         server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
         server.except(player.socketId).emit('player_moved', player);
