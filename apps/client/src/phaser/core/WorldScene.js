@@ -425,9 +425,10 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("character_teleport", (data) => {
       if (this.player) {
-        this.player.setPosition(data.x, data.y);
-        this.cameras.main.centerOn(data.x, data.y);
-        this.lastSyncedPosition = { x: data.x, y: data.y, direction: this.player.direction };
+        const { x, y } = resolveScreen(data);
+        this.player.setPosition(x, y);
+        this.cameras.main.centerOn(x, y);
+        this.lastSyncedPosition = { x, y, direction: this.player.direction };
       }
     });
 
@@ -436,9 +437,10 @@ export default class WorldScene extends Phaser.Scene {
       destroyHpBar(this.playerHpBar);
       this.playerHpBar = null;
       if (this.player) {
-        this.player.setPosition(data.x, data.y);
-        this.cameras.main.centerOn(data.x, data.y);
-        this.lastSyncedPosition = { x: data.x, y: data.y, direction: "down" };
+        const { x, y } = resolveScreen(data);
+        this.player.setPosition(x, y);
+        this.cameras.main.centerOn(x, y);
+        this.lastSyncedPosition = { x, y, direction: "down" };
       }
     });
 

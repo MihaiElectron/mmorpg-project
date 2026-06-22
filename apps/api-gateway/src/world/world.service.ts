@@ -161,6 +161,9 @@ export class WorldService implements OnModuleInit {
           characterId,
           x: newX,
           y: newY,
+          worldX: newWX,
+          worldY: newWY,
+          mapId: nearestWU.mapId,
           health: newHealth,
           maxHealth: character.maxHealth,
         });
@@ -413,7 +416,13 @@ export class WorldService implements OnModuleInit {
         }
 
         await this.characterRepository.update(characterId, positionUpdate);
-        server.to(player.socketId).emit('character_teleport', { x: rx, y: ry });
+        server.to(player.socketId).emit('character_teleport', {
+          x: rx,
+          y: ry,
+          worldX: teleportWorldX,
+          worldY: teleportWorldY,
+          mapId: teleportMapId,
+        });
         server.except(player.socketId).emit('player_moved', player);
         return player;
       }
