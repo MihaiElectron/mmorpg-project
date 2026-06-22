@@ -45,6 +45,18 @@ function destroyHpBar(hpBar) {
   hpBar.fill.destroy();
 }
 
+// Convertit des coordonnées WU en pixels Phaser.
+// Fallback sur les champs x/y legacy si worldX/worldY absents ou invalides.
+function resolvePlayerScreen(player) {
+  if (Number.isFinite(player.worldX) && Number.isFinite(player.worldY)) {
+    return {
+      x: Math.round(1000 + (player.worldX - player.worldY) / 16),
+      y: Math.round((player.worldX + player.worldY) / 32),
+    };
+  }
+  return { x: Math.round(player.x), y: Math.round(player.y) };
+}
+
 export default class WorldScene extends Phaser.Scene {
   constructor() {
     super({ key: "WorldScene" });
@@ -387,12 +399,9 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("world_joined", (player) => {
       if (!this.player) return;
 
-      this.player.setPosition(player.x, player.y);
-      this.lastSyncedPosition = {
-        x: Math.round(player.x),
-        y: Math.round(player.y),
-        direction: player.direction,
-      };
+      const { x, y } = resolvePlayerScreen(player);
+      this.player.setPosition(x, y);
+      this.lastSyncedPosition = { x, y, direction: player.direction };
     });
 
     this.socket.on("player_joined", (player) => {
@@ -488,18 +497,20 @@ export default class WorldScene extends Phaser.Scene {
   upsertRemotePlayer(player) {
     if (!player?.characterId || player.socketId === this.socket?.id) return;
 
+    const { x, y } = resolvePlayerScreen(player);
+
     const existing = this.remotePlayers.get(player.characterId);
     if (existing) {
       this.tweens.add({
         targets: existing.sprite,
-        x: player.x,
-        y: player.y,
+        x,
+        y,
         duration: 90,
         ease: "Linear",
       });
 
       existing.nameText.setText(player.name || "Joueur");
-      existing.nameText.setPosition(player.x, player.y - 34);
+      existing.nameText.setPosition(x, y - 34);
       existing.socketId = player.socketId;
       setSpriteDepth(existing.sprite);
       existing.nameText.setDepth(existing.sprite.depth + 1);
@@ -507,8 +518,8 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     const sprite = this.add.sprite(
-      player.x,
-      player.y,
+      x,
+      y,
       this.getPlayerTexture(player.sex),
     );
     sprite.setTint(0x66ccff);
@@ -519,7 +530,7 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     const nameText = this.add
-      .text(player.x, player.y - 34, player.name || "Joueur", {
+      .text(x, y - 34, player.name || "Joueur", {
         fontSize: "12px",
         color: "#ffffff",
         stroke: "#000000",
