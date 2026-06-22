@@ -187,7 +187,7 @@ describe('AnimalsService', () => {
     });
 
     it('applique les dégâts et retourne un succès', async () => {
-      const animal = makeAnimal({ x: 600, y: 580, health: 30 });
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
@@ -206,7 +206,7 @@ describe('AnimalsService', () => {
 
     it("tue l'animal, programme un respawn et efface l'état de patrouille", async () => {
       jest.useFakeTimers();
-      const animal = makeAnimal({ x: 600, y: 580, health: 5 });
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveAnimals.set(animal.id, animal);
       (service as any).patrolStates.set(animal.id, {});
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
@@ -223,7 +223,7 @@ describe('AnimalsService', () => {
     });
 
     it('préserve l\'état fighting si l\'animal survit', async () => {
-      const animal = makeAnimal({ x: 600, y: 580, health: 30, state: 'fighting' });
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 7, defense: 3 }));
 
@@ -312,9 +312,9 @@ describe('AnimalsService', () => {
 
   // -------------------------------------------------------------------------
   describe('double-écriture WU', () => {
-    it('attack() écrit worldX/worldY/mapId sur l\'entité avant save', async () => {
-      // animal pixel(600, 580) → worldX=6080, worldY=12480
-      const animal = makeAnimal({ x: 600, y: 580, health: 30 });
+    it('attack() conserve worldX/worldY/mapId lors du save', async () => {
+      // animal WU(6080,12480) fourni dès le départ — plus besoin de conversion pixel→WU (A7)
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 

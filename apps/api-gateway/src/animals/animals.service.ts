@@ -427,14 +427,10 @@ export class AnimalsService implements OnModuleInit {
     if (character.health <= 0) return { success: false, error: 'Character is dead' };
 
     const range = this.resolveAttackRange(character);
-    // animal.x/y encore en pixels — IA non migrée vers WU.
-    let animalWU: { worldX: number; worldY: number };
-    try {
-      animalWU = isoScreenToWorldWU(animal.x, animal.y);
-    } catch {
+    if (animal.worldX == null || animal.worldY == null) {
       return { success: false, error: 'Target out of range' };
     }
-    const distance = chebyshevDistanceWU(attackerPosition, animalWU);
+    const distance = chebyshevDistanceWU(attackerPosition, { worldX: animal.worldX, worldY: animal.worldY });
     if (distance > range) return { success: false, error: 'Target out of range' };
 
     this.lastAttackAt.set(characterId, now);
@@ -450,8 +446,6 @@ export class AnimalsService implements OnModuleInit {
       const delay = animal.spawn.respawnDelayMs;
       setTimeout(() => this.respawnAnimal(animal.id), delay);
     }
-    const attackSaveWU = this.pixelToWUSafe(animal.x, animal.y);
-    if (attackSaveWU) { animal.worldX = attackSaveWU.worldX; animal.worldY = attackSaveWU.worldY; animal.mapId = attackSaveWU.mapId; }
     await this.animalRepository.save(animal);
 
     let riposte: { damage: number; characterHealth: number } | undefined;
