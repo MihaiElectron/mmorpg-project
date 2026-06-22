@@ -9,8 +9,12 @@ import { Character } from '../characters/entities/character.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { AnimalDto } from './dto/animal.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
+import { isoScreenToWorldWU, chebyshevDistanceWU } from '../common/world-coordinates';
+import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 
-const MELEE_RANGE = 60;
+const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
+// Portée mêlée pour attack() en WU — temporaire (legacyRadiusToWU(60) = 960)
+const MELEE_RANGE_WU = 960;
 const RANGED_RANGE_DEFAULT = 300;
 const ATTACK_COOLDOWN_MS = 700;
 const AUTO_ATTACK_COOLDOWN_MS = 1500;
@@ -372,10 +376,17 @@ export class AnimalsService implements OnModuleInit {
     if (character.health <= 0) return { success: false, error: 'Character is dead' };
 
     const range = this.resolveAttackRange(character);
-    const distance = Math.hypot(
-      animal.x - attackerPosition.x,
-      animal.y - attackerPosition.y,
-    );
+    // Conversion WU — animal.x/y encore en pixels (IA non migrée).
+    // attackerPosition.x/y : payload legacy jusqu'à migration AnimalsGateway.
+    let attackerWU: { worldX: number; worldY: number };
+    let animalWU: { worldX: number; worldY: number };
+    try {
+      attackerWU = isoScreenToWorldWU(attackerPosition.x, attackerPosition.y);
+      animalWU   = isoScreenToWorldWU(animal.x, animal.y);
+    } catch {
+      return { success: false, error: 'Target out of range' };
+    }
+    const distance = chebyshevDistanceWU(attackerWU, animalWU);
     if (distance > range) return { success: false, error: 'Target out of range' };
 
     this.lastAttackAt.set(characterId, now);
@@ -394,7 +405,7 @@ export class AnimalsService implements OnModuleInit {
     await this.animalRepository.save(animal);
 
     let riposte: { damage: number; characterHealth: number } | undefined;
-    if ((animal.state === 'alive' || animal.state === 'fighting') && distance <= MELEE_RANGE) {
+    if ((animal.state === 'alive' || animal.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       const riposteDamage = Math.max(template.baseAttack - character.defense, 1);
       const characterHealth = Math.max(character.health - riposteDamage, 0);
       await this.characterRepository.update(characterId, { health: characterHealth });
@@ -413,7 +424,7 @@ export class AnimalsService implements OnModuleInit {
     const ranged = equipment.find(
       (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
     );
-    if (ranged) return ranged.item.range ?? RANGED_RANGE_DEFAULT;
+    if (ranged) return legacyRadiusToWU(ranged.item.range ?? RANGED_RANGE_DEFAULT);
 
     const melee = equipment.find(
       (eq) =>
@@ -421,9 +432,9 @@ export class AnimalsService implements OnModuleInit {
           (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
         eq.item?.type === 'weapon',
     );
-    if (melee) return melee.item.range ?? MELEE_RANGE;
+    if (melee) return legacyRadiusToWU(melee.item.range ?? MELEE_RANGE);
 
-    return MELEE_RANGE;
+    return MELEE_RANGE_WU;
   }
 
   // -------------------------------------------------------------------------
