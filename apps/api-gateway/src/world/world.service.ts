@@ -36,8 +36,6 @@ export type JoinWorldPayload = {
   characterId: string;
   name: string;
   sex?: string;
-  x?: number;
-  y?: number;
   direction?: string;
 };
 
@@ -218,9 +216,9 @@ export class WorldService implements OnModuleInit {
       playerX = Math.round(wuToIsoScreenX(playerWX, playerWY));
       playerY = Math.round(wuToIsoScreenY(playerWX, playerWY));
     } catch {
-      // Entité sans coordonnées valides : fallback pixels directs, worldX/Y à zéro
-      playerX = character.positionX ?? payload.x ?? 400;
-      playerY = character.positionY ?? payload.y ?? 300;
+      // Entité sans coordonnées WU valides : fallback serveur contrôlé, worldX/Y restent à zéro
+      playerX = character.positionX ?? 400;
+      playerY = character.positionY ?? 300;
     }
 
     const player: ConnectedPlayer = {

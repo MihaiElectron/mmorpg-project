@@ -19,8 +19,6 @@ type JoinWorldPayload = {
   characterId: string;
   name: string;
   sex?: string;
-  x?: number;
-  y?: number;
   direction?: string;
 };
 

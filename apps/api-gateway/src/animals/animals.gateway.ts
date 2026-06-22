@@ -59,7 +59,7 @@ export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
     const result = await this.animalsService.attack(
       payload.targetId,
       player.characterId,
-      { x: player.x, y: player.y },
+      { worldX: player.worldX, worldY: player.worldY, mapId: player.mapId },
     );
 
     if (isAttackFailure(result)) {
