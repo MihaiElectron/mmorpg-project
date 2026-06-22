@@ -114,9 +114,6 @@ export class AdminService {
       } catch {
         throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
       }
-      if (!Number.isFinite(wu.worldX) || !Number.isFinite(wu.worldY)) {
-        throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
-      }
       resource.worldX = wu.worldX;
       resource.worldY = wu.worldY;
       resource.mapId = DEFAULT_MAP_ID;
@@ -125,8 +122,6 @@ export class AdminService {
   }
 
   async createResource(type: string, x: number, y: number): Promise<Resource> {
-    const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
-    const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
     const rx = Math.round(x);
     const ry = Math.round(y);
     if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
@@ -138,9 +133,8 @@ export class AdminService {
     } catch {
       throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
     }
-    if (!Number.isFinite(wu.worldX) || !Number.isFinite(wu.worldY)) {
-      throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
-    }
+    const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
+    const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
     return this.resourceRepo.save(
       this.resourceRepo.create({ type, x: rx, y: ry, worldX: wu.worldX, worldY: wu.worldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
     );
