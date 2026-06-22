@@ -119,6 +119,7 @@ If a contradiction is found:
 ### 07_Admin
 
 - [Admin Tool](07_Admin/admin-tool.md) - Status: Draft - Documentation planned for the admin tool.
+- [DevTools — Architecture](07_Admin/devtools-architecture.md) - Status: Draft - Spécification fonctionnelle du DevTools en tant que plateforme de développement intégrée.
 
 ### 08_Gameplay
 
