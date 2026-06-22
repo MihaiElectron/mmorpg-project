@@ -1,16 +1,40 @@
 import { create } from "zustand";
 
+// ── Types legacy ───────────────────────────────────────────────────────────────
+// DevToolsPos : conservé pour compatibilité avec getAdminStore().setLastClickedPos()
 export type DevToolsPos = { x: number; y: number };
 
+// ── Types espaces de coordonnées ───────────────────────────────────────────────
+// Pixels Phaser (pointer.worldX / pointer.worldY)
+export type DevToolsScreenPoint = { x: number; y: number };
+
+// World Units (ADR-0001 — 1 tile = 1024 WU)
+// Inverse : worldX = 8*(sx−1000) + 16*sy,  worldY = −8*(sx−1000) + 16*sy
+export type DevToolsWorldPoint = { mapId: number; worldX: number; worldY: number };
+
+// Tuile logique  — tileX = worldX >> 10,  tileY = worldY >> 10
+export type DevToolsTilePoint = { mapId: number; tileX: number; tileY: number };
+
+// Chunk  — chunkX = worldX >> 16,  chunkY = worldY >> 16  (CHUNK_SHIFT = 16)
+export type DevToolsChunkPoint = { mapId: number; chunkX: number; chunkY: number };
+
+export type DevToolsClickContext = {
+  screenPoint: DevToolsScreenPoint;
+  worldPoint: DevToolsWorldPoint;
+  tilePoint: DevToolsTilePoint;
+  chunkPoint: DevToolsChunkPoint;
+};
+
+// ── Store logic ────────────────────────────────────────────────────────────────
+
 const storeLogic = (set, get) => ({
+
+  // ── Console ─────────────────────────────────────────────────────────────────
   isConsoleActive: false,
-  lastClickedPos: null as DevToolsPos | null,
   commandHistory: [] as string[],
   historyIndex: -1,
 
   setConsoleActive: (active: boolean) => set({ isConsoleActive: active }),
-
-  setLastClickedPos: (pos: DevToolsPos) => set({ lastClickedPos: pos }),
 
   addToHistory: (cmd: string) => {
     const prev = get().commandHistory;
@@ -21,19 +45,66 @@ const storeLogic = (set, get) => ({
   navigateHistory: (dir: "up" | "down", currentInput: string): string => {
     const { commandHistory, historyIndex } = get();
     if (commandHistory.length === 0) return currentInput;
-
     let next = historyIndex;
-
     if (dir === "up") {
       next = Math.min(historyIndex + 1, commandHistory.length - 1);
     } else {
       next = Math.max(historyIndex - 1, -1);
     }
-
     set({ historyIndex: next });
     return next === -1 ? "" : commandHistory[next];
   },
+
+  // ── Outil actif ──────────────────────────────────────────────────────────────
+  // "legacy-admin" est la seule valeur utilisée actuellement.
+  // Étendu quand un ToolSystem sera introduit.
+  activeTool: "legacy-admin" as string,
+
+  setActiveTool: (toolId: string) => set({ activeTool: toolId }),
+
+  // ── Dernier clic — legacy (compatibilité admin.store) ────────────────────────
+  lastClickedPos: null as DevToolsPos | null,
+
+  setLastClickedPos: (pos: DevToolsPos) => set({ lastClickedPos: pos }),
+
+  // ── Dernier clic — espaces de coordonnées complets ───────────────────────────
+  lastClickedScreenPoint: null as DevToolsScreenPoint | null,
+  lastClickedWorldPoint: null as DevToolsWorldPoint | null,
+  lastClickedTilePoint: null as DevToolsTilePoint | null,
+  lastClickedChunkPoint: null as DevToolsChunkPoint | null,
+
+  setLastClickedScreenPoint: (point: DevToolsScreenPoint) =>
+    set({ lastClickedScreenPoint: point }),
+
+  setLastClickedWorldPoint: (point: DevToolsWorldPoint) =>
+    set({ lastClickedWorldPoint: point }),
+
+  setLastClickedTilePoint: (point: DevToolsTilePoint) =>
+    set({ lastClickedTilePoint: point }),
+
+  setLastClickedChunkPoint: (point: DevToolsChunkPoint) =>
+    set({ lastClickedChunkPoint: point }),
+
+  // Setter composite — met à jour les quatre espaces en une seule opération.
+  setLastClickedContext: (ctx: DevToolsClickContext) =>
+    set({
+      lastClickedScreenPoint: ctx.screenPoint,
+      lastClickedWorldPoint:  ctx.worldPoint,
+      lastClickedTilePoint:   ctx.tilePoint,
+      lastClickedChunkPoint:  ctx.chunkPoint,
+    }),
+
+  clearLastClickedContext: () =>
+    set({
+      lastClickedPos:          null,
+      lastClickedScreenPoint:  null,
+      lastClickedWorldPoint:   null,
+      lastClickedTilePoint:    null,
+      lastClickedChunkPoint:   null,
+    }),
 });
+
+// ── Singleton global (partagé React + Phaser) ──────────────────────────────────
 
 const getStore = () => {
   const KEY = "__GLOBAL_DEVTOOLS_STORE__";

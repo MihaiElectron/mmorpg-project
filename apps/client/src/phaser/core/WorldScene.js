@@ -234,7 +234,18 @@ export default class WorldScene extends Phaser.Scene {
         return;
       }
 
-      getAdminStore().getState().setLastClickedPos({ x: Math.round(worldX), y: Math.round(worldY) });
+      const sx = Math.round(worldX);
+      const sy = Math.round(worldY);
+      // Inverse de la projection isométrique ADR-0001 (mapId hardcodé = 1, carte unique)
+      const wuX = Math.round(8 * (worldX - 1000) + 16 * worldY);
+      const wuY = Math.round(-8 * (worldX - 1000) + 16 * worldY);
+      getAdminStore().getState().setLastClickedPos({ x: sx, y: sy });
+      getAdminStore().getState().setLastClickedContext({
+        screenPoint: { x: sx, y: sy },
+        worldPoint:  { mapId: 1, worldX: wuX, worldY: wuY },
+        tilePoint:   { mapId: 1, tileX: wuX >> 10, tileY: wuY >> 10 },
+        chunkPoint:  { mapId: 1, chunkX: wuX >> 16, chunkY: wuY >> 16 },
+      });
       getActionPanelStore().getState().closePanel();
       this.stopAutoAttack();
       this.controller.startMouseMove(worldX, worldY);
