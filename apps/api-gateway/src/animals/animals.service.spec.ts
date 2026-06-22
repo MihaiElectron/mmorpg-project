@@ -327,4 +327,54 @@ describe('AnimalsService', () => {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  describe('synchronisation WU mémoire IA (A2)', () => {
+    it('doPatrolMovement synchronise worldX/worldY après déplacement', () => {
+      // animal pixel(600, 580), se déplace vers la droite
+      const animal = makeAnimal({ x: 600, y: 580 });
+      const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
+
+      (service as any).doPatrolMovement(animal, state, makeTemplate(), Date.now());
+
+      expect(Number.isFinite(animal.worldX)).toBe(true);
+      expect(Number.isFinite(animal.worldY)).toBe(true);
+      expect(animal.mapId).toBe(1);
+    });
+
+    it('doFighting synchronise worldX/worldY lors de la poursuite', async () => {
+      // animal (700,580), joueur (400,300) — dist ≈ 410 > MELEE_RANGE
+      const animal = makeAnimal({ x: 700, y: 580 });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 400, y: 300, worldX: 0, worldY: 9600, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+
+      await (service as any).doFighting(animal, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      expect(Number.isFinite(animal.worldX)).toBe(true);
+      expect(Number.isFinite(animal.worldY)).toBe(true);
+      expect(animal.mapId).toBe(1);
+    });
+
+    it('doEscaping synchronise worldX/worldY lors de la fuite', async () => {
+      // animal (600,580), joueur (600,560) — animal fuit vers le haut
+      const animal = makeAnimal({ x: 600, y: 580 });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 600, y: 560, worldX: 1600, worldY: 11840, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+
+      await (service as any).doEscaping(animal, state, makeTemplate(), [player], Date.now());
+
+      expect(Number.isFinite(animal.worldX)).toBe(true);
+      expect(Number.isFinite(animal.worldY)).toBe(true);
+      expect(animal.mapId).toBe(1);
+    });
+  });
 });

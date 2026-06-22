@@ -229,6 +229,8 @@ export class AnimalsService implements OnModuleInit {
       animal.x = Math.round(newX);
       animal.y = Math.round(newY);
     }
+    const patrolWU = this.pixelToWUSafe(animal.x, animal.y);
+    if (patrolWU) { animal.worldX = patrolWU.worldX; animal.worldY = patrolWU.worldY; animal.mapId = patrolWU.mapId; }
   }
 
   private async doFighting(
@@ -266,6 +268,8 @@ export class AnimalsService implements OnModuleInit {
       const dt = PATROL_TICK_MS / 1000;
       animal.x = Math.round(animal.x + (dx / dist) * template.speedMax * dt);
       animal.y = Math.round(animal.y + (dy / dist) * template.speedMax * dt);
+      const fightWU = this.pixelToWUSafe(animal.x, animal.y);
+      if (fightWU) { animal.worldX = fightWU.worldX; animal.worldY = fightWU.worldY; animal.mapId = fightWU.mapId; }
     }
 
     // Auto-attaque
@@ -326,6 +330,8 @@ export class AnimalsService implements OnModuleInit {
       animal.x = Math.round(newX);
       animal.y = Math.round(newY);
     }
+    const escapeWU = this.pixelToWUSafe(animal.x, animal.y);
+    if (escapeWU) { animal.worldX = escapeWU.worldX; animal.worldY = escapeWU.worldY; animal.mapId = escapeWU.mapId; }
   }
 
   private pixelToWUSafe(
