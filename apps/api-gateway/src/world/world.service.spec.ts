@@ -103,6 +103,33 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
     expect(socket.data.player.y).toBe(400);
   });
 
+  it('client.data.player reçoit worldX/worldY/mapId après updatePlayer', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    // pixel(600, 300) → WU(1600, 8000)
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { x: 600, y: 300 });
+
+    expect(socket.data.player.worldX).toBe(1600);
+    expect(socket.data.player.worldY).toBe(8000);
+    expect(socket.data.player.mapId).toBe(1);
+  });
+
+  it('client.data.player garde worldX/worldY si payload invalide', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1, x: 600, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { x: NaN, y: NaN });
+
+    expect(socket.data.player.worldX).toBe(1600);
+    expect(socket.data.player.worldY).toBe(8000);
+    expect(socket.data.player.mapId).toBe(1);
+  });
+
   it('retourne le ConnectedPlayer mis à jour', () => {
     const svc = makeService();
     const socket = makeSocket();
