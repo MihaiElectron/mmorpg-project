@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
 import { CreatureTemplate } from '../animals/entities/creature-template.entity';
@@ -8,6 +8,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { WorldService } from '../world/world.service';
+import { DEFAULT_MAP_ID, isoScreenToWorldWU } from '../common/world-coordinates';
 
 @Injectable()
 export class AdminService {
@@ -103,14 +104,45 @@ export class AdminService {
       resource.state = 'alive';
       if (resource.remainingLoots === 0) resource.remainingLoots = 5;
     }
+    if ('x' in fields || 'y' in fields) {
+      if (!Number.isFinite(resource.x) || !Number.isFinite(resource.y)) {
+        throw new BadRequestException('Coordonnées ressource invalides : x et y doivent être finis.');
+      }
+      let wu: ReturnType<typeof isoScreenToWorldWU>;
+      try {
+        wu = isoScreenToWorldWU(resource.x, resource.y);
+      } catch {
+        throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
+      }
+      if (!Number.isFinite(wu.worldX) || !Number.isFinite(wu.worldY)) {
+        throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
+      }
+      resource.worldX = wu.worldX;
+      resource.worldY = wu.worldY;
+      resource.mapId = DEFAULT_MAP_ID;
+    }
     return this.resourceRepo.save(resource);
   }
 
   async createResource(type: string, x: number, y: number): Promise<Resource> {
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
+    const rx = Math.round(x);
+    const ry = Math.round(y);
+    if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
+      throw new BadRequestException('Coordonnées ressource invalides : x et y doivent être finis.');
+    }
+    let wu: ReturnType<typeof isoScreenToWorldWU>;
+    try {
+      wu = isoScreenToWorldWU(rx, ry);
+    } catch {
+      throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
+    }
+    if (!Number.isFinite(wu.worldX) || !Number.isFinite(wu.worldY)) {
+      throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
+    }
     return this.resourceRepo.save(
-      this.resourceRepo.create({ type, x: Math.round(x), y: Math.round(y), remainingLoots }),
+      this.resourceRepo.create({ type, x: rx, y: ry, worldX: wu.worldX, worldY: wu.worldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
     );
   }
 

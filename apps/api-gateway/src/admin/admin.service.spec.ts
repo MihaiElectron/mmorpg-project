@@ -1,0 +1,91 @@
+import { BadRequestException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { AdminService } from './admin.service';
+import { CreatureTemplate } from '../animals/entities/creature-template.entity';
+import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
+import { Animal } from '../animals/entities/animal.entity';
+import { Character } from '../characters/entities/character.entity';
+import { Resource } from '../resources/entities/resource.entity';
+import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { WorldService } from '../world/world.service';
+
+describe('AdminService resources', () => {
+  let service: AdminService;
+  let resourceRepo: Record<string, jest.Mock>;
+  let resourceTemplateRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    resourceRepo = {
+      findOne: jest.fn(),
+      save: jest.fn().mockImplementation((resource) => Promise.resolve(resource)),
+      create: jest.fn().mockImplementation((resource) => resource),
+    };
+    resourceTemplateRepo = {
+      findOne: jest.fn().mockResolvedValue({ type: 'wood', defaultRemainingLoots: 7 }),
+    };
+
+    const emptyRepo = {
+      count: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
+        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
+        { provide: getRepositoryToken(Character), useValue: emptyRepo },
+        { provide: getRepositoryToken(Resource), useValue: resourceRepo },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
+        { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('createResource écrit x/y pixels et worldX/worldY/mapId', async () => {
+    const resource = await service.createResource('wood', 600.4, 300.2);
+
+    expect(resourceRepo.create).toHaveBeenCalledWith({
+      type: 'wood',
+      x: 600,
+      y: 300,
+      worldX: 1600,
+      worldY: 8000,
+      mapId: 1,
+      remainingLoots: 7,
+    });
+    expect(resource).toMatchObject({ x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1 });
+  });
+
+  it('updateResource recalcule worldX/worldY/mapId quand x change', async () => {
+    const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'dead', remainingLoots: 0 } as Resource;
+    resourceRepo.findOne.mockResolvedValue(resource);
+
+    const updated = await service.updateResource('resource-1', { x: 700 });
+
+    expect(resourceRepo.save).toHaveBeenCalledWith(expect.objectContaining({
+      x: 700,
+      y: 300,
+      worldX: 2400,
+      worldY: 7200,
+      mapId: 1,
+      state: 'alive',
+      remainingLoots: 5,
+    }));
+    expect(updated).toMatchObject({ worldX: 2400, worldY: 7200, mapId: 1 });
+  });
+
+  it('updateResource refuse une coordonnée non finie', async () => {
+    const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'alive', remainingLoots: 5 } as Resource;
+    resourceRepo.findOne.mockResolvedValue(resource);
+
+    await expect(service.updateResource('resource-1', { x: Infinity })).rejects.toBeInstanceOf(BadRequestException);
+    expect(resourceRepo.save).not.toHaveBeenCalled();
+  });
+});
