@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-22_
-_Session : 2026-06-22_
+_Session : 2026-06-22 (session 3)_
 _Branche : main_
 _État : développement local_
 
@@ -15,21 +15,28 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
+Migration WU Phase 2 terminée : backend et frontend utilisent worldX/worldY/mapId
+en priorité pour toutes les entités (joueurs, animaux, ressources). Le protocole
+WebSocket player_move est additif (x/y conservés en fallback). Audits et plan de
+migration WebSocket documentés.
+
 ---
 
 ## Derniers changements importants
 
-- **Phase 1 migration WU — clôturée** : backfill exécuté (0 anomalie / 0 entité),
-  ADR-0001 accepté (2026-06-22), documentation alignée (`worldX/Y` partout).
-- **`updatePlayer()` WU-first** : `player_move` convertit les pixels en WU en priorité ;
-  `player.x/y` mis à jour seulement si conversion réussit. 16 tests (`world.service.spec.ts`).
-- **`teleportCharacter()` double-écriture** : DB écrit `positionX/Y` + `worldX/Y/mapId`.
-  Bug CRITIQUE soldé (`b751bad`).
-- **Migration WU — world.service.ts** : `ConnectedPlayer` WU-first, toutes les fonctions
-  runtime migrées (`joinPlayer`, `updatePlayer`, `persistPlayerPosition`, `respawnCharacter`,
-  `teleportCharacter`).
-- **Infrastructure WU** : `world-coordinates.ts` (65 tests), `world-position.adapter.ts`
-  (32 tests), `wu-backfill-report.ts` (36 tests), scripts `wu:dry-run` / `wu:backfill`.
+- **Phase 2 migration WU — clôturée** : `animals.service.ts` entièrement WU (IA,
+  combat, range checks). Frontend positionne joueurs, animaux et ressources depuis
+  `worldX/worldY` avec fallback `x/y`. Helper `resolveScreen` dans `WorldScene.js`.
+- **Protocole WebSocket — player_move additif** : client envoie `x/y + worldX/worldY/mapId`.
+  Backend WU-first (6 nouveaux tests, 24 total dans `world.service.spec.ts`).
+- **P0 — join_world** : `payload.x/y` supprimés de `JoinWorldPayload`. Le serveur ne fait
+  plus confiance aux coordonnées envoyées à la connexion.
+- **Backfill secondaire validé** : `wu:dry-run` confirme `creature_spawn` et `respawn_point`
+  1/1 WU — prérequis B1/B2 de l'audit satisfaits.
+- **Audits et plan** : `wu-final-backend-audit.md` (~60 % migration globale estimée) et
+  `websocket-wu-migration-study.md` (plan P0-P7) créés dans `docs/01_Architecture/`.
+- **Phase 1 migration WU — clôturée** (session précédente) : backfill exécuté (0 anomalie),
+  ADR-0001 accepté, `world.service.ts` entièrement migré.
 
 ---
 
@@ -45,8 +52,8 @@ personnages enregistrés, animaux actifs, templates, spawns).
 | Admin — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 15 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 16 `world.service` (198/199 verts — 1 préexistant KO sans lien WU) |
-| Migration WU | `world.service.ts` entièrement migré (joinPlayer, updatePlayer, persist, respawn, teleport) ; scripts backfill prêts (anomalies OUT_OF_MAP_BOUNDS à corriger avant exécution) |
+| Tests | 27 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` (verts — 1 préexistant KO sans lien WU) |
+| Migration WU | Backend : `world.service.ts` + `animals.service.ts` entièrement migrés. Frontend : `resolveScreen()` WU-first pour joueurs, animaux et ressources. Protocole `player_move` additif. |
 
 ---
 
@@ -83,18 +90,15 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Dette technique connue
 
-- **[CRITIQUE] `animals.service.ts` entièrement en pixels** : boucle IA/combat complète
-  (aggro, patrol, pursuit, escape, leash, MELEE_RANGE=60, patrolRadius, aggroRadius)
-  non migrée vers WU. Bloc le plus large restant.
-- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**. Entités repositionnées, backfill exécuté. `wu:dry-run` retourne 0/0.
-- **[CRITIQUE] `resources.gateway.ts` range check en pixels** : `RESOURCE_INTERACT_RANGE=100`
-  px + `Math.hypot` — anti-cheat gathering non migré.
-- **[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime** : colonnes présentes mais
-  non maintenues par `animals.service.ts` (mouvements, respawns).
-- **[IMPORTANT] `client.data.player` sans worldX/Y** : `AnimalsGateway` et
-  `ResourcesGateway` utilisent `player.x/y` (pixels) pour les range checks.
+- ~~**[CRITIQUE] `animals.service.ts` entièrement en pixels**~~ — **SOLDÉ**. Boucle IA entièrement WU (A2-A7). `attack()` utilise `animal.worldX/Y` directement.
+- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**. Backfill exécuté, `wu:dry-run` retourne 0/0.
+- ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**. `RESOURCE_INTERACT_RANGE_WU = 1600` + `chebyshevDistanceWU`.
+- ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**. Double-write + cache pixel dérivé de WU à chaque tick IA.
+- **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
 - **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
+- **[IMPORTANT] `player_move` — x/y fallback à supprimer** : protocole additif (P1). Suppression définitive des champs `x/y` dans le payload possible une fois le frontend entièrement migré (P2 fait, reste character_respawn / character_teleport côté frontend).
+- **[IMPORTANT] `character_respawn` et `character_teleport`** : payloads encore en pixels côté client (`WorldScene.js:player.setPosition(data.x, data.y)`). Backend émet `x/y` pixels — migration prévue en P3-suites / P4 de l'étude WebSocket.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante.
@@ -106,15 +110,25 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Prochaines priorités possibles
 
-### Migration WU — Phase 2 (animaux et ressources)
+### Migration WU — Phase 2 (animaux et ressources) — **CLÔTURÉE**
 - [x] Fix `teleportCharacter()` double-écriture (`b751bad`)
 - [x] `updatePlayer()` WU-first + garde-fous NaN/Infinity (`9bdd4b3`)
 - [x] Backfill exécuté — 0 anomalie / 0 entité restante
-- [ ] Migrer `animals.service.ts` vers WU (aggroRadius, patrolRadius, MELEE_RANGE, Math.hypot → chebyshev)
-- [ ] Double-écriture animaux : `worldX/Y/mapId` dans les `animalRepository.update()`
-- [ ] Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE` + range check en WU
-- [ ] Exposer `worldX/Y/mapId` dans `client.data.player`
-- [ ] Migrer `player_move` client→serveur vers `{ worldX, worldY, direction }`
+- [x] Migrer `animals.service.ts` vers WU (A2-A7 — IA, combat, range checks)
+- [x] Double-écriture animaux : `worldX/Y/mapId` dans tous les `animalRepository.update()`
+- [x] Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE_WU` + `chebyshevDistanceWU`
+- [x] `AnimalsGateway.attack()` utilise `player.worldX/Y/mapId` (client.data.player WU)
+- [x] Migrer `player_move` : payload additif `x/y + worldX/worldY/mapId` (P1)
+
+### Migration WU — Phase 3 (protocole WebSocket)
+- [x] P0 — `join_world` : supprimer fallback `payload.x/y`
+- [x] P1 — `player_move` additif : backend WU-first, fallback x/y conservé
+- [x] P2 — Frontend joueurs : `resolveScreen()` WU-first pour `world_joined`, `player_joined`, `current_players`, `player_moved`
+- [x] P3 — Frontend animaux + ressources : `resolveScreen()` WU-first
+- [ ] P4 — `character_respawn` et `character_teleport` : ajouter `worldX/Y` dans payload, frontend lit WU
+- [ ] P5 — `player_move` : supprimer fallback `x/y` (après stabilisation P1)
+- [ ] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_animal` en WU
+- [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `animal.x/y` en cache pur)
 
 ### Gameplay / contenu
 - [ ] Système de loot sur les animaux tués
@@ -131,11 +145,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 Cette liste indique les documents à vérifier après une session de code. Elle ne signifie pas qu'ils doivent tous être modifiés.
 
-- [ ] `docs/04_Server/websockets.md` — documenter les payloads WU (`world_joined` inclut `worldX/Y/mapId`)
-- [ ] `docs/06_Database/schema.md` — colonnes WU ajoutées aux 5 entités (character, animal, resource, creature_spawn, respawn_point)
-- [ ] `docs/05_World/chunks.md` — après validation ADR-0001
-- [ ] `docs/05_World/maps-and-collisions.md` — après validation ADR-0001
-- [ ] `docs/03_Client/phaser-world.md` — après migration protocole player_move
+- [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world
+- [ ] `docs/03_Client/phaser-world.md` — `resolveScreen()`, migration WU frontend complète
+- [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
+- [ ] `docs/05_World/chunks.md` — après validation ADR-0001 (déjà fait, vérifier)
+- [ ] `docs/05_World/maps-and-collisions.md` — après validation ADR-0001 (déjà fait, vérifier)
 
 ---
 
@@ -152,6 +166,23 @@ Après une session de code :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-22 (session 3 — Phase 2 + protocole WebSocket)
+
+- **`animals.service.ts` — migration WU complète** : boucle IA (doPatrolMovement,
+  doFighting, doEscaping) WU-authoritative, pixel cache dérivé de WU. `findNearestPlayer`
+  WU + filtre `mapId`. `attack()` utilise `animal.worldX/Y` directement. 27/27 tests.
+- **Backfill secondaire validé** : `wu:dry-run` confirme `creature_spawn` et
+  `respawn_point` 1/1 WU — prérequis B1/B2 de l'audit satisfaits.
+- **P0** : `join_world` ne fait plus confiance aux coordonnées client — `x/y` supprimés
+  de `JoinWorldPayload`, fallback serveur contrôlé uniquement.
+- **P1** : `player_move` payload additif — client envoie `x/y + worldX/worldY/mapId`,
+  backend WU-first. 6 nouveaux tests (24 total `world.service.spec.ts`).
+- **P2** : Frontend positionne joueurs depuis `worldX/worldY` — helper `resolveScreen`
+  (renommé depuis `resolvePlayerScreen`), fallback `x/y` conservé.
+- **P3** : Frontend positionne animaux et ressources depuis `worldX/worldY` via `resolveScreen`.
+- **Audits créés** : `wu-final-backend-audit.md` (migration ~60 % backend estimée) et
+  `websocket-wu-migration-study.md` (plan P0-P7).
 
 ### 2026-06-22 (session 2 — clôture Phase 1)
 
