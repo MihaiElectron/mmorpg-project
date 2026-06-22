@@ -1,24 +1,11 @@
 import { useState } from "react";
 import CharacterLayer from "../CharacterLayer/CharacterLayer";
 import Inventory from "../Inventory/Inventory";
-import DevToolsShell from "../DevTools/DevToolsShell";
 import { useCharacterStore } from "../../store/character.store";
-
-function decodeJwtRole(token) {
-  try {
-    return JSON.parse(atob(token.split(".")[1]))?.role ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default function CharacterLayout() {
   const isOpen = useCharacterStore((s) => s.isOpen);
   const toggleOpen = useCharacterStore((s) => s.toggleOpen);
-  const closePanel = useCharacterStore((s) => s.closePanel);
-
-  const token = localStorage.getItem("token") ?? "";
-  const isAdmin = decodeJwtRole(token) === "admin";
 
   const [activeTab, setActiveTab] = useState("perso");
 
@@ -42,15 +29,6 @@ export default function CharacterLayout() {
         >
           Perso
         </button>
-
-        {isAdmin && (
-          <button
-            className={`character-layout__tab character-layout__tab--admin${activeTab === "admin" && isOpen ? " character-layout__tab--active" : ""}`}
-            onClick={() => handleTabClick("admin")}
-          >
-            DevTools
-          </button>
-        )}
       </div>
 
       {activeTab === "perso" && (
@@ -62,12 +40,6 @@ export default function CharacterLayout() {
             <Inventory />
           </div>
         </>
-      )}
-
-      {activeTab === "admin" && isAdmin && (
-        <div className="character-layout__content character-layout__content--admin">
-          <DevToolsShell />
-        </div>
       )}
     </div>
   );

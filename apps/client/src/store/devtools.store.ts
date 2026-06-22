@@ -25,6 +25,10 @@ export type DevToolsClickContext = {
   chunkPoint: DevToolsChunkPoint;
 };
 
+export type DevToolsPanelPosition = { x: number; y: number };
+
+const DEFAULT_PANEL_POSITION: DevToolsPanelPosition = { x: 0, y: 0 };
+
 // ── Store logic ────────────────────────────────────────────────────────────────
 
 const storeLogic = (set, get) => ({
@@ -61,6 +65,32 @@ const storeLogic = (set, get) => ({
   activeTool: "legacy-admin" as string,
 
   setActiveTool: (toolId: string) => set({ activeTool: toolId }),
+
+  // ── Entrée HUD DevTools ─────────────────────────────────────────────────────
+  isDevToolsOpen: false,
+  isEditMode: false,
+  panelPosition: DEFAULT_PANEL_POSITION,
+
+  setDevToolsOpen: (open: boolean) =>
+    set({
+      isDevToolsOpen: open,
+      panelPosition: open ? get().panelPosition : DEFAULT_PANEL_POSITION,
+    }),
+
+  toggleDevToolsOpen: () => {
+    const next = !get().isDevToolsOpen;
+    set({
+      isDevToolsOpen: next,
+      panelPosition: next ? get().panelPosition : DEFAULT_PANEL_POSITION,
+    });
+  },
+
+  setEditMode: (active: boolean) => set({ isEditMode: active }),
+
+  setPanelPosition: (position: DevToolsPanelPosition) =>
+    set({ panelPosition: position }),
+
+  resetPanelPosition: () => set({ panelPosition: DEFAULT_PANEL_POSITION }),
 
   // ── Dernier clic — legacy (compatibilité admin.store) ────────────────────────
   lastClickedPos: null as DevToolsPos | null,

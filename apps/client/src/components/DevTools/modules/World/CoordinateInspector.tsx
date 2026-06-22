@@ -23,6 +23,8 @@ function CoordinateRow({
 
 export default function CoordinateInspector() {
   const activeTool = useDevToolsStore((s) => s.activeTool);
+  // Pixels du dernier clic dans le monde Phaser, pas coordonnées écran/caméra.
+  // TODO: ajouter une section Camera quand le contexte caméra sera exposé.
   const screenPoint = useDevToolsStore((s) => s.lastClickedScreenPoint);
   const worldPoint = useDevToolsStore((s) => s.lastClickedWorldPoint);
   const tilePoint = useDevToolsStore((s) => s.lastClickedTilePoint);
@@ -33,7 +35,7 @@ export default function CoordinateInspector() {
       <h3 className="devtools-world__title">Coordinates</h3>
       <div className="devtools-world__coordinate-list">
         <CoordinateRow label="Tool" values={[["active", activeTool]]} />
-        <CoordinateRow label="Screen" values={[["x", screenPoint?.x], ["y", screenPoint?.y]]} />
+        <CoordinateRow label="World Click (px)" values={[["x", screenPoint?.x], ["y", screenPoint?.y]]} />
         <CoordinateRow
           label="WU"
           values={[

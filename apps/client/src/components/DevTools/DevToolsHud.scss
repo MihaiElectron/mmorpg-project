@@ -1,0 +1,109 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.devtools-hud {
+  position: fixed;
+  top: 78px;
+  right: 16px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+
+  &__button,
+  &__edit {
+    @include m.panel-header;
+    border-radius: vars.$panel-radius-sm;
+    padding: 5px 8px;
+    color: vars.$color-text-primary;
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+
+  &__button {
+    cursor: pointer;
+  }
+
+  &__button.is-active {
+    color: vars.$color-text-gold;
+    border-color: vars.$color-magic-amber;
+  }
+
+  &__edit {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  &__checkbox {
+    width: 12px;
+    height: 12px;
+    accent-color: vars.$color-magic-amber;
+  }
+}
+
+.devtools-floating-panel {
+  --devtools-panel-x: 0px;
+  --devtools-panel-y: 0px;
+
+  position: fixed;
+  top: 112px;
+  right: 16px;
+  z-index: 1190;
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100vh - 132px);
+  transform: translate(var(--devtools-panel-x), var(--devtools-panel-y));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background: vars.$panel-bg;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-card;
+  box-shadow: vars.$panel-shadow-float;
+  color: vars.$color-text-primary;
+
+  &__header {
+    @include m.panel-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: vars.$panel-radius-sm;
+    cursor: grab;
+    user-select: none;
+  }
+
+  &__header:active {
+    cursor: grabbing;
+  }
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  &__close {
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-inner-bg;
+    color: vars.$color-text-primary;
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 3px 6px;
+    cursor: pointer;
+  }
+
+  &__body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
