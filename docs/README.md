@@ -119,6 +119,7 @@ If a contradiction is found:
 ### 07_Admin
 
 - [MMORPG Studio — Vision](07_Admin/mmorpg-studio.md) - Status: Draft - Vision et architecture du Studio : deux produits (Runtime / Studio), composants (DevTools, LiveOps, Monitoring, Automation, Validation, Analytics, SDK), profils, contextes de travail.
+- [Studio SDK](07_Admin/studio-sdk.md) - Status: Draft - Document fondateur du Studio SDK : couche de médiation entre Runtime et Studio, rôles de l'Adapter, Capability Providers, Inspector, Overlay, Validation, Command et Automation Providers.
 - [DevTools — Architecture](07_Admin/devtools-architecture.md) - Status: Draft - Spécification fonctionnelle du DevTools en tant que composant de développement du MMORPG Studio.
 - [Admin Tool](07_Admin/admin-tool.md) - Status: Draft - Documentation de l'outil admin legacy (AdminPanel.tsx) — précurseur du Studio.
 
