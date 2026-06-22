@@ -1,0 +1,118 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+.devtools-resources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: vars.$color-text-primary;
+
+  &__header {
+    @include m.panel-section;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__status {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    padding: 4px 0;
+  }
+
+  &__status--error {
+    color: #e74c3c;
+  }
+
+  &__count {
+    font-size: 0.72rem;
+    color: vars.$color-text-muted;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 6px;
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    padding: 3px 8px;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  &__cell-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  &__type {
+    color: vars.$color-text-gold;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__id {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+  }
+
+  &__pos {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  &__loots {
+    color: vars.$color-text-primary;
+    white-space: nowrap;
+  }
+
+  &__caps {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  &__badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: vars.$panel-radius-sm;
+    font-size: 0.68rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__badge--alive {
+    background: rgba(39, 174, 96, 0.25);
+    color: #2ecc71;
+  }
+
+  &__badge--dead {
+    background: rgba(192, 57, 43, 0.25);
+    color: #e74c3c;
+  }
+}
