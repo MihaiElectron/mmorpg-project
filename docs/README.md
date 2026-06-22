@@ -41,7 +41,7 @@ sources should be checked when documentation and implementation disagree.
 - `04_Server`: NestJS, modules, WebSockets, and TypeORM documentation.
 - `05_World`: assets, Tiled maps, collisions, chunks, and world structure.
 - `06_Database`: PostgreSQL, schema, and migration documentation.
-- `07_Admin`: admin tooling and admin-specific documentation.
+- `07_Admin`: MMORPG Studio — development platform, DevTools, LiveOps, and admin-specific documentation.
 - `08_Gameplay`: game concepts, entity model, world model, and gameplay rules — technology-independent.
 - `09_Workflow`: development, documentation, review, and Codex workflow.
 - `10_AI`: general rules for ChatGPT, Codex, and other AI assistants.
@@ -118,8 +118,9 @@ If a contradiction is found:
 
 ### 07_Admin
 
-- [Admin Tool](07_Admin/admin-tool.md) - Status: Draft - Documentation planned for the admin tool.
-- [DevTools — Architecture](07_Admin/devtools-architecture.md) - Status: Draft - Spécification fonctionnelle du DevTools en tant que plateforme de développement intégrée.
+- [MMORPG Studio — Vision](07_Admin/mmorpg-studio.md) - Status: Draft - Vision et architecture du Studio : deux produits (Runtime / Studio), composants (DevTools, LiveOps, Monitoring, Automation, Validation, Analytics, SDK), profils, contextes de travail.
+- [DevTools — Architecture](07_Admin/devtools-architecture.md) - Status: Draft - Spécification fonctionnelle du DevTools en tant que composant de développement du MMORPG Studio.
+- [Admin Tool](07_Admin/admin-tool.md) - Status: Draft - Documentation de l'outil admin legacy (AdminPanel.tsx) — précurseur du Studio.
 
 ### 08_Gameplay
 
@@ -141,7 +142,7 @@ If a contradiction is found:
 - [Implementation Rules](10_AI/implementation-rules.md) - Status: Draft - Règles d'implémentation concrètes : scope, serveur autoritatif, DTOs, patterns interdits.
 - [Architecture Review](10_AI/architecture-review.md) - Status: Draft - Comment analyser et protéger les décisions d'architecture ; décisions WU acquises documentées.
 - [Commit Policy](10_AI/commit-policy.md) - Status: Draft - Format Conventional Commits en français, scopes du projet, obligations pré-commit.
-- [Project Philosophy](10_AI/project-philosophy.md) - Status: Draft - Principes immuables du projet : vision, philosophie d'architecture, DevTools, IA, critères de décision.
+- [Project Philosophy](10_AI/project-philosophy.md) - Status: Draft - Principes immuables du projet : vision, philosophie d'architecture, MMORPG Studio, IA, critères de décision.
 
 ## Documentation lifecycle
 

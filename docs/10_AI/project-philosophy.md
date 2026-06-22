@@ -141,42 +141,55 @@ justification, et un statut clair.
 
 ---
 
-## 4. Philosophie du DevTools
+## 4. Philosophie du MMORPG Studio
 
-Le DevTools n'est pas un outil de débogage accessoire. C'est une partie
-intégrante du moteur du jeu, au même titre que le système de combat ou le
-système de récolte.
+Le MMORPG Studio n'est pas un panneau d'administration accessoire. C'est une
+plateforme interne parallèle au Runtime, aussi structurante que le système de
+combat ou le système de récolte.
+
+Le Studio est organisé en composants complémentaires : **DevTools** (inspection
+et debug, développement uniquement), **LiveOps** (opérations production,
+sécurisées et auditées), **Monitoring** (flux d'événements temps réel),
+**Automation** (opérations batch avec confirmation), **Validation** (cohérence
+du contenu avant production), **Analytics** (données de jeu dans le temps),
+**SDK** (contrat d'interface Runtime → Studio).
 
 La règle fondamentale est : **tout ce que le serveur connaît doit pouvoir être
-visualisé.**
+visualisé, inspecté et exploité selon les droits.**
 
 Ce principe se décline en une chaîne :
 
 - **Tout état serveur est visualisable.** Positions, zones d'influence,
   comportements d'IA, états de ressources, timers — chaque donnée significative
-  du monde peut être affichée dans le DevTools.
+  du monde peut être affichée via le Studio.
 
-- **Tout ce qui est visualisable est inspectable.** L'outil ne se limite pas
+- **Tout ce qui est visualisable est inspectable.** Le Studio ne se limite pas
   à afficher. Il permet de lire les valeurs précises, de comprendre l'état
   interne d'une entité.
 
-- **Tout ce qui est inspectable est modifiable selon les permissions.** Un
-  administrateur autorisé peut modifier les paramètres d'une entité, repositionner
-  un spawn, ajuster une statistique — directement depuis le DevTools, avec les
-  mêmes garde-fous que n'importe quelle autre opération serveur.
+- **Tout ce qui est inspectable est exploitable selon les droits.** Un
+  développeur peut modifier les paramètres d'une entité en debug ; un GM peut
+  corriger un état corrompu en production ; les deux passent par les mêmes
+  garde-fous serveur.
 
-- **Chaque nouvelle mécanique s'intègre naturellement au DevTools.** Quand un
-  nouveau système est conçu, la question "comment l'observer dans le DevTools ?"
-  fait partie de la conception, pas d'une phase ultérieure.
+- **Chaque nouvelle mécanique s'intègre naturellement au Studio.** Quand un
+  nouveau système est conçu, la question "comment l'observer, le surveiller et
+  le déclencher depuis le Studio ?" fait partie de la conception, pas d'une
+  phase ultérieure.
 
-- **Le DevTools ne multiplie pas les panneaux spécifiques.** Un outil générique
-  et extensible vaut mieux qu'une accumulation de vues ad hoc. Chaque nouveau
-  domaine s'intègre dans le cadre existant plutôt que d'ajouter une nouvelle
-  interface isolée.
+- **Le Studio ne multiplie pas les interfaces isolées.** Une plateforme
+  générique et extensible vaut mieux qu'une accumulation de panneaux ad hoc.
+  Chaque nouveau domaine s'intègre dans le cadre Studio existant.
 
-Cette philosophie garantit que le projet reste compréhensible à mesure qu'il
-grandit. Un monde complexe sans outils pour l'observer devient rapidement
-incontrôlable.
+- **Le Studio ne contient pas de logique métier.** Il observe et déclenche
+  les mécaniques du Runtime via les APIs existantes. Il ne calcule pas, ne
+  persiste pas directement, ne court-circuite pas les validations serveur.
+
+Cette philosophie garantit que le projet reste compréhensible et opérable à
+mesure qu'il grandit. Un monde complexe sans outils pour l'observer et
+l'exploiter devient rapidement incontrôlable.
+
+Spécification complète : `docs/07_Admin/mmorpg-studio.md`.
 
 ---
 

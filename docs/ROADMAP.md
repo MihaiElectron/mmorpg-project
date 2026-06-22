@@ -129,12 +129,17 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 
 ---
 
-# 5. Admin Tool
+# 5. MMORPG Studio / DevTools
 
-- [ ] World editor
-- [ ] Spawn editor
-- [ ] Resource editor
-- [ ] NPC editor
+- [ ] World editor (Builder — Automation)
+- [ ] Spawn editor (Builder — Automation)
+- [ ] Resource editor (Builder — Automation)
+- [ ] NPC editor (Builder — Automation)
+- [ ] Overlays debug : chunks, collisions, aggro, pathfinding (DevTools)
+- [ ] LiveOps : audit log, rate limiting, auth WebSocket indépendante
+- [ ] Validation monde (Validation)
+
+Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.
 
 ---
 

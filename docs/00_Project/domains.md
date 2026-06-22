@@ -23,10 +23,19 @@ règles respecter.
 
 ## 1. Vision globale
 
-Le projet est organisé en neuf domaines fonctionnels :
+Le projet est structuré en deux produits parallèles :
+
+- **MMORPG Runtime** : le jeu jouable — serveur, monde, entités, gameplay,
+  réseau, persistance. C'est la source de vérité unique.
+- **MMORPG Studio** : la plateforme interne de développement et d'opération —
+  DevTools, LiveOps, Monitoring, Automation, Validation, Analytics, SDK.
+  Voir `docs/07_Admin/mmorpg-studio.md`.
+
+Les neuf domaines ci-dessous appartiennent au **Runtime**. Le Studio est
+transversal à tous sans en implémenter les mécaniques.
 
 ```
-MMORPG
+MMORPG Runtime
 │
 ├── World          — espace du monde, coordonnées, cartes, chunks, terrain
 ├── Entities       — objets du monde (joueurs, animaux, ressources, PNJ…)
@@ -35,15 +44,20 @@ MMORPG
 ├── Networking     — transport temps réel, synchronisation, protocole
 ├── Persistence    — stockage durable, schéma, migrations
 ├── Assets         — ressources visuelles et sonores, pipeline graphique
-├── DevTools       — inspection, visualisation, modification des états
+├── DevTools (*)   — composant Studio : inspection, visualisation, debug
 └── Infrastructure — environnement d'exécution, déploiement, services locaux
+
+(*) DevTools est un composant du MMORPG Studio, pas un domaine Runtime.
+    Il est listé ici pour la correspondance code → domaine (section 15).
 ```
 
-**DevTools est transversal.** Il observe et interagit avec tous les autres
-domaines sans en implémenter les mécaniques.
+**MMORPG Studio est transversal.** Il observe et interagit avec tous les
+domaines Runtime sans en implémenter les mécaniques. Ses composants
+(DevTools, LiveOps, Monitoring…) lisent les états et déclenchent des actions
+via les APIs Runtime existantes.
 
 **Identity est transversal.** Il fournit l'identité et les droits à tous les
-autres domaines sans en gérer les règles métier.
+domaines sans en gérer les règles métier.
 
 ---
 
@@ -429,7 +443,12 @@ sont des décisions figées dans ROADMAP.md.
 
 ---
 
-## 9. Domaine DevTools
+## 9. Domaine DevTools (composant MMORPG Studio)
+
+> Le DevTools est un composant du **MMORPG Studio**, non un domaine Runtime.
+> Il est documenté ici pour la correspondance code → domaine (section 15).
+> Vision complète : `docs/07_Admin/devtools-architecture.md`.
+> Studio complet : `docs/07_Admin/mmorpg-studio.md`.
 
 ### Objectif
 
@@ -462,6 +481,8 @@ Il ne remplace aucun domaine et n'en implémente aucune mécanique.
 
 ### Documents associés
 
+- `docs/07_Admin/mmorpg-studio.md`
+- `docs/07_Admin/devtools-architecture.md`
 - `docs/07_Admin/admin-tool.md`
 - `docs/01_Architecture/admin-tool-roadmap.md`
 

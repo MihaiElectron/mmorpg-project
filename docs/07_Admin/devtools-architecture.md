@@ -11,11 +11,17 @@
 ## Scope
 
 Ce document définit la vision, l'architecture cible et les règles permanentes du
-DevTools MMORPG.
+DevTools, en tant que composant du **MMORPG Studio**.
 
-Il ne documente pas l'implémentation courante dans le détail — `STATUS.md` et le
-code servent à cela. Il définit ce que le DevTools doit devenir, pourquoi, et les
-règles que toute future contribution devra respecter.
+Le MMORPG Studio est la plateforme interne de développement et d'opération du
+jeu. Le DevTools en est le composant de développement — celui qui expose les
+outils d'inspection, de visualisation et de debug. Les autres composants du
+Studio (LiveOps, Monitoring, Automation, Validation, Analytics, SDK) sont
+définis dans `docs/07_Admin/mmorpg-studio.md`.
+
+Ce document ne documente pas l'implémentation courante dans le détail — `STATUS.md`
+et le code servent à cela. Il définit ce que le DevTools doit devenir, pourquoi,
+et les règles que toute future contribution devra respecter.
 
 Il ne doit pas être traité comme un backlog. C'est une spécification fondatrice.
 
@@ -23,7 +29,7 @@ Il ne doit pas être traité comme un backlog. C'est une spécification fondatri
 
 ## 1. Vision
 
-Le DevTools est le moteur de développement intégré du MMORPG.
+Le DevTools est le composant de développement du MMORPG Studio.
 
 Un monde multijoueur persistant est un système vivant : des entités se déplacent,
 des mécaniques interagissent, des états évoluent en continu. Sans outil de
@@ -468,6 +474,7 @@ est inactif.
 
 ## Related files
 
+- [MMORPG Studio — Vision](mmorpg-studio.md)
 - [Admin Tool](admin-tool.md)
 - [Admin Tool Roadmap](../01_Architecture/admin-tool-roadmap.md)
 - [Project Audit](../01_Architecture/project-audit.md)
