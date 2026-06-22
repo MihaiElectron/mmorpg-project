@@ -5,14 +5,7 @@ import { getAdminStore } from "../../store/admin.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import HealthBar from "../HealthBar/HealthBar";
-
-type GameWindow = Window &
-  typeof globalThis & {
-    game?: {
-      socket?: { connected?: boolean; emit: (e: string, p: unknown, cb?: (r: unknown) => void) => void };
-      scene?: { getScene?: (k: string) => any };
-    };
-  };
+import { getDevToolsSocket, getWorldScene } from "../DevTools/devtoolsBridge";
 
 type ConsoleLine = { text: string; ok: boolean };
 
@@ -74,7 +67,7 @@ export default function ActionPanel() {
 
   // ── Gestion du focus → store admin + désactivation capture clavier Phaser ─
   function getPhaserKeyboard() {
-    return (window as GameWindow).game?.scene?.getScene?.("WorldScene")?.input?.keyboard;
+    return getWorldScene()?.input?.keyboard;
   }
 
   function onFocus() {
@@ -108,7 +101,7 @@ export default function ActionPanel() {
       return;
     }
 
-    const socket = (window as GameWindow).game?.socket;
+    const socket = getDevToolsSocket();
     if (!socket?.connected) {
       pushResult("Erreur : socket non connecté.", false);
       return;
@@ -179,7 +172,7 @@ export default function ActionPanel() {
 
   // ── Suppression admin ─────────────────────────────────────────────────────
   function handleAdminDelete() {
-    const socket = (window as GameWindow).game?.socket;
+    const socket = getDevToolsSocket();
     if (!socket?.connected || !target) return;
 
     const event = target.kind === "animal" ? "admin:delete_animal" : "admin:delete_resource";
@@ -191,11 +184,11 @@ export default function ActionPanel() {
 
   // ── Actions gameplay ──────────────────────────────────────────────────────
   function handleAction(action: string) {
-    const socket = (window as GameWindow).game?.socket;
+    const socket = getDevToolsSocket();
     if (!socket?.connected || !character?.id) { closePanel(); return; }
 
     if (target?.kind === "animal") {
-      const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
+      const scene = getWorldScene();
       if (scene?.startAutoAttack) scene.startAutoAttack(target.id);
     } else {
       socket.emit("interact_resource", { targetId: target!.id, characterId: character.id });

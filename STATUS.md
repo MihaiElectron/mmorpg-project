@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-22_
-_Session : 2026-06-22 (session 4 — DevTools infrastructure)_
+_Session : 2026-06-22 (session 5 — DevToolsBridge minimal)_
 _Branche : main_
 _État : développement local_
 
@@ -16,7 +16,8 @@ map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
 Migration WU Phase 2 terminée. Infrastructure DevTools introduite : shell,
-panel, store centralisé, contexte de coordonnées au clic.
+panel, store centralisé, contexte de coordonnées au clic. Un `DevToolsBridge`
+minimal centralise désormais les accès React simples vers Phaser (`window.game`).
 
 ---
 
@@ -31,6 +32,11 @@ panel, store centralisé, contexte de coordonnées au clic.
 - **DevToolsStore — étape 3** : ajout de `activeTool` (défaut `"legacy-admin"`),
   types et setters pour les quatre espaces de coordonnées (screen, worldPoint WU,
   tilePoint, chunkPoint). `WorldScene.js` alimente le contexte complet à chaque clic map.
+- **DevToolsBridge minimal** : `components/DevTools/devtoolsBridge.ts` créé avec
+  `getPhaserGame`, `getWorldScene`, `getDevToolsSocket`, `getCurrentMapId`,
+  `getMainCamera`. `AdminPanel` et `ActionPanel` utilisent le bridge pour les
+  accès socket/scène/caméra triviaux. Les points d'attache `window.game` restent
+  dans `WorldPage` et `WorldScene`.
 - **Documentation DevTools** : `docs/01_Architecture/admin-tool-roadmap.md`,
   `docs/01_Architecture/project-audit.md`, `docs/10_AI/` (6 documents), `docs/00_Project/domains.md`.
 
@@ -47,6 +53,7 @@ panel, store centralisé, contexte de coordonnées au clic.
 | DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
 | DevTools — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
 | DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, lastClickedPos, contexte coordonnées (screen/WU/tile/chunk) |
+| DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
 | Tests | 27 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` (verts — 1 préexistant KO sans lien WU) |
@@ -105,6 +112,9 @@ panel, store centralisé, contexte de coordonnées au clic.
   de clic alimente `mapId: 1` statique. À rendre dynamique quand le multi-cartes arrive.
 - **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanel.tsx` dupliquent
   la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
+- **[MINEUR] `window.game` résiduel** : les attachements restent dans `WorldPage.jsx`
+  et `WorldScene.js`, et `CoordinatesLayer.jsx` lit encore directement `window.game`.
+  Migration progressive via `DevToolsBridge` prévue.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante.
@@ -120,6 +130,7 @@ panel, store centralisé, contexte de coordonnées au clic.
 - [x] Étape 1 — `DevToolsShell` + `DevToolsPanel` + branchement `CharacterLayout`
 - [x] Étape 2 — `devtools.store.ts` minimal, `admin.store.ts` alias
 - [x] Étape 3 — `activeTool`, types coordonnées, `setLastClickedContext` dans WorldScene
+- [x] Étape 3.5 — `DevToolsBridge` minimal React ↔ Phaser
 - [ ] Étape 4 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
 - [ ] Étape 5 — afficher les coordonnées du dernier clic dans `DevToolsPanel` (overlay lecture seule)
 - [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
@@ -169,6 +180,18 @@ Après une session de code :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-22 (session 5 — DevToolsBridge minimal)
+
+- **`devtoolsBridge.ts`** : premier bridge tolérant React ↔ Phaser côté DevTools
+  (`getPhaserGame`, `getWorldScene`, `getDevToolsSocket`, `getCurrentMapId`,
+  `getMainCamera`), sans état React et sans exception si Phaser n'est pas prêt.
+- **`AdminPanel.tsx`** : accès socket, clavier Phaser et caméra drag-to-map passés
+  par le bridge.
+- **`ActionPanel.tsx`** : accès socket, clavier Phaser et scène WorldScene passés
+  par le bridge.
+- **Validation** : `npm run build` dans `apps/client` OK (warning Vite de taille
+  de chunk uniquement).
 
 ### 2026-06-22 (session 4 — DevTools infrastructure)
 

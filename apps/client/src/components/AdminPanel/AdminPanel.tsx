@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { getAdminStore } from "../../store/admin.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
+import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,14 +65,6 @@ type GroupedSectionConfig = {
   instanceDeleteEvent?:      string;
   getInstanceDeletePayload?: (i: any) => object;
 };
-
-type GameWindow = Window &
-  typeof globalThis & {
-    game?: {
-      socket?: { connected?: boolean; emit: (e: string, p: unknown, cb?: (r: unknown) => void) => void };
-      scene?: { getScene?: (k: string) => any };
-    };
-  };
 
 // ── Configs ────────────────────────────────────────────────────────────────────
 
@@ -177,11 +170,11 @@ function toWorldPoint(clientX: number, clientY: number): { x: number; y: number 
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
-  const scene = (window as GameWindow).game?.scene?.getScene?.("WorldScene");
-  if (!scene?.cameras?.main) return null;
+  const camera = getMainCamera();
+  if (!camera) return null;
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  return scene.cameras.main.getWorldPoint(
+  return camera.getWorldPoint(
     (clientX - rect.left) * scaleX,
     (clientY - rect.top)  * scaleY,
   ) as { x: number; y: number };
@@ -228,7 +221,7 @@ function fetchAdmin<T>(path: string, token: string): Promise<T> {
 }
 
 function getPhaserKeyboard() {
-  return (window as GameWindow).game?.scene?.getScene?.("WorldScene")?.input?.keyboard;
+  return getWorldScene()?.input?.keyboard;
 }
 
 const kbHandlers = {
@@ -246,7 +239,7 @@ function ackPromise(socket: any, event: string, payload: unknown): Promise<{ suc
   });
 }
 
-function getSocket() { return (window as GameWindow).game?.socket; }
+function getSocket() { return getDevToolsSocket(); }
 
 function getAdminCharacterId(): string | null {
   return (window as any).__GLOBAL_CHARACTER_STORE__?.getState?.()?.character?.id ?? null;
