@@ -58,6 +58,10 @@ export class AdminController {
   @Get('resources')
   getResources() { return this.adminService.getResources(); }
 
+  /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
+  @Get('resources/world-objects')
+  getResourceWorldObjects() { return this.adminService.getResourceWorldObjects(); }
+
   @Patch('resources/:id')
   async updateResource(@Param('id') id: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateResource(id, fields);

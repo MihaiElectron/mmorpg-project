@@ -17,6 +17,7 @@ describe('AdminService resources', () => {
 
   beforeEach(async () => {
     resourceRepo = {
+      find: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn().mockImplementation((resource) => Promise.resolve(resource)),
       create: jest.fn().mockImplementation((resource) => resource),
@@ -87,5 +88,33 @@ describe('AdminService resources', () => {
 
     await expect(service.updateResource('resource-1', { x: Infinity })).rejects.toBeInstanceOf(BadRequestException);
     expect(resourceRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('getResourceWorldObjects retourne les WorldObjects adaptés', async () => {
+    const resources: Resource[] = [
+      { id: 'r-1', type: 'dead_tree', x: 400, y: 300, worldX: 1024, worldY: 2048, mapId: 1, state: 'alive', remainingLoots: 3 } as Resource,
+      { id: 'r-2', type: 'ore',       x: 600, y: 400, worldX: null, worldY: null, mapId: null, state: 'dead',  remainingLoots: 0 } as Resource,
+    ];
+    resourceRepo.find.mockResolvedValue(resources);
+
+    const result = await service.getResourceWorldObjects();
+
+    expect(result).toHaveLength(2);
+
+    expect(result[0]).toMatchObject({
+      kind: 'entity',
+      category: 'resource',
+      id: 'r-1',
+      type: 'dead_tree',
+      mapId: 1,
+      position: { worldX: 1024, worldY: 2048 },
+      state: 'alive',
+      remainingLoots: 3,
+    });
+    expect(result[0].capabilities).toContain('transform');
+    expect(result[0].capabilities).toContain('harvestable');
+
+    expect(result[1].position).toBeNull();
+    expect(result[1].state).toBe('dead');
   });
 });
