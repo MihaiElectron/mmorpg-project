@@ -45,16 +45,16 @@ function destroyHpBar(hpBar) {
   hpBar.fill.destroy();
 }
 
-// Convertit des coordonnées WU en pixels Phaser.
+// Convertit des coordonnées WU en pixels Phaser (joueurs, animaux, ressources).
 // Fallback sur les champs x/y legacy si worldX/worldY absents ou invalides.
-function resolvePlayerScreen(player) {
-  if (Number.isFinite(player.worldX) && Number.isFinite(player.worldY)) {
+function resolveScreen(entity) {
+  if (Number.isFinite(entity.worldX) && Number.isFinite(entity.worldY)) {
     return {
-      x: Math.round(1000 + (player.worldX - player.worldY) / 16),
-      y: Math.round((player.worldX + player.worldY) / 32),
+      x: Math.round(1000 + (entity.worldX - entity.worldY) / 16),
+      y: Math.round((entity.worldX + entity.worldY) / 32),
     };
   }
-  return { x: Math.round(player.x), y: Math.round(player.y) };
+  return { x: Math.round(entity.x), y: Math.round(entity.y) };
 }
 
 export default class WorldScene extends Phaser.Scene {
@@ -399,7 +399,7 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("world_joined", (player) => {
       if (!this.player) return;
 
-      const { x, y } = resolvePlayerScreen(player);
+      const { x, y } = resolveScreen(player);
       this.player.setPosition(x, y);
       this.lastSyncedPosition = { x, y, direction: player.direction };
     });
@@ -497,7 +497,7 @@ export default class WorldScene extends Phaser.Scene {
   upsertRemotePlayer(player) {
     if (!player?.characterId || player.socketId === this.socket?.id) return;
 
-    const { x, y } = resolvePlayerScreen(player);
+    const { x, y } = resolveScreen(player);
 
     const existing = this.remotePlayers.get(player.characterId);
     if (existing) {
@@ -659,11 +659,12 @@ export default class WorldScene extends Phaser.Scene {
     resources
       .filter((resource) => resource.state === "alive")
       .forEach((resource) => {
+        const { x, y } = resolveScreen(resource);
         const textureKey = this.textures.exists(resource.type)
           ? resource.type
           : "dead_tree";
 
-        const sprite = this.add.image(resource.x, resource.y, textureKey);
+        const sprite = this.add.image(x, y, textureKey);
         sprite.setDepth(10);
         sprite.setInteractive(
           new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
@@ -682,14 +683,15 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   upsertResource(resource) {
+    const { x, y } = resolveScreen(resource);
     const existing = this.resourceSprites.get(resource.id);
     if (existing) {
-      this.tweens.add({ targets: existing, x: resource.x, y: resource.y, duration: 200, ease: "Linear" });
+      this.tweens.add({ targets: existing, x, y, duration: 200, ease: "Linear" });
       return;
     }
 
     const textureKey = this.textures.exists(resource.type) ? resource.type : "dead_tree";
-    const sprite = this.add.image(resource.x, resource.y, textureKey);
+    const sprite = this.add.image(x, y, textureKey);
     sprite.setDepth(10);
     sprite.setInteractive(
       new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
@@ -715,14 +717,15 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   upsertAnimal(animal) {
+    const { x, y } = resolveScreen(animal);
     const existing = this.animalSprites.get(animal.id);
 
     if (existing) {
       existing.animal = animal;
       this.tweens.add({
         targets: existing.sprite,
-        x: animal.x,
-        y: animal.y,
+        x,
+        y,
         duration: 180,
         ease: "Linear",
       });
@@ -738,7 +741,7 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     const textureKey = this.textures.exists(animal.type) ? animal.type : "turkey";
-    const sprite = this.add.image(animal.x, animal.y, textureKey);
+    const sprite = this.add.image(x, y, textureKey);
     sprite.setDepth(10);
     sprite.setInteractive(
       new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
@@ -746,8 +749,8 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     const inCombat = animal.state === "fighting" || animal.state === "escaping";
-    const hpBar = inCombat ? createHpBar(this, animal.x, animal.y) : null;
-    if (hpBar) updateHpBar(hpBar, animal.health, animal.maxHealth, animal.x, animal.y);
+    const hpBar = inCombat ? createHpBar(this, x, y) : null;
+    if (hpBar) updateHpBar(hpBar, animal.health, animal.maxHealth, x, y);
 
     this.animalSprites.set(animal.id, { sprite, animal, hpBar });
     this.interactionTargets.push({
