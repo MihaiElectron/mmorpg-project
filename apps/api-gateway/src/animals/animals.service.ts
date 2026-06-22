@@ -9,7 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { AnimalDto } from './dto/animal.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
-import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 
 const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
@@ -216,24 +216,33 @@ export class AnimalsService implements OnModuleInit {
       state.moveUntil = now + rand(PATROL_MOVE_MIN_MS, PATROL_MOVE_MAX_MS);
     }
 
-    const dt = PATROL_TICK_MS / 1000;
-    const newX = animal.x + state.dirX * state.speed * dt;
-    const newY = animal.y + state.dirY * state.speed * dt;
-    const dx = newX - animal.spawn.spawnX;
-    const dy = newY - animal.spawn.spawnY;
-    const dist = Math.hypot(dx, dy);
+    if (animal.worldX == null || animal.worldY == null) return;
 
-    if (dist > template.patrolRadius) {
-      animal.x = Math.round(animal.spawn.spawnX + (dx / dist) * template.patrolRadius);
-      animal.y = Math.round(animal.spawn.spawnY + (dy / dist) * template.patrolRadius);
+    const spawnWU = animal.spawn.worldX != null
+      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
+      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+
+    const dt = PATROL_TICK_MS / 1000;
+    const stepWU = legacyRadiusToWU(state.speed * dt);
+    const newWX = animal.worldX + state.dirX * stepWU;
+    const newWY = animal.worldY + state.dirY * stepWU;
+    const dx = newWX - spawnWU.worldX;
+    const dy = newWY - spawnWU.worldY;
+    const dist = Math.hypot(dx, dy);
+    const patrolRadiusWU = legacyRadiusToWU(template.patrolRadius);
+
+    if (dist > patrolRadiusWU) {
+      animal.worldX = Math.round(spawnWU.worldX + (dx / dist) * patrolRadiusWU);
+      animal.worldY = Math.round(spawnWU.worldY + (dy / dist) * patrolRadiusWU);
       state.moveUntil = 0;
       state.pauseUntil = now + rand(template.pauseMinMs, template.pauseMaxMs);
     } else {
-      animal.x = Math.round(newX);
-      animal.y = Math.round(newY);
+      animal.worldX = Math.round(newWX);
+      animal.worldY = Math.round(newWY);
     }
-    const patrolWU = this.pixelToWUSafe(animal.x, animal.y);
-    if (patrolWU) { animal.worldX = patrolWU.worldX; animal.worldY = patrolWU.worldY; animal.mapId = patrolWU.mapId; }
+    animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
+    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
+    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
   }
 
   private async doFighting(
@@ -255,29 +264,37 @@ export class AnimalsService implements OnModuleInit {
       return;
     }
 
-    const dx = target.x - animal.x;
-    const dy = target.y - animal.y;
+    if (animal.worldX == null || animal.worldY == null) return;
+
+    const spawnWU = animal.spawn.worldX != null
+      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
+      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+
+    const dx = target.worldX - animal.worldX;
+    const dy = target.worldY - animal.worldY;
     const dist = Math.hypot(dx, dy);
 
-    const spawnDist = Math.hypot(animal.x - animal.spawn.spawnX, animal.y - animal.spawn.spawnY);
-    if (spawnDist > template.patrolRadius * LEASH_MULTIPLIER) {
+    const spawnDist = Math.hypot(animal.worldX - spawnWU.worldX, animal.worldY - spawnWU.worldY);
+    if (spawnDist > legacyRadiusToWU(template.patrolRadius) * LEASH_MULTIPLIER) {
       await this.changeAnimalState(animal, 'alive');
       state.targetCharacterId = undefined;
       return;
     }
 
     // Avancer vers la cible
-    if (dist > MELEE_RANGE) {
+    if (dist > MELEE_RANGE_WU) {
       const dt = PATROL_TICK_MS / 1000;
-      animal.x = Math.round(animal.x + (dx / dist) * template.speedMax * dt);
-      animal.y = Math.round(animal.y + (dy / dist) * template.speedMax * dt);
-      const fightWU = this.pixelToWUSafe(animal.x, animal.y);
-      if (fightWU) { animal.worldX = fightWU.worldX; animal.worldY = fightWU.worldY; animal.mapId = fightWU.mapId; }
+      const stepWU = legacyRadiusToWU(template.speedMax * dt);
+      animal.worldX = Math.round(animal.worldX + (dx / dist) * stepWU);
+      animal.worldY = Math.round(animal.worldY + (dy / dist) * stepWU);
+      animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
+      animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
+      animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
     }
 
     // Auto-attaque
     const lastAtk = this.lastAnimalAutoAttackAt.get(animal.id) ?? 0;
-    if (dist <= MELEE_RANGE && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
+    if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       this.lastAnimalAutoAttackAt.set(animal.id, now);
       const char = await this.characterRepository.findOne({ where: { id: target.characterId } });
       if (char && char.health > 0) {
@@ -312,29 +329,37 @@ export class AnimalsService implements OnModuleInit {
       return;
     }
 
-    const dx = animal.x - nearest.player.x;
-    const dy = animal.y - nearest.player.y;
+    if (animal.worldX == null || animal.worldY == null) return;
+
+    const spawnWU = animal.spawn.worldX != null
+      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
+      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+
+    const dx = animal.worldX - nearest.player.worldX;
+    const dy = animal.worldY - nearest.player.worldY;
     const dist = Math.hypot(dx, dy);
     if (dist === 0) return;
 
     const dt = PATROL_TICK_MS / 1000;
-    const newX = animal.x + (dx / dist) * template.speedMax * dt;
-    const newY = animal.y + (dy / dist) * template.speedMax * dt;
+    const stepWU = legacyRadiusToWU(template.speedMax * dt);
+    const newWX = animal.worldX + (dx / dist) * stepWU;
+    const newWY = animal.worldY + (dy / dist) * stepWU;
 
-    const escDx = newX - animal.spawn.spawnX;
-    const escDy = newY - animal.spawn.spawnY;
+    const escDx = newWX - spawnWU.worldX;
+    const escDy = newWY - spawnWU.worldY;
     const escDist = Math.hypot(escDx, escDy);
-    const maxRadius = template.patrolRadius * ESCAPE_RADIUS_MULTIPLIER;
+    const maxRadius = legacyRadiusToWU(template.patrolRadius) * ESCAPE_RADIUS_MULTIPLIER;
 
     if (escDist > maxRadius) {
-      animal.x = Math.round(animal.spawn.spawnX + (escDx / escDist) * maxRadius);
-      animal.y = Math.round(animal.spawn.spawnY + (escDy / escDist) * maxRadius);
+      animal.worldX = Math.round(spawnWU.worldX + (escDx / escDist) * maxRadius);
+      animal.worldY = Math.round(spawnWU.worldY + (escDy / escDist) * maxRadius);
     } else {
-      animal.x = Math.round(newX);
-      animal.y = Math.round(newY);
+      animal.worldX = Math.round(newWX);
+      animal.worldY = Math.round(newWY);
     }
-    const escapeWU = this.pixelToWUSafe(animal.x, animal.y);
-    if (escapeWU) { animal.worldX = escapeWU.worldX; animal.worldY = escapeWU.worldY; animal.mapId = escapeWU.mapId; }
+    animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
+    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
+    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
   }
 
   private pixelToWUSafe(

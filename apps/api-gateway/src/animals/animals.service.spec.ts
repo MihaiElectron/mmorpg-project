@@ -6,6 +6,7 @@ import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { WorldService } from '../world/world.service';
+import { wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -329,10 +330,10 @@ describe('AnimalsService', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('synchronisation WU mémoire IA (A2)', () => {
+  describe('synchronisation WU mémoire IA (A2→A4)', () => {
     it('doPatrolMovement synchronise worldX/worldY après déplacement', () => {
-      // animal pixel(600, 580), se déplace vers la droite
-      const animal = makeAnimal({ x: 600, y: 580 });
+      // animal pixel(600,580) → WU(6080,12480), déplacement dirX=1 dirY=0
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
       const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
 
       (service as any).doPatrolMovement(animal, state, makeTemplate(), Date.now());
@@ -343,8 +344,8 @@ describe('AnimalsService', () => {
     });
 
     it('doFighting synchronise worldX/worldY lors de la poursuite', async () => {
-      // animal (700,580), joueur (400,300) — dist ≈ 410 > MELEE_RANGE
-      const animal = makeAnimal({ x: 700, y: 580 });
+      // animal pixel(700,580) → WU(6880,11680), joueur WU(0,9600) — dist > MELEE_RANGE_WU
+      const animal = makeAnimal({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
         x: 400, y: 300, worldX: 0, worldY: 9600, mapId: 1,
@@ -429,6 +430,69 @@ describe('AnimalsService', () => {
 
       // Le plus proche (near) est dans le patrolRadius → l'animal continue à fuir
       expect(animal.state).toBe('escaping');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('moteur de déplacement WU (A4)', () => {
+    it('doPatrolMovement — worldX/worldY sont la vérité, x/y dérivés par projection', () => {
+      // animal WU(6080,12480), dirX=1 dirY=0, speed=60, dt=0.2s
+      // stepWU=192 → newWX=6272, newWY=12480 < patrolRadius(3200WU) → else
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
+
+      (service as any).doPatrolMovement(animal, state, makeTemplate(), Date.now());
+
+      expect(animal.worldX).toBe(6272);
+      expect(animal.worldY).toBe(12480);
+      expect(animal.x).toBe(Math.round(wuToIsoScreenX(animal.worldX!, animal.worldY!)));
+      expect(animal.y).toBe(Math.round(wuToIsoScreenY(animal.worldX!, animal.worldY!)));
+    });
+
+    it('doFighting — x/y dérivés de worldX/worldY après poursuite', async () => {
+      // animal WU(6880,11680), joueur WU(0,9600) — dist>MELEE_RANGE_WU → mouvement
+      const animal = makeAnimal({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 400, y: 300, worldX: 0, worldY: 9600, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+
+      await (service as any).doFighting(animal, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      expect(Number.isFinite(animal.worldX)).toBe(true);
+      expect(animal.x).toBe(Math.round(wuToIsoScreenX(animal.worldX!, animal.worldY!)));
+      expect(animal.y).toBe(Math.round(wuToIsoScreenY(animal.worldX!, animal.worldY!)));
+    });
+
+    it('doEscaping — x/y dérivés de worldX/worldY lors de la fuite', async () => {
+      // animal WU(6080,12480), joueur WU(5760,12160) — dist(320WU) < patrolRadius(3200WU)
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+
+      await (service as any).doEscaping(animal, state, makeTemplate(), [player], Date.now());
+
+      expect(Number.isFinite(animal.worldX)).toBe(true);
+      expect(animal.x).toBe(Math.round(wuToIsoScreenX(animal.worldX!, animal.worldY!)));
+      expect(animal.y).toBe(Math.round(wuToIsoScreenY(animal.worldX!, animal.worldY!)));
+    });
+
+    it('doPatrolMovement — guard : retourne sans modifier si worldX est null', () => {
+      const animal = makeAnimal({ x: 600, y: 580 });
+      const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
+      const prevX = animal.x;
+
+      (service as any).doPatrolMovement(animal, state, makeTemplate(), Date.now());
+
+      expect(animal.x).toBe(prevX);
+      expect(animal.worldX).toBeUndefined();
     });
   });
 });
