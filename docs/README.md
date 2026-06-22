@@ -139,6 +139,7 @@ If a contradiction is found:
 - [Implementation Rules](10_AI/implementation-rules.md) - Status: Draft - Règles d'implémentation concrètes : scope, serveur autoritatif, DTOs, patterns interdits.
 - [Architecture Review](10_AI/architecture-review.md) - Status: Draft - Comment analyser et protéger les décisions d'architecture ; décisions WU acquises documentées.
 - [Commit Policy](10_AI/commit-policy.md) - Status: Draft - Format Conventional Commits en français, scopes du projet, obligations pré-commit.
+- [Project Philosophy](10_AI/project-philosophy.md) - Status: Draft - Principes immuables du projet : vision, philosophie d'architecture, DevTools, IA, critères de décision.
 
 ## Documentation lifecycle
 
