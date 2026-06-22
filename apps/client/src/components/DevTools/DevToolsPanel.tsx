@@ -1,5 +1,11 @@
 import AdminPanel from "../AdminPanel/AdminPanel";
+import CoordinateInspector from "./CoordinateInspector";
 
 export default function DevToolsPanel() {
-  return <AdminPanel />;
+  return (
+    <>
+      <CoordinateInspector />
+      <AdminPanel />
+    </>
+  );
 }
