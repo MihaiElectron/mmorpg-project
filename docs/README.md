@@ -74,6 +74,7 @@ If a contradiction is found:
 ### 00_Project
 
 - [Glossary](00_Project/glossary.md) - Status: Draft - Documentation planned for project, technical, gameplay, world, security, and AI workflow terms.
+- [Domain Map](00_Project/domains.md) - Status: Draft - Découpage fonctionnel en 9 domaines (World, Entities, Gameplay, Identity, Networking, Persistence, Assets, DevTools, Infrastructure), dépendances, frontières et règles d'évolution.
 
 ### 01_Architecture
 
