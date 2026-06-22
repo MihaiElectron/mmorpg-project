@@ -105,7 +105,7 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('player_move')
   handlePlayerMove(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { x: number; y: number; direction?: string },
+    @MessageBody() payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number; direction?: string },
   ) {
     if (
       !payload ||

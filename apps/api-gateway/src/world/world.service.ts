@@ -252,22 +252,31 @@ export class WorldService implements OnModuleInit {
 
   updatePlayer(
     client: WorldSocket,
-    payload: { x: number; y: number; direction?: string },
+    payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number; direction?: string },
   ): ConnectedPlayer | null {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
 
     player.direction = payload.direction ?? player.direction;
 
-    // Garde-fous : coordonnées non finies ignorées, ancienne position conservée
-    if (Number.isFinite(payload.x) && Number.isFinite(payload.y)) {
-      // Conversion WU prioritaire — vérité serveur
+    if (
+      Number.isFinite(payload.worldX) &&
+      Number.isFinite(payload.worldY) &&
+      Number.isFinite(payload.mapId)
+    ) {
+      // Chemin WU direct — client transmet des coordonnées WU validées
+      player.worldX = payload.worldX!;
+      player.worldY = payload.worldY!;
+      player.mapId  = payload.mapId!;
+      player.x = Math.round(wuToIsoScreenX(payload.worldX!, payload.worldY!));
+      player.y = Math.round(wuToIsoScreenY(payload.worldX!, payload.worldY!));
+    } else if (Number.isFinite(payload.x) && Number.isFinite(payload.y)) {
+      // Fallback legacy — conversion pixel → WU (client sans support WU)
       try {
         const wu = isoScreenToWorldWU(payload.x, payload.y);
         player.worldX = wu.worldX;
         player.worldY = wu.worldY;
-        // player.mapId reste inchangé : le client ne transmet pas de mapId
-        // Cache de rendu pixels mis à jour uniquement si la conversion WU réussit
+        // mapId reste inchangé dans ce chemin : le client ne le transmet pas
         player.x = payload.x;
         player.y = payload.y;
       } catch { /* position hors isométrie : worldX/Y et x/y conservent leur valeur précédente */ }

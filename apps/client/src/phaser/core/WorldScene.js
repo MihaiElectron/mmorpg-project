@@ -460,9 +460,14 @@ export default class WorldScene extends Phaser.Scene {
     if (!this.socket || !this.socket.connected || !this.player) return;
     if (time - this.lastPlayerSyncAt < 80) return;
 
+    const px = Math.round(this.player.x);
+    const py = Math.round(this.player.y);
     const position = {
-      x: Math.round(this.player.x),
-      y: Math.round(this.player.y),
+      x: px,
+      y: py,
+      worldX: 8 * (px - 1000) + 16 * py,
+      worldY: -8 * (px - 1000) + 16 * py,
+      mapId: 1,
       direction: this.player.direction,
     };
 

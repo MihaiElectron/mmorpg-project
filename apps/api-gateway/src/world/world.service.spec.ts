@@ -231,6 +231,87 @@ describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () =
   });
 });
 
+// ─── updatePlayer — chemin WU direct ─────────────────────────────────────────
+
+describe('WorldService.updatePlayer — chemin WU direct', () => {
+  it('utilise worldX/worldY/mapId directement si présents et valides', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    // worldX=6080, worldY=12480 → pixel(600, 580)
+    svc.updatePlayer(socket, { x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+
+    expect(player.worldX).toBe(6080);
+    expect(player.worldY).toBe(12480);
+    expect(player.mapId).toBe(1);
+    expect(player.x).toBe(600);
+    expect(player.y).toBe(580);
+  });
+
+  it('dérive le cache pixel depuis worldX/Y (chemin WU — ne lit pas payload.x/y)', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    // On passe des pixels incohérents avec worldX/Y — le chemin WU doit les ignorer
+    svc.updatePlayer(socket, { x: 999, y: 999, worldX: 6080, worldY: 12480, mapId: 1 });
+
+    expect(player.x).toBe(600);  // dérivé de worldX/Y, pas de payload.x
+    expect(player.y).toBe(580);
+  });
+
+  it('met à jour mapId via le chemin WU', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 2 });
+
+    expect(player.mapId).toBe(2);
+  });
+
+  it('tombe en fallback pixel si worldX manquant', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    // worldY et mapId présents mais worldX absent → fallback pixel
+    svc.updatePlayer(socket, { x: 600, y: 300, worldY: 12480, mapId: 1 });
+
+    expect(player.worldX).toBe(1600);  // converti depuis pixel(600, 300)
+    expect(player.worldY).toBe(8000);
+  });
+
+  it('tombe en fallback pixel si mapId manquant', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    // worldX et worldY présents mais mapId absent → fallback pixel
+    svc.updatePlayer(socket, { x: 600, y: 300, worldX: 6080, worldY: 12480 });
+
+    expect(player.worldX).toBe(1600);  // converti depuis pixel(600, 300)
+    expect(player.worldY).toBe(8000);
+  });
+
+  it('tombe en fallback pixel si worldX est NaN', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { x: 600, y: 300, worldX: NaN, worldY: 12480, mapId: 1 });
+
+    expect(player.worldX).toBe(1600);  // fallback pixel
+  });
+});
+
 // ─── updatePlayer — worldX/Y cohérence avec la projection isométrique ─────────
 
 describe('WorldService.updatePlayer — cohérence WU ↔ pixels', () => {
