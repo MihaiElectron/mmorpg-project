@@ -1,7 +1,7 @@
 import { useState } from "react";
 import CharacterLayer from "../CharacterLayer/CharacterLayer";
 import Inventory from "../Inventory/Inventory";
-import AdminPanel from "../AdminPanel/AdminPanel";
+import DevToolsShell from "../DevTools/DevToolsShell";
 import { useCharacterStore } from "../../store/character.store";
 
 function decodeJwtRole(token) {
@@ -48,7 +48,7 @@ export default function CharacterLayout() {
             className={`character-layout__tab character-layout__tab--admin${activeTab === "admin" && isOpen ? " character-layout__tab--active" : ""}`}
             onClick={() => handleTabClick("admin")}
           >
-            Admin
+            DevTools
           </button>
         )}
       </div>
@@ -66,7 +66,7 @@ export default function CharacterLayout() {
 
       {activeTab === "admin" && isAdmin && (
         <div className="character-layout__content character-layout__content--admin">
-          <AdminPanel />
+          <DevToolsShell />
         </div>
       )}
     </div>
