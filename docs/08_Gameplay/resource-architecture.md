@@ -121,11 +121,58 @@ Un template est une règle, pas une instance. Il n'a pas de position dans le mon
 
 Exemples : `dead_tree`, `iron_vein`, `chamomile_bush`, `granite_block`.
 
+### Resource Node
+
+Un **Node** est un groupe logique d'instances de Resources d'un même type,
+organisées dans une zone géographique délimitée.
+
+```
+Template
+    │
+    ▼
+  Node  ←─ responsable de : densité, quota, régénération, équilibre
+    │
+    ├── Instance A
+    ├── Instance B
+    └── Instance C
+```
+
+Le Node n'est pas une Resource lui-même — il n'est pas exploitable directement.
+C'est le niveau de gestion écologique : il sait combien d'instances de son
+type doivent exister dans sa zone, à quel rythme elles se régénèrent ou
+respawnent, et maintient la cohérence de la zone.
+
+**Responsabilités du Node :**
+
+- **Densité** — combien d'instances actives la zone peut contenir simultanément.
+- **Quota** — plafond absolu (même si la régénération est disponible, on ne
+  dépasse pas N instances).
+- **Régénération** — le Node orchestre les timers de régénération de ses
+  instances, et peut décider d'en spawner une nouvelle si une instance est
+  détruite et que le quota n'est pas atteint.
+- **Équilibre écologique** — un Node surexploité peut réduire sa vitesse de
+  régénération ; un Node sous-exploité peut accélérer. Il peut tenir compte
+  de l'activité joueur dans sa zone.
+
+**Exemples :**
+
+- Une forêt est un Node de type `woodland`. Il contient N arbres de différents
+  templates (`dead_tree`, `oak`, `birch`). Si un arbre est abattu, le Node
+  décide si et quand un nouvel arbre apparaît dans la zone.
+- Une mine de fer est un Node de type `iron_deposit`. Il contient plusieurs
+  veines de type `iron_vein`. Le Node gère le quota total de veines actives
+  et le temps de régénération global de la mine.
+
+Le Node est un **World Object de type Area spécialisée**, pas une Entity. Il
+ne change pas d'état selon des règles gameplay directes — il administre un
+ensemble d'Entities. Sa conception complète (relations, identité, storage)
+sera définie lors de l'implémentation.
+
 ### Instance
 
-Une Resource concrète dans le monde. Elle dérive d'un template, mais peut en
-surcharger certaines propriétés (loot pool modifié, timer de respawn spécifique,
-quantité différente).
+Une Resource concrète dans le monde. Elle dérive d'un template et appartient
+à un Node (optionnel pour les Resources isolées). Elle peut surcharger certaines
+propriétés du template (loot pool modifié, timer spécifique, quantité initiale).
 
 Deux instances du même template `dead_tree` peuvent avoir des quantités restantes
 différentes, des états différents, des positions différentes.
@@ -225,17 +272,67 @@ Spawned → Active (LifeState: alive / available)
              ...
 ```
 
-**Parcours transformation — Resource transformée en une fois :**
+**Parcours régénération — Resource qui se reconstitue sans disparaître :**
+```
+Active (LifeState: alive / exhausted ou partially_depleted)
+  │
+  │ ← temps, saison, maturité
+  ▼
+Active (LifeState: alive / harvestable)
+  │
+  │ ← interaction joueur
+  ...
+```
+La Resource reste active tout au long. Son identifiant ne change pas.
+
+**Parcours maturité — Resource qui grandit avant d'être exploitable :**
+```
+Spawned → Active (LifeState: alive / seed)
+                │
+                │ ← temps
+                ▼
+             alive / growing
+                │
+                │ ← temps
+                ▼
+             alive / mature / harvestable
+                │
+                │ ← interaction joueur
+                ▼
+             alive / exhausted
+                │
+                │ ← régénération ou respawn selon template
+                ...
+```
+
+**Parcours transformation sur place — mutation d'identité fonctionnelle :**
+```
+Active [id:42] (LifeState: alive / dead_tree)
+  │
+  │ ← interaction joueur (brûler)
+  ▼
+Active [id:42] (LifeState: alive / burned_tree) ← même instance, même id
+  │
+  │ ← interaction joueur (récolter les cendres)
+  ▼
+Active [id:42] (LifeState: dead / ashes) ← dernière forme
+  │
+  │ ← aucun respawn
+  ▼
+Destroyed [id:42]
+```
+
+**Parcours transformation — Resource remplacée par une nouvelle instance :**
 ```
 Active (LifeState: alive)
   │
-  │ ← interaction joueur (brûler, raffiner, sculpter)
+  │ ← interaction joueur (couper, raffiner, sculpter)
   ▼
 Active (LifeState: dead / transformed)
   │
   │ ← selon règle : peut spawner une nouvelle Resource à cet emplacement
   ▼
-Destroyed (ou remplacement par une nouvelle instance)
+Destroyed (et remplacement par une nouvelle instance avec un nouvel id)
 ```
 
 **Parcours destruction définitive :**
@@ -307,6 +404,10 @@ capacités par défaut. Une instance peut en ajouter ou en restreindre.
 
 | Capacité | Pertinence Resource | Description |
 |---|---|---|
+| `maturity` | Futur | Cycle de maturité (seed → growing → mature → harvestable → exhausted) |
+| `regeneration` | Futur | Reconstitution progressive des charges sans disparaître |
+| `in_place_transform` | Futur | Mutation d'identité fonctionnelle sur place (même instance, forme change) |
+| `node_member` | Futur | Appartient à un Resource Node qui orchestre sa zone |
 | `crafting_input` | Futur | Peut servir d'input pour une recette de crafting |
 | `processing_input` | Futur | Peut être transformée par un système de traitement |
 | `depletion` | Futur | Modèle de dépletion progressive et partielle |
@@ -340,12 +441,48 @@ Ces états affinent `alive` sans le remplacer. Plusieurs peuvent coexister.
 
 | État interne | Signification |
 |---|---|
-| `depleted` | Charges épuisées — respawn éventuel en attente |
-| `transformed` | A changé de forme — remplacée ou convertie |
-| `destroyed` | Détruite définitivement, aucun respawn |
+| `depleted` | Charges épuisées — respawn ou régénération éventuelle |
+| `transformed` | A changé de forme sur place (voir §8) |
+| `destroyed` | Détruite définitivement, aucun retour possible |
+
+### Dimension de maturité
+
+La maturité est une dimension d'état orthogonale au LifeState. Elle décrit le
+**degré de développement** d'une Resource sur son cycle de croissance naturel.
+
+```
+Seed → Growing → Mature → Harvestable → Exhausted
+  │        │         │          │            │
+  │      pas encore │      pleinement    plus récoltable
+  │      récoltable │     récoltable     (sauf régénération)
+  │                 │
+  │            peut être récoltée partiellement
+  │            (mais pénalité ou rendement réduit)
+```
+
+| Stade | Signification |
+|---|---|
+| `seed` | Vient d'être planté ou d'apparaître — pas encore exploitable |
+| `growing` | En développement — peut être exploité mais avec rendement réduit |
+| `mature` | Pleinement développé — rendement optimal |
+| `harvestable` | Prêt à être récolté (sous-état de mature, pour resources cycliques) |
+| `exhausted` | A produit tout ce qu'il pouvait — attend régénération ou transformation |
+
+La maturité n'est pas obligatoire pour toutes les Resources. Elle s'applique
+naturellement aux :
+- plantes et herbes sauvages ;
+- arbres fruitiers et cultures ;
+- champignons et végétaux cycliques ;
+- mines à recharge progressive (le minerai se "reconstitue").
+
+Pour les Resources sans cycle de croissance (`granite_block`, `dead_tree`), la
+maturité est absente — elles sont immédiatement disponibles au spawn.
+
+La maturité est gérée par le Runtime (ou le Node). Elle évolue avec le temps,
+indépendamment des interactions.
 
 Cette liste n'est pas fermée. Des types spécifiques de Resources peuvent introduire
-des états supplémentaires cohérents avec leurs règles gameplay.
+des stades supplémentaires cohérents avec leurs règles gameplay.
 
 ---
 
@@ -444,13 +581,55 @@ sa position change.
 **Détruire** — la Resource est consumée sans loot significatif, ou avec des
 sous-produits de destruction (décombres, cendres, ruines).
 
+### Transformation sur place — mutation d'identité fonctionnelle
+
+Une Resource peut se transformer **en restant à la même position, avec le même
+identifiant**, mais en changeant d'identité fonctionnelle. Ce n'est pas une
+nouvelle Resource créée à côté — c'est la même instance qui mute.
+
+```
+Dead Tree  →  Burned Tree  →  Ashes
+   [id:42]       [id:42]      [id:42]
+```
+
+```
+Iron Ore  →  Broken Ore  →  Empty Vein
+  [id:7]       [id:7]         [id:7]
+```
+
+```
+Crop  →  Harvested Crop  →  Field
+[id:5]       [id:5]         [id:5]
+```
+
+L'instance conserve son identifiant. Ce qui change :
+- le template actif (ou la "forme" courante du template) ;
+- les capacités exposées (un `Burned Tree` n'est plus `harvestable` mais `lootable` pour les cendres) ;
+- le sprite / représentation visuelle côté client ;
+- les interactions disponibles.
+
+Ce mécanisme rend le monde vivant : un arbre incendié laisse des cendres sur
+place, une mine épuisée reste visible comme veine vide. Le monde garde une
+mémoire des transformations.
+
+**Différence avec un remplacement par une nouvelle instance :**
+
+| Mécanique | Identifiant | Usage |
+|---|---|---|
+| Transformation sur place | Conservé (`id:42`) | Mutation naturelle, histoire de la Resource |
+| Remplacement | Nouveau (`id:43`) | Respawn, spawn d'une Resource distincte |
+
+La décision de transformer sur place vs remplacer est une propriété du template.
+Elle a des implications sur le monitoring (historique des mutations) et le Studio
+(inspector qui affiche l'évolution de l'instance).
+
 ### Règles de transformation
 
 - Une transformation est toujours une action Runtime : le client exprime une
   intention, le serveur valide et exécute.
-- Une transformation peut produire une nouvelle Resource à la même position (un
-  tronc abattu remplace l'arbre), un loot direct (items dans l'inventaire), ou
-  les deux.
+- Une transformation sur place conserve l'identifiant de l'instance.
+- Une transformation peut produire un loot direct (cendres, fragments) et/ou
+  changer la forme de la Resource en place.
 - Une transformation peut être conditionnelle : nécessiter un outil, une compétence,
   un niveau minimum, une quête active.
 - Les transformations complexes (raffinage, alchimie) dépendront de systèmes
@@ -459,49 +638,115 @@ sous-produits de destruction (décombres, cendres, ruines).
 
 ---
 
-## 9. Respawn et régénération
+## 9. Respawn et Régénération
 
-Le respawn est le mécanisme par lequel une Resource réapparaît dans le monde après
-épuisement ou destruction. La régénération est une forme continue de reconstitution
-partielle.
+Ce sont deux mécaniques distinctes. Les confondre produit des modèles incorrects.
 
-### Types de respawn
+### Respawn — une nouvelle instance apparaît
 
-**Respawn fixe** — la Resource réapparaît exactement à sa position d'origine après
-un délai fixe. C'est le modèle le plus simple. Implémenté actuellement pour
-`dead_tree` et les animaux.
+Le **Respawn** concerne une Resource dont le Lifecycle est `removed` ou
+`destroyed`. Elle n'existe plus (ou plus fonctionnellement). Le Respawn fait
+apparaître une nouvelle instance, ou réactive l'ancienne, à une position donnée.
 
-**Respawn dynamique** — la Resource réapparaît dans une zone autour de sa position
-d'origine, selon des règles de placement (tile walkable, distance aux autres
-Resources, biome compatible). Plus réaliste, mais plus complexe.
+```
+Arbre abattu
+  Lifecycle: destroyed
+      │
+      │ ← timer écoulé, conditions réunies
+      ▼
+Nouvel arbre spawn à la même position (ou dans la zone du Node)
+  Lifecycle: active
+  LifeState: alive / growing ou mature
+```
 
-**Régénération progressive** — la Resource ne disparaît pas complètement mais perd
-des charges. Elle récupère des charges avec le temps, indépendamment des interactions.
-Un buisson d'herbes pourrait régénérer une charge toutes les heures.
+Le Respawn est un événement de naissance ou de renaissance. L'instance qui
+réapparaît peut être la même (identifiant conservé, Lifecycle: removed → active)
+ou une nouvelle (nouvel identifiant, si l'ancienne était Destroyed).
 
-**Quotas par zone** — une Area peut avoir un quota maximum de Resources actives d'un
-type donné. Si le quota est atteint, un respawn individuel est bloqué. Si le quota
-est sous le seuil, le respawn est prioritaire.
+**Types de Respawn :**
 
-**Dépendance au biome** — certaines Resources ne peuvent spawner que dans des biomes
-compatibles. Une herbe alpine ne pousse pas dans un désert. La compatibilité biome
-est une contrainte du template.
+**Fixe** — réapparition à la position exacte d'origine après un délai fixe.
+Implémenté pour `dead_tree` et les animaux.
 
-**Dépendance au temps** — certaines Resources ne sont disponibles que la nuit (plante
-lunaire), que l'été (fruit saisonnier), ou après un événement (plante post-tempête).
+**Dynamique** — réapparition dans la zone du Node selon des règles de placement
+(tile walkable, distance aux autres instances, biome). Géré par le Node.
 
-**Dépendance à l'activité joueur** — le taux de respawn peut s'adapter à l'activité
-de récolte dans une zone. Une zone intensément récoltée peut avoir un respawn plus
-lent (simulation de surexploitation) ou plus rapide (pour équilibrer le gameplay).
+**Conditionnel** — le Respawn n'a lieu que si des conditions sont réunies (biome
+compatible, quota non atteint, heure de la journée, événement actif).
 
-### Règles d'autorité sur le respawn
+---
 
-- Le Runtime décide si et quand une Resource respawn. Le client n'a aucun rôle
-  dans cette décision.
-- Le Runtime peut bloquer un respawn si les conditions ne sont pas réunies (biome
-  incorrect, quota atteint, position occupée).
-- Un respawn réussi génère un événement que le Runtime diffuse aux clients
-  concernés.
+### Régénération — la même instance se reconstitue
+
+La **Régénération** concerne une Resource dont le Lifecycle est `active` — elle
+existe toujours dans le monde. Elle récupère progressivement des charges, des
+fruits, des branches, ou du minerai sans disparaître ni être remplacée.
+
+```
+Arbre fruitier
+  LifeState: alive / exhausted (fruits récoltés)
+      │
+      │ ← temps qui passe, saison
+      ▼
+  LifeState: alive / harvestable (fruits repoussés)
+```
+
+```
+Mine de fer
+  LifeState: alive / partially_depleted
+      │
+      │ ← régénération 1 charge / 30 min
+      ▼
+  LifeState: alive / available (veine rechargée)
+```
+
+La Resource ne quitte jamais le monde pendant la Régénération. Son identifiant
+ne change pas. Sa maturité peut progresser (seed → growing → mature → harvestable).
+
+**Formes de Régénération :**
+
+**Progressive (par charges)** — la Resource récupère des charges au fil du temps.
+Applicable aux mines, aux buissons, aux sources.
+
+**Par maturité** — la Resource progresse dans son cycle de maturité. Un stade
+`growing` devient `mature`, puis `harvestable`. Applicable aux cultures et arbres
+fruitiers.
+
+**Partielle** — la Resource ne récupère pas toutes ses charges, seulement une
+fraction, selon la saison ou l'état du sol.
+
+---
+
+### Tableau comparatif
+
+| Aspect | Respawn | Régénération |
+|---|---|---|
+| Lifecycle de la Resource | removed ou destroyed | active (reste dans le monde) |
+| L'instance disparaît ? | Oui (temporairement ou définitivement) | Non |
+| Identifiant conservé ? | Peut-être (si removed → active) | Toujours |
+| Ce qui se reconstitue | L'existence dans le monde | Les charges / la maturité |
+| Géré par | Runtime + Node | Runtime + Node |
+| Exemples | Animal mort, arbre abattu | Arbre fruitier, mine, buisson |
+
+---
+
+### Dépendances communes (Respawn et Régénération)
+
+- **Biome** : certaines Resources ne peuvent spawner ou régénérer que dans un
+  biome compatible. Contrainte du template.
+- **Temps de jeu** : plante lunaire (nuit), fruit saisonnier (été), post-événement.
+- **Activité joueur** : surexploitation d'une zone peut ralentir la régénération
+  (simulation écologique). Géré par le Node.
+- **Quota** : le Node plafonne le nombre d'instances actives. Si le quota est
+  atteint, un Respawn est bloqué jusqu'à ce qu'une instance disparaisse.
+
+### Règles d'autorité
+
+- Le Runtime décide si et quand une Resource respawn ou se régénère.
+- Le Node orchestre les décisions à l'échelle de la zone.
+- Le client n'a aucun rôle dans ces décisions.
+- Tout Respawn ou saut de maturité significatif génère un événement diffusé
+  aux clients concernés.
 
 ---
 
@@ -712,71 +957,93 @@ de type Building. Ils consomment des items (inputs) et produisent d'autres items
 
 ### Dead Tree (Arbre Mort)
 
-Resource récoltable statique, implémentée dans le projet.
+Resource récoltable statique, implémentée. Illustre la transformation sur place.
 
 | Concept | Description |
 |---|---|
 | Type | raw_wood, sous-biome forêt tempérée |
 | Template | `dead_tree` — défini dans les seeds |
+| Node | `woodland_node` (à venir) — gère densité et quota de la forêt |
 | LifeState | alive (available) → dead (depleted) |
 | Lifecycle | active → removed (respawn prévu) → active |
+| Maturité | absente (arbre mort déjà prêt à être récolté au spawn) |
 | Charges | 3 récoltes par défaut |
 | Loot | wood_log (1 à 3 par récolte) |
 | Respawn | 120 s, position fixe |
+| Transformation sur place | dead_tree → burned_tree → ashes (futur) |
 | Capacités | `transform`, `harvestable`, `loot`, `respawn`, `persistence` |
-| Futur | `crafting_input` (wood_log → plank), transformation possible (brûler) |
+| Futur | `in_place_transform`, `crafting_input`, `node_member` |
 
-**État actuel** : implémenté en backend (`ResourceTemplate`, instances) et en frontend
-(sprite, interaction). Le cycle de vie dépletion/respawn fonctionne. Le loot
-n'est pas encore généré côté serveur.
+**État actuel** : implémenté en backend (`ResourceTemplate`, instances) et en
+frontend (sprite, interaction). Dépletion/respawn fonctionne. Loot pas encore
+généré côté serveur. Node et transformation sur place sont futurs.
 
 ### Iron Vein (Veine de Minerai)
 
-Resource non implémentée, dépletion lente.
+Resource non implémentée. Illustre la régénération progressive et le Node de mine.
 
 | Concept | Description |
 |---|---|
 | Type | raw_ore, sous-biome montagne / mine |
 | Template | `iron_vein` (à créer) |
+| Node | `iron_mine_node` — gère quota de veines actives et régénération de la mine |
 | LifeState | alive (available / partially_depleted) → dead (depleted) |
-| Lifecycle | active → removed (respawn lent) → active |
-| Charges | 10 récoltes, régénération 1 charge / 30 min |
+| Lifecycle | active — ne disparaît pas, se régénère sur place |
+| Maturité | absente (minerai soit disponible, soit épuisé) |
+| Charges | 10 récoltes, **Régénération** 1 charge / 30 min (pas de Respawn) |
 | Loot | iron_ore (1 par récolte) |
-| Respawn | 6 h, position fixe ou dynamique dans zone montagne |
-| Capacités | `transform`, `harvestable`, `loot`, `respawn`, `persistence`, `depletion` |
-| Futur | `crafting_input` (iron_ore → iron_bar), quota par zone (anti-farming) |
+| Régénération | La veine reste en place, ses charges se reconstituent progressivement |
+| Respawn | Aucun sur l'instance — c'est le Node qui spawne une nouvelle veine si nécessaire |
+| Transformation sur place | iron_vein → broken_ore → empty_vein (futur) |
+| Capacités | `transform`, `harvestable`, `loot`, `persistence`, `depletion`, `node_member` |
+| Futur | `regeneration`, `in_place_transform`, `crafting_input` |
 
 ### Wild Herb (Herbe Sauvage)
 
-Resource non implémentée, dépendante du biome et du temps.
+Resource non implémentée. Illustre la maturité et la régénération cyclique.
 
 | Concept | Description |
 |---|---|
 | Type | plant, sous-biome prairie / forêt |
 | Template | `chamomile_bush` (à créer) |
-| LifeState | alive (available) → alive (hidden, nuit seulement pour certains types) → dead (depleted) |
-| Lifecycle | active → removed (respawn rapide) → active |
-| Charges | 2 récoltes |
+| Node | `herb_patch_node` — gère densité du tapis herbacé dans une zone |
+| LifeState | alive (growing → mature → harvestable → exhausted) |
+| Lifecycle | active — régénère sur place sans disparaître |
+| Maturité | seed → growing → mature → harvestable → exhausted → (régénération) → harvestable |
+| Charges | 2 récoltes au stade harvestable |
 | Loot | chamomile_flower (1 à 2 par récolte) |
-| Respawn | 45 min, dépendance biome |
-| Capacités | `transform`, `harvestable`, `loot`, `respawn`, `persistence` |
-| Futur | `weather_sensitive`, `crafting_input` (fleur → potion) |
+| Régénération | La plante repousse sur place après épuisement (pas de Respawn) |
+| Respawn | Aucun sur l'instance — Node spawne de nouvelles herbes si quota bas |
+| Capacités | `transform`, `harvestable`, `loot`, `persistence`, `node_member` |
+| Futur | `maturity`, `regeneration`, `weather_sensitive`, `crafting_input` |
 
-### Granite Block (Bloc de Granit)
+### Dead Tree → Burned Tree → Ashes
 
-Resource transformable, non implémentée.
+Illustration complète de la transformation sur place (futur).
 
-| Concept | Description |
-|---|---|
-| Type | stone, sous-biome montagne / côtier |
-| Template | `granite_block` (à créer) |
-| LifeState | alive (available) → dead (destroyed ou transformed) |
-| Lifecycle | active → active (si replaced par carved_granite) ou destroyed |
-| Charges | 1 interaction (transformation unique) |
-| Loot | stone_chunk (sur destruction), ou aucun (si transformation en carved_granite) |
-| Respawn | aucun par défaut (blocs naturels réapparaissent lentement selon biome) |
-| Capacités | `transform`, `harvestable`, `loot`, `persistence`, `collision` (bloque le passage) |
-| Futur | transformation (block → carved_granite, nouvelle Resource in-place) |
+```
+[id:42] Dead Tree
+  alive / available
+      │
+      │ ← joueur allume un feu (outil: torche, compétence: pyromancie)
+      ▼
+[id:42] Burned Tree              ← même instance, même identifiant
+  alive / transformed
+  (loot: charcoal)
+      │
+      │ ← joueur récolte les cendres
+      ▼
+[id:42] Ashes                   ← troisième forme, même identifiant
+  dead / depleted
+      │
+      │ ← aucun respawn (les cendres se dissipent)
+      ▼
+[id:42] Destroyed
+```
+
+À chaque étape, l'instance [id:42] change de forme (template actif, sprite,
+capacités disponibles), mais conserve son identifiant et son historique. Le
+Studio peut afficher toute l'évolution d'un [id:42] dans son inspector.
 
 ---
 
@@ -805,15 +1072,29 @@ Resource ? Ou devient-elle un objet de décor (Decoration dans le WOM) ? La
 frontière entre Resource sans interaction et Decoration mérite d'être précisée
 lors de la conception du système Décor.
 
-**Q2 — Comment modéliser une Resource transformée ?**
-Quand un Granite Block est sculpté, est-ce la même instance (LifeState change,
-template change) ou une instance détruite remplacée par une nouvelle ? Les deux
-approches ont des implications différentes pour les identifiants et la traçabilité.
+**Q2 — Transformation sur place : critère de décision template vs nouvelle instance ?**
+Le modèle distingue transformation sur place (même id) et remplacement (nouvel id).
+Mais le critère qui détermine lequel s'applique reste à définir. Proposition :
+transformation sur place si la "mémoire de l'objet" (son histoire, sa position,
+son appartenance à un Node) doit être conservée ; remplacement si l'objet résultant
+est fonctionnellement distinct et sans lien identitaire avec l'original.
 
-**Q3 — Resource épuisée vs détruite : persistance de l'identité ?**
-Une Resource épuisée qui respawn est-elle la même instance (id conservé) ou une
-nouvelle instance (nouvel id) ? La continuité d'identité à travers le respawn est
-une décision technique avec des impacts sur le monitoring et l'historique.
+**Q3 — Resource épuisée vs détruite : persistance de l'identité à travers le Respawn ?**
+Si une Resource est removed (pas destroyed), le Respawn réactive-t-il la même instance
+(id conservé) ou spawne-t-il une nouvelle ? Conséquences : monitoring (on peut voir
+"cet arbre en est à son 4e cycle de vie"), quota Node (l'instance est encore comptée
+pendant le removed), traçabilité. À trancher lors de l'implémentation du Respawn.
+
+**Q9 — Maturité : le stade initial au spawn est-il configurable par le Node ?**
+Un Node pourrait spawner une herbe directement au stade `mature` (pour un monde
+déjà vivant à l'ouverture) ou au stade `seed` (pour simuler la croissance). Cette
+décision appartient-elle au template, au Node, ou aux deux ?
+
+**Q10 — Resource Node : World Object de type Area ou type dédié ?**
+Le Node est décrit comme une Area spécialisée. Mais il a des comportements propres
+(quota, régénération, écologie). Faut-il une catégorie WOM dédiée `ResourceNode`,
+ou le modéliser comme une Area avec des capacités `node_*` ? À trancher lors de la
+conception du Node.
 
 **Q4 — Loot déterministe ou probabiliste par défaut ?**
 Le modèle actuel (`dead_tree`) semble utiliser un loot fixe. Faut-il définir une
