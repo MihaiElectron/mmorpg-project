@@ -207,6 +207,12 @@ Périmètre :
 - conventions d'enregistrement pour les modules Studio ;
 - contrat de cycle de vie des modules Studio.
 
+Le SDK s'appuie sur le **World Object Model (WOM)** comme abstraction commune :
+les modules Runtime exposent des World Objects avec des capacités, les
+composants Studio consomment ces capacités sans connaître les types spécifiques.
+
+Référence : `docs/08_Gameplay/world-object-model.md`.
+
 Le SDK est la colonne vertébrale qui permet aux composants Studio d'étendre
 leurs capacités sans modifier le Runtime et sans se coupler les uns aux autres.
 
@@ -437,6 +443,7 @@ indépendamment et ne pas impacter les performances du Runtime quand il est inac
 
 ## Related files
 
+- [World Object Model](../08_Gameplay/world-object-model.md)
 - [DevTools — Architecture](devtools-architecture.md)
 - [Admin Tool](admin-tool.md)
 - [Admin Tool Roadmap](../01_Architecture/admin-tool-roadmap.md)

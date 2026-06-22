@@ -180,17 +180,19 @@ L'Inspector affiche les détails de la sélection courante.
 **Il y a un seul Inspector.** Son contenu change selon ce qui est sélectionné.
 Le panneau ne change pas.
 
+L'Inspector reçoit un **World Object** (voir `docs/08_Gameplay/world-object-model.md`)
+et délègue l'affichage de chaque section à un **capability provider** enregistré
+pour la capacité correspondante. Il ne connaît pas les types spécifiques (Loup,
+Arbre Mort) — seulement les capacités qu'ils exposent.
+
 Exemples de contenu selon la sélection :
-- Animal sélectionné → stats, état FSM, zone d'aggro, dernière action IA
-- Tile sélectionné → coordonnées (screen/WU/tile/chunk), type de terrain, walkabilité
-- Chunk sélectionné → entités présentes, état de chargement
-- Joueur sélectionné → position, HP, état, inventaire
+- Animal sélectionné → capacités `health`, `combat`, `ai`, `navigation`, `loot`
+- Tile sélectionné → capacités `terrain`, `collision`, `height`, coordonnées (screen/WU/tile/chunk)
+- Chunk sélectionné → capacités `bounds`, `streaming`, `entities`
+- Joueur sélectionné → capacités `transform`, `health`, `inventory`
 
-L'Inspector délègue le rendu de son contenu au module qui connaît le type
-sélectionné. Il ne connaît pas les types eux-mêmes.
-
-**État actuel :** `CoordinateInspector` affiche les données du dernier clic. Inspector
-universel avec délégation non implémenté.
+**État actuel :** `CoordinateInspector` affiche les données du dernier clic (lecture
+seule). Inspector universel avec délégation aux capability providers : non implémenté.
 
 ### Overlays
 

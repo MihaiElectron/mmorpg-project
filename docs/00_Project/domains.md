@@ -145,6 +145,7 @@ ressources, PNJ, bâtiments, effets.
 
 ### Documents associés
 
+- `docs/08_Gameplay/world-object-model.md` (modèle racine commun Runtime/Studio)
 - `docs/08_Gameplay/entity-model.md`
 - `docs/00_Project/glossary.md` (section Gameplay terms)
 
