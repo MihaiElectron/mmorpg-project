@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-22_
-_Session : 2026-06-22 (session 3)_
+_Session : 2026-06-22 (session 4 — DevTools infrastructure)_
 _Branche : main_
 _État : développement local_
 
@@ -15,28 +15,24 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
-Migration WU Phase 2 terminée : backend et frontend utilisent worldX/worldY/mapId
-en priorité pour toutes les entités (joueurs, animaux, ressources). Le protocole
-WebSocket player_move est additif (x/y conservés en fallback). Audits et plan de
-migration WebSocket documentés.
+Migration WU Phase 2 terminée. Infrastructure DevTools introduite : shell,
+panel, store centralisé, contexte de coordonnées au clic.
 
 ---
 
 ## Derniers changements importants
 
-- **Phase 2 migration WU — clôturée** : `animals.service.ts` entièrement WU (IA,
-  combat, range checks). Frontend positionne joueurs, animaux et ressources depuis
-  `worldX/worldY` avec fallback `x/y`. Helper `resolveScreen` dans `WorldScene.js`.
-- **Protocole WebSocket — player_move additif** : client envoie `x/y + worldX/worldY/mapId`.
-  Backend WU-first (6 nouveaux tests, 24 total dans `world.service.spec.ts`).
-- **P0 — join_world** : `payload.x/y` supprimés de `JoinWorldPayload`. Le serveur ne fait
-  plus confiance aux coordonnées envoyées à la connexion.
-- **Backfill secondaire validé** : `wu:dry-run` confirme `creature_spawn` et `respawn_point`
-  1/1 WU — prérequis B1/B2 de l'audit satisfaits.
-- **Audits et plan** : `wu-final-backend-audit.md` (~60 % migration globale estimée) et
-  `websocket-wu-migration-study.md` (plan P0-P7) créés dans `docs/01_Architecture/`.
-- **Phase 1 migration WU — clôturée** (session précédente) : backfill exécuté (0 anomalie),
-  ADR-0001 accepté, `world.service.ts` entièrement migré.
+- **Infrastructure DevTools — étape 1** : `DevToolsShell` et `DevToolsPanel` créés
+  dans `src/components/DevTools/`. `CharacterLayout` branchée sur `DevToolsShell`.
+  Onglet "Admin" renommé "DevTools". `AdminPanel` inchangé.
+- **DevToolsStore — étape 2** : `src/store/devtools.store.ts` créé avec les concepts
+  transversaux (`isConsoleActive`, `lastClickedPos`, `commandHistory`, `historyIndex`).
+  `admin.store.ts` transformé en alias de compatibilité (re-export).
+- **DevToolsStore — étape 3** : ajout de `activeTool` (défaut `"legacy-admin"`),
+  types et setters pour les quatre espaces de coordonnées (screen, worldPoint WU,
+  tilePoint, chunkPoint). `WorldScene.js` alimente le contexte complet à chaque clic map.
+- **Documentation DevTools** : `docs/01_Architecture/admin-tool-roadmap.md`,
+  `docs/01_Architecture/project-audit.md`, `docs/10_AI/` (6 documents), `docs/00_Project/domains.md`.
 
 ---
 
@@ -47,9 +43,10 @@ migration WebSocket documentés.
 | Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
 | Respawn | Animal (20 s) et personnage (point le plus proche à 0 PV) |
 | Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
-| UI | ActionPanel, barre de vie flottante, panneau personnage, onglets Perso/Inventaire/Admin |
-| Admin — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
-| Admin — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
+| UI | ActionPanel, barre de vie flottante, panneau personnage, onglets Perso/DevTools |
+| DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
+| DevTools — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
+| DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, lastClickedPos, contexte coordonnées (screen/WU/tile/chunk) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
 | Tests | 27 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` (verts — 1 préexistant KO sans lien WU) |
@@ -80,6 +77,8 @@ migration WebSocket documentés.
   nécessitent `{ default: x }` — voir `docs/04_Server/typeorm.md`.
 - Le socket Socket.IO est un singleton créé dans `WorldPage.jsx`, partagé via
   `window.game.socket`. Les stores Zustand sont des singletons `window.__GLOBAL_*_STORE__`.
+- `admin.store.ts` est un alias de compatibilité vers `devtools.store.ts`. Ne pas y
+  ajouter de nouvelle logique. Supprimer quand tous les imports sont migrés.
 - Les maps Tiled utilisent exclusivement le format TMJ (natif JSON). Les tilesets
   utilisent TSX. Aucun convertisseur TMX → JSON autorisé. Le tileset doit être inliné
   dans le TMJ (pas de référence TSX externe) pour que Phaser le charge correctement.
@@ -90,15 +89,22 @@ migration WebSocket documentés.
 
 ## Dette technique connue
 
-- ~~**[CRITIQUE] `animals.service.ts` entièrement en pixels**~~ — **SOLDÉ**. Boucle IA entièrement WU (A2-A7). `attack()` utilise `animal.worldX/Y` directement.
-- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**. Backfill exécuté, `wu:dry-run` retourne 0/0.
-- ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**. `RESOURCE_INTERACT_RANGE_WU = 1600` + `chebyshevDistanceWU`.
-- ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**. Double-write + cache pixel dérivé de WU à chaque tick IA.
+- ~~**[CRITIQUE] `animals.service.ts` entièrement en pixels**~~ — **SOLDÉ**.
+- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**.
+- ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**.
+- ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**.
 - **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
 - **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
 - **[IMPORTANT] `player_move` — x/y fallback à supprimer** : protocole additif (P1). Suppression définitive des champs `x/y` dans le payload possible une fois le frontend entièrement migré (P2 fait, reste character_respawn / character_teleport côté frontend).
 - **[IMPORTANT] `character_respawn` et `character_teleport`** : payloads encore en pixels côté client (`WorldScene.js:player.setPosition(data.x, data.y)`). Backend émet `x/y` pixels — migration prévue en P3-suites / P4 de l'étude WebSocket.
+- **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
+  `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
+  `devtools.store` fichier par fichier.
+- **[IMPORTANT] `mapId` hardcodé à `1` dans DevToolsStore/WorldScene** : le contexte
+  de clic alimente `mapId: 1` statique. À rendre dynamique quand le multi-cartes arrive.
+- **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanel.tsx` dupliquent
+  la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante.
@@ -110,20 +116,19 @@ migration WebSocket documentés.
 
 ## Prochaines priorités possibles
 
-### Migration WU — Phase 2 (animaux et ressources) — **CLÔTURÉE**
-- [x] Fix `teleportCharacter()` double-écriture (`b751bad`)
-- [x] `updatePlayer()` WU-first + garde-fous NaN/Infinity (`9bdd4b3`)
-- [x] Backfill exécuté — 0 anomalie / 0 entité restante
-- [x] Migrer `animals.service.ts` vers WU (A2-A7 — IA, combat, range checks)
-- [x] Double-écriture animaux : `worldX/Y/mapId` dans tous les `animalRepository.update()`
-- [x] Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE_WU` + `chebyshevDistanceWU`
-- [x] `AnimalsGateway.attack()` utilise `player.worldX/Y/mapId` (client.data.player WU)
-- [x] Migrer `player_move` : payload additif `x/y + worldX/worldY/mapId` (P1)
+### DevTools — infrastructure (en cours)
+- [x] Étape 1 — `DevToolsShell` + `DevToolsPanel` + branchement `CharacterLayout`
+- [x] Étape 2 — `devtools.store.ts` minimal, `admin.store.ts` alias
+- [x] Étape 3 — `activeTool`, types coordonnées, `setLastClickedContext` dans WorldScene
+- [ ] Étape 4 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
+- [ ] Étape 5 — afficher les coordonnées du dernier clic dans `DevToolsPanel` (overlay lecture seule)
+- [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
+- [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
 
 ### Migration WU — Phase 3 (protocole WebSocket)
 - [x] P0 — `join_world` : supprimer fallback `payload.x/y`
 - [x] P1 — `player_move` additif : backend WU-first, fallback x/y conservé
-- [x] P2 — Frontend joueurs : `resolveScreen()` WU-first pour `world_joined`, `player_joined`, `current_players`, `player_moved`
+- [x] P2 — Frontend joueurs : `resolveScreen()` WU-first
 - [x] P3 — Frontend animaux + ressources : `resolveScreen()` WU-first
 - [ ] P4 — `character_respawn` et `character_teleport` : ajouter `worldX/Y` dans payload, frontend lit WU
 - [ ] P5 — `player_move` : supprimer fallback `x/y` (après stabilisation P1)
@@ -136,20 +141,18 @@ migration WebSocket documentés.
 - [ ] Import sprite goblin (textureKey propre)
 - [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
 - [ ] Autres types d'animaux (loup, sanglier…)
-- [ ] Section Décor dans le panneau admin
+- [ ] Section Décor dans le panneau DevTools
 - [ ] Migrations TypeORM pour la prod
 
 ---
 
 ## Documents potentiellement impactés
 
-Cette liste indique les documents à vérifier après une session de code. Elle ne signifie pas qu'ils doivent tous être modifiés.
-
+- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `setLastClickedContext`
 - [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world
-- [ ] `docs/03_Client/phaser-world.md` — `resolveScreen()`, migration WU frontend complète
+- [ ] `docs/07_Admin/admin-tool.md` — renommage onglet Admin → DevTools, nouvelle architecture shell/panel
 - [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
 - [ ] `docs/05_World/chunks.md` — après validation ADR-0001 (déjà fait, vérifier)
-- [ ] `docs/05_World/maps-and-collisions.md` — après validation ADR-0001 (déjà fait, vérifier)
 
 ---
 
@@ -166,6 +169,21 @@ Après une session de code :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-22 (session 4 — DevTools infrastructure)
+
+- **DevToolsShell + DevToolsPanel** : créés dans `src/components/DevTools/`. `CharacterLayout`
+  branché sur `DevToolsShell`. Onglet "Admin" → "DevTools". `AdminPanel` inchangé.
+- **devtools.store.ts** : store Zustand singleton `__GLOBAL_DEVTOOLS_STORE__` avec
+  `isConsoleActive`, `lastClickedPos`, `commandHistory`, `historyIndex`. `admin.store.ts`
+  transformé en alias de compatibilité (re-export).
+- **DevToolsStore enrichi** : `activeTool` (défaut `"legacy-admin"`), types
+  `DevToolsScreenPoint / WorldPoint / TilePoint / ChunkPoint`, setters individuels +
+  `setLastClickedContext` composite + `clearLastClickedContext`.
+- **WorldScene.js** : au pointerdown sans cible, calcule et alimente les quatre espaces
+  de coordonnées via l'inverse ADR-0001. `lastClickedPos` legacy conservé.
+- **Documentation** : `admin-tool-roadmap.md`, `project-audit.md`, 6 documents `docs/10_AI/`,
+  `docs/00_Project/domains.md`.
 
 ### 2026-06-22 (session 3 — Phase 2 + protocole WebSocket)
 
