@@ -126,6 +126,7 @@ If a contradiction is found:
 
 - [Gameplay README](08_Gameplay/README.md) - Status: Draft - Role of the gameplay documentation domain.
 - [World Object Model](08_Gameplay/world-object-model.md) - Status: Draft - Modèle conceptuel racine du monde : World Object, catégories, capacités, relation Runtime/Studio, Inspector universel, validation.
+- [Entity Architecture](08_Gameplay/entity-architecture.md) - Status: Draft - Architecture conceptuelle des Entities : cycle de vie, identité, localisation, état, capacités, comportements, événements, autorité, visibilité Studio.
 - [World Model](08_Gameplay/world-model.md) - Status: Draft - World, Map, Chunk, and Tile concepts — technology-independent.
 - [Entity Model](08_Gameplay/entity-model.md) - Status: Draft - Entity concept and specialized entity types.
 
