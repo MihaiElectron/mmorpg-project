@@ -361,11 +361,12 @@ describe('AnimalsService', () => {
     });
 
     it('doEscaping synchronise worldX/worldY lors de la fuite', async () => {
-      // animal (600,580), joueur (600,560) — animal fuit vers le haut
-      const animal = makeAnimal({ x: 600, y: 580 });
+      // animal pixel(600,580) → WU(6080,12480), joueur pixel(600,560) → WU(5760,12160)
+      // chebyshev=320 WU < patrolRadius(200px)=3200 WU → animal reste en fuite
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
-        x: 600, y: 560, worldX: 1600, worldY: 11840, mapId: 1,
+        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1,
         name: 'Test', direction: 'down',
       };
       const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
@@ -375,6 +376,59 @@ describe('AnimalsService', () => {
       expect(Number.isFinite(animal.worldX)).toBe(true);
       expect(Number.isFinite(animal.worldY)).toBe(true);
       expect(animal.mapId).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('findNearestPlayer WU (A3)', () => {
+    it('retourne null si animal n\'a pas de worldX/worldY → doEscaping passe en alive', async () => {
+      // animal sans WU → findNearestPlayer retourne null immédiatement
+      const animal = makeAnimal({ state: 'escaping' });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+
+      await (service as any).doEscaping(animal, state, makeTemplate(), [player], Date.now());
+
+      expect(animal.state).toBe('alive');
+    });
+
+    it('exclut les joueurs sur une carte différente (mapId filter)', async () => {
+      // animal mapId=1, seul joueur mapId=2 → nearest=null → retour en alive
+      const animal = makeAnimal({ state: 'escaping', worldX: 6080, worldY: 12480, mapId: 1 });
+      const player = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 2,
+        name: 'Test', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+
+      await (service as any).doEscaping(animal, state, makeTemplate(), [player], Date.now());
+
+      expect(animal.state).toBe('alive');
+    });
+
+    it('sélectionne le joueur le plus proche par WU', async () => {
+      // animal WU(6080,12480) — près: WU(5760,12160) chebyshev=320 — loin: WU(-4160,12160) chebyshev=10240
+      // patrolRadius(200px)=3200 WU : le joueur proche (320≤3200) maintient la fuite
+      const animal = makeAnimal({ state: 'escaping', worldX: 6080, worldY: 12480, mapId: 1 });
+      const near = {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1, name: 'Near', direction: 'down',
+      };
+      const far = {
+        characterId: 'char-2', socketId: 'sock-2',
+        x: 100, y: 560, worldX: -4160, worldY: 12160, mapId: 1, name: 'Far', direction: 'down',
+      };
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+
+      await (service as any).doEscaping(animal, state, makeTemplate(), [near, far], Date.now());
+
+      // Le plus proche (near) est dans le patrolRadius → l'animal continue à fuir
+      expect(animal.state).toBe('escaping');
     });
   });
 });

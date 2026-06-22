@@ -32,10 +32,13 @@ function findNearestPlayer(
   players: ConnectedPlayer[],
   animal: Animal,
 ): { player: ConnectedPlayer; dist: number } | null {
+  if (animal.worldX == null || animal.worldY == null) return null;
+  const animalPos = { worldX: animal.worldX, worldY: animal.worldY };
   let nearest: ConnectedPlayer | null = null;
   let minDist = Infinity;
   for (const p of players) {
-    const d = Math.hypot(p.x - animal.x, p.y - animal.y);
+    if (animal.mapId != null && p.mapId !== animal.mapId) continue;
+    const d = chebyshevDistanceWU({ worldX: p.worldX, worldY: p.worldY }, animalPos);
     if (d < minDist) { minDist = d; nearest = p; }
   }
   return nearest ? { player: nearest, dist: minDist } : null;
@@ -175,7 +178,7 @@ export class AnimalsService implements OnModuleInit {
       // Transition : aggro (seulement en patrouille)
       if (animal.state === 'alive' && template.aggroRadius > 0 && players.length > 0) {
         const nearest = findNearestPlayer(players, animal);
-        if (nearest && nearest.dist <= template.aggroRadius) {
+        if (nearest && nearest.dist <= legacyRadiusToWU(template.aggroRadius)) {
           await this.changeAnimalState(animal, 'fighting');
           state.targetCharacterId = nearest.player.characterId;
         }
@@ -303,7 +306,7 @@ export class AnimalsService implements OnModuleInit {
     const nearest = findNearestPlayer(players, animal);
 
     // Plus de joueurs ou suffisamment loin → retour en patrouille
-    if (!nearest || nearest.dist > template.patrolRadius) {
+    if (!nearest || nearest.dist > legacyRadiusToWU(template.patrolRadius)) {
       await this.changeAnimalState(animal, 'alive');
       state.pauseUntil = now + rand(template.pauseMinMs, template.pauseMaxMs);
       return;
