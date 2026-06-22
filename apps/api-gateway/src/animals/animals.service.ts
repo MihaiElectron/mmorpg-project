@@ -9,7 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { AnimalDto } from './dto/animal.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
-import { isoScreenToWorldWU, chebyshevDistanceWU } from '../common/world-coordinates';
+import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 
 const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
@@ -127,6 +127,8 @@ export class AnimalsService implements OnModuleInit {
         a.health = a.spawn.template.baseHealth;
         a.x = a.spawn.spawnX;
         a.y = a.spawn.spawnY;
+        const wu = this.pixelToWUSafe(a.x, a.y);
+        if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
         await this.animalRepository.save(a);
       }
       this.liveAnimals.set(a.id, a);
@@ -326,6 +328,18 @@ export class AnimalsService implements OnModuleInit {
     }
   }
 
+  private pixelToWUSafe(
+    x: number,
+    y: number,
+  ): { worldX: number; worldY: number; mapId: number } | null {
+    try {
+      const wu = isoScreenToWorldWU(x, y);
+      return { worldX: wu.worldX, worldY: wu.worldY, mapId: DEFAULT_MAP_ID };
+    } catch {
+      return null;
+    }
+  }
+
   private async changeAnimalState(animal: Animal, newState: Animal['state']) {
     animal.state = newState;
     await this.animalRepository.update(animal.id, { state: newState });
@@ -340,12 +354,15 @@ export class AnimalsService implements OnModuleInit {
     animal.health = template.baseHealth;
     animal.x = animal.spawn.spawnX;
     animal.y = animal.spawn.spawnY;
+    const respawnWU = this.pixelToWUSafe(animal.x, animal.y);
+    if (respawnWU) { animal.worldX = respawnWU.worldX; animal.worldY = respawnWU.worldY; animal.mapId = respawnWU.mapId; }
 
     await this.animalRepository.update(id, {
       state: 'alive',
       health: template.baseHealth,
       x: animal.spawn.spawnX,
       y: animal.spawn.spawnY,
+      ...(respawnWU ?? {}),
     });
 
     if (this.server) {
@@ -356,7 +373,7 @@ export class AnimalsService implements OnModuleInit {
   async attack(
     id: string,
     characterId: string,
-    attackerPosition: { x: number; y: number },
+    attackerPosition: { worldX: number; worldY: number; mapId: number },
   ): Promise<AttackResult> {
     const now = Date.now();
     const lastAttack = this.lastAttackAt.get(characterId) ?? 0;
@@ -376,17 +393,14 @@ export class AnimalsService implements OnModuleInit {
     if (character.health <= 0) return { success: false, error: 'Character is dead' };
 
     const range = this.resolveAttackRange(character);
-    // Conversion WU — animal.x/y encore en pixels (IA non migrée).
-    // attackerPosition.x/y : payload legacy jusqu'à migration AnimalsGateway.
-    let attackerWU: { worldX: number; worldY: number };
+    // animal.x/y encore en pixels — IA non migrée vers WU.
     let animalWU: { worldX: number; worldY: number };
     try {
-      attackerWU = isoScreenToWorldWU(attackerPosition.x, attackerPosition.y);
-      animalWU   = isoScreenToWorldWU(animal.x, animal.y);
+      animalWU = isoScreenToWorldWU(animal.x, animal.y);
     } catch {
       return { success: false, error: 'Target out of range' };
     }
-    const distance = chebyshevDistanceWU(attackerWU, animalWU);
+    const distance = chebyshevDistanceWU(attackerPosition, animalWU);
     if (distance > range) return { success: false, error: 'Target out of range' };
 
     this.lastAttackAt.set(characterId, now);
@@ -402,6 +416,8 @@ export class AnimalsService implements OnModuleInit {
       const delay = animal.spawn.respawnDelayMs;
       setTimeout(() => this.respawnAnimal(animal.id), delay);
     }
+    const attackSaveWU = this.pixelToWUSafe(animal.x, animal.y);
+    if (attackSaveWU) { animal.worldX = attackSaveWU.worldX; animal.worldY = attackSaveWU.worldY; animal.mapId = attackSaveWU.mapId; }
     await this.animalRepository.save(animal);
 
     let riposte: { damage: number; characterHealth: number } | undefined;
@@ -500,11 +516,13 @@ export class AnimalsService implements OnModuleInit {
       }),
     );
 
+    const spawnWU = this.pixelToWUSafe(Math.round(x), Math.round(y));
     const rawAnimal = await this.animalRepository.save(
       this.animalRepository.create({
         spawn,
         x: Math.round(x),
         y: Math.round(y),
+        ...(spawnWU ?? {}),
         health: template.baseHealth,
         state: 'alive',
       }),
@@ -576,6 +594,8 @@ export class AnimalsService implements OnModuleInit {
 
     if (fields.x !== undefined || fields.y !== undefined) {
       this.patrolStates.delete(id);
+      const updateWU = this.pixelToWUSafe(animal.x, animal.y);
+      if (updateWU) { animal.worldX = updateWU.worldX; animal.worldY = updateWU.worldY; animal.mapId = updateWU.mapId; }
     }
 
     await this.animalRepository.save(animal);
@@ -592,8 +612,10 @@ export class AnimalsService implements OnModuleInit {
     animal.x = Math.round(x);
     animal.y = Math.round(y);
     this.patrolStates.delete(animalId);
+    const moveWU = this.pixelToWUSafe(animal.x, animal.y);
+    if (moveWU) { animal.worldX = moveWU.worldX; animal.worldY = moveWU.worldY; animal.mapId = moveWU.mapId; }
 
-    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y });
+    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y, ...(moveWU ?? {}) });
 
     if (this.server) {
       this.server.emit('animal_update', toDto(animal));
@@ -611,6 +633,8 @@ export class AnimalsService implements OnModuleInit {
       animal.health = template.baseHealth;
       animal.x = animal.spawn.spawnX;
       animal.y = animal.spawn.spawnY;
+      const forceWU = this.pixelToWUSafe(animal.x, animal.y);
+      if (forceWU) { animal.worldX = forceWU.worldX; animal.worldY = forceWU.worldY; animal.mapId = forceWU.mapId; }
 
       this.patrolStates.delete(animal.id);
       this.lastAnimalAutoAttackAt.delete(animal.id);
@@ -620,6 +644,7 @@ export class AnimalsService implements OnModuleInit {
         health: template.baseHealth,
         x: animal.spawn.spawnX,
         y: animal.spawn.spawnY,
+        ...(forceWU ?? {}),
       });
 
       if (this.server) {
@@ -662,11 +687,13 @@ export class AnimalsService implements OnModuleInit {
       });
       if (existing) continue;
 
+      const seedWU = this.pixelToWUSafe(spawn.spawnX, spawn.spawnY);
       await this.animalRepository.save(
         this.animalRepository.create({
           spawn,
           x: spawn.spawnX,
           y: spawn.spawnY,
+          ...(seedWU ?? {}),
           health: spawn.template.baseHealth,
           state: 'alive',
         }),

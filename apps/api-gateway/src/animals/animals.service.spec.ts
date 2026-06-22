@@ -142,7 +142,7 @@ describe('AnimalsService', () => {
   // -------------------------------------------------------------------------
   describe('attack', () => {
     it("rejette si l'animal est introuvable", async () => {
-      const result = await service.attack('unknown', 'char-1', { x: 0, y: 0 });
+      const result = await service.attack('unknown', 'char-1', { worldX: 0, worldY: 0, mapId: 1 });
       expect(result).toEqual({ success: false, error: 'Animal not found' });
     });
 
@@ -150,7 +150,7 @@ describe('AnimalsService', () => {
       const animal = makeAnimal({ state: 'dead' });
       (service as any).liveAnimals.set(animal.id, animal);
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Animal already dead' });
     });
@@ -160,17 +160,17 @@ describe('AnimalsService', () => {
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.attack(animal.id, 'char-missing', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-missing', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Character not found' });
     });
 
     it('rejette si la cible est hors de portée', async () => {
-      const animal = makeAnimal({ x: 600, y: 580 });
+      const animal = makeAnimal({ worldX: 6080, worldY: 12480, mapId: 1 });
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter());
 
-      const result = await service.attack(animal.id, 'char-1', { x: 0, y: 0 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: -8000, worldY: 8000, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Target out of range' });
     });
@@ -180,7 +180,7 @@ describe('AnimalsService', () => {
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 0 }));
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Character is dead' });
     });
@@ -190,7 +190,7 @@ describe('AnimalsService', () => {
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       // damage = max(max(10,5) - 2, 1) = 8
       expect(result.success).toBe(true);
@@ -210,7 +210,7 @@ describe('AnimalsService', () => {
       (service as any).patrolStates.set(animal.id, {});
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
       expect(animal.state).toBe('dead');
@@ -226,7 +226,7 @@ describe('AnimalsService', () => {
       (service as any).liveAnimals.set(animal.id, animal);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 7, defense: 3 }));
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
       expect(animal.state).toBe('fighting');
@@ -238,7 +238,7 @@ describe('AnimalsService', () => {
       // Simuler un attack récent
       (service as any).lastAttackAt.set('char-1', Date.now());
 
-      const result = await service.attack(animal.id, 'char-1', { x: 600, y: 580 });
+      const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Attack on cooldown' });
     });
@@ -289,6 +289,42 @@ describe('AnimalsService', () => {
 
       await expect((service as any).respawnAnimal(animal.id)).resolves.not.toThrow();
       expect(animalRepository.update).toHaveBeenCalled();
+    });
+
+    it('écrit worldX/worldY/mapId en DB lors du respawn', async () => {
+      // spawn pixel(600, 580) → worldX=6080, worldY=12480
+      const animal = makeAnimal({ state: 'dead', health: 0, x: 999, y: 999 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      (service as any).server = null;
+
+      await (service as any).respawnAnimal(animal.id);
+
+      expect(animalRepository.update).toHaveBeenCalledWith(
+        animal.id,
+        expect.objectContaining({ worldX: 6080, worldY: 12480, mapId: 1 }),
+      );
+      expect(animal.worldX).toBe(6080);
+      expect(animal.worldY).toBe(12480);
+      expect(animal.mapId).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('double-écriture WU', () => {
+    it('attack() écrit worldX/worldY/mapId sur l\'entité avant save', async () => {
+      // animal pixel(600, 580) → worldX=6080, worldY=12480
+      const animal = makeAnimal({ x: 600, y: 580, health: 30 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(animal.worldX).toBe(6080);
+      expect(animal.worldY).toBe(12480);
+      expect(animal.mapId).toBe(1);
+      expect(animalRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ worldX: 6080, worldY: 12480, mapId: 1 }),
+      );
     });
   });
 });
