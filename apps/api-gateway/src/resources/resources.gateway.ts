@@ -16,13 +16,15 @@ import { InventoryService } from '../inventory/inventory.service';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
+import { readWorldPosition, WUPositionRecord } from '../common/world-position.adapter';
+import { chebyshevDistanceWU } from '../common/world-coordinates';
 
 interface InteractResourcePayload {
   targetId: string;
 }
 
-// Portée de récolte (corps à corps, indépendante de l'arme équipée).
-const RESOURCE_INTERACT_RANGE = 100;
+// Portée de récolte en WU — temporaire, à recalibrer (≈ 100 px legacy).
+const RESOURCE_INTERACT_RANGE_WU = 1600;
 
 // Intervalle entre deux loots d'un cycle de récolte continue.
 const GATHER_INTERVAL_MS = 3000;
@@ -242,11 +244,16 @@ export class ResourcesGateway
   }
 
   private isInRange(
-    player: { x: number; y: number },
-    target: { x: number; y: number },
+    player: { worldX: number; worldY: number; mapId: number },
+    target: WUPositionRecord & { x: number; y: number },
   ): boolean {
-    const distance = Math.hypot(target.x - player.x, target.y - player.y);
-    return distance <= RESOURCE_INTERACT_RANGE;
+    let targetWU: { worldX: number; worldY: number; mapId: number };
+    try {
+      targetWU = readWorldPosition(target, () => ({ x: target.x, y: target.y }));
+    } catch {
+      return false;
+    }
+    return chebyshevDistanceWU(player, targetWU) <= RESOURCE_INTERACT_RANGE_WU;
   }
 
   private cancelGathering(
