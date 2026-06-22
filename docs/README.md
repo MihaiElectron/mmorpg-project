@@ -134,7 +134,11 @@ If a contradiction is found:
 
 ### 10_AI
 
-- [Golden Rules](10_AI/golden-rules.md) - Status: Draft - Documentation planned for AI assistant rules.
+- [Golden Rules](10_AI/golden-rules.md) - Status: Draft - Règles générales de comportement pour tout agent IA travaillant sur ce projet.
+- [Session Workflow](10_AI/session-workflow.md) - Status: Draft - Protocole obligatoire de chaque session IA (14 étapes, lecture, planification, vérification, résumé).
+- [Implementation Rules](10_AI/implementation-rules.md) - Status: Draft - Règles d'implémentation concrètes : scope, serveur autoritatif, DTOs, patterns interdits.
+- [Architecture Review](10_AI/architecture-review.md) - Status: Draft - Comment analyser et protéger les décisions d'architecture ; décisions WU acquises documentées.
+- [Commit Policy](10_AI/commit-policy.md) - Status: Draft - Format Conventional Commits en français, scopes du projet, obligations pré-commit.
 
 ## Documentation lifecycle
 
