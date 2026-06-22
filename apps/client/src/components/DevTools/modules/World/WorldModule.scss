@@ -1,0 +1,52 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+.devtools-world {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: vars.$color-text-primary;
+
+  &__inspector {
+    @include m.panel-section;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__coordinate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__coordinate-row {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 3px 8px;
+    word-break: break-word;
+  }
+
+  &__coordinate-label {
+    color: vars.$color-text-gold;
+    margin-right: 6px;
+  }
+
+  &__coordinate-value {
+    color: vars.$color-text-primary;
+  }
+}

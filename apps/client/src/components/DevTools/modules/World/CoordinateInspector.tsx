@@ -1,13 +1,22 @@
-import { useDevToolsStore } from "../../store/devtools.store";
+import { useDevToolsStore } from "../../../../store/devtools.store";
 
 function formatValue(value: number | string | null | undefined): string {
   return value === null || value === undefined ? "-" : String(value);
 }
 
-function CoordinateRow({ label, values }: { label: string; values: Array<[string, number | string | null | undefined]> }) {
+function CoordinateRow({
+  label,
+  values,
+}: {
+  label: string;
+  values: Array<[string, number | string | null | undefined]>;
+}) {
   return (
-    <div className="admin-panel__result">
-      <strong>{label}</strong> {values.map(([key, value]) => `${key}:${formatValue(value)}`).join(" ")}
+    <div className="devtools-world__coordinate-row">
+      <strong className="devtools-world__coordinate-label">{label}</strong>
+      <span className="devtools-world__coordinate-value">
+        {values.map(([key, value]) => `${key}:${formatValue(value)}`).join(" ")}
+      </span>
     </div>
   );
 }
@@ -20,9 +29,9 @@ export default function CoordinateInspector() {
   const chunkPoint = useDevToolsStore((s) => s.lastClickedChunkPoint);
 
   return (
-    <section className="admin-panel__section" aria-label="Coordinate inspector">
-      <h3 className="admin-panel__section-title">Coordinates</h3>
-      <div className="admin-panel__results">
+    <section className="devtools-world__inspector" aria-label="Coordinate inspector">
+      <h3 className="devtools-world__title">Coordinates</h3>
+      <div className="devtools-world__coordinate-list">
         <CoordinateRow label="Tool" values={[["active", activeTool]]} />
         <CoordinateRow label="Screen" values={[["x", screenPoint?.x], ["y", screenPoint?.y]]} />
         <CoordinateRow

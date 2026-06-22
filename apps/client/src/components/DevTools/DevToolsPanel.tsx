@@ -1,10 +1,10 @@
 import AdminPanel from "../AdminPanel/AdminPanel";
-import CoordinateInspector from "./CoordinateInspector";
+import { WorldModule } from "./modules/World";
 
 export default function DevToolsPanel() {
   return (
     <>
-      <CoordinateInspector />
+      <WorldModule />
       <AdminPanel />
     </>
   );
