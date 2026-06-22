@@ -1,8 +1,8 @@
 # Validation — Phase 1 de la migration WU
 
-_Date : 2026-06-22_  
-_Branche : main — commit de référence : `9bdd4b3`_  
-_Périmètre : audit lecture seule — aucune modification._
+_Date de validation initiale : 2026-06-22 (commit `9bdd4b3`)_  
+_Mise à jour de clôture : 2026-06-22 (backfill exécuté, ADR-0001 accepté)_  
+_Branche : main_
 
 ---
 
@@ -12,13 +12,14 @@ _Périmètre : audit lecture seule — aucune modification._
 
 | ADR | Statut déclaré | Unité logique | Noms canoniques |
 |---|---|---|---|
-| ADR-0001 | Draft / Proposed | **Ouverte** — "not fixed by this ADR" | `worldX / worldY` (WU) |
-| ADR-0002 | Draft / Proposed | "tile units" (contradictoire ADR-0001) | `worldTileX / worldTileY` (périmé) |
-| ADR-0003 | Draft / Proposed | non précisée (distance gate sous-spécifiée) | `worldTileX / worldTileY` (périmé) |
+| ADR-0001 | **Accepted** (2026-06-22) | `1 WU = 1/1024 tile` — décidé | `worldX / worldY` (WU) |
+| ADR-0002 | Draft / Proposed | WU (cohérent ADR-0001) | `worldX / worldY` (WU) |
+| ADR-0003 | Draft / Proposed | WU (cohérent ADR-0001) | `worldX / worldY` (WU) |
 
-Les trois ADRs sont **non acceptés**. L'`adr-consistency-review.md` documente cinq
-incohérences entre les documents (nommage `worldTileX/Y` vs `worldX/Y`, unité ouverte
-vs déclarée, formule distance gate sous-spécifiée).
+ADR-0001 est **accepté** : le système de coordonnées WU est implémenté, testé
+(65 tests `world-coordinates.ts`) et validé par le backfill. ADR-0002 et ADR-0003
+restent `Proposed` car leurs décisions (WebSocket payload `{ worldX, worldY }`,
+validation distance gate) ne sont pas encore implémentées.
 
 ### Résolution de fait
 
@@ -95,13 +96,11 @@ Toutes les colonnes legacy sont conservées (migration additive, aucune suppress
 | État | Détail |
 |---|---|
 | Scripts prêts | `npm run wu:dry-run` / `npm run wu:backfill` |
-| Dry-run | Fonctionne — détecte les anomalies |
-| Backfill réel | **Non exécuté** — bloqué par anomalies OUT_OF_MAP_BOUNDS |
-| Anomalie identifiée | Entités avec `pixel(140, 365)` → `WU(-1040, 12720)` (worldX < 0, hors [0, 65536)) |
+| Dry-run post-backfill | **0 anomalie / 0 entité à backfiller** |
+| Backfill réel | **Exécuté avec succès** — toutes les entités backfillées |
 
-Les colonnes WU existent en DB mais restent **NULL** pour les lignes non backfillées.
-Le runtime compense via le fallback legacy de `readWorldPosition()` : à la connexion,
-si `worldX/Y/mapId` sont NULL, le serveur convertit `positionX/Y` en WU.
+Toutes les colonnes WU en DB sont renseignées. Le fallback legacy de `readWorldPosition()`
+reste actif comme filet de sécurité (par exemple si une entité est ajoutée sans WU).
 
 ### Double-écriture active
 
@@ -239,7 +238,7 @@ Aucune colonne legacy supprimée. Phase différée après stabilisation complèt
 
 ### Documentation
 
-Les ADRs (0001, 0002, 0003) sont encore en `Draft / Proposed`. Le nommage `worldTileX/Y` dans ADR-0002 et ADR-0003 diverge de l'implémentation (`worldX/Y`). À aligner avec la décision de fait avant d'avancer sur la migration animaux.
+ADR-0001 est `Accepted`. ADR-0002 et ADR-0003 restent `Proposed` (décisions non encore implémentées). Le nommage `worldTileX/Y` dans les documents de référence non-ADR (glossaire, ROADMAP, `movement-authority-audit.md`) est mis à jour en session de clôture Phase 1.
 
 ---
 
@@ -249,13 +248,7 @@ Les ADRs (0001, 0002, 0003) sont encore en `Draft / Proposed`. Le nommage `world
 
 **Oui.**
 
-La Phase 1 couvre : module central de coordonnées, adapters, backfill scripts, migration runtime des joueurs (`ConnectedPlayer` WU-first, cycle de vie complet). Tout cela est en place, compilé, testé.
-
-Un bloqueur opérationnel subsiste — le backfill réel n'a pas pu tourner — mais il ne bloque pas le développement : le fallback legacy de `readWorldPosition()` assure que le runtime est fonctionnel même avec des colonnes WU NULL en DB.
-
-### Bloqueur opérationnel avant Phase 2 (recommandé, non obligatoire)
-
-- **Corriger les entités OUT_OF_MAP_BOUNDS** : repositionner les entités avec `pixel(140, 365)` sur la map, puis exécuter `npm run wu:backfill`. Sans cela, les colonnes WU restent NULL pour ces entités et le fallback pixel s'applique indéfiniment.
+La Phase 1 couvre : module central de coordonnées, adapters, backfill scripts, migration runtime des joueurs (`ConnectedPlayer` WU-first, cycle de vie complet). Tout cela est en place, compilé, testé. Le backfill DB a été exécuté avec succès (0 anomalie / 0 entité à backfiller). ADR-0001 accepté.
 
 ### Prochain jalon — Phase 2 : migration animaux et ressources
 

@@ -19,19 +19,17 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Derniers changements importants
 
-- **`updatePlayer()` WU-first** : `player_move` convertit désormais les pixels en WU
-  en priorité (`isoScreenToWorldWU`) ; `player.x/y` ne sont mis à jour que si la
-  conversion réussit. Garde-fous NaN/Infinity : position conservée sans mutation.
-  16 tests (`world.service.spec.ts`).
-- **`teleportCharacter()` double-écriture** : DB écrit `positionX/Y` + `worldX/Y/mapId`
-  (conditionnel sur validité de la conversion WU). Bug CRITIQUE soldé (`b751bad`).
-- **Migration WU — world.service.ts** : `ConnectedPlayer` porte `worldX/worldY/mapId`
-  (vérité serveur) + `x/y` (cache pixel Phaser). Toutes les fonctions runtime migrées :
-  `joinPlayer`, `updatePlayer`, `persistPlayerPosition`, `respawnCharacter`, `teleportCharacter`.
-- **Infrastructure WU** : `world-coordinates.ts`, `world-position.adapter.ts` (32 tests),
-  `wu-backfill-report.ts` (36 tests), scripts `wu:dry-run` / `wu:backfill`.
-- **Audit WU** : `docs/01_Architecture/wu-migration-audit.md` — état complet de la
-  migration, checklist ordonnée.
+- **Phase 1 migration WU — clôturée** : backfill exécuté (0 anomalie / 0 entité),
+  ADR-0001 accepté (2026-06-22), documentation alignée (`worldX/Y` partout).
+- **`updatePlayer()` WU-first** : `player_move` convertit les pixels en WU en priorité ;
+  `player.x/y` mis à jour seulement si conversion réussit. 16 tests (`world.service.spec.ts`).
+- **`teleportCharacter()` double-écriture** : DB écrit `positionX/Y` + `worldX/Y/mapId`.
+  Bug CRITIQUE soldé (`b751bad`).
+- **Migration WU — world.service.ts** : `ConnectedPlayer` WU-first, toutes les fonctions
+  runtime migrées (`joinPlayer`, `updatePlayer`, `persistPlayerPosition`, `respawnCharacter`,
+  `teleportCharacter`).
+- **Infrastructure WU** : `world-coordinates.ts` (65 tests), `world-position.adapter.ts`
+  (32 tests), `wu-backfill-report.ts` (36 tests), scripts `wu:dry-run` / `wu:backfill`.
 
 ---
 
@@ -54,11 +52,11 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Décisions et règles à ne pas oublier
 
-- **Système de coordonnées WU** : `1 tile = 1024 WU`, `CHUNK_SIZE=64`,
+- **Système de coordonnées WU (ADR-0001 Accepted)** : `1 tile = 1024 WU`, `CHUNK_SIZE=64`,
   `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`. Projection isométrique :
   `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`.
   Inverse : `worldX = 8*(sx−1000) + 16*sy`, `worldY = −8*(sx−1000) + 16*sy`.
-  Pixels jamais persistés comme vérité (double-écriture = transitoire).
+  Phase 1 clôturée : backfill OK, `world.service.ts` entièrement migré.
   Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
   `docs/01_Architecture/wu-migration-audit.md`.
 - Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
@@ -88,8 +86,7 @@ personnages enregistrés, animaux actifs, templates, spawns).
 - **[CRITIQUE] `animals.service.ts` entièrement en pixels** : boucle IA/combat complète
   (aggro, patrol, pursuit, escape, leash, MELEE_RANGE=60, patrolRadius, aggroRadius)
   non migrée vers WU. Bloc le plus large restant.
-- **[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS** : entités avec pixel(140, 365) → WU(-1040, 12720)
-  (worldX < 0). Bloquent l'exécution du backfill réel.
+- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**. Entités repositionnées, backfill exécuté. `wu:dry-run` retourne 0/0.
 - **[CRITIQUE] `resources.gateway.ts` range check en pixels** : `RESOURCE_INTERACT_RANGE=100`
   px + `Math.hypot` — anti-cheat gathering non migré.
 - **[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime** : colonnes présentes mais
@@ -109,10 +106,10 @@ personnages enregistrés, animaux actifs, templates, spawns).
 
 ## Prochaines priorités possibles
 
-### Migration WU (en cours)
+### Migration WU — Phase 2 (animaux et ressources)
 - [x] Fix `teleportCharacter()` double-écriture (`b751bad`)
 - [x] `updatePlayer()` WU-first + garde-fous NaN/Infinity (`9bdd4b3`)
-- [ ] Corriger les anomalies OUT_OF_MAP_BOUNDS (entités hors [0, 65536)) puis `npm run wu:backfill`
+- [x] Backfill exécuté — 0 anomalie / 0 entité restante
 - [ ] Migrer `animals.service.ts` vers WU (aggroRadius, patrolRadius, MELEE_RANGE, Math.hypot → chebyshev)
 - [ ] Double-écriture animaux : `worldX/Y/mapId` dans les `animalRepository.update()`
 - [ ] Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE` + range check en WU
@@ -156,13 +153,20 @@ Après une session de code :
 
 ## Historique court des sessions
 
-### 2026-06-22
+### 2026-06-22 (session 2 — clôture Phase 1)
+
+- **Phase 1 WU — clôturée** : backfill exécuté (0 anomalie), ADR-0001 accepté.
+- **Documentation alignée** : `worldTileX/Y` → `worldX/Y` dans glossaire, ROADMAP,
+  `movement-authority-audit.md`. Formule bounds ADR-0003 corrigée (`CHUNK_SIZE` → `CHUNK_SIZE_WU`).
+- **`coordinate-system-phase1-validation.md`** mis à jour : section backfill, section ADR, critères de sortie.
+- **`wu-migration-audit.md`** : C1 et C4 marqués soldés, estimations mises à jour (~35–40%).
+
+### 2026-06-22 (session 1)
 
 - **`updatePlayer()` WU-first** : pixels → WU en priorité, x/y mis à jour seulement
   si conversion réussit, garde-fous NaN/Infinity. 16 tests (`world.service.spec.ts`).
 - **`teleportCharacter()` double-écriture** : bug CRITIQUE soldé — DB écrit désormais
   `positionX/Y` + `worldX/Y/mapId` sur téléportation.
-- **STATUS.md** mis à jour.
 
 ### 2026-06-21 (session 2)
 

@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Active
+- Decision status: Accepted
 - Owner: Project
 - Last updated: 2026-06-22
 - Date proposed: 2026-06-21
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-22
+- Approved by: Project owner
+- Approval reference: Phase 1 WU migration — backfill exécuté (0 anomalie / 0 entité), `world.service.ts` entièrement migré, 65 tests `world-coordinates.ts` verts
 - Depends on: docs/01_Architecture/adr/README.md, docs/01_Architecture/client-server-boundaries.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 - Supersedes: None
@@ -307,23 +307,23 @@ Code using the new coordinate system must be isolated from code using the old sy
 
 - [x] Existing implementation analyzed (character, animal, resource, respawn point, creature spawn, WorldScene, AnimalsService, ResourcesGateway).
 - [x] Architecture proposal reviewed before this ADR.
-- [ ] Related ADRs reviewed (no prior coordinate ADR exists).
+- [x] Related ADRs reviewed (ADR-0002, ADR-0003 — both use `worldX/worldY` naming).
 - [x] Security impact reviewed.
 - [x] Performance impact reviewed.
-- [ ] Human approval recorded.
-- [ ] Related documentation updated (deferred until this ADR is accepted).
+- [x] Human approval recorded (Project owner, 2026-06-22).
+- [x] Core coordinate system implemented and tested (65 tests `world-coordinates.ts`, 16 tests `world.service.spec.ts`, backfill 0 anomalie).
 
 ## Open questions
 
-- **Storage column type**: `worldX` and `worldY` are signed integers. The target DB type is `INTEGER` (int32) by default, which supports maps up to 2 097 151 tiles per axis (int32 max / TILE_SIZE_WU ≈ 2 147 483 647 / 1024). `BIGINT` (int64) is the fallback for worlds exceeding that range. The exact type is confirmed at migration time.
+- **Storage column type**: RESOLVED — `INTEGER` (int32) chosen. All WU columns use `@Column({ type: 'int', nullable: true })` in TypeORM entities. int32 supports maps up to ~2 M tiles per axis (int32 max / TILE_SIZE_WU), sufficient for the current project scope.
 
-- **Migration strategy**: how should existing pixel-equivalent positions be converted to WU? The conversion uses the inverse projection formula × `TILE_SIZE_WU`. It requires the final per-map origin offset (currently `TILEMAP_TEST_OFFSET_X = 936`, which is temporary). Existing gameplay constants (range, speed, radius) must be recalibrated in WU — their new values are not decided yet.
+- **Migration strategy**: RESOLVED — additive columns (`worldX`, `worldY`, `mapId` nullable) + `readWorldPosition()` fallback chain + idempotent backfill script (`npm run wu:backfill`). Executed successfully: 0 anomalies / 0 entities remaining. See `tools/scripts/wu-backfill-real.ts`.
 
-- **Speed and range constants in WU**: `RESOURCE_INTERACT_RANGE = 100`, `MELEE_RANGE = 60`, animal `patrolRadius`, `speedMax` are in pixel-equivalent units. Their WU equivalents require calibration using the inverse projection (not a scalar — see `docs/08_Gameplay/world-units-study.md`) and gameplay validation.
+- **Tilemap origin offset**: RESOLVED — `WORLD_ORIGIN_X_PX = 1000` defined in `world-coordinates.ts`. Derived from `TILEMAP_TEST_OFFSET_X (936) + ISO_HALF_TILE_WIDTH_PX (64)` (north vertex of tile 0,0). `TILEMAP_TEST_OFFSET_X` remains in `WorldScene.js` as a Phaser visual offset; it is not part of the coordinate system.
 
-- **Gameplay distance metric**: the shape of range checks (melee, gathering, aggro) depends on whether distance is computed as Euclidean WU, Euclidean pixel (projected), Chebyshev, or Manhattan. This decision is deferred to gameplay calibration after the WU migration.
+- **Speed and range constants in WU**: DEFERRED — `RESOURCE_INTERACT_RANGE = 100`, `MELEE_RANGE = 60`, animal `patrolRadius`, `speedMax` remain in pixel-equivalent units. Calibration in WU/s is scheduled for Phase 2 (migration `animals.service.ts`).
 
-- **Tilemap origin offset**: `TILEMAP_TEST_OFFSET_X = 936` is temporary. The final per-map origin must be defined before any px → WU conversion can be applied.
+- **Gameplay distance metric**: PARTIALLY RESOLVED — Chebyshev WU selected for respawn point proximity (`chebyshevDistanceWU` in `world-coordinates.ts:162`). Combat and gathering distance metric deferred to Phase 2 along with speed/range calibration.
 
 ## Non-goals
 
@@ -364,13 +364,14 @@ Chunk-scoped Socket.IO rooms are a future consequence of this system. Their desi
 
 ## TODO
 
-- [ ] Obtain human approval and record it in `Approved by` and `Approval reference`.
-- [ ] Set `Decision status` to `Accepted` after human validation.
-- [ ] Set `Date accepted` after human validation.
-- [ ] Update `docs/05_World/chunks.md` to reflect the official CHUNK_SIZE and derived coordinate definitions.
+- [x] Obtain human approval and record it in `Approved by` and `Approval reference`. *(Project owner, 2026-06-22)*
+- [x] Set `Decision status` to `Accepted` after human validation.
+- [x] Set `Date accepted` after human validation.
+- [x] Resolve storage column type and migration strategy open questions.
+- [ ] Update `docs/05_World/chunks.md` to reflect the official CHUNK_SIZE and derived coordinate definitions. *(deferred until ADR-0003 accepted)*
 - [ ] Update `docs/05_World/maps-and-collisions.md` to reference this ADR for coordinate authority.
 - [ ] Update `docs/03_Client/phaser-world.md` to document the projection formula as the official conversion.
-- [ ] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`.
-- [ ] Update `docs/06_Database/schema.md` when the DB column type (`INTEGER` vs `BIGINT`) is confirmed.
-- [ ] Resolve remaining open questions (migration strategy, distance metric, origin offset) before implementation begins.
-- [ ] Update `docs/05_World/chunks.md` to document `TILE_SIZE_WU = 1024` and the bit-field derivations.
+- [ ] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`. *(deferred until WebSocket payload migration — Phase 2)*
+- [ ] Update `docs/06_Database/schema.md` — column type `INTEGER` confirmed; update after legacy columns are removed.
+- [ ] Calibrate speed and range constants in WU/s (Phase 2 prerequisite for ADR-0003 distance gate).
+- [ ] Finalize gameplay distance metric for combat and gathering (Chebyshev vs Euclidean WU).

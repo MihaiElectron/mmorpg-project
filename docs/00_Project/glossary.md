@@ -72,19 +72,19 @@ Definitions marked `Not verified` or `Planned concept` must not be treated as im
 
 ## Coordinate terms
 
-All coordinates in this section are defined by ADR-0001. The server coordinate system is **not yet migrated** from pixel-equivalent values to tile units. These are target definitions for the planned system.
+All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22). The Phase 1 WU migration is complete for player entities (`world.service.ts`). Remaining entities (animals, resources, spawns) still use pixel-equivalent coordinates — see `docs/01_Architecture/wu-migration-audit.md`.
 
-- **World tile coordinate**: the official position unit of the project. One unit = one tile. Values are continuous: the integer part identifies the tile index; the fractional part encodes sub-tile precision (e.g., `5.5` = horizontal center of tile column 5). Stored as `worldTileX` and `worldTileY`. Storage type is an open question (ADR-0001). Planned concept.
-- **`worldTileX`**: the X component of the world tile coordinate. Integer part = tile column index. Fractional part = sub-tile horizontal offset. Defined by ADR-0001. Planned concept.
-- **`worldTileY`**: the Y component of the world tile coordinate. Integer part = tile row index. Fractional part = sub-tile vertical offset. Defined by ADR-0001. Planned concept.
-- **`mapId`**: identifier of the Map an entity belongs to. Required in every position-bearing entity record and socket payload. Defined by ADR-0001 and ADR-0002. Planned concept.
-- **Logical coordinate**: the server-side numeric position of an entity in the game world. Currently stored as `x`/`y` (pixel-equivalent values in `WorldService` memory and database). The migration target is `worldTileX`/`worldTileY` (ADR-0001). The distinction between "pixel-equivalent" and "tile unit" is a known technical debt.
-- **Chunk coordinate** (`chunkX`, `chunkY`): the position of a chunk within a map. Derived from world tile coordinates: `chunkX = floor(worldTileX / CHUNK_SIZE)`, `chunkY = floor(worldTileY / CHUNK_SIZE)`. Never persisted. Planned concept.
-- **Local tile coordinate** (`localTileX`, `localTileY`): the position of a tile within its chunk. Derived: `localTileX = floor(worldTileX) % CHUNK_SIZE`, `localTileY = floor(worldTileY) % CHUNK_SIZE`. Range 0–63. Never persisted. Planned concept.
-- **Screen coordinate** (`screenX`, `screenY`): the pixel position of an entity or tile in the Phaser world. Derived by the client using the isometric projection formula. Never persisted. Client-only. Planned concept.
-- **Isometric projection**: the mathematical transformation applied by the Phaser client to convert world tile coordinates to screen pixel coordinates. Formula: `screenX = origin.x + (worldTileX − worldTileY) × HALF_TILE_W`, `screenY = origin.y + (worldTileX + worldTileY) × HALF_TILE_H`. Where `HALF_TILE_W = 64` and `HALF_TILE_H = 32` for the current 128×64 tile format. Client-only. Defined by ADR-0001.
-- **Origin**: the Phaser world pixel position corresponding to the north vertex of tile (0, 0) for a specific map. Each map defines its own origin. Not a global constant. Not persisted. Defined by ADR-0001.
-- **`CHUNK_SIZE`**: the constant `64`, representing the number of tiles per side of a chunk (64 × 64 = 4096 tiles per chunk). Invariant of the project. Defined by ADR-0001.
+- **World Unit (WU)**: the official server-side position unit. `1 tile = 1024 WU = 2^10 WU`. Defined by ADR-0001, implemented in `world-coordinates.ts`. Stored as `worldX` (integer) and `worldY` (integer). Tile index = `worldX >> 10`; sub-tile offset = `worldX & 1023`.
+- **`worldX`**: the X component of the World Unit coordinate. Signed integer (int32). Defined by ADR-0001. Column type `INTEGER` in PostgreSQL. Implemented.
+- **`worldY`**: the Y component of the World Unit coordinate. Signed integer (int32). Defined by ADR-0001. Implemented.
+- **`mapId`**: identifier of the Map an entity belongs to. Required in every position-bearing entity record and socket payload (phase 2 target for payloads). Defined by ADR-0001 and ADR-0002. Column `INTEGER`, nullable. Implemented for player entities.
+- **Logical coordinate**: the server-side numeric position of an entity in the game world. For player characters: `worldX/worldY/mapId` (World Units, authoritative). For animals, resources, spawns: `x`/`y` (pixel-equivalent — migration debt). Source of truth in `ConnectedPlayer.worldX/Y/mapId`.
+- **Chunk coordinate** (`chunkX`, `chunkY`): the position of a chunk within a map. Derived: `chunkX = worldX >> 16`, `chunkY = worldY >> 16` (bit-shift by `CHUNK_SHIFT = 16`). Never persisted. Defined by ADR-0001.
+- **Local tile coordinate** (`localTileX`, `localTileY`): the position of a tile within its chunk. Derived: `localTileX = (worldX >> 10) & 63`, `localTileY = (worldY >> 10) & 63`. Range 0–63. Never persisted. Defined by ADR-0001.
+- **Screen coordinate** (`screenX`, `screenY`): the pixel position of an entity or tile in the Phaser world. Derived by the client using the isometric projection formula. Never persisted. Client-only. Defined by ADR-0001.
+- **Isometric projection**: the mathematical transformation applied by the Phaser client to convert World Unit coordinates to screen pixel coordinates. Formula: `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`. Inverse: `worldX = round(8*(screenX−1000) + 16*screenY)`, `worldY = round(−8*(screenX−1000) + 16*screenY)`. Implemented in `world-coordinates.ts`. Defined by ADR-0001.
+- **Origin**: the Phaser world pixel position corresponding to the north vertex of tile (0, 0). `WORLD_ORIGIN_X_PX = 1000`, `WORLD_ORIGIN_Y_PX = 0`. Per-map origins are a planned concept. Defined by ADR-0001.
+- **`CHUNK_SIZE`**: the constant `64`, representing the number of tiles per side of a chunk (64 × 64 = 4096 tiles per chunk). Invariant of the project. `CHUNK_SIZE_WU = 65 536`. Defined by ADR-0001.
 
 ---
 
@@ -116,7 +116,7 @@ All coordinates in this section are defined by ADR-0001. The server coordinate s
 
 ## Gameplay terms
 
-- **Gameplay entity** (game entity): any object that exists in the game world, occupies a logical position, and participates in gameplay. Has an identity, a position (`mapId`, `worldTileX`, `worldTileY`), a state, and a lifecycle. Distinct from a TypeORM entity. See `docs/08_Gameplay/entity-model.md`.
+- **Gameplay entity** (game entity): any object that exists in the game world, occupies a logical position, and participates in gameplay. Has an identity, a position (`mapId`, `worldX`, `worldY`), a state, and a lifecycle. Distinct from a TypeORM entity. See `docs/08_Gameplay/entity-model.md`.
 - **Player** (gameplay): a gameplay entity controlled by a human player. Has stats, inventory, and interacts with the world. Corresponds to the `character` database entity in the current implementation.
 - **Animal**: a gameplay entity controlled by server-side AI. Has states (`alive`, `fighting`, `escaping`, `dead`), patrol behavior, aggro radius, and a respawn cycle. Implemented.
 - **NPC**: Non-Player Character. A gameplay entity with a defined role (vendor, quest giver, guard). Not controlled by a player. Planned concept.
@@ -226,7 +226,7 @@ All coordinates in this section are defined by ADR-0001. The server coordinate s
 - **Prediction**: client-side anticipation of gameplay outcomes before server confirmation. Used for local player movement. Not formally implemented as a reconciliation-backed system. Planned concept.
 - **Reconciliation**: the process of correcting client state when the server rejects or overrides a client prediction. Not yet implemented. Planned concept.
 - **Room** (Socket.IO): a named group of connected sockets that can receive targeted broadcasts. Not yet implemented for world events. Planned concept.
-- **Payload**: the data object carried by a Socket.IO event or HTTP request body. Position payloads currently use `x`/`y`; the migration target is `mapId`, `worldTileX`, `worldTileY` (ADR-0002).
+- **Payload**: the data object carried by a Socket.IO event or HTTP request body. Position payloads currently use `x`/`y`; the migration target is `{ mapId, worldX, worldY }` (ADR-0002, Proposed).
 - **Namespace** (Socket.IO): a communication channel that allows multiplexing connections. All observed gateways use the default namespace. No custom namespace is currently in use.
 - **Gather tick**: a server-side timer that fires once per resource gathering cycle, re-validates gathering conditions, and grants loot if conditions are met. Implemented.
 
@@ -335,7 +335,7 @@ When a term changes meaning or is superseded, update its definition. Do not sile
 
 ## Known gaps
 
-- Coordinate terms (`worldTileX`, `worldTileY`, `mapId`, chunk coordinates) are defined but not yet implemented in code.
+- Coordinate terms (`worldX`, `worldY`, `mapId`, chunk coordinates) are fully defined (ADR-0001 Accepted) and implemented for player entities. Animals, resources, and spawns retain pixel-equivalent coordinates — see `docs/01_Architecture/wu-migration-audit.md`.
 - Production readiness is Not verified.
 - Complete test coverage is Not verified.
 - Complete migration workflow is Not verified.
@@ -405,7 +405,7 @@ Security-sensitive terms must preserve the distinction between client display lo
 
 ## Open questions
 
-- Should `worldTileX` and `worldTileY` appear as top-level entries or only under World Tile Coordinate?
+- ~~Should `worldTileX` and `worldTileY` appear as top-level entries?~~ — Résolu : le terme officiel est `worldX / worldY` (WU). `worldTileX/Y` était le nom proposé avant ADR-0001; ne pas réintroduire.
 - Should admin command names be documented here or only in the admin tool document?
 - When Biome is implemented, should it move from "Planned concept" to a dedicated gameplay document?
 - Should Hitbox and Hurtbox be formally implemented as distinct concepts or remain informally merged?
@@ -414,7 +414,7 @@ Security-sensitive terms must preserve the distinction between client display lo
 
 ## TODO
 
-- [ ] Mark coordinate terms as Implemented once ADR-0001 migration is complete.
+- [x] Mark coordinate terms as Implemented — ADR-0001 Accepted (2026-06-22), Phase 1 WU migration complète. *(fait dans session de clôture Phase 1)*
 - [ ] Mark Planned concept terms as Implemented as features are built.
 - [ ] Keep security-sensitive entries free of real credential material.
 - [ ] Update Ambiguous terms section when a new dual-use term is introduced.

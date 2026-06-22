@@ -66,7 +66,7 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 
 ## ADR
 
-- [x] ADR-0001 — World Coordinate System (`mapId`, `worldTileX`, `worldTileY`, `CHUNK_SIZE=64`) — **Draft / Proposed** (en attente de validation humaine)
+- [x] ADR-0001 — World Coordinate System (`mapId`, `worldX`, `worldY` WU, `CHUNK_SIZE=64`) — **Accepted** (2026-06-22)
 - [x] ADR-0002 — Entity Positioning (convention de nommage, classification statique/dynamique, contrat WebSocket) — **Draft / Proposed** (en attente de validation humaine)
 
 ---
@@ -140,7 +140,7 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 
 # 6. Network
 
-- [ ] World synchronization (migration payloads `worldTileX/worldTileY`)
+- [ ] World synchronization (migration payloads vers `{ mapId, worldX, worldY }`)
 - [ ] Chunk synchronization
 - [ ] Interest management
 - [ ] Prediction
@@ -178,7 +178,7 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 
 **Critères de validation** :
 
-- [ ] Coordonnées joueur exprimées en `worldTileX`, `worldTileY` (ADR-0001)
+- [ ] Coordonnées joueur exprimées en `worldX`, `worldY` WU côté protocole (ADR-0001 Accepted, implémentation serveur Phase 1 complète)
 - [ ] Projection isométrique appliquée : sprite aligné sur les tiles sans offset résiduel
 - [ ] Caméra qui suit le sprite correctement dans l'espace isométrique
 - [ ] `player_move` émis en tile units, reçu et validé par le serveur

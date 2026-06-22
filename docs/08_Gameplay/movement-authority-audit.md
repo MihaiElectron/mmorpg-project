@@ -530,27 +530,27 @@ out-of-bounds values, and reconnect there at next login.
 
 | Gap | Location | Required change |
 |---|---|---|
-| Coordinates stored as pixel-equivalent `positionX / positionY` | `character` entity | Rename to `worldTileX / worldTileY`, convert values |
-| Coordinates stored as pixel-equivalent `x / y` | `animal`, `resource`, `creature_spawn`, `respawn_point` entities | Rename to `worldTileX / worldTileY`, convert values |
-| `player_move` payload uses `{ x, y }` in pixel units | `WorldGateway`, `WorldScene.syncLocalPlayer` | Change to `{ mapId, worldTileX, worldTileY }` |
-| `player_moved` broadcast uses `{ x, y }` in pixel units | `WorldGateway`, all clients consuming `player_moved` | Change to `{ mapId, worldTileX, worldTileY }` |
-| `world_joined` uses `{ x, y }` | `WorldService.joinPlayer`, client handler | Change to `{ mapId, worldTileX, worldTileY }` |
-| `animal_update` uses `{ x, y }` | `AnimalsService.toDto`, client handler | Change to `{ mapId, worldTileX, worldTileY }` |
-| `character_teleport` uses `{ x, y }` | `WorldService.teleportCharacter`, client handler | Change to `{ mapId, worldTileX, worldTileY }` |
-| `character_respawn` uses `{ x, y }` | `WorldService.respawnCharacter`, client handler | Change to `{ mapId, worldTileX, worldTileY }` |
+| Coordinates stored as pixel-equivalent `positionX / positionY` | `character` entity | Rename to `worldX / worldY`, convert values |
+| Coordinates stored as pixel-equivalent `x / y` | `animal`, `resource`, `creature_spawn`, `respawn_point` entities | Rename to `worldX / worldY`, convert values |
+| `player_move` payload uses `{ x, y }` in pixel units | `WorldGateway`, `WorldScene.syncLocalPlayer` | Change to `{ mapId, worldX, worldY }` |
+| `player_moved` broadcast uses `{ x, y }` in pixel units | `WorldGateway`, all clients consuming `player_moved` | Change to `{ mapId, worldX, worldY }` |
+| `world_joined` uses `{ x, y }` | `WorldService.joinPlayer`, client handler | Change to `{ mapId, worldX, worldY }` |
+| `animal_update` uses `{ x, y }` | `AnimalsService.toDto`, client handler | Change to `{ mapId, worldX, worldY }` |
+| `character_teleport` uses `{ x, y }` | `WorldService.teleportCharacter`, client handler | Change to `{ mapId, worldX, worldY }` |
+| `character_respawn` uses `{ x, y }` | `WorldService.respawnCharacter`, client handler | Change to `{ mapId, worldX, worldY }` |
 | Client pathfinder uses 32 px tiles, not `localTileX / localTileY` | `PlayerController.calculatePath`, `pathfinding.js` | Rebuild grid to match `localTileX / localTileY` after migration |
-| `WorldScene` spawns player at `character.positionX / positionY` | `WorldScene.create` | Use `worldTileX / worldTileY` with projection formula |
+| `WorldScene` spawns player at `character.positionX / positionY` | `WorldScene.create` | Use `worldX / worldY` with projection formula |
 | Remote player sprites positioned at `player.x / player.y` (pixel) | `WorldScene.upsertRemotePlayer` | Apply projection formula to tile coordinates |
 | Animal sprites positioned at `animal.x / animal.y` (pixel) | `WorldScene.upsertAnimal` | Apply projection formula to tile coordinates |
-| Keyboard input in screen-space axes | `PlayerController.update` | Remap to `worldTileX / worldTileY` isometric axes |
+| Keyboard input in screen-space axes | `PlayerController.update` | Remap to `worldX / worldY` isometric axes |
 | `physics.world.setBounds(0, 0, 2000, 2000)` — arbitrary pixel bounds | `WorldScene.create` | Derive from map dimensions in tile units after migration |
 
 ### ADR-0002 compliance gaps
 
 | Gap | Location | Required change |
 |---|---|---|
-| `character` uses `positionX / positionY` instead of `worldTileX / worldTileY` | `character.entity.ts` | Column rename + add `mapId` |
-| `animal` uses `x / y` instead of `worldTileX / worldTileY` | `animal.entity.ts` | Column rename + add `mapId` |
+| `character` uses `positionX / positionY` instead of `worldX / worldY` | `character.entity.ts` | Column rename + add `mapId` |
+| `animal` uses `x / y` instead of `worldX / worldY` | `animal.entity.ts` | Column rename + add `mapId` |
 | `resource` uses `x / y` | `resource.entity.ts` | Column rename + add `mapId` |
 | `creature_spawn` uses `spawnX / spawnY` | `creature-spawn.entity.ts` | Column rename + add `mapId` |
 | `respawn_point` uses `x / y` | `respawn-point.entity.ts` | Column rename + add `mapId` |
@@ -561,8 +561,8 @@ out-of-bounds values, and reconnect there at next login.
 | Gap | Location | Required change |
 |---|---|---|
 | No server-side distance gate on `player_move` | `WorldService.updatePlayer` | Add: distance from last validated position ≤ `effectiveSpeed × dt × tolerance` |
-| No server-side walkability check on player positions | `WorldService.updatePlayer` | Add: lookup tile at `floor(worldTileX), floor(worldTileY)` before accepting |
-| No server-side map bounds check on player positions | `WorldService.updatePlayer` | Add: `0 ≤ worldTileX < mapWidthTiles`, same for Y |
+| No server-side walkability check on player positions | `WorldService.updatePlayer` | Add: lookup tile at `floor(worldX >> 10), floor(worldY >> 10)` before accepting |
+| No server-side map bounds check on player positions | `WorldService.updatePlayer` | Add: `0 ≤ worldX < mapWidthChunks × CHUNK_SIZE_WU`, same for Y |
 | No map bounds check on animal positions | `AnimalsService` (all movement methods) | Add: clamp to map bounds on every tick |
 | No `effectiveSpeed` pipeline | Server | Create: `baseSpeed × product(modifiers)`, used for all entity types |
 | Speed in pixel-equivalent units, not tile/s | All entities, seeds | Convert after ADR-0001 conversion factor is decided |
@@ -615,11 +615,11 @@ The following items must be resolved or explicitly acknowledged before ADR-0003
 2. **Add `mapId` to all entities and payloads** (ADR-0002). Required before
    any map-scoped validation can be implemented.
 
-3. **Rename entity position columns** to `worldTileX / worldTileY`
+3. **Rename entity position columns** to `worldX / worldY`
    (ADR-0002). Enables uniform server-side position handling.
 
 4. **Migrate WebSocket payloads** from `{ x, y }` to
-   `{ mapId, worldTileX, worldTileY }`. Client and server must be updated
+   `{ mapId, worldX, worldY }`. Client and server must be updated
    atomically.
 
 5. **Implement server-side distance gate** on `player_move`. Minimum viable

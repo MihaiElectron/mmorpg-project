@@ -200,9 +200,10 @@ order before accepting a position:
 
 2. **Map bounds check**: the reported position must satisfy:
    ```
-   0 ≤ worldX < mapWidthChunks × CHUNK_SIZE
-   0 ≤ worldY < mapHeightChunks × CHUNK_SIZE
+   0 ≤ worldX < mapWidthChunks × CHUNK_SIZE_WU   // CHUNK_SIZE_WU = 65 536 WU
+   0 ≤ worldY < mapHeightChunks × CHUNK_SIZE_WU
    ```
+   Where `CHUNK_SIZE_WU = CHUNK_SIZE × TILE_SIZE_WU = 64 × 1024 = 65 536`.
    A position outside these bounds is rejected. The character remains at its
    last validated position.
 

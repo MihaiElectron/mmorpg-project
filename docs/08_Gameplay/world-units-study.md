@@ -2,9 +2,18 @@
 
 ## Metadata
 
-- Status: Draft
+- Status: Superseded — ADR-0001 Accepted (2026-06-22)
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-22
+
+> **Décision prise (ADR-0001 — Accepted 2026-06-22)** : le système de coordonnées
+> officiel est le World Unit (WU), où `1 tile = 1024 WU`. Les colonnes DB et la
+> mémoire serveur utilisent `worldX / worldY` (int, WU). Ce document utilise
+> `worldTileX / worldTileY` avec la sémantique "1 unité = 1 tile" — c'est l'option
+> qui fut analysée mais *non* retenue. Les formules ici s'appliquent en espace tile ;
+> pour convertir en WU, multiplier par `TILE_SIZE_WU = 1024`. Voir
+> `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
+> `apps/api-gateway/src/common/world-coordinates.ts`.
 - Depends on:
   - docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md
   - docs/08_Gameplay/movement-authority-audit.md
