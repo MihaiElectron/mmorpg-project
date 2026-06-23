@@ -149,6 +149,15 @@ const storeLogic = (set, get) => ({
 
   incrementResourcesRefreshKey: () =>
     set({ resourcesRefreshKey: get().resourcesRefreshKey + 1 }),
+
+  // ── Overlay Studio ────────────────────────────────────────────────────────
+  resourceOverlayEnabled: false,
+
+  setResourceOverlayEnabled: (enabled: boolean) =>
+    set({ resourceOverlayEnabled: enabled }),
+
+  toggleResourceOverlayEnabled: () =>
+    set({ resourceOverlayEnabled: !get().resourceOverlayEnabled }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

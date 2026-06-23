@@ -97,6 +97,9 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = [];
     this.resourceSprites = new Map();
     this.resourceData = new Map();
+    this.resourceOverlayGraphics = null;
+    this.resourceOverlayLabels = new Map();
+    this.overlayStoreUnsub = null;
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
     this.gatheringEventsRegistered = false;
@@ -299,6 +302,15 @@ export default class WorldScene extends Phaser.Scene {
     // CAMERA
     this.cameras.main.setZoom(1);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+
+    // ── Studio SDK — overlay + sélection ──────────────────────────────────────
+    this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
+      const overlayChanged = state.resourceOverlayEnabled !== prev.resourceOverlayEnabled;
+      const selectionChanged = state.selectedWorldObject?.id !== prev.selectedWorldObject?.id;
+      if (overlayChanged || selectionChanged) {
+        this.redrawResourceOverlay();
+      }
+    });
 
     this.joinWorld();
   }
@@ -728,6 +740,7 @@ export default class WorldScene extends Phaser.Scene {
           actions: ["ramasser", "gathering"],
         });
       });
+    this.redrawResourceOverlay();
   }
 
   upsertResource(resource) {
@@ -755,6 +768,7 @@ export default class WorldScene extends Phaser.Scene {
       kind: "resource",
       actions: ["ramasser", "gathering"],
     });
+    this.redrawResourceOverlay();
   }
 
   renderAnimals(animals) {
@@ -811,6 +825,50 @@ export default class WorldScene extends Phaser.Scene {
     });
   }
 
+  // ── Studio SDK — Resource Overlay ─────────────────────────────────────────
+
+  redrawResourceOverlay() {
+    // Effacer l'overlay existant
+    if (this.resourceOverlayGraphics) {
+      this.resourceOverlayGraphics.clear();
+    }
+    for (const text of this.resourceOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.resourceOverlayLabels.clear();
+
+    if (!getAdminStore().getState().resourceOverlayEnabled) return;
+
+    if (!this.resourceOverlayGraphics) {
+      this.resourceOverlayGraphics = this.add.graphics();
+      this.resourceOverlayGraphics.setDepth(50);
+    }
+
+    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
+
+    for (const [id, resource] of this.resourceData.entries()) {
+      const { x, y } = resolveScreen(resource);
+      const isSelected = id === selectedId;
+
+      const color = isSelected ? 0xf1c40f : 0x2ecc71;
+      const alpha = isSelected ? 1.0 : 0.75;
+      const radius = isSelected ? 14 : 9;
+
+      this.resourceOverlayGraphics.lineStyle(isSelected ? 3 : 2, color, alpha);
+      this.resourceOverlayGraphics.strokeCircle(x, y - 18, radius);
+
+      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
+      const label = this.add.text(x, y - 34, `${resource.type}\n${shortId}`, {
+        fontSize: "9px",
+        color: isSelected ? "#f1c40f" : "#2ecc71",
+        align: "center",
+      });
+      label.setOrigin(0.5, 1);
+      label.setDepth(51);
+      this.resourceOverlayLabels.set(id, label);
+    }
+  }
+
   clearResources() {
     for (const sprite of this.resourceSprites.values()) {
       sprite.destroy();
@@ -821,6 +879,7 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.kind !== "resource",
     );
+    this.redrawResourceOverlay();
   }
 
   clearAnimals() {
@@ -849,6 +908,7 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     this.stopGatherIndicator(resourceId);
+    this.redrawResourceOverlay();
   }
 
   removeAnimal(animalId) {
@@ -887,6 +947,19 @@ export default class WorldScene extends Phaser.Scene {
       this.gatherIndicator.graphics.destroy();
       this.gatherIndicator = null;
     }
+
+    if (this.overlayStoreUnsub) {
+      this.overlayStoreUnsub();
+      this.overlayStoreUnsub = null;
+    }
+    if (this.resourceOverlayGraphics) {
+      this.resourceOverlayGraphics.destroy();
+      this.resourceOverlayGraphics = null;
+    }
+    for (const text of this.resourceOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.resourceOverlayLabels.clear();
 
     this.clearResources();
     destroyHpBar(this.playerHpBar);

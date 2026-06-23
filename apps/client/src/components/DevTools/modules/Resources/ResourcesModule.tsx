@@ -80,6 +80,8 @@ export default function ResourcesModule() {
   const refreshKey = useDevToolsStore((s) => s.resourcesRefreshKey);
   const incrementRefreshKey = useDevToolsStore((s) => s.incrementResourcesRefreshKey);
   const clearSelected = useDevToolsStore((s) => s.clearSelectedWorldObject);
+  const overlayEnabled = useDevToolsStore((s) => s.resourceOverlayEnabled);
+  const toggleOverlay = useDevToolsStore((s) => s.toggleResourceOverlayEnabled);
 
   const cmdCtx: StudioCommandContext = {
     clearSelectedWorldObject: clearSelected,
@@ -134,6 +136,18 @@ export default function ResourcesModule() {
         <div className="devtools-resources__header-row">
           <h3 className="devtools-resources__title">Resources (WOM)</h3>
           <div className="devtools-resources__actions">
+            <button
+              className={
+                "devtools-resources__action-btn" +
+                (overlayEnabled ? " devtools-resources__action-btn--active" : "")
+              }
+              onClick={toggleOverlay}
+              title={overlayEnabled ? "Désactiver l'overlay" : "Activer l'overlay"}
+              aria-label="Overlay"
+              aria-pressed={overlayEnabled}
+            >
+              ◎
+            </button>
             <button
               className="devtools-resources__action-btn"
               onClick={() => getCommand("resource.refresh")?.run(cmdCtx)}

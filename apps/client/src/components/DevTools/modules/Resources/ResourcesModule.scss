@@ -61,6 +61,11 @@
     }
   }
 
+  &__action-btn--active {
+    color: vars.$color-text-gold;
+    border-color: vars.$color-magic-amber;
+  }
+
   &__status {
     font-size: 0.75rem;
     color: vars.$color-text-muted;
