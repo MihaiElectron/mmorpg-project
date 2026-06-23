@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-23_
-_Session : 2026-06-23 (session 7 — Studio SDK : actions, Command Palette, overlays)_
+_Session : 2026-06-23 (session 8 — AdminPanelWOM, fixes overlays et respawn)_
 _Branche : main_
 _État : développement local_
 
@@ -18,40 +18,35 @@ personnages enregistrés, animaux actifs, templates, spawns).
 Migration WU Phase 2 terminée. Infrastructure DevTools complète : shell, panel,
 store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
 
-Studio SDK en construction : ActionRegistry, CapabilityRegistry, providers d'actions
-(Focus Camera, Copy Info, Force Respawn), OverlayControls global, Command Palette,
-sélection CreatureSpawn depuis la map Phaser. Projection WU → écran centralisée
-dans `wuProjection.ts`.
+**AdminPanelWOM** opérationnel : interface admin principale basée sur le pipeline
+WOM pour les ressources (instances + templates dérivés) et les animaux (instances).
+Accès côté client avec onglet toggle Legacy/WOM. Cycle respawn resource corrigé :
+`buildResourceBroadcast` assure que le payload contient `type`/`x`/`y` pour la
+réapparition côté client.
 
 ---
 
 ## Derniers changements importants
 
-- **OverlayControls global** : `OverlayControls.tsx` liste tous les overlays via
-  `getAllOverlayDefinitions()`, avec toggles ON/OFF centralisés. Les boutons overlay
-  locaux des modules (Resources, Animals, CreatureSpawns) ont été supprimés.
-- **Command Palette** : `CommandPalette.tsx` dans le panneau Studio — input filtrant
-  les actions par label/id, Enter exécute la première action visible, clic exécute
-  l'action choisie. `filterActions()` fonction pure exportée et testée.
-- **Sélection CreatureSpawn depuis Phaser** : `DevToolsOverlayManager` crée un
-  `Phaser.GameObjects.Zone` 28×28 par spawn quand l'overlay est ON. Clic → 
-  `setSelectedWorldObject(spawn)` via callback. Zones détruites quand overlay OFF.
-  Surbrillance automatique dans `CreatureSpawnsModule`.
-- **ActionRegistry — Focus Camera** : `PositionActionProvider` (capability `transform`) →
-  action `worldObject.focusCamera` : convertit WU en screen, appelle `camera.pan()`
-  via `DevToolsBridge`. Disabled si `position null`.
-- **ActionRegistry — Copy Info** : `WorldObjectActionProvider` (capability `transform`) →
-  action `worldObject.copyInfo` : copie un résumé `category:type#id\nmapId=...\n...`
-  dans le presse-papiers via `navigator.clipboard`.
-- **Projection WU centralisée** : `src/phaser/utils/wuProjection.ts` — `wuToScreen()`
-  unique source de vérité. `DevToolsOverlayManager` et `PositionActionProvider` utilisent
-  ce helper ; `_wu2px()` supprimée.
-- **Backend — Force Respawn** : `ResourcesService.forceRespawn()` + endpoint
-  `POST /admin/resources/:id/force-respawn`. Tokens de génération
-  (`pendingRespawnTokens`) pour invalider les timers legacy après un force respawn.
-- **Action Force Respawn** : `ResourceActionProvider` (capability `harvestable`) →
-  `SelectedActionsPanel` et `CommandPalette`. Bouton local retiré de
-  `ResourceTemplateControls`.
+- **AdminPanelWOM** : `AdminPanelWOM.tsx` — panel admin WOM-first complet.
+  `adminPanel.shared.tsx` extrait les composants partagés (GroupedSection,
+  EntitySection, useDraft, usePagination, InstanceAction). `DevToolsPanel.tsx`
+  avec onglet toggle Admin (WOM) / Admin (Legacy).
+- **Overlay Creature Spawns — bug corrigé** : `WorldScene.js` fetch URL corrigée
+  (`VITE_API_URL` + header `Authorization`). `DevToolsOverlayManager.js` fallback
+  `metadata.legacy.spawnX/spawnY` pour les spawns sans WU backfillés.
+- **Resource templates — `respawnDelayMs` éditable** : `admin:update_resource_template`
+  gateway accepte désormais `respawnDelayMs` (validation > 0). `AdminPanelWOM`
+  expose le champ dans `groupFields`. `lootPool` affiché en lecture seule.
+- **Resource instances WOM** : `wosToResourceInstances` expose `worldX/Y/mapId` et
+  `respawnAt`. `getInstanceInfoLine` affiche coordonnées WU + temps restant avant
+  respawn. Bouton "Reset template" via `instanceActions`.
+- **`respawnAt` dans Resource WorldObjects** : `resource-world-object.adapter.ts`
+  expose `metadata.respawnAt`. 2 tests adapter. Type frontend mis à jour.
+- **Cycle respawn resource corrigé** : `armRespawnTimer`, `forceRespawn` et
+  `resetInstanceFromTemplate` utilisent `buildResourceBroadcast` — payload complet
+  avec `type`, `x`, `y`, `worldX`, `worldY`, `mapId`. Sans ces champs, `upsertResource`
+  côté client refusait de recréer le sprite (garde `x !== undefined`).
 
 ---
 
@@ -60,22 +55,23 @@ dans `wuProjection.ts`.
 | Domaine | Ce qui fonctionne |
 |---|---|
 | Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
-| Respawn | Animal (20 s) et personnage (point le plus proche à 0 PV) |
+| Respawn | Animal (20 s), personnage (point le plus proche à 0 PV), resource (timer template) |
 | Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
 | UI | ActionPanel, barre de vie flottante, panneau personnage onglet Perso, HUD DevTools admin-only |
 | DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
-| DevTools — panneau | Panneau flottant draggable : module World + OverlayControls + modules WOM + WorldObjectInspector + SelectedActionsPanel + CommandPalette + ValidationPanel + AdminPanel legacy |
+| DevTools — panneau | Panneau flottant draggable : module World + OverlayControls + AdminPanel WOM (onglet toggle Legacy) |
 | DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, ouverture HUD, mode edit, position panneau, lastClickedPos, contexte coordonnées (world click px/WU/tile/chunk) |
 | DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
 | DevTools — World | `CoordinateInspector` lecture seule : activeTool, dernier clic monde Phaser en pixels, WU, tile, chunk |
-| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic (Resources, Animals via interactionTargets ; CreatureSpawns via Zone Phaser) |
+| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic |
 | DevTools — Command Palette | Input filtré par label/id, Enter = première action, liste cliquable, pending state |
-| Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn) |
+| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Animals (instances WOM, templates REST). Players/Overview REST. Console identique legacy. |
+| Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn + Reset Template) |
 | Studio SDK — projection | `wuToScreen()` centralisée dans `phaser/utils/wuProjection.ts` |
-| Backend — admin | `POST /admin/resources/:id/force-respawn` avec invalidation token de génération |
+| Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 27 `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` + 138 tests frontend (verts) |
+| Tests | 383 tests backend (15 suites) + 147 tests frontend — 1 suite pré-existante en échec (`auth.controller.spec.ts`, dépendance manquante non liée aux changements récents) |
 | Migration WU | Backend : `world.service.ts` + `animals.service.ts` entièrement migrés. Frontend : `resolveScreen()` WU-first pour joueurs, animaux et ressources. Protocole `player_move` additif. |
 
 ---
@@ -113,6 +109,12 @@ dans `wuProjection.ts`.
 - **Tokens de génération respawn** : `ResourcesService.pendingRespawnTokens` invalide
   les timers legacy après un `forceRespawn`. Tout nouveau timer doit capturer son
   token au moment de `armRespawnTimer` et le vérifier dans `doRespawn`.
+- **`buildResourceBroadcast`** : tout broadcast `resource_update` depuis le service
+  doit utiliser ce helper pour inclure `type`/`x`/`y`/`worldX`/`worldY`/`mapId`.
+  Sans ces champs, le client ne peut pas recréer le sprite après un état `dead`.
+- **`lootPool` non éditable via socket** : `admin:update_resource_template` n'accepte
+  que `defaultRemainingLoots` et `respawnDelayMs`. `lootPool` est affiché en lecture
+  seule dans AdminPanelWOM.
 - Les maps Tiled utilisent exclusivement le format TMJ (natif JSON). Les tilesets
   utilisent TSX. Aucun convertisseur TMX → JSON autorisé. Le tileset doit être inliné
   dans le TMJ (pas de référence TSX externe) pour que Phaser le charge correctement.
@@ -127,6 +129,10 @@ dans `wuProjection.ts`.
 - ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**.
 - ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**.
 - ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**.
+- ~~**[IMPORTANT] Cycle respawn resource invisible après dead**~~ — **SOLDÉ** (`buildResourceBroadcast`).
+- **[IMPORTANT] `auth.controller.spec.ts` en échec** : 1 test pré-existant échoue
+  (dépendance `AuthService` manquante dans le module de test). Non bloquant en dev,
+  à corriger avant CI/prod.
 - **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
 - **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
@@ -143,8 +149,8 @@ dans `wuProjection.ts`.
 - **[MINEUR] `wuToScreen` encore dupliquée dans `WorldScene.js`** : `resolveScreen()`
   local n'utilise pas encore `wuProjection.ts`. Migration possible quand `WorldScene`
   sera partiellement converti en TS ou quand le besoin se représente.
-- **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanel.tsx` dupliquent
-  la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
+- **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanelWOM.tsx`
+  dupliquent la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
 - **[MINEUR] `window.game` résiduel** : les attachements restent dans `WorldPage.jsx`
   et `WorldScene.js`, et `CoordinatesLayer.jsx` lit encore directement `window.game`.
   Migration progressive via `DevToolsBridge` prévue.
@@ -153,6 +159,8 @@ dans `wuProjection.ts`.
   hors du cercle visuel déclenche quand même la sélection — acceptable pour un outil admin.
 - **[MINEUR] Copy Info sans feedback visuel** : action `worldObject.copyInfo` silencieuse
   si clipboard indisponible (HTTP sans HTTPS). Pas de toast / confirmation prévue.
+- **[MINEUR] `lootPool` non éditable dans AdminPanelWOM** : affiché en lecture seule.
+  Édition nécessiterait un nouveau socket event ou endpoint REST avec validation JSON.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante.
@@ -164,15 +172,13 @@ dans `wuProjection.ts`.
 
 ## Prochaines priorités possibles
 
-### DevTools — Studio SDK (en cours)
-- [x] OverlayControls global (toggles centralisés)
-- [x] Supprimer les boutons overlay locaux des modules WOM
-- [x] Command Palette (input filtré, Enter, clic)
-- [x] Sélection CreatureSpawn depuis overlay Phaser
-- [x] Action Focus Camera (`worldObject.focusCamera`)
-- [x] Action Copy Info (`worldObject.copyInfo`)
-- [x] Action Force Respawn (`resource.forceRespawn`) via ActionRegistry
-- [x] Projection WU centralisée (`wuProjection.ts`)
+### DevTools — Admin WOM (en cours)
+- [x] AdminPanelWOM — pipeline WOM pour ressources et animaux
+- [x] Overlay Creature Spawns corrigé (URL + auth + fallback legacy)
+- [x] `respawnDelayMs` éditable dans les templates resource
+- [x] `respawnAt` exposé dans les Resource WorldObjects
+- [x] Coordonnées WU et respawnAt affichés sur les instances resource
+- [x] Bouton "Reset template" sur les instances resource
 - [ ] Étape 7 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
 - [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
 - [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
@@ -200,9 +206,9 @@ dans `wuProjection.ts`.
 
 ## Documents potentiellement impactés
 
-- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection
-- [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world
-- [ ] `docs/07_Admin/admin-tool.md` — DevTools hors panneau personnage, AdminPanel legacy, architecture modules, Command Palette, ActionRegistry
+- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection, AdminPanelWOM
+- [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world ; `buildResourceBroadcast` pour resource_update
+- [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, toggle Legacy/WOM, InstanceAction, adminPanel.shared
 - [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
 - [ ] `docs/05_World/chunks.md` — après validation ADR-0001 (déjà fait, vérifier)
 
@@ -224,6 +230,32 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-23 (session 8 — AdminPanelWOM, fixes overlays et respawn)
+
+- **AdminPanelWOM** : `adminPanel.shared.tsx` extrait GroupedSection, EntitySection,
+  useDraft, usePagination, InstanceAction des composants partagés. `AdminPanel.tsx`
+  refactorisé pour importer depuis shared. `AdminPanelWOM.tsx` pipeline WOM pour
+  ressources (instances + templates dérivés) et animaux (instances WOM, templates REST).
+  `DevToolsPanel.tsx` onglet toggle Legacy/WOM.
+- **Overlay Creature Spawns corrigé** : `WorldScene.js` — URL relative `/admin/...`
+  corrigée en `${VITE_API_URL}/admin/...` avec header `Authorization`. Fallback
+  `spawnX/spawnY` legacy dans `resolveWomScreen` de `DevToolsOverlayManager.js`.
+- **Resource templates enrichis** : `admin:update_resource_template` accepte
+  `respawnDelayMs`. `AdminPanelWOM` ajoute `respawnDelayMs` dans groupFields,
+  `lootPoolItems` en lecture seule. `_admin-panel.scss` règle `.admin-panel__info-line`.
+- **Resource instances enrichies** : `wosToResourceInstances` expose `worldX/Y/mapId`
+  et `respawnAt`. `getInstanceInfoLine` + `formatRespawnAt()`. Bouton "Reset template"
+  via `instanceActions`. `GroupedSectionConfig` étendu avec `getGroupInfoLine`,
+  `getInstanceInfoLine`, `instanceActions`, `InstanceActionButton`.
+- **`respawnAt` dans Resource WorldObjects** : `ResourceMetadata.respawnAt: Date | null`.
+  2 tests adapter. Type frontend `WorldObject.metadata.respawnAt?: string | null`.
+- **Cycle respawn resource corrigé** : `buildResourceBroadcast()` dans
+  `ResourcesService` — payload complet (`type`, `x`, `y`, `worldX`, `worldY`, `mapId`)
+  utilisé dans `armRespawnTimer`, `forceRespawn`, `resetInstanceFromTemplate`.
+  Cause : le client supprime le sprite à `dead` ; sans position/type au respawn,
+  la garde `x !== undefined` empêchait `upsertResource` de recréer le sprite.
+  Tests : 51 `resources.service.spec.ts` (2 nouveaux sur payload).
 
 ### 2026-06-23 (session 7 — Studio SDK : actions, Command Palette, overlays)
 
