@@ -8,6 +8,7 @@ import { setSpriteDepth } from "../utils/depth";
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
 import { getAdminStore } from "../../store/admin.store";
+import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
 
 // ── Studio SDK — WorldObject adapters (client-side mirror des backend adapters) ──
 const RESOURCE_WO_CAPABILITIES = Object.freeze([
@@ -111,15 +112,6 @@ function resolveScreen(entity) {
   return { x: Math.round(entity.x), y: Math.round(entity.y) };
 }
 
-// Convertit un WorldObject WOM (position: {worldX, worldY}) en pixels Phaser.
-// Retourne null si position absente (entité non localisée).
-function resolveWomScreen(wo) {
-  if (!wo.position) return null;
-  return {
-    x: Math.round(1000 + (wo.position.worldX - wo.position.worldY) / 16),
-    y: Math.round((wo.position.worldX + wo.position.worldY) / 32),
-  };
-}
 
 export default class WorldScene extends Phaser.Scene {
   constructor() {
@@ -136,11 +128,8 @@ export default class WorldScene extends Phaser.Scene {
     this.resourceData = new Map();
     this.resourceOverlayGraphics = null;
     this.resourceOverlayLabels = new Map();
-    this.animalOverlayGraphics = null;
-    this.animalOverlayLabels = new Map();
     this.creatureSpawnData = new Map();
-    this.creatureSpawnOverlayGraphics = null;
-    this.creatureSpawnOverlayLabels = new Map();
+    this.overlayManager = null;
     this.overlayStoreUnsub = null;
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
@@ -350,6 +339,8 @@ export default class WorldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
     // ── Studio SDK — overlay + sélection ──────────────────────────────────────
+    this.overlayManager = new DevToolsOverlayManager(this);
+
     this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
       const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
@@ -885,160 +876,33 @@ export default class WorldScene extends Phaser.Scene {
   // ── Studio SDK — Animal Overlay ──────────────────────────────────────────
 
   redrawAnimalOverlay() {
-    if (this.animalOverlayGraphics) {
-      this.animalOverlayGraphics.clear();
-    }
-    for (const text of this.animalOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.animalOverlayLabels.clear();
-
-    if (!getAdminStore().getState().animalOverlayEnabled) return;
-
-    if (!this.animalOverlayGraphics) {
-      this.animalOverlayGraphics = this.add.graphics();
-      this.animalOverlayGraphics.setDepth(50);
-    }
-
-    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
-
-    for (const [id, entry] of this.animalSprites.entries()) {
-      const animal = entry.animal;
-      const { x, y } = resolveScreen(animal);
-      const isSelected = id === selectedId;
-
-      const color = isSelected ? 0xf1c40f : 0xe74c3c;
-      const alpha = isSelected ? 1.0 : 0.75;
-      const radius = isSelected ? 14 : 9;
-
-      this.animalOverlayGraphics.lineStyle(isSelected ? 3 : 2, color, alpha);
-      this.animalOverlayGraphics.strokeCircle(x, y - 18, radius);
-
-      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
-      const label = this.add.text(x, y - 34, `${animal.type}\n${shortId}`, {
-        fontSize: "9px",
-        color: isSelected ? "#f1c40f" : "#e74c3c",
-        align: "center",
-      });
-      label.setOrigin(0.5, 1);
-      label.setDepth(51);
-      this.animalOverlayLabels.set(id, label);
-    }
+    const state = getAdminStore().getState();
+    this.overlayManager.redrawAnimals(
+      this.animalSprites, state.animalOverlayEnabled, state.selectedWorldObject?.id ?? null,
+    );
   }
 
   // ── Studio SDK — Resource Overlay ─────────────────────────────────────────
 
   redrawResourceOverlay() {
-    // Effacer l'overlay existant
-    if (this.resourceOverlayGraphics) {
-      this.resourceOverlayGraphics.clear();
-    }
-    for (const text of this.resourceOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.resourceOverlayLabels.clear();
-
-    if (!getAdminStore().getState().resourceOverlayEnabled) return;
-
-    if (!this.resourceOverlayGraphics) {
-      this.resourceOverlayGraphics = this.add.graphics();
-      this.resourceOverlayGraphics.setDepth(50);
-    }
-
-    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
-
-    for (const [id, resource] of this.resourceData.entries()) {
-      const { x, y } = resolveScreen(resource);
-      const isSelected = id === selectedId;
-
-      const color = isSelected ? 0xf1c40f : 0x2ecc71;
-      const alpha = isSelected ? 1.0 : 0.75;
-      const radius = isSelected ? 14 : 9;
-
-      this.resourceOverlayGraphics.lineStyle(isSelected ? 3 : 2, color, alpha);
-      this.resourceOverlayGraphics.strokeCircle(x, y - 18, radius);
-
-      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
-      const label = this.add.text(x, y - 34, `${resource.type}\n${shortId}`, {
-        fontSize: "9px",
-        color: isSelected ? "#f1c40f" : "#2ecc71",
-        align: "center",
-      });
-      label.setOrigin(0.5, 1);
-      label.setDepth(51);
-      this.resourceOverlayLabels.set(id, label);
-    }
+    const state = getAdminStore().getState();
+    this.overlayManager.redrawResources(
+      this.resourceData, state.resourceOverlayEnabled, state.selectedWorldObject?.id ?? null,
+    );
   }
 
   // ── Studio SDK — CreatureSpawn Overlay ──────────────────────────────────────
 
-  _clearCreatureSpawnOverlay() {
-    if (this.creatureSpawnOverlayGraphics) {
-      this.creatureSpawnOverlayGraphics.clear();
-    }
-    for (const text of this.creatureSpawnOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.creatureSpawnOverlayLabels.clear();
-  }
-
-  _drawCreatureSpawnOverlay() {
-    if (!this.creatureSpawnOverlayGraphics) {
-      this.creatureSpawnOverlayGraphics = this.add.graphics();
-      this.creatureSpawnOverlayGraphics.setDepth(50);
-    }
-
-    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
-
-    for (const [id, spawn] of this.creatureSpawnData.entries()) {
-      const pos = resolveWomScreen(spawn);
-      if (!pos) continue;
-
-      const { x, y } = pos;
-      const isSelected  = id === selectedId;
-      const dotColor    = isSelected ? 0xf1c40f : 0x3498db;
-      const alpha       = isSelected ? 1.0 : 0.8;
-      const dotRadius   = isSelected ? 12 : 7;
-
-      // Centre du spawn
-      this.creatureSpawnOverlayGraphics.lineStyle(isSelected ? 3 : 2, dotColor, alpha);
-      this.creatureSpawnOverlayGraphics.strokeCircle(x, y, dotRadius);
-
-      // Rayon de patrouille legacy en pixels — dette : patrolRadius est en px legacy,
-      // pas en WU. Affiché tel quel jusqu'à migration WU complète.
-      const patrolRadius = typeof spawn.metadata?.patrolRadius === "number"
-        ? spawn.metadata.patrolRadius
-        : null;
-      if (patrolRadius != null && patrolRadius > 0) {
-        this.creatureSpawnOverlayGraphics.lineStyle(1, dotColor, isSelected ? 0.5 : 0.3);
-        this.creatureSpawnOverlayGraphics.strokeCircle(x, y, patrolRadius);
-      }
-
-      // Label : type + id court
-      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
-      const label = this.add.text(x, y - dotRadius - 5, `${spawn.type}\n${shortId}`, {
-        fontSize: "9px",
-        color: isSelected ? "#f1c40f" : "#3498db",
-        align: "center",
-      });
-      label.setOrigin(0.5, 1);
-      label.setDepth(51);
-      this.creatureSpawnOverlayLabels.set(id, label);
-    }
-  }
-
   redrawCreatureSpawnOverlay() {
-    this._clearCreatureSpawnOverlay();
+    const state = getAdminStore().getState();
+    const enabled    = state.creatureSpawnOverlayEnabled;
+    const selectedId = state.selectedWorldObject?.id ?? null;
 
-    if (!getAdminStore().getState().creatureSpawnOverlayEnabled) return;
+    this.overlayManager.redrawCreatureSpawns(this.creatureSpawnData, enabled, selectedId);
 
-    // Données déjà chargées : dessiner directement.
-    if (this.creatureSpawnData.size > 0) {
-      this._drawCreatureSpawnOverlay();
-      return;
-    }
+    if (!enabled || this.creatureSpawnData.size > 0) return;
 
-    // Premier affichage : fetch depuis le backend, puis redraw.
+    // Premier toggle ON : charger les données depuis le backend, puis redraw.
     fetch("/admin/creature-spawns/world-objects")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1048,9 +912,9 @@ export default class WorldScene extends Phaser.Scene {
         for (const item of items) {
           this.creatureSpawnData.set(item.id, item);
         }
-        // Vérifier que l'overlay est toujours actif avant de dessiner.
         if (getAdminStore().getState().creatureSpawnOverlayEnabled) {
-          this._drawCreatureSpawnOverlay();
+          const s = getAdminStore().getState();
+          this.overlayManager.redrawCreatureSpawns(this.creatureSpawnData, true, s.selectedWorldObject?.id ?? null);
         }
       })
       .catch((err) => {
@@ -1143,32 +1007,10 @@ export default class WorldScene extends Phaser.Scene {
       this.overlayStoreUnsub();
       this.overlayStoreUnsub = null;
     }
-    if (this.resourceOverlayGraphics) {
-      this.resourceOverlayGraphics.destroy();
-      this.resourceOverlayGraphics = null;
+    if (this.overlayManager) {
+      this.overlayManager.destroy();
+      this.overlayManager = null;
     }
-    for (const text of this.resourceOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.resourceOverlayLabels.clear();
-
-    if (this.animalOverlayGraphics) {
-      this.animalOverlayGraphics.destroy();
-      this.animalOverlayGraphics = null;
-    }
-    for (const text of this.animalOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.animalOverlayLabels.clear();
-
-    if (this.creatureSpawnOverlayGraphics) {
-      this.creatureSpawnOverlayGraphics.destroy();
-      this.creatureSpawnOverlayGraphics = null;
-    }
-    for (const text of this.creatureSpawnOverlayLabels.values()) {
-      text.destroy();
-    }
-    this.creatureSpawnOverlayLabels.clear();
     this.creatureSpawnData.clear();
 
     this.clearResources();
