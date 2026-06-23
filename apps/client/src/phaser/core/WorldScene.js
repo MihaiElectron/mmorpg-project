@@ -9,6 +9,33 @@ import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
 import { getAdminStore } from "../../store/admin.store";
 
+// ── Studio SDK — WorldObject adapter (client-side mirror du backend adapter) ──
+const RESOURCE_WO_CAPABILITIES = Object.freeze([
+  "transform", "harvestable", "loot", "persistence", "validation",
+]);
+
+function resourceToWorldObject(resource) {
+  const hasWU =
+    resource.worldX != null && resource.worldY != null && resource.mapId != null;
+  return {
+    kind: "entity",
+    category: "resource",
+    id: resource.id,
+    type: resource.type,
+    mapId: resource.mapId ?? null,
+    position: hasWU ? { worldX: resource.worldX, worldY: resource.worldY } : null,
+    state: resource.state ?? "alive",
+    remainingLoots: resource.remainingLoots ?? 0,
+    capabilities: RESOURCE_WO_CAPABILITIES,
+    metadata: {
+      legacy:
+        resource.x != null && resource.y != null
+          ? { x: resource.x, y: resource.y }
+          : null,
+    },
+  };
+}
+
 // ── HP bar constants (mirrors SCSS variables) ──────────────────────────────
 const HP_BAR_WIDTH = 40;
 const HP_BAR_HEIGHT = 6;
@@ -69,6 +96,7 @@ export default class WorldScene extends Phaser.Scene {
     this.socket = null;
     this.interactionTargets = [];
     this.resourceSprites = new Map();
+    this.resourceData = new Map();
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
     this.gatheringEventsRegistered = false;
@@ -231,6 +259,12 @@ export default class WorldScene extends Phaser.Scene {
           first.actions,
           overlapping.length > 1 ? overlapping : [],
         );
+
+        if (first.kind === "resource") {
+          const rd = this.resourceData.get(first.id);
+          if (rd) getAdminStore().getState().setSelectedWorldObject(resourceToWorldObject(rd));
+        }
+
         return;
       }
 
@@ -685,6 +719,7 @@ export default class WorldScene extends Phaser.Scene {
         );
 
         this.resourceSprites.set(resource.id, sprite);
+        this.resourceData.set(resource.id, resource);
         this.interactionTargets.push({
           sprite,
           id: resource.id,
@@ -712,6 +747,7 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     this.resourceSprites.set(resource.id, sprite);
+    this.resourceData.set(resource.id, resource);
     this.interactionTargets.push({
       sprite,
       id: resource.id,
@@ -781,6 +817,7 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.resourceSprites.clear();
+    this.resourceData.clear();
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.kind !== "resource",
     );
@@ -806,6 +843,7 @@ export default class WorldScene extends Phaser.Scene {
       this.resourceSprites.delete(resourceId);
     }
 
+    this.resourceData.delete(resourceId);
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.id !== resourceId,
     );
