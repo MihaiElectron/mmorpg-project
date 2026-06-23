@@ -1,5 +1,6 @@
 import type { WorldObject } from "../../../components/DevTools/types/worldObject.types";
 import type { Diagnostic } from "../../../components/DevTools/validation/validateWorldObject";
+import type { StudioCommand, StudioCommandContext } from "../../../components/DevTools/commands/studioCommands";
 
 /**
  * Interface de base de tous les Capability Providers.
@@ -20,4 +21,22 @@ export interface ValidationProvider extends CapabilityProvider {
 
 export function isValidationProvider(p: CapabilityProvider): p is ValidationProvider {
   return (p as ValidationProvider).kind === "validation";
+}
+
+/**
+ * Provider capable de retourner des commandes Studio pour un WorldObject.
+ *
+ * Limitation actuelle : getCommands() retourne des commandes module-level
+ * (identiques pour tout WorldObject de la même capability). Le contexte d'exécution
+ * est reçu en paramètre pour anticiper les futures commandes object-level qui en
+ * auront besoin. Pour des commandes object-level, le WorldObject devra être passé
+ * à getCommands() dans une version future.
+ */
+export interface CommandProvider extends CapabilityProvider {
+  readonly kind: "command";
+  getCommands(context: StudioCommandContext): StudioCommand[];
+}
+
+export function isCommandProvider(p: CapabilityProvider): p is CommandProvider {
+  return (p as CommandProvider).kind === "command";
 }
