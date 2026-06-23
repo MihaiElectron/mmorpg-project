@@ -6,9 +6,19 @@ import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
-const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs'>[] = [
-  { type: 'dead_tree', defaultRemainingLoots: 9999, respawnDelayMs: 60_000 },
-  { type: 'ore',       defaultRemainingLoots: 9999, respawnDelayMs: 45_000 },
+const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool'>[] = [
+  {
+    type: 'dead_tree',
+    defaultRemainingLoots: 9999,
+    respawnDelayMs: 60_000,
+    lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 1 }],
+  },
+  {
+    type: 'ore',
+    defaultRemainingLoots: 9999,
+    respawnDelayMs: 45_000,
+    lootPool: [{ itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 1 }],
+  },
 ];
 
 // Délai de respawn par défaut si aucun champ template n'existe.
@@ -38,6 +48,10 @@ export class ResourcesService implements OnModuleInit {
   async onModuleInit() {
     await this.templateRepo.upsert(RESOURCE_TEMPLATES, ['type']);
     await this.reloadPendingRespawns();
+  }
+
+  getTemplate(type: string): Promise<ResourceTemplate | null> {
+    return this.templateRepo.findOne({ where: { type } });
   }
 
   async getDefaultRemainingLoots(type: string): Promise<number> {

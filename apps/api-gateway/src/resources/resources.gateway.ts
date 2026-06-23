@@ -196,7 +196,8 @@ export class ResourcesGateway
 
     const characterId = player.characterId;
 
-    const loot = this.loot.generateLoot(resource.type);
+    const template = await this.resources.getTemplate(resource.type);
+    const loot = this.loot.generateLoot(resource.type, template?.lootPool ?? null);
     if (loot.quantity <= 0) {
       this.cancelGathering(client, targetId, 'error');
       return;
