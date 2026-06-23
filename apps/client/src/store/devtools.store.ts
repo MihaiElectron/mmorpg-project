@@ -174,6 +174,13 @@ const storeLogic = (set, get) => ({
 
   toggleAnimalOverlayEnabled: () =>
     set({ animalOverlayEnabled: !get().animalOverlayEnabled }),
+
+  // ── Commandes Studio — CreatureSpawns ─────────────────────────────────────
+  // Incrémenter force CreatureSpawnsModule à relancer son fetch initial.
+  creatureSpawnsRefreshKey: 0,
+
+  incrementCreatureSpawnsRefreshKey: () =>
+    set({ creatureSpawnsRefreshKey: get().creatureSpawnsRefreshKey + 1 }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

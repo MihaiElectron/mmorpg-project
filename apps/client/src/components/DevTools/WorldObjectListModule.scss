@@ -165,6 +165,11 @@
     letter-spacing: 0.5px;
   }
 
+  &__badge--active {
+    background: rgba(52, 152, 219, 0.25);
+    color: #3498db;
+  }
+
   &__badge--alive {
     background: rgba(39, 174, 96, 0.25);
     color: #2ecc71;

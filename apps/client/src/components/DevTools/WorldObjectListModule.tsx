@@ -78,14 +78,18 @@ function WorldObjectRow({ wo, isSelected, onSelect }: WorldObjectRowProps) {
 export interface WorldObjectListModuleProps {
   title: string;
   fetchUrl: string;
-  socketEvent: string;
-  patchFn: (existing: WorldObject, data: Record<string, any>) => WorldObject;
+  /** Omis pour les listes statiques (pas de mise à jour runtime par socket). */
+  socketEvent?: string;
+  /** Requis uniquement si socketEvent est fourni. */
+  patchFn?: (existing: WorldObject, data: Record<string, any>) => WorldObject;
   refreshKey: number;
-  overlayEnabled: boolean;
+  /** Omis pour masquer le bouton overlay. */
+  overlayEnabled?: boolean;
   selectedId: string | null;
   onSelect: (wo: WorldObject) => void;
   onRefresh: () => void;
-  onToggleOverlay: () => void;
+  /** Omis pour masquer le bouton overlay. */
+  onToggleOverlay?: () => void;
   onClearSelection: () => void;
 }
 
@@ -117,8 +121,9 @@ export function WorldObjectListModule({
       .catch(() => setStatus("error"));
   }, [refreshKey, fetchUrl]);
 
-  // ── Synchronisation runtime via socket ────────────────────────────────────
+  // ── Synchronisation runtime via socket (ignorée si socketEvent absent) ───────
   useEffect(() => {
+    if (!socketEvent || !patchFn) return;
     const socket = getDevToolsSocket();
     if (!socket?.on) return;
 
@@ -127,7 +132,7 @@ export function WorldObjectListModule({
         const idx = prev.findIndex((wo) => wo.id === data.id);
         if (idx < 0) return prev;
 
-        const updated = patchFn(prev[idx], data);
+        const updated = patchFn!(prev[idx], data);
         const next = [...prev];
         next[idx] = updated;
 
@@ -155,18 +160,20 @@ export function WorldObjectListModule({
         <div className="devtools-wo-list__header-row">
           <h3 className="devtools-wo-list__title">{title}</h3>
           <div className="devtools-wo-list__actions">
-            <button
-              className={
-                "devtools-wo-list__action-btn" +
-                (overlayEnabled ? " devtools-wo-list__action-btn--active" : "")
-              }
-              onClick={onToggleOverlay}
-              title={overlayEnabled ? "Désactiver l'overlay" : "Activer l'overlay"}
-              aria-label="Overlay"
-              aria-pressed={overlayEnabled}
-            >
-              ◎
-            </button>
+            {onToggleOverlay && (
+              <button
+                className={
+                  "devtools-wo-list__action-btn" +
+                  (overlayEnabled ? " devtools-wo-list__action-btn--active" : "")
+                }
+                onClick={onToggleOverlay}
+                title={overlayEnabled ? "Désactiver l'overlay" : "Activer l'overlay"}
+                aria-label="Overlay"
+                aria-pressed={overlayEnabled ?? false}
+              >
+                ◎
+              </button>
+            )}
             <button
               className="devtools-wo-list__action-btn"
               onClick={onRefresh}

@@ -92,12 +92,45 @@ function validateAnimal(obj: WorldObject, out: Diagnostic[]): void {
   }
 }
 
+// ── Règles spécifiques à la catégorie creature_spawn ─────────────────────────
+
+function validateCreatureSpawn(obj: WorldObject, out: Diagnostic[]): void {
+  const templateKey   = typeof obj.metadata?.templateKey   === "string" ? obj.metadata.templateKey   : null;
+  const respawnDelay  = typeof obj.metadata?.respawnDelayMs === "number" ? obj.metadata.respawnDelayMs : null;
+  const patrolRadius  = typeof obj.metadata?.patrolRadius   === "number" ? obj.metadata.patrolRadius   : null;
+
+  if (!templateKey) {
+    out.push({
+      severity: "warning",
+      code: "SPAWN_MISSING_TEMPLATE_KEY",
+      message: "templateKey absent — template non chargé ou supprimé",
+    });
+  }
+
+  if (respawnDelay != null && respawnDelay <= 0) {
+    out.push({
+      severity: "error",
+      code: "SPAWN_INVALID_RESPAWN_DELAY",
+      message: `respawnDelayMs invalide (${respawnDelay}) — doit être > 0`,
+    });
+  }
+
+  if (patrolRadius != null && patrolRadius < 0) {
+    out.push({
+      severity: "error",
+      code: "SPAWN_NEGATIVE_PATROL_RADIUS",
+      message: `patrolRadius négatif (${patrolRadius})`,
+    });
+  }
+}
+
 // ── Registre de règles par catégorie ─────────────────────────────────────────
 // Ajouter une entrée ici pour brancher un validateur sur une nouvelle catégorie.
 
 const CATEGORY_VALIDATORS: Record<string, (obj: WorldObject, out: Diagnostic[]) => void> = {
   resource: validateResource,
   animal: validateAnimal,
+  creature_spawn: validateCreatureSpawn,
 };
 
 // ── Point d'entrée ────────────────────────────────────────────────────────────

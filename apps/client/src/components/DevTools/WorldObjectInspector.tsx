@@ -10,6 +10,16 @@ function formatPos(position: { worldX: number; worldY: number } | null): string 
   return `${position.worldX} / ${position.worldY}`;
 }
 
+function metaStr(meta: Record<string, unknown>, key: string): string | null {
+  const v = meta[key];
+  return typeof v === "string" ? v : null;
+}
+
+function metaNum(meta: Record<string, unknown>, key: string): number | null {
+  const v = meta[key];
+  return typeof v === "number" ? v : null;
+}
+
 export default function WorldObjectInspector() {
   const obj = useDevToolsStore((s) => s.selectedWorldObject);
   const clear = useDevToolsStore((s) => s.clearSelectedWorldObject);
@@ -67,6 +77,34 @@ export default function WorldObjectInspector() {
                 {obj.health}
                 {obj.maxHealth != null ? ` / ${obj.maxHealth}` : ""}
               </dd>
+            </>
+          )}
+
+          {metaStr(obj.metadata, "templateKey") != null && (
+            <>
+              <dt className="woi__label">templateKey</dt>
+              <dd className="woi__value woi__value--muted">{metaStr(obj.metadata, "templateKey")}</dd>
+            </>
+          )}
+
+          {metaStr(obj.metadata, "templateName") != null && (
+            <>
+              <dt className="woi__label">templateName</dt>
+              <dd className="woi__value">{metaStr(obj.metadata, "templateName")}</dd>
+            </>
+          )}
+
+          {metaNum(obj.metadata, "patrolRadius") != null && (
+            <>
+              <dt className="woi__label">patrolRadius</dt>
+              <dd className="woi__value">{metaNum(obj.metadata, "patrolRadius")} px</dd>
+            </>
+          )}
+
+          {metaNum(obj.metadata, "respawnDelayMs") != null && (
+            <>
+              <dt className="woi__label">respawnDelay</dt>
+              <dd className="woi__value">{metaNum(obj.metadata, "respawnDelayMs")} ms</dd>
             </>
           )}
 
