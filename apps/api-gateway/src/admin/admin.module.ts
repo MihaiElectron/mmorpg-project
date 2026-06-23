@@ -7,6 +7,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { AnimalsModule } from '../animals/animals.module';
+import { ResourcesModule } from '../resources/resources.module';
 import { WorldModule } from '../world/world.module';
 import { CommonModule } from '../common/common.module';
 import { AdminService } from './admin.service';
@@ -17,6 +18,7 @@ import { AdminGateway } from './admin.gateway';
   imports: [
     TypeOrmModule.forFeature([CreatureTemplate, CreatureSpawn, Animal, Character, Resource, ResourceTemplate]),
     AnimalsModule,
+    ResourcesModule,
     WorldModule,
     CommonModule,
   ],

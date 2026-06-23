@@ -1,6 +1,7 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AnimalsService } from '../animals/animals.service';
+import { ResourcesService } from '../resources/resources.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -13,6 +14,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly animalsService: AnimalsService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   @Get('overview')
@@ -80,6 +82,13 @@ export class AdminController {
   @Patch('resources/:id')
   async updateResource(@Param('id') id: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateResource(id, fields);
+    if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
+    return updated;
+  }
+
+  @Post('resources/:id/force-respawn')
+  async forceRespawnResource(@Param('id') id: string) {
+    const updated = await this.resourcesService.forceRespawn(id);
     if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
     return updated;
   }

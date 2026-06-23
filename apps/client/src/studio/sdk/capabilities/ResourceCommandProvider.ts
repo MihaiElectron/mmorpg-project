@@ -3,7 +3,11 @@ import type { CommandProvider } from "./CapabilityProvider";
 
 // IDs des commandes module-level exposées pour les Resources.
 // Elles sont identiques quelle que soit l'instance Resource sélectionnée.
-const RESOURCE_COMMAND_IDS = new Set(["resource.refresh", "resource.clearSelection"]);
+const RESOURCE_COMMAND_IDS = new Set([
+  "resource.refresh",
+  "resource.clearSelection",
+  "resource.forceRespawn",
+]);
 
 /**
  * Provider de commandes pour les WorldObjects portant la capability "harvestable".

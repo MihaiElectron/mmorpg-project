@@ -28,6 +28,7 @@ function makeCtx(): StudioCommandContext {
     incrementResourcesRefreshKey: vi.fn(),
     incrementAnimalsRefreshKey: vi.fn(),
     incrementCreatureSpawnsRefreshKey: vi.fn(),
+    selectedWorldObjectId: null,
   };
 }
 
@@ -46,12 +47,13 @@ describe("resourceCommandProvider", () => {
     expect(isCommandProvider(resourceCommandProvider)).toBe(true);
   });
 
-  it("getCommands retourne resource.refresh et resource.clearSelection", () => {
+  it("getCommands retourne resource.refresh, resource.clearSelection et resource.forceRespawn", () => {
     const ctx = makeCtx();
     const cmds = resourceCommandProvider.getCommands(ctx);
     const ids = cmds.map((c) => c.id);
     expect(ids).toContain("resource.refresh");
     expect(ids).toContain("resource.clearSelection");
+    expect(ids).toContain("resource.forceRespawn");
   });
 
   it("getCommands ne retourne que les commandes resource", () => {
@@ -100,13 +102,13 @@ describe("getCommandsForWorldObject", () => {
     expect(cmds.every((c) => !c.id.startsWith("resource."))).toBe(true);
   });
 
-  it("les commandes retournées sont exécutables via run(ctx)", () => {
+  it("les commandes retournées sont exécutables via run(ctx)", async () => {
     const obj = makeWorldObject(["harvestable"]);
     const ctx = makeCtx();
     const cmds = getCommandsForWorldObject(obj, ctx);
     const refresh = cmds.find((c) => c.id === "resource.refresh");
     expect(refresh).toBeDefined();
-    refresh!.run(ctx);
+    await refresh!.run(ctx);
     expect(ctx.incrementResourcesRefreshKey).toHaveBeenCalledOnce();
   });
 });

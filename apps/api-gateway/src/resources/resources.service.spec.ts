@@ -263,6 +263,87 @@ describe('ResourcesService', () => {
     });
   });
 
+  // ── forceRespawn ─────────────────────────────────────────────────────────────
+
+  describe('forceRespawn', () => {
+    it("retourne null si la resource est introuvable", async () => {
+      resourceRepo.findOne.mockResolvedValue(null);
+      const result = await service.forceRespawn('unknown-id');
+      expect(result).toBeNull();
+    });
+
+    it("remet state=alive, remainingLoots depuis template, respawnAt=null", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0, respawnAt: new Date() }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const result = await service.forceRespawn('res-1');
+
+      expect(result?.state).toBe('alive');
+      expect(result?.remainingLoots).toBe(5);
+      expect(result?.respawnAt).toBeNull();
+    });
+
+    it("appelle repo.update avec les bonnes valeurs", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 10 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.forceRespawn('res-1');
+
+      expect(resourceRepo.update).toHaveBeenCalledWith('res-1', {
+        state: 'alive',
+        remainingLoots: 10,
+        respawnAt: null,
+      });
+    });
+
+    it("émet resource_update via server socket", async () => {
+      const mockServer = makeMockServer();
+      service.setServer(mockServer as any);
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.forceRespawn('res-1');
+
+      expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
+        id: 'res-1',
+        state: 'alive',
+        remainingLoots: 5,
+        respawnAt: null,
+      }));
+    });
+
+    it("ne crash pas si server socket absent", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate());
+      resourceRepo.update.mockResolvedValue(undefined);
+      await expect(service.forceRespawn('res-1')).resolves.not.toThrow();
+    });
+
+    it("supprime la resource du pendingRespawns", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate());
+      resourceRepo.update.mockResolvedValue(undefined);
+      (service as any).pendingRespawns.add('res-1');
+
+      await service.forceRespawn('res-1');
+
+      expect((service as any).pendingRespawns.has('res-1')).toBe(false);
+    });
+
+    it("fonctionne aussi sur une resource déjà alive", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'alive', remainingLoots: 3 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const result = await service.forceRespawn('res-1');
+      expect(result?.state).toBe('alive');
+      expect(result?.remainingLoots).toBe(5);
+    });
+  });
+
   // ── reloadPendingRespawns (via onModuleInit) ──────────────────────────────────
 
   describe('onModuleInit — reloadPendingRespawns', () => {

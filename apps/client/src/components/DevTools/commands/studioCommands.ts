@@ -9,13 +9,15 @@ export interface StudioCommandContext {
   incrementResourcesRefreshKey: () => void;
   incrementAnimalsRefreshKey: () => void;
   incrementCreatureSpawnsRefreshKey: () => void;
+  /** ID du WorldObject sélectionné — requis pour les commandes object-level. */
+  selectedWorldObjectId: string | null;
 }
 
 export interface StudioCommand {
   id: string;
   label: string;
   description: string;
-  run(ctx: StudioCommandContext): void;
+  run(ctx: StudioCommandContext): void | Promise<void>;
 }
 
 export const STUDIO_COMMANDS: readonly StudioCommand[] = Object.freeze([
@@ -57,6 +59,24 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = Object.freeze([
     description: "Recharge la liste des CreatureSpawns depuis le serveur.",
     run(ctx) {
       ctx.incrementCreatureSpawnsRefreshKey();
+    },
+  },
+  {
+    id: "resource.forceRespawn",
+    label: "Force Respawn",
+    description: "Force le respawn immédiat de la Resource sélectionnée via l'API admin.",
+    async run(ctx) {
+      const id = ctx.selectedWorldObjectId;
+      if (!id) return;
+      const apiUrl = (import.meta as Record<string, any>).env?.VITE_API_URL ?? "";
+      const token = localStorage.getItem("token") ?? "";
+      const res = await fetch(`${apiUrl}/admin/resources/${id}/force-respawn`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        ctx.incrementResourcesRefreshKey();
+      }
     },
   },
 ]);

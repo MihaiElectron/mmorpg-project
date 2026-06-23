@@ -8,13 +8,14 @@ function makeCtx(overrides: Partial<StudioCommandContext> = {}): StudioCommandCo
     incrementResourcesRefreshKey: vi.fn(),
     incrementAnimalsRefreshKey: vi.fn(),
     incrementCreatureSpawnsRefreshKey: vi.fn(),
+    selectedWorldObjectId: null,
     ...overrides,
   };
 }
 
 describe("STUDIO_COMMANDS — registre", () => {
-  it("contient exactement cinq commandes", () => {
-    expect(STUDIO_COMMANDS).toHaveLength(5);
+  it("contient exactement six commandes", () => {
+    expect(STUDIO_COMMANDS).toHaveLength(6);
   });
 
   it("toutes les commandes ont id, label, description, run", () => {
@@ -62,5 +63,52 @@ describe("resource.clearSelection", () => {
     getCommand("resource.clearSelection")!.run(ctx);
     expect(ctx.clearSelectedWorldObject).toHaveBeenCalledOnce();
     expect(ctx.incrementResourcesRefreshKey).not.toHaveBeenCalled();
+  });
+});
+
+describe("resource.forceRespawn", () => {
+  it("est enregistré dans STUDIO_COMMANDS", () => {
+    expect(getCommand("resource.forceRespawn")).toBeDefined();
+  });
+
+  it("ne fait rien si selectedWorldObjectId est null", async () => {
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("localStorage", { getItem: vi.fn().mockReturnValue(null) });
+    const ctx = makeCtx({ selectedWorldObjectId: null });
+    await getCommand("resource.forceRespawn")!.run(ctx);
+    expect(mockFetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("appelle POST /admin/resources/:id/force-respawn avec le bon ID", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("localStorage", { getItem: vi.fn().mockReturnValue("tok") });
+    const ctx = makeCtx({ selectedWorldObjectId: "res-abc" });
+    await getCommand("resource.forceRespawn")!.run(ctx);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/resources/res-abc/force-respawn"),
+      expect.objectContaining({ method: "POST" }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("appelle incrementResourcesRefreshKey si la réponse est ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    vi.stubGlobal("localStorage", { getItem: vi.fn().mockReturnValue(null) });
+    const ctx = makeCtx({ selectedWorldObjectId: "res-abc" });
+    await getCommand("resource.forceRespawn")!.run(ctx);
+    expect(ctx.incrementResourcesRefreshKey).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
+  it("ne rafraîchit pas si la réponse n'est pas ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    vi.stubGlobal("localStorage", { getItem: vi.fn().mockReturnValue(null) });
+    const ctx = makeCtx({ selectedWorldObjectId: "res-abc" });
+    await getCommand("resource.forceRespawn")!.run(ctx);
+    expect(ctx.incrementResourcesRefreshKey).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

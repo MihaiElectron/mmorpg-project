@@ -103,6 +103,35 @@ export class ResourcesService implements OnModuleInit {
   }
 
   /**
+   * Force le respawn immédiat d'une resource quelle que soit son état.
+   * Annule le respawn planifié s'il existe, restaure les loots depuis le template, émet resource_update.
+   * Si un timer précédemment armé se déclenche ultérieurement, il appellera doRespawn à nouveau —
+   * comportement bénin mais documenté comme limite connue.
+   */
+  async forceRespawn(id: string): Promise<Resource | null> {
+    const resource = await this.findOne(id);
+    if (!resource) return null;
+
+    this.pendingRespawns.delete(id);
+
+    const remainingLoots = await this.getDefaultRemainingLoots(resource.type);
+    await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
+
+    const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
+
+    if (this.server) {
+      this.server.emit('resource_update', {
+        id: updated.id,
+        state: updated.state,
+        remainingLoots: updated.remainingLoots,
+        respawnAt: null,
+      });
+    }
+
+    return updated;
+  }
+
+  /**
    * Marque une ressource comme "dead"
    */
   async markGathered(id: string) {
