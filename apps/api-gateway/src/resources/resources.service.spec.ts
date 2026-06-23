@@ -239,12 +239,41 @@ describe('ResourcesService', () => {
 
       await jest.runAllTimersAsync();
 
-      expect(mockServer.emit).toHaveBeenCalledWith('resource_update', {
+      expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
+        type: 'dead_tree',
         state: 'alive',
         remainingLoots: 5,
         respawnAt: null,
+        x: 100,
+        y: 100,
+      }));
+    });
+
+    it("le payload de respawn contient type et position pour le rendu client", async () => {
+      const resource = makeResource({
+        state: 'dead', remainingLoots: 0,
+        x: 400, y: 300,
+        worldX: 6560768, worldY: 6529024, mapId: 1,
       });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const mockServer = makeMockServer();
+      service.setServer(mockServer as any);
+
+      await service.scheduleRespawn('res-1', 50);
+      await jest.runAllTimersAsync();
+
+      const [event, payload] = mockServer.emit.mock.calls[0];
+      expect(event).toBe('resource_update');
+      expect(payload.type).toBe('dead_tree');
+      expect(payload.x).toBe(400);
+      expect(payload.y).toBe(300);
+      expect(payload.worldX).toBe(6560768);
+      expect(payload.worldY).toBe(6529024);
+      expect(payload.mapId).toBe(1);
     });
 
     it("n'arme qu'un seul timer si scheduleRespawn est appelé deux fois pour le même ID", async () => {
@@ -309,9 +338,12 @@ describe('ResourcesService', () => {
 
       expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
+        type: 'dead_tree',
         state: 'alive',
         remainingLoots: 5,
         respawnAt: null,
+        x: 100,
+        y: 100,
       }));
     });
 
@@ -635,6 +667,33 @@ describe('ResourcesService', () => {
         'res-1',
         expect.objectContaining({ state: 'alive', remainingLoots: 6, respawnAt: null }),
       );
+    });
+
+    it('le broadcast contient type et position pour le rendu client', async () => {
+      const resource = makeResource({
+        state: 'dead', remainingLoots: 0,
+        x: 500, y: 250, worldX: 5000, worldY: 3000, mapId: 1,
+      });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const mockServer = makeMockServer();
+      service.setServer(mockServer as any);
+
+      await service.resetInstanceFromTemplate('res-1');
+
+      expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
+        id: 'res-1',
+        type: 'dead_tree',
+        state: 'alive',
+        remainingLoots: 4,
+        x: 500,
+        y: 250,
+        worldX: 5000,
+        worldY: 3000,
+        mapId: 1,
+      }));
     });
   });
 });

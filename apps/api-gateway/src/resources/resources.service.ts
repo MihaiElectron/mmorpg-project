@@ -125,12 +125,7 @@ export class ResourcesService implements OnModuleInit {
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', {
-        id: updated.id,
-        state: updated.state,
-        remainingLoots: updated.remainingLoots,
-        respawnAt: null,
-      });
+      this.server.emit('resource_update', this.buildResourceBroadcast(updated));
     }
 
     return updated;
@@ -160,12 +155,7 @@ export class ResourcesService implements OnModuleInit {
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', {
-        id: updated.id,
-        state: updated.state,
-        remainingLoots: updated.remainingLoots,
-        respawnAt: null,
-      });
+      this.server.emit('resource_update', this.buildResourceBroadcast(updated));
     }
 
     return updated;
@@ -253,6 +243,26 @@ export class ResourcesService implements OnModuleInit {
   }
 
   /**
+   * Construit le payload resource_update complet pour le client.
+   * Inclut type et coordonnées (legacy + WU) nécessaires au rendu Phaser.
+   * Sans type/position, upsertResource ne peut pas recréer le sprite après un dead.
+   */
+  private buildResourceBroadcast(resource: Resource): Record<string, unknown> {
+    return {
+      id:            resource.id,
+      type:          resource.type,
+      state:         resource.state,
+      remainingLoots: resource.remainingLoots,
+      respawnAt:     resource.respawnAt ?? null,
+      x:             resource.x,
+      y:             resource.y,
+      worldX:        resource.worldX  ?? null,
+      worldY:        resource.worldY  ?? null,
+      mapId:         resource.mapId   ?? null,
+    };
+  }
+
+  /**
    * Arme le setTimeout qui déclenche doRespawn et broadcast resource_update.
    * Le token capturé est passé à doRespawn : si le token a été invalidé entre-temps
    * (forceRespawn ou double schedule), doRespawn retourne null sans toucher la DB.
@@ -261,12 +271,7 @@ export class ResourcesService implements OnModuleInit {
     setTimeout(async () => {
       const respawned = await this.doRespawn(id, token);
       if (respawned && this.server) {
-        this.server.emit('resource_update', {
-          id: respawned.id,
-          state: respawned.state,
-          remainingLoots: respawned.remainingLoots,
-          respawnAt: null,
-        });
+        this.server.emit('resource_update', this.buildResourceBroadcast(respawned));
       }
     }, delayMs);
   }
