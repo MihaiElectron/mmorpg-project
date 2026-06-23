@@ -6,9 +6,9 @@ import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
-const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots'>[] = [
-  { type: 'dead_tree', defaultRemainingLoots: 9999 },
-  { type: 'ore',       defaultRemainingLoots: 9999 },
+const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs'>[] = [
+  { type: 'dead_tree', defaultRemainingLoots: 9999, respawnDelayMs: 60_000 },
+  { type: 'ore',       defaultRemainingLoots: 9999, respawnDelayMs: 45_000 },
 ];
 
 // Délai de respawn par défaut si aucun champ template n'existe.
@@ -43,6 +43,18 @@ export class ResourcesService implements OnModuleInit {
   async getDefaultRemainingLoots(type: string): Promise<number> {
     const tpl = await this.templateRepo.findOne({ where: { type } });
     return tpl?.defaultRemainingLoots ?? 9999;
+  }
+
+  /**
+   * Résout le délai de respawn depuis le template de la ressource.
+   * Fallback vers RESOURCE_RESPAWN_DELAY_MS si template absent ou respawnDelayMs invalide.
+   */
+  private async resolveRespawnDelay(resourceId: string): Promise<number> {
+    const resource = await this.findOne(resourceId);
+    if (!resource) return RESOURCE_RESPAWN_DELAY_MS;
+    const tpl = await this.templateRepo.findOne({ where: { type: resource.type } });
+    const delay = tpl?.respawnDelayMs;
+    return delay != null && delay > 0 ? delay : RESOURCE_RESPAWN_DELAY_MS;
   }
 
   findAll() {
@@ -85,17 +97,20 @@ export class ResourcesService implements OnModuleInit {
 
   /**
    * Planifie le respawn d'une ressource morte.
+   * Résout le délai depuis le template (fallback RESOURCE_RESPAWN_DELAY_MS).
    * Persiste respawnAt en DB avant d'armer le timer.
    * Sans effet si un respawn est déjà en attente pour cet ID.
+   * delayMs est un override interne pour les tests.
    */
-  async scheduleRespawn(id: string, delayMs = RESOURCE_RESPAWN_DELAY_MS): Promise<void> {
+  async scheduleRespawn(id: string, delayMs?: number): Promise<void> {
     if (this.pendingRespawns.has(id)) return;
     this.pendingRespawns.add(id);
 
-    const respawnAt = new Date(Date.now() + delayMs);
+    const resolvedDelay = delayMs ?? await this.resolveRespawnDelay(id);
+    const respawnAt = new Date(Date.now() + resolvedDelay);
     await this.repo.update(id, { respawnAt });
 
-    this.armRespawnTimer(id, delayMs);
+    this.armRespawnTimer(id, resolvedDelay);
   }
 
   /**

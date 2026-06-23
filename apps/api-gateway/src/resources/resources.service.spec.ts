@@ -27,6 +27,7 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
     id: 'tpl-1',
     type: 'dead_tree',
     defaultRemainingLoots: 5,
+    respawnDelayMs: 30_000,
     ...overrides,
   } as ResourceTemplate;
 }
@@ -137,6 +138,73 @@ describe('ResourcesService', () => {
       const result = await service.doRespawn('unknown');
 
       expect(result).toBeNull();
+    });
+  });
+
+  // ── resolveRespawnDelay (via scheduleRespawn sans override) ─────────────────
+
+  describe('scheduleRespawn — résolution du délai depuis le template', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it("utilise respawnDelayMs du template pour calculer respawnAt", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ respawnDelayMs: 120_000 } as any));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const before = Date.now();
+      await service.scheduleRespawn('res-1'); // pas d'override → résolution template
+
+      const updateCall = resourceRepo.update.mock.calls[0];
+      expect(updateCall[0]).toBe('res-1');
+      const respawnAt: Date = updateCall[1].respawnAt;
+      expect(respawnAt).toBeInstanceOf(Date);
+      expect(respawnAt.getTime()).toBeGreaterThanOrEqual(before + 120_000);
+      expect(respawnAt.getTime()).toBeLessThan(before + 120_000 + 500);
+    });
+
+    it("fallback vers RESOURCE_RESPAWN_DELAY_MS si template introuvable", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(null); // template absent
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const before = Date.now();
+      await service.scheduleRespawn('res-1');
+
+      const updateCall = resourceRepo.update.mock.calls[0];
+      const respawnAt: Date = updateCall[1].respawnAt;
+      expect(respawnAt.getTime()).toBeGreaterThanOrEqual(before + RESOURCE_RESPAWN_DELAY_MS);
+    });
+
+    it("fallback vers RESOURCE_RESPAWN_DELAY_MS si respawnDelayMs <= 0", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ respawnDelayMs: 0 } as any));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const before = Date.now();
+      await service.scheduleRespawn('res-1');
+
+      const updateCall = resourceRepo.update.mock.calls[0];
+      const respawnAt: Date = updateCall[1].respawnAt;
+      expect(respawnAt.getTime()).toBeGreaterThanOrEqual(before + RESOURCE_RESPAWN_DELAY_MS);
+    });
+
+    it("fallback vers RESOURCE_RESPAWN_DELAY_MS si resource introuvable", async () => {
+      // findOne appelé deux fois : une pour resolveRespawnDelay (resource null),
+      // on n'atteint pas l'étape d'armement mais le timer est planifié avec le fallback.
+      // Note: scheduleRespawn continue même si findOne retourne null (fallback uniquement).
+      resourceRepo.findOne.mockResolvedValue(null);
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const before = Date.now();
+      await service.scheduleRespawn('res-1');
+
+      const updateCall = resourceRepo.update.mock.calls[0];
+      const respawnAt: Date = updateCall[1].respawnAt;
+      expect(respawnAt.getTime()).toBeGreaterThanOrEqual(before + RESOURCE_RESPAWN_DELAY_MS);
     });
   });
 
