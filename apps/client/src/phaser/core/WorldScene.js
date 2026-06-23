@@ -319,6 +319,7 @@ export default class WorldScene extends Phaser.Scene {
         chunkPoint:  { mapId: 1, chunkX: wuX >> 16, chunkY: wuY >> 16 },
       });
       getActionPanelStore().getState().closePanel();
+      getDevToolsStore().getState().clearSelectedWorldObject();
       this.stopAutoAttack();
       this.controller.startMouseMove(worldX, worldY);
     });

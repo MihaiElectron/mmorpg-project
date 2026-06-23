@@ -2,10 +2,10 @@ import type { OverlayProvider, StudioOverlayDefinition } from "./CapabilityProvi
 
 const ANIMAL_OVERLAY: StudioOverlayDefinition = {
   id: "animal.overlay",
-  label: "Animaux",
+  label: "Créatures",
   category: "animal",
   capability: "combat",
-  description: "Affiche les animaux actifs et leur position sur la map.",
+  description: "Affiche les créatures actives et leur position sur la map.",
 };
 
 /**
