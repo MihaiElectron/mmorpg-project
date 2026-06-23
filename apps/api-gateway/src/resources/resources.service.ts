@@ -6,17 +6,17 @@ import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
-const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool'>[] = [
+export const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool'>[] = [
   {
     type: 'dead_tree',
-    defaultRemainingLoots: 9999,
+    defaultRemainingLoots: 4,
     respawnDelayMs: 60_000,
-    lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 1 }],
+    lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 1 }],
   },
   {
     type: 'ore',
-    defaultRemainingLoots: 9999,
-    respawnDelayMs: 45_000,
+    defaultRemainingLoots: 6,
+    respawnDelayMs: 120_000,
     lootPool: [{ itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 1 }],
   },
 ];

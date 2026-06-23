@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ResourcesService, RESOURCE_RESPAWN_DELAY_MS } from './resources.service';
+import { ResourcesService, RESOURCE_RESPAWN_DELAY_MS, RESOURCE_TEMPLATES } from './resources.service';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
@@ -558,5 +558,61 @@ describe('ResourcesService', () => {
       // Toujours un seul timer (le premier)
       expect(jest.getTimerCount()).toBe(1);
     });
+  });
+});
+
+// ── RESOURCE_TEMPLATES — équilibrage ──────────────────────────────────────────
+
+describe('RESOURCE_TEMPLATES', () => {
+  const deadTree = RESOURCE_TEMPLATES.find((t) => t.type === 'dead_tree')!;
+  const ore      = RESOURCE_TEMPLATES.find((t) => t.type === 'ore')!;
+
+  it('dead_tree existe dans les templates', () => {
+    expect(deadTree).toBeDefined();
+  });
+
+  it('dead_tree.defaultRemainingLoots est faible (≤ 10)', () => {
+    expect(deadTree.defaultRemainingLoots).toBeGreaterThanOrEqual(1);
+    expect(deadTree.defaultRemainingLoots).toBeLessThanOrEqual(10);
+  });
+
+  it('dead_tree.respawnDelayMs vaut 60 000 ms', () => {
+    expect(deadTree.respawnDelayMs).toBe(60_000);
+  });
+
+  it('dead_tree.lootPool contient wooden_stick', () => {
+    const ids = (deadTree.lootPool ?? []).map((e: any) => e.itemId);
+    expect(ids).toContain('wooden_stick');
+  });
+
+  it('dead_tree.lootPool maxQty ≥ minQty', () => {
+    for (const entry of deadTree.lootPool ?? []) {
+      expect((entry as any).maxQty).toBeGreaterThanOrEqual((entry as any).minQty);
+    }
+  });
+
+  it('ore existe dans les templates', () => {
+    expect(ore).toBeDefined();
+  });
+
+  it('ore.defaultRemainingLoots est faible/moyen (≤ 10)', () => {
+    expect(ore.defaultRemainingLoots).toBeGreaterThanOrEqual(1);
+    expect(ore.defaultRemainingLoots).toBeLessThanOrEqual(10);
+  });
+
+  it('ore.respawnDelayMs est plus long que dead_tree', () => {
+    expect(ore.respawnDelayMs).toBeGreaterThan(deadTree.respawnDelayMs);
+  });
+
+  it('ore.lootPool contient iron_ore', () => {
+    const ids = (ore.lootPool ?? []).map((e: any) => e.itemId);
+    expect(ids).toContain('iron_ore');
+  });
+
+  it('tous les templates ont un lootPool non vide', () => {
+    for (const tpl of RESOURCE_TEMPLATES) {
+      expect(tpl.lootPool).not.toBeNull();
+      expect((tpl.lootPool ?? []).length).toBeGreaterThan(0);
+    }
   });
 });
