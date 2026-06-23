@@ -83,13 +83,9 @@ export interface WorldObjectListModuleProps {
   /** Requis uniquement si socketEvent est fourni. */
   patchFn?: (existing: WorldObject, data: Record<string, any>) => WorldObject;
   refreshKey: number;
-  /** Omis pour masquer le bouton overlay. */
-  overlayEnabled?: boolean;
   selectedId: string | null;
   onSelect: (wo: WorldObject) => void;
   onRefresh: () => void;
-  /** Omis pour masquer le bouton overlay. */
-  onToggleOverlay?: () => void;
   onClearSelection: () => void;
 }
 
@@ -99,11 +95,9 @@ export function WorldObjectListModule({
   socketEvent,
   patchFn,
   refreshKey,
-  overlayEnabled,
   selectedId,
   onSelect,
   onRefresh,
-  onToggleOverlay,
   onClearSelection,
 }: WorldObjectListModuleProps) {
   const [items, setItems] = useState<WorldObject[]>([]);
@@ -160,20 +154,6 @@ export function WorldObjectListModule({
         <div className="devtools-wo-list__header-row">
           <h3 className="devtools-wo-list__title">{title}</h3>
           <div className="devtools-wo-list__actions">
-            {onToggleOverlay && (
-              <button
-                className={
-                  "devtools-wo-list__action-btn" +
-                  (overlayEnabled ? " devtools-wo-list__action-btn--active" : "")
-                }
-                onClick={onToggleOverlay}
-                title={overlayEnabled ? "Désactiver l'overlay" : "Activer l'overlay"}
-                aria-label="Overlay"
-                aria-pressed={overlayEnabled ?? false}
-              >
-                ◎
-              </button>
-            )}
             <button
               className="devtools-wo-list__action-btn"
               onClick={onRefresh}

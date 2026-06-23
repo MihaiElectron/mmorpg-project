@@ -4,12 +4,10 @@ import { patchClientWorldObject } from "./resourceWorldObjectClientAdapter";
 import { ResourceTemplateControls } from "./ResourceTemplateControls";
 
 export default function ResourcesModule() {
-  const refreshKey    = useDevToolsStore((s) => s.resourcesRefreshKey);
-  const overlayEnabled = useDevToolsStore((s) => s.resourceOverlayEnabled);
-  const selectedId    = useDevToolsStore((s) => s.selectedWorldObject?.id ?? null);
-  const onSelect      = useDevToolsStore((s) => s.setSelectedWorldObject);
-  const onRefresh     = useDevToolsStore((s) => s.incrementResourcesRefreshKey);
-  const onToggleOverlay = useDevToolsStore((s) => s.toggleResourceOverlayEnabled);
+  const refreshKey       = useDevToolsStore((s) => s.resourcesRefreshKey);
+  const selectedId       = useDevToolsStore((s) => s.selectedWorldObject?.id ?? null);
+  const onSelect         = useDevToolsStore((s) => s.setSelectedWorldObject);
+  const onRefresh        = useDevToolsStore((s) => s.incrementResourcesRefreshKey);
   const onClearSelection = useDevToolsStore((s) => s.clearSelectedWorldObject);
 
   return (
@@ -20,11 +18,9 @@ export default function ResourcesModule() {
         socketEvent="resource_update"
         patchFn={patchClientWorldObject}
         refreshKey={refreshKey}
-        overlayEnabled={overlayEnabled}
         selectedId={selectedId}
         onSelect={onSelect}
         onRefresh={onRefresh}
-        onToggleOverlay={onToggleOverlay}
         onClearSelection={onClearSelection}
       />
       <ResourceTemplateControls onRefresh={onRefresh} />
