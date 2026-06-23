@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-22_
-_Session : 2026-06-22 (session 5 — DevToolsBridge minimal)_
+_Dernière mise à jour : 2026-06-23_
+_Session : 2026-06-23 (session 7 — Studio SDK : actions, Command Palette, overlays)_
 _Branche : main_
 _État : développement local_
 
@@ -15,30 +15,43 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
-Migration WU Phase 2 terminée. Infrastructure DevTools introduite : shell,
-panel, store centralisé, contexte de coordonnées au clic. Un `DevToolsBridge`
-minimal centralise désormais les accès React simples vers Phaser (`window.game`).
+Migration WU Phase 2 terminée. Infrastructure DevTools complète : shell, panel,
+store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
+
+Studio SDK en construction : ActionRegistry, CapabilityRegistry, providers d'actions
+(Focus Camera, Copy Info, Force Respawn), OverlayControls global, Command Palette,
+sélection CreatureSpawn depuis la map Phaser. Projection WU → écran centralisée
+dans `wuProjection.ts`.
 
 ---
 
 ## Derniers changements importants
 
-- **Infrastructure DevTools — étape 1** : `DevToolsShell` et `DevToolsPanel` créés
-  dans `src/components/DevTools/`. `CharacterLayout` branchée sur `DevToolsShell`.
-  Onglet "Admin" renommé "DevTools". `AdminPanel` inchangé.
-- **DevToolsStore — étape 2** : `src/store/devtools.store.ts` créé avec les concepts
-  transversaux (`isConsoleActive`, `lastClickedPos`, `commandHistory`, `historyIndex`).
-  `admin.store.ts` transformé en alias de compatibilité (re-export).
-- **DevToolsStore — étape 3** : ajout de `activeTool` (défaut `"legacy-admin"`),
-  types et setters pour les quatre espaces de coordonnées (screen, worldPoint WU,
-  tilePoint, chunkPoint). `WorldScene.js` alimente le contexte complet à chaque clic map.
-- **DevToolsBridge minimal** : `components/DevTools/devtoolsBridge.ts` créé avec
-  `getPhaserGame`, `getWorldScene`, `getDevToolsSocket`, `getCurrentMapId`,
-  `getMainCamera`. `AdminPanel` et `ActionPanel` utilisent le bridge pour les
-  accès socket/scène/caméra triviaux. Les points d'attache `window.game` restent
-  dans `WorldPage` et `WorldScene`.
-- **Documentation DevTools** : `docs/01_Architecture/admin-tool-roadmap.md`,
-  `docs/01_Architecture/project-audit.md`, `docs/10_AI/` (6 documents), `docs/00_Project/domains.md`.
+- **OverlayControls global** : `OverlayControls.tsx` liste tous les overlays via
+  `getAllOverlayDefinitions()`, avec toggles ON/OFF centralisés. Les boutons overlay
+  locaux des modules (Resources, Animals, CreatureSpawns) ont été supprimés.
+- **Command Palette** : `CommandPalette.tsx` dans le panneau Studio — input filtrant
+  les actions par label/id, Enter exécute la première action visible, clic exécute
+  l'action choisie. `filterActions()` fonction pure exportée et testée.
+- **Sélection CreatureSpawn depuis Phaser** : `DevToolsOverlayManager` crée un
+  `Phaser.GameObjects.Zone` 28×28 par spawn quand l'overlay est ON. Clic → 
+  `setSelectedWorldObject(spawn)` via callback. Zones détruites quand overlay OFF.
+  Surbrillance automatique dans `CreatureSpawnsModule`.
+- **ActionRegistry — Focus Camera** : `PositionActionProvider` (capability `transform`) →
+  action `worldObject.focusCamera` : convertit WU en screen, appelle `camera.pan()`
+  via `DevToolsBridge`. Disabled si `position null`.
+- **ActionRegistry — Copy Info** : `WorldObjectActionProvider` (capability `transform`) →
+  action `worldObject.copyInfo` : copie un résumé `category:type#id\nmapId=...\n...`
+  dans le presse-papiers via `navigator.clipboard`.
+- **Projection WU centralisée** : `src/phaser/utils/wuProjection.ts` — `wuToScreen()`
+  unique source de vérité. `DevToolsOverlayManager` et `PositionActionProvider` utilisent
+  ce helper ; `_wu2px()` supprimée.
+- **Backend — Force Respawn** : `ResourcesService.forceRespawn()` + endpoint
+  `POST /admin/resources/:id/force-respawn`. Tokens de génération
+  (`pendingRespawnTokens`) pour invalider les timers legacy après un force respawn.
+- **Action Force Respawn** : `ResourceActionProvider` (capability `harvestable`) →
+  `SelectedActionsPanel` et `CommandPalette`. Bouton local retiré de
+  `ResourceTemplateControls`.
 
 ---
 
@@ -49,14 +62,20 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
 | Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
 | Respawn | Animal (20 s) et personnage (point le plus proche à 0 PV) |
 | Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
-| UI | ActionPanel, barre de vie flottante, panneau personnage, onglets Perso/DevTools |
+| UI | ActionPanel, barre de vie flottante, panneau personnage onglet Perso, HUD DevTools admin-only |
 | DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
-| DevTools — panneau | Vue d'ensemble live, hiérarchie template → instances, drag-and-drop map, suppression, pagination, recherche |
-| DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, lastClickedPos, contexte coordonnées (screen/WU/tile/chunk) |
+| DevTools — panneau | Panneau flottant draggable : module World + OverlayControls + modules WOM + WorldObjectInspector + SelectedActionsPanel + CommandPalette + ValidationPanel + AdminPanel legacy |
+| DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, ouverture HUD, mode edit, position panneau, lastClickedPos, contexte coordonnées (world click px/WU/tile/chunk) |
 | DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
+| DevTools — World | `CoordinateInspector` lecture seule : activeTool, dernier clic monde Phaser en pixels, WU, tile, chunk |
+| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic (Resources, Animals via interactionTargets ; CreatureSpawns via Zone Phaser) |
+| DevTools — Command Palette | Input filtré par label/id, Enter = première action, liste cliquable, pending state |
+| Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn) |
+| Studio SDK — projection | `wuToScreen()` centralisée dans `phaser/utils/wuProjection.ts` |
+| Backend — admin | `POST /admin/resources/:id/force-respawn` avec invalidation token de génération |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 27 tests `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` (verts — 1 préexistant KO sans lien WU) |
+| Tests | 27 `AnimalsService` + 32 `world-position.adapter` + 36 `wu-backfill-report` + 24 `world.service` + 138 tests frontend (verts) |
 | Migration WU | Backend : `world.service.ts` + `animals.service.ts` entièrement migrés. Frontend : `resolveScreen()` WU-first pour joueurs, animaux et ressources. Protocole `player_move` additif. |
 
 ---
@@ -67,6 +86,7 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
   `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`. Projection isométrique :
   `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`.
   Inverse : `worldX = 8*(sx−1000) + 16*sy`, `worldY = −8*(sx−1000) + 16*sy`.
+  Helper TS partagé : `src/phaser/utils/wuProjection.ts` (`wuToScreen`).
   Phase 1 clôturée : backfill OK, `world.service.ts` entièrement migré.
   Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
   `docs/01_Architecture/wu-migration-audit.md`.
@@ -86,6 +106,13 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
   `window.game.socket`. Les stores Zustand sont des singletons `window.__GLOBAL_*_STORE__`.
 - `admin.store.ts` est un alias de compatibilité vers `devtools.store.ts`. Ne pas y
   ajouter de nouvelle logique. Supprimer quand tous les imports sont migrés.
+- **Studio SDK — ActionRegistry** : les providers d'actions sont déclenchés par
+  capabilities WOM. Un provider peut partager une capability avec un autre (ex.
+  `PositionActionProvider` et `WorldObjectActionProvider` utilisent tous deux `transform`).
+  L'ordre d'enregistrement dans `index.ts` détermine l'ordre d'affichage.
+- **Tokens de génération respawn** : `ResourcesService.pendingRespawnTokens` invalide
+  les timers legacy après un `forceRespawn`. Tout nouveau timer doit capturer son
+  token au moment de `armRespawnTimer` et le vérifier dans `doRespawn`.
 - Les maps Tiled utilisent exclusivement le format TMJ (natif JSON). Les tilesets
   utilisent TSX. Aucun convertisseur TMX → JSON autorisé. Le tileset doit être inliné
   dans le TMJ (pas de référence TSX externe) pour que Phaser le charge correctement.
@@ -110,11 +137,22 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
   `devtools.store` fichier par fichier.
 - **[IMPORTANT] `mapId` hardcodé à `1` dans DevToolsStore/WorldScene** : le contexte
   de clic alimente `mapId: 1` statique. À rendre dynamique quand le multi-cartes arrive.
+- **[IMPORTANT] DevTools HUD — rôle admin côté client uniquement pour l'affichage** :
+  le bouton HUD reprend la visibilité client-side existante. Les actions sensibles
+  restent à valider côté serveur comme avant.
+- **[MINEUR] `wuToScreen` encore dupliquée dans `WorldScene.js`** : `resolveScreen()`
+  local n'utilise pas encore `wuProjection.ts`. Migration possible quand `WorldScene`
+  sera partiellement converti en TS ou quand le besoin se représente.
 - **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanel.tsx` dupliquent
   la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
 - **[MINEUR] `window.game` résiduel** : les attachements restent dans `WorldPage.jsx`
   et `WorldScene.js`, et `CoordinatesLayer.jsx` lit encore directement `window.game`.
   Migration progressive via `DevToolsBridge` prévue.
+- **[MINEUR] Zone hit spawn rectangulaire** : les Zones Phaser pour la sélection
+  CreatureSpawn sont 28×28 rectangulaires (pas circulaires). Un clic dans le coin
+  hors du cercle visuel déclenche quand même la sélection — acceptable pour un outil admin.
+- **[MINEUR] Copy Info sans feedback visuel** : action `worldObject.copyInfo` silencieuse
+  si clipboard indisponible (HTTP sans HTTPS). Pas de toast / confirmation prévue.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un animal est sur une tuile bloquante.
@@ -126,13 +164,16 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
 
 ## Prochaines priorités possibles
 
-### DevTools — infrastructure (en cours)
-- [x] Étape 1 — `DevToolsShell` + `DevToolsPanel` + branchement `CharacterLayout`
-- [x] Étape 2 — `devtools.store.ts` minimal, `admin.store.ts` alias
-- [x] Étape 3 — `activeTool`, types coordonnées, `setLastClickedContext` dans WorldScene
-- [x] Étape 3.5 — `DevToolsBridge` minimal React ↔ Phaser
-- [ ] Étape 4 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
-- [ ] Étape 5 — afficher les coordonnées du dernier clic dans `DevToolsPanel` (overlay lecture seule)
+### DevTools — Studio SDK (en cours)
+- [x] OverlayControls global (toggles centralisés)
+- [x] Supprimer les boutons overlay locaux des modules WOM
+- [x] Command Palette (input filtré, Enter, clic)
+- [x] Sélection CreatureSpawn depuis overlay Phaser
+- [x] Action Focus Camera (`worldObject.focusCamera`)
+- [x] Action Copy Info (`worldObject.copyInfo`)
+- [x] Action Force Respawn (`resource.forceRespawn`) via ActionRegistry
+- [x] Projection WU centralisée (`wuProjection.ts`)
+- [ ] Étape 7 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
 - [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
 - [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
 
@@ -159,9 +200,9 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
 
 ## Documents potentiellement impactés
 
-- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `setLastClickedContext`
+- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection
 - [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world
-- [ ] `docs/07_Admin/admin-tool.md` — renommage onglet Admin → DevTools, nouvelle architecture shell/panel
+- [ ] `docs/07_Admin/admin-tool.md` — DevTools hors panneau personnage, AdminPanel legacy, architecture modules, Command Palette, ActionRegistry
 - [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
 - [ ] `docs/05_World/chunks.md` — après validation ADR-0001 (déjà fait, vérifier)
 
@@ -169,7 +210,10 @@ minimal centralise désormais les accès React simples vers Phaser (`window.game
 
 ## Règle de mise à jour
 
-Après une session de code :
+Mettre à jour `STATUS.md` uniquement quand demandé explicitement ou quand une
+évolution structurante doit être reflétée. Garder ce fichier synthétique.
+
+Quand une mise à jour est demandée :
 
 1. Mettre à jour `STATUS.md`.
 2. Résumer ce qui a changé.
@@ -180,6 +224,37 @@ Après une session de code :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-23 (session 7 — Studio SDK : actions, Command Palette, overlays)
+
+- **OverlayControls global** : panneau centralisé listant tous les overlays via
+  `getAllOverlayDefinitions()`. Boutons overlay locaux supprimés des modules WOM.
+- **Command Palette** : `CommandPalette.tsx` avec `filterActions()` pure, input filtré,
+  Enter = première action, clic = action choisie. 10 tests.
+- **Sélection CreatureSpawn depuis Phaser** : `Phaser.GameObjects.Zone` 28×28 au
+  centre de chaque spawn quand overlay ON. Callback → `setSelectedWorldObject`.
+  Cleanup automatique quand overlay OFF ou destroy.
+- **Action Focus Camera** : `PositionActionProvider` (capability `transform`),
+  `wuToScreen()` + `camera.pan(x, y, 400, "Power2")` via `DevToolsBridge`. 8 tests.
+- **Action Copy Info** : `WorldObjectActionProvider` (capability `transform`),
+  `formatWorldObjectInfo()` pure + `navigator.clipboard.writeText`. 12 tests.
+- **Action Force Respawn** : backend `ResourcesService.forceRespawn()` + tokens de
+  génération + endpoint `POST /admin/resources/:id/force-respawn`. Frontend
+  `ResourceActionProvider` (capability `harvestable`). Bouton local retiré de
+  `ResourceTemplateControls`.
+- **Projection WU centralisée** : `wuProjection.ts` + `wuProjection.spec.ts` (8 tests).
+  `DevToolsOverlayManager._wu2px()` supprimée, `PositionActionProvider` inline supprimée.
+- **Tests frontend** : 138 tests (10 fichiers) tous verts.
+
+### 2026-06-22 (session 6 — DevTools HUD et module World)
+
+- **DevTools hors panneau personnage** : entrée déplacée dans un HUD admin-only
+  monté depuis `GameLayout`, avec panneau flottant draggable et reset de position
+  à la fermeture.
+- **Module World** : premier module DevTools indépendant, avec `CoordinateInspector`
+  lecture seule (`World Click (px)`, WU, tile, chunk).
+- **AdminPanel legacy** : toujours accessible dans le panneau DevTools flottant,
+  sans modification fonctionnelle.
 
 ### 2026-06-22 (session 5 — DevToolsBridge minimal)
 
