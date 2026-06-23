@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
+- Last updated: 2026-06-24
 - Depends on: docs/README.md, docs/04_Server/typeorm.md, docs/06_Database/postgresql.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -72,10 +72,10 @@ Some table names are explicit through `@Entity('...')`. Others use TypeORM defau
 | `CharacterEquipment` | `id`, `characterId`, `itemId`, `slot`, timestamps | Many rows reference one character and one item | Character service | Implemented |
 | `Inventory` | `id`, `quantity`, `equipped`, timestamps | Many rows reference one character and one item | Inventory and character services | Implemented |
 | `Item` | `id`, `name`, `type`, `category`, `attack`, `defense`, `range`, `slot`, `image`, timestamps | One item can appear in inventory and equipment rows | Item service | Implemented |
-| `Resource` | `id`, `type`, `x`, `y`, `state`, `remainingLoots` | No TypeORM relation observed | Resource and admin services | Implemented |
-| `ResourceTemplate` | `id`, `type`, `defaultRemainingLoots` | No TypeORM relation observed | Resource and admin services | Implemented |
-| `Animal` | `id`, `spawn`, `x`, `y`, `health`, `state` | Many animals may reference one creature spawn | Animal and admin services | Implemented |
-| `CreatureTemplate` | `id`, `key`, `name`, `textureKey`, `baseHealth`, `baseArmor`, `baseAttack`, `patrolRadius`, `speedMin`, `speedMax`, `pauseMinMs`, `pauseMaxMs`, `aggroRadius`, `fleeThresholdPct` | Referenced by creature spawns | Animal and admin services | Implemented |
+| `Resource` | `id`, `type`, `x`, `y`, `worldX`, `worldY`, `mapId`, `state`, `remainingLoots`, `respawnAt`, `respawnDelayMs` | No TypeORM relation observed | Resource and admin services | Implemented |
+| `ResourceTemplate` | `id`, `type`, `defaultRemainingLoots`, `respawnDelayMs`, `lootPool` | No TypeORM relation observed | Resource and admin services | Implemented |
+| `Animal` | `id`, `spawn`, `x`, `y`, `worldX`, `worldY`, `mapId`, `health`, `state`, `respawnAt`, `respawnDelayMs` | Many animals may reference one creature spawn | Animal and admin services | Implemented |
+| `CreatureTemplate` | `id`, `key`, `name`, `textureKey`, `baseHealth`, `baseArmor`, `baseAttack`, `patrolRadius`, `speedMin`, `speedMax`, `pauseMinMs`, `pauseMaxMs`, `aggroRadius`, `fleeThresholdPct`, `respawnDelayMs` | Referenced by creature spawns | Animal and admin services | Implemented |
 | `CreatureSpawn` | `id`, `key`, `template`, `spawnX`, `spawnY`, `respawnDelayMs` | Many spawns reference one creature template | Animal and admin services | Implemented |
 | `RespawnPoint` | `id`, `x`, `y`, `radius` | No TypeORM relation observed | World service | Implemented |
 
@@ -111,7 +111,7 @@ Complete inventory route ownership and all concurrent inventory write safety are
 
 `Resource` stores live resource instances with type, coordinates, state, and remaining loot count.
 
-`ResourceTemplate` stores defaults per resource type. `ResourcesService` upserts observed default templates on module initialization.
+`ResourceTemplate` stores defaults per resource type. `ResourcesService` seeds observed default templates on module initialization using insert-or-ignore — existing rows are never overwritten on restart, preserving admin-edited values.
 
 No TypeORM relation between resource instances and templates was observed. Resource consume and inventory update are not verified as one shared transaction.
 

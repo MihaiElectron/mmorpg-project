@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
+- Last updated: 2026-06-24
 - Depends on: docs/README.md, docs/02_Security/admin-permissions.md, docs/03_Client/react-vite.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -90,11 +90,11 @@ The server-side admin surface is split between HTTP routes under `/admin/*` and 
 | `admin:spawn_resource` | `AdminPanel.tsx` drag | `AdminGateway.onSpawnResource` | `client.data.role === 'admin'` | Creates a resource and emits `resource_update`. | Implemented |
 | `admin:teleport` | `commandRegistry.ts`, `AdminPanel.tsx` drag and teleport buttons | `AdminGateway.onTeleport` | `client.data.role === 'admin'` | Resolves a connected character by name or id and teleports it. | Implemented |
 | `admin:move_animal` | `commandRegistry.ts` | `AdminGateway.onMoveAnimal` | `client.data.role === 'admin'` | Moves a live animal through `AnimalsService`. | Implemented |
-| `admin:update_template` | `commandRegistry.ts`, `AdminPanel.tsx` | `AdminGateway.onUpdateTemplate` | `client.data.role === 'admin'` | Updates creature template fields, refreshes in-memory animal template data, emits `category:updated`. | Implemented |
-| `admin:update_resource_template` | `AdminPanel.tsx` | `AdminGateway.onUpdateResourceTemplate` | `client.data.role === 'admin'` | Updates resource template defaults. | Implemented |
+| `admin:update_template` | `commandRegistry.ts`, `AdminPanel.tsx` | `AdminGateway.onUpdateTemplate` | `client.data.role === 'admin'` | Updates creature template fields (including `respawnDelayMs`), refreshes in-memory animal template data, emits `category:updated`. | Implemented |
+| `admin:update_resource_template` | `AdminPanel.tsx` | `AdminGateway.onUpdateResourceTemplate` | `client.data.role === 'admin'` | Updates resource template defaults including `defaultRemainingLoots` and `respawnDelayMs`. | Implemented |
 | `admin:update_character` | `AdminPanel.tsx` | `AdminGateway.onUpdateCharacter` | `client.data.role === 'admin'` | Updates editable character numeric fields. | Implemented |
-| `admin:update_resource` | `AdminPanel.tsx` | `AdminGateway.onUpdateResource` | `client.data.role === 'admin'` | Updates resource state, position, or loot count and emits `resource_update`. | Implemented |
-| `admin:update_animal` | `AdminPanel.tsx` | `AdminGateway.onUpdateAnimal` | `client.data.role === 'admin'` | Updates animal state, health, or coordinates. | Implemented |
+| `admin:update_resource` | `AdminPanel.tsx` | `AdminGateway.onUpdateResource` | `client.data.role === 'admin'` | Updates resource state, position, loot count, or per-instance `respawnDelayMs` and emits `resource_update`. | Implemented |
+| `admin:update_animal` | `AdminPanel.tsx` | `AdminGateway.onUpdateAnimal` | `client.data.role === 'admin'` | Updates animal state, health, coordinates, or per-instance `respawnDelayMs`. | Implemented |
 | `admin:delete_animal` | `AdminPanel.tsx`, `ActionPanel.tsx` | `AdminGateway.onDeleteAnimal` | `client.data.role === 'admin'` | Deletes an animal through `AnimalsService` and emits a dead `animal_update`. | Implemented |
 | `admin:delete_resource` | `AdminPanel.tsx`, `ActionPanel.tsx` | `AdminGateway.onDeleteResource` | `client.data.role === 'admin'` | Deletes a resource and emits `resource_update` with deletion marker. | Implemented |
 | `admin:respawn_all` | `commandRegistry.ts` | `AdminGateway.onRespawnAll` | `client.data.role === 'admin'` | Forces all matching animals for a template back to spawn state. | Implemented |
@@ -115,10 +115,10 @@ The server-side admin surface is split between HTTP routes under `/admin/*` and 
 | `/sethp <template> <value>` | Socket.IO | Creature template | Updates `baseHealth`. | Repeated updates overwrite template value; audit is Not verified. | Implemented |
 | `/aggro <template> <radius>` | Socket.IO | Creature template | Updates `aggroRadius`. | Repeated updates overwrite template value; audit is Not verified. | Implemented |
 | `/respawn all <template>` | Socket.IO | Animals for one template | Resets matching animals to spawn state. | Mass-operation idempotence and replay protection are Not verified. | Implemented |
-| Apply creature template fields | Socket.IO | Creature template | Updates allowed numeric template fields. | Repeated updates overwrite template values. | Implemented |
-| Apply animal instance fields | Socket.IO | Animal instance | Updates state, health, x, or y. | Repeated updates overwrite instance values. | Implemented |
-| Apply resource template fields | Socket.IO | Resource template | Updates default remaining loots. | Repeated updates overwrite template values. | Implemented |
-| Apply resource instance fields | Socket.IO | Resource instance | Updates state, x, y, or remaining loots. | Repeated updates overwrite instance values. | Implemented |
+| Apply creature template fields | Socket.IO | Creature template | Updates allowed numeric template fields including `respawnDelayMs`. | Repeated updates overwrite template values. | Implemented |
+| Apply animal instance fields | Socket.IO | Animal instance | Updates state, health, x, y, or per-instance `respawnDelayMs`. | Repeated updates overwrite instance values. | Implemented |
+| Apply resource template fields | Socket.IO | Resource template | Updates `defaultRemainingLoots` and `respawnDelayMs`. | Repeated updates overwrite template values. | Implemented |
+| Apply resource instance fields | Socket.IO | Resource instance | Updates state, x, y, remaining loots, or per-instance `respawnDelayMs`. | Repeated updates overwrite instance values. | Implemented |
 | Apply player fields | Socket.IO | Character | Updates level, health, maxHealth, attack, or defense. | Repeated updates overwrite character values. | Implemented |
 | Delete animal | Socket.IO | Animal instance | Deletes animal and emits dead update. | Repeated delete becomes target-missing behavior; audit is Not verified. | Implemented |
 | Delete resource | Socket.IO | Resource instance | Deletes resource and emits deleted resource update. | Repeated delete becomes target-missing behavior; audit is Not verified. | Implemented |
@@ -129,9 +129,9 @@ The server-side admin surface is split between HTTP routes under `/admin/*` and 
 
 - Overview counters: templates, spawns, active animals.
 - Creature groups: template name and editable creature template fields.
-- Creature instances: id fragment, state badge, health, x, and y.
-- Resource groups: resource type and default remaining loots.
-- Resource instances: id fragment, state badge, x, y, and remaining loots.
+- Creature instances: id fragment (clickable — copies UUID to clipboard), state badge, health, x, y, WU coordinates, respawn timer (`respawnAt`), and per-instance `respawnDelayMs`.
+- Resource groups: resource type, default remaining loots, and `respawnDelayMs`.
+- Resource instances: id fragment (clickable — copies UUID to clipboard), state badge, x, y, WU coordinates, remaining loots, respawn timer (`respawnAt`), and per-instance `respawnDelayMs`.
 - Player entries: name, level, health, maxHealth, attack, defense, and teleport position when available.
 - Recent admin command results, limited to the latest five lines in the observed panel code.
 
