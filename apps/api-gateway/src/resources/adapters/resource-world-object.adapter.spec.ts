@@ -1,5 +1,6 @@
 import { toResourceWorldObject, ResourceWorldObject } from './resource-world-object.adapter';
 import { Resource } from '../entities/resource.entity';
+import { ResourceTemplate } from '../entities/resource-template.entity';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -14,8 +15,19 @@ function makeResource(overrides: Partial<Resource> = {}): Resource {
     mapId: null,
     state: 'alive',
     remainingLoots: 3,
+    respawnAt: null,
     ...overrides,
   } as Resource;
+}
+
+function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTemplate {
+  return {
+    id: 'tpl-1',
+    type: 'dead_tree',
+    defaultRemainingLoots: 5,
+    respawnDelayMs: 60_000,
+    ...overrides,
+  } as ResourceTemplate;
 }
 
 // ─── Forme de l'objet retourné ────────────────────────────────────────────────
@@ -148,6 +160,30 @@ describe('toResourceWorldObject — capabilities', () => {
   it('pas de capability "node_member" — non implémentée', () => {
     const wo = toResourceWorldObject(makeResource());
     expect(wo.capabilities).not.toContain('node_member');
+  });
+});
+
+// ─── Metadata respawnDelayMs ──────────────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.respawnDelayMs', () => {
+  it('présent si template fourni avec respawnDelayMs > 0', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ respawnDelayMs: 60_000 }));
+    expect(wo.metadata.respawnDelayMs).toBe(60_000);
+  });
+
+  it('null si template non fourni', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.respawnDelayMs).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.respawnDelayMs).toBeNull();
+  });
+
+  it('reflète respawnDelayMs du template passé', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ respawnDelayMs: 45_000 }));
+    expect(wo.metadata.respawnDelayMs).toBe(45_000);
   });
 });
 

@@ -38,6 +38,16 @@ function validateGeneric(obj: WorldObject, out: Diagnostic[]): void {
 
 function validateResource(obj: WorldObject, out: Diagnostic[]): void {
   const loots = obj.remainingLoots;
+  const respawnDelayMs = typeof obj.metadata?.respawnDelayMs === "number"
+    ? obj.metadata.respawnDelayMs : null;
+
+  if (respawnDelayMs != null && respawnDelayMs <= 0) {
+    out.push({
+      severity: "error",
+      code: "RESOURCE_INVALID_RESPAWN_DELAY",
+      message: `respawnDelayMs invalide (${respawnDelayMs}) — doit être > 0`,
+    });
+  }
 
   if (loots != null && loots < 0) {
     out.push({

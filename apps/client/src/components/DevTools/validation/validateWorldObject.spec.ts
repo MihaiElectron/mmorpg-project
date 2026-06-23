@@ -116,6 +116,29 @@ describe("validateWorldObject — règles resource", () => {
     );
     expect(triggered).toHaveLength(0);
   });
+
+  it("metadata.respawnDelayMs <= 0 → RESOURCE_INVALID_RESPAWN_DELAY error", () => {
+    const diags = validateWorldObject(
+      makeResource({ metadata: { legacy: null, respawnDelayMs: 0 } }),
+    );
+    const d = diags.find((x) => x.code === "RESOURCE_INVALID_RESPAWN_DELAY");
+    expect(d).toBeDefined();
+    expect(d?.severity).toBe("error");
+  });
+
+  it("metadata.respawnDelayMs absent → pas de RESOURCE_INVALID_RESPAWN_DELAY", () => {
+    const triggered = codes(makeResource({ metadata: { legacy: null } })).filter(
+      (c) => c === "RESOURCE_INVALID_RESPAWN_DELAY",
+    );
+    expect(triggered).toHaveLength(0);
+  });
+
+  it("metadata.respawnDelayMs > 0 → pas de RESOURCE_INVALID_RESPAWN_DELAY", () => {
+    const triggered = codes(
+      makeResource({ metadata: { legacy: null, respawnDelayMs: 60_000 } }),
+    ).filter((c) => c === "RESOURCE_INVALID_RESPAWN_DELAY");
+    expect(triggered).toHaveLength(0);
+  });
 });
 
 // ── Catégorie inconnue ────────────────────────────────────────────────────────

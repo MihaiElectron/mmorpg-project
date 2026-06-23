@@ -97,8 +97,12 @@ export class AdminService {
 
   /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
   async getResourceWorldObjects(): Promise<ResourceWorldObject[]> {
-    const resources = await this.resourceRepo.find({ order: { type: 'ASC' } });
-    return resources.map(toResourceWorldObject);
+    const [resources, templates] = await Promise.all([
+      this.resourceRepo.find({ order: { type: 'ASC' } }),
+      this.resourceTemplateRepo.find(),
+    ]);
+    const templateByType = new Map(templates.map((t) => [t.type, t]));
+    return resources.map((r) => toResourceWorldObject(r, templateByType.get(r.type) ?? null));
   }
 
   /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */

@@ -9,6 +9,7 @@
  */
 
 import { Resource } from '../entities/resource.entity';
+import { ResourceTemplate } from '../entities/resource-template.entity';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export interface ResourcePosition {
 export interface ResourceMetadata {
   /** Coordonnées pixel legacy si présentes dans l'entité source. */
   readonly legacy: { readonly x: number; readonly y: number } | null;
+  /** Délai de respawn en ms depuis le ResourceTemplate. Null si template absent. */
+  readonly respawnDelayMs: number | null;
 }
 
 /**
@@ -79,9 +82,12 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  * - position null si worldX ou worldY est absent (legacy-only ou données manquantes).
  * - x/y legacy toujours inclus dans metadata.legacy si les valeurs sont finies.
  * - capabilities : ensemble fixe des 5 capacités actuellement implémentées.
- * - respawn absent intentionnellement — aucun timer de respawn n'existe encore.
+ * - respawnDelayMs exposé dans metadata si template fourni, null sinon.
  */
-export function toResourceWorldObject(resource: Resource): ResourceWorldObject {
+export function toResourceWorldObject(
+  resource: Resource,
+  template?: Pick<ResourceTemplate, 'respawnDelayMs'> | null,
+): ResourceWorldObject {
   const hasWU =
     resource.worldX != null &&
     resource.worldY != null &&
@@ -108,6 +114,6 @@ export function toResourceWorldObject(resource: Resource): ResourceWorldObject {
     state: resource.state,
     remainingLoots: resource.remainingLoots,
     capabilities: RESOURCE_CAPABILITIES,
-    metadata: Object.freeze({ legacy }),
+    metadata: Object.freeze({ legacy, respawnDelayMs: template?.respawnDelayMs ?? null }),
   });
 }
