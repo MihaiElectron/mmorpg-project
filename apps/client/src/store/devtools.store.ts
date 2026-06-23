@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { WorldObject } from "../components/DevTools/types/worldObject.types";
 
 // ── Types legacy ───────────────────────────────────────────────────────────────
 // DevToolsPos : conservé pour compatibilité avec getAdminStore().setLastClickedPos()
@@ -132,6 +133,15 @@ const storeLogic = (set, get) => ({
       lastClickedTilePoint:    null,
       lastClickedChunkPoint:   null,
     }),
+
+  // ── Sélection WorldObject (Studio SDK) ──────────────────────────────────────
+  selectedWorldObject: null as WorldObject | null,
+
+  setSelectedWorldObject: (obj: WorldObject) =>
+    set({ selectedWorldObject: obj }),
+
+  clearSelectedWorldObject: () =>
+    set({ selectedWorldObject: null }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

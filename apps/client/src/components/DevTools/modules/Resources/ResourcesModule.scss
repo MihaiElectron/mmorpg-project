@@ -57,6 +57,23 @@
     font-family: vars.$coords-font-family;
     font-size: 0.72rem;
     line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.1s ease, border-color 0.1s ease;
+
+    &:hover {
+      background: vars.$panel-border-subtle;
+    }
+
+    &:focus-visible {
+      outline: 1px solid vars.$color-text-gold;
+      outline-offset: 1px;
+    }
+  }
+
+  &__row--selected {
+    border-color: vars.$color-text-gold;
+    background: vars.$panel-inner-bg;
   }
 
   &__cell-main {

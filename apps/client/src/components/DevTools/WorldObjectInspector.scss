@@ -1,0 +1,72 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.woi {
+  @include m.panel-section;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: vars.$color-text-primary;
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__empty {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    padding: 2px 0;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    row-gap: 3px;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  &__value {
+    color: vars.$color-text-primary;
+    word-break: break-all;
+  }
+
+  &__value--highlight {
+    color: vars.$color-text-gold;
+    font-weight: bold;
+  }
+
+  &__value--muted {
+    color: vars.$color-text-muted;
+  }
+
+  &__caps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  &__cap-tag {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    padding: 1px 5px;
+    font-size: 0.65rem;
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+  }
+}
