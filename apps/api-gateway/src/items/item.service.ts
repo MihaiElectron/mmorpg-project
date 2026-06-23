@@ -24,7 +24,10 @@ export class ItemService implements OnModuleInit {
 
   private async seedLootItems(): Promise<void> {
     for (const seed of LOOT_ITEM_SEEDS) {
-      const exists = await this.repo.findOne({ where: { category: seed.category } });
+      // Vérifie par (category, type) : category seul n'est pas unique (famille d'items).
+      const exists = await this.repo.findOne({
+        where: { category: seed.category, type: seed.type },
+      });
       if (!exists) {
         await this.repo.save(this.repo.create(seed));
       }

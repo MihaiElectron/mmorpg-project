@@ -559,6 +559,84 @@ describe('ResourcesService', () => {
       expect(jest.getTimerCount()).toBe(1);
     });
   });
+
+  // ── resetInstanceFromTemplate ─────────────────────────────────────────────
+
+  describe('resetInstanceFromTemplate', () => {
+    it('retourne null si la resource est introuvable', async () => {
+      resourceRepo.findOne.mockResolvedValue(null);
+      const result = await service.resetInstanceFromTemplate('unknown');
+      expect(result).toBeNull();
+    });
+
+    it('lève BadRequestException si le template est absent', async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ type: 'dead_tree' }));
+      templateRepo.findOne.mockResolvedValue(null);
+      await expect(service.resetInstanceFromTemplate('res-1')).rejects.toThrow(
+        /Template absent/,
+      );
+    });
+
+    it('remet remainingLoots depuis template.defaultRemainingLoots', async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ remainingLoots: 9999 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const result = await service.resetInstanceFromTemplate('res-1');
+      expect(result?.remainingLoots).toBe(4);
+    });
+
+    it('remet state à alive', async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead' }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const result = await service.resetInstanceFromTemplate('res-1');
+      expect(result?.state).toBe('alive');
+    });
+
+    it('efface respawnAt', async () => {
+      const future = new Date(Date.now() + 60_000);
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', respawnAt: future }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      const result = await service.resetInstanceFromTemplate('res-1');
+      expect(result?.respawnAt).toBeNull();
+    });
+
+    it('invalide le timer de respawn en cours', async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead' }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      // Arme un respawn fictif
+      jest.useFakeTimers();
+      resourceRepo.update.mockResolvedValue(undefined);
+      // Injecte directement un état pending (via scheduleRespawn simplifié)
+      await (service as any).pendingRespawns.add('res-1');
+      await (service as any).pendingRespawnTokens.set('res-1', 99);
+
+      await service.resetInstanceFromTemplate('res-1');
+
+      expect((service as any).pendingRespawns.has('res-1')).toBe(false);
+      expect((service as any).pendingRespawnTokens.has('res-1')).toBe(false);
+      jest.useRealTimers();
+    });
+
+    it('persiste les nouvelles valeurs en DB', async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ remainingLoots: 9999, state: 'dead' }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 6 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.resetInstanceFromTemplate('res-1');
+
+      expect(resourceRepo.update).toHaveBeenCalledWith(
+        'res-1',
+        expect.objectContaining({ state: 'alive', remainingLoots: 6, respawnAt: null }),
+      );
+    });
+  });
 });
 
 // ── RESOURCE_TEMPLATES — équilibrage ──────────────────────────────────────────

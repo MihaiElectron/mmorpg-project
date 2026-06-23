@@ -1,5 +1,5 @@
 // apps/api-gateway/src/resources/resources.service.ts
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, IsNull, Repository } from 'typeorm';
 import { Server } from 'socket.io';
@@ -120,6 +120,41 @@ export class ResourcesService implements OnModuleInit {
     this.pendingRespawnTokens.delete(id);
 
     const remainingLoots = await this.getDefaultRemainingLoots(resource.type);
+    await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
+
+    const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
+
+    if (this.server) {
+      this.server.emit('resource_update', {
+        id: updated.id,
+        state: updated.state,
+        remainingLoots: updated.remainingLoots,
+        respawnAt: null,
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Réinitialise une instance Resource depuis son template :
+   * remainingLoots = template.defaultRemainingLoots, state = alive, respawnAt = null.
+   * Invalide le timer de respawn en cours comme forceRespawn.
+   * Lève BadRequestException si le template est absent.
+   */
+  async resetInstanceFromTemplate(id: string): Promise<Resource | null> {
+    const resource = await this.findOne(id);
+    if (!resource) return null;
+
+    const template = await this.templateRepo.findOne({ where: { type: resource.type } });
+    if (!template) {
+      throw new BadRequestException(`Template absent pour le type "${resource.type}".`);
+    }
+
+    this.pendingRespawns.delete(id);
+    this.pendingRespawnTokens.delete(id);
+
+    const remainingLoots = template.defaultRemainingLoots;
     await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
 
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };

@@ -7,6 +7,7 @@ const RESOURCE_COMMAND_IDS = new Set([
   "resource.refresh",
   "resource.clearSelection",
   "resource.forceRespawn",
+  "resource.resetFromTemplate",
 ]);
 
 /**

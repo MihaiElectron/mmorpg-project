@@ -24,7 +24,7 @@ export class Item {
   @Column()
   type: string;
 
-  @Column({ unique: true })
+  @Column()
   category: string;
 
   @Column({ nullable: true })

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AnimalsService } from '../animals/animals.service';
 import { ResourcesService } from '../resources/resources.service';
@@ -89,6 +89,13 @@ export class AdminController {
   @Post('resources/:id/force-respawn')
   async forceRespawnResource(@Param('id') id: string) {
     const updated = await this.resourcesService.forceRespawn(id);
+    if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
+    return updated;
+  }
+
+  @Post('resources/:id/reset-from-template')
+  async resetResourceFromTemplate(@Param('id') id: string) {
+    const updated = await this.resourcesService.resetInstanceFromTemplate(id);
     if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
     return updated;
   }

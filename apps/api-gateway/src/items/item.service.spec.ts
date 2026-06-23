@@ -84,23 +84,34 @@ describe('ItemService', () => {
 
   describe('onModuleInit', () => {
     it('insère les items absents au démarrage', async () => {
-      repo.findOne.mockResolvedValue(null); // aucun item en DB
+      repo.findOne.mockResolvedValue(null); // aucun item material en DB
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(LOOT_ITEM_SEEDS.length);
     });
 
     it('ne duplique pas les items déjà présents', async () => {
-      repo.findOne.mockResolvedValue(makeItem()); // tous présents
+      repo.findOne.mockResolvedValue(makeItem()); // material déjà présents
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
     });
 
     it('insère uniquement les items manquants (un présent, un absent)', async () => {
       repo.findOne
-        .mockResolvedValueOnce(makeItem()) // wooden_stick présent
-        .mockResolvedValueOnce(null);      // iron_ore absent
+        .mockResolvedValueOnce(makeItem()) // wooden_stick material présent
+        .mockResolvedValueOnce(null);      // iron_ore material absent
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('vérifie par (category, type) — un earring wooden_stick ne bloque pas le seed', async () => {
+      // Un item non-material avec category='wooden_stick' ne doit pas bloquer la seed
+      // La seed cherche { category, type: 'material' } — ici findOne retourne null → insert OK
+      repo.findOne.mockResolvedValue(null);
+      await service.onModuleInit();
+      // Vérifie que la recherche inclut type dans le where
+      expect(repo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ type: 'material' }) }),
+      );
     });
   });
 

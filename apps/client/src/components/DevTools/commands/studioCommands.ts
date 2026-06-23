@@ -79,6 +79,24 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = Object.freeze([
       }
     },
   },
+  {
+    id: "resource.resetFromTemplate",
+    label: "Reset from Template",
+    description: "Réinitialise remainingLoots et state depuis le template de la Resource sélectionnée.",
+    async run(ctx) {
+      const id = ctx.selectedWorldObjectId;
+      if (!id) return;
+      const apiUrl = (import.meta as Record<string, any>).env?.VITE_API_URL ?? "";
+      const token = localStorage.getItem("token") ?? "";
+      const res = await fetch(`${apiUrl}/admin/resources/${id}/reset-from-template`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        ctx.incrementResourcesRefreshKey();
+      }
+    },
+  },
 ]);
 
 /** Retourne une commande par son identifiant, ou undefined si inconnue. */

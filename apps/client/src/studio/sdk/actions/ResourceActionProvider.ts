@@ -20,11 +20,24 @@ const forceRespawnAction: StudioAction = {
   },
 };
 
+const resetFromTemplateAction: StudioAction = {
+  id: "resource.resetFromTemplate",
+  label: "Reset from Template",
+  group: "resource",
+  danger: false,
+  enabled: (_obj: WorldObject) => true,
+  run: async (_obj: WorldObject, ctx: StudioCommandContext) => {
+    const cmd = getCommand("resource.resetFromTemplate");
+    if (!cmd) return;
+    await cmd.run(ctx);
+  },
+};
+
 /**
  * Expose les actions admin pour les WorldObjects portant la capability "harvestable".
  * ResourceCommandProvider (Commands) reste inchangé et parallèle à ce provider.
  */
 export const resourceActionProvider: ActionProvider = {
   capabilities: ["harvestable"],
-  getActions: (_obj: WorldObject): StudioAction[] => [forceRespawnAction],
+  getActions: (_obj: WorldObject): StudioAction[] => [forceRespawnAction, resetFromTemplateAction],
 };
