@@ -236,6 +236,13 @@ export class ResourcesGateway
     });
 
     if (updatedResource.state === 'dead') {
+      this.resources.scheduleRespawn(updatedResource.id, (respawned) => {
+        this.server.emit('resource_update', {
+          id: respawned.id,
+          state: respawned.state,
+          remainingLoots: respawned.remainingLoots,
+        });
+      });
       this.cancelGathering(client, targetId, 'depleted');
       return;
     }
