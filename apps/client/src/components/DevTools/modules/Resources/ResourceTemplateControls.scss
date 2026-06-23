@@ -80,32 +80,4 @@
     margin: 0;
   }
 
-  &__instance-actions {
-    display: flex;
-    justify-content: flex-end;
-    border-top: 1px solid vars.$panel-border-subtle;
-    padding-top: 6px;
-    margin-top: 2px;
-  }
-
-  &__force-respawn {
-    padding: 3px 10px;
-    background: vars.$panel-inner-bg;
-    border: 1px solid vars.$panel-border;
-    border-radius: 3px;
-    color: vars.$color-text-primary;
-    font-size: 0.8rem;
-    cursor: pointer;
-    white-space: nowrap;
-
-    &:hover:not(:disabled) {
-      border-color: vars.$color-text-gold;
-      color: vars.$color-text-gold;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
 }

@@ -14,7 +14,6 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
   const obj = useDevToolsStore((s) => s.selectedWorldObject);
 
   const isResource = obj?.category === "resource";
-  const id = obj?.id ?? null;
   const type = obj?.type ?? null;
   const rawDelay =
     typeof obj?.metadata?.respawnDelayMs === "number" ? obj.metadata.respawnDelayMs : null;
@@ -27,14 +26,11 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
   const [loots, setLoots] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [respawning, setRespawning] = useState(false);
-  const [respawnError, setRespawnError] = useState<string | null>(null);
 
   useEffect(() => {
     setDelay(rawDelay != null ? String(rawDelay) : "");
     setLoots(rawLoots != null ? String(rawLoots) : "");
     setError(null);
-    setRespawnError(null);
   }, [obj?.id, rawDelay, rawLoots]);
 
   if (!isResource || !type) return null;
@@ -101,29 +97,6 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
     }
   }
 
-  async function handleForceRespawn() {
-    if (!id) return;
-    setRespawning(true);
-    setRespawnError(null);
-    try {
-      const token = localStorage.getItem("token") ?? "";
-      const res = await fetch(`${API}/admin/resources/${id}/force-respawn`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        setRespawnError(typeof body.message === "string" ? body.message : `Erreur ${res.status}`);
-      } else {
-        onRefresh();
-      }
-    } catch {
-      setRespawnError("Erreur réseau");
-    } finally {
-      setRespawning(false);
-    }
-  }
-
   return (
     <div className="rtc">
       <div className="rtc__header">
@@ -169,19 +142,6 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
       </div>
 
       {error && <p className="rtc__error">{error}</p>}
-
-      <div className="rtc__instance-actions">
-        <button
-          className="rtc__force-respawn"
-          onClick={handleForceRespawn}
-          disabled={respawning}
-          title="Force le respawn immédiat de cette instance"
-        >
-          {respawning ? "…" : "Force Respawn"}
-        </button>
-      </div>
-
-      {respawnError && <p className="rtc__error">{respawnError}</p>}
     </div>
   );
 }
