@@ -142,6 +142,13 @@ const storeLogic = (set, get) => ({
 
   clearSelectedWorldObject: () =>
     set({ selectedWorldObject: null }),
+
+  // ── Commandes Studio ──────────────────────────────────────────────────────
+  // Incrémenter force ResourcesModule à relancer son fetch initial.
+  resourcesRefreshKey: 0,
+
+  incrementResourcesRefreshKey: () =>
+    set({ resourcesRefreshKey: get().resourcesRefreshKey + 1 }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

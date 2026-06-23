@@ -14,14 +14,51 @@
     gap: 6px;
   }
 
+  &__header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
   &__title {
     color: vars.$color-text-gold;
     font-size: 0.85rem;
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 1px;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  &__action-btn {
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-size: 0.75rem;
+    padding: 1px 6px;
+    cursor: pointer;
+    line-height: 1.4;
+
+    &:hover {
+      color: vars.$color-text-primary;
+      border-color: vars.$panel-border;
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 1px solid vars.$color-text-gold;
+      outline-offset: 1px;
+    }
   }
 
   &__status {

@@ -3,6 +3,7 @@ import { useDevToolsStore, getDevToolsStore } from "../../../../store/devtools.s
 import { getDevToolsSocket } from "../../devtoolsBridge";
 import type { WorldObject } from "../../types/worldObject.types";
 import { patchClientWorldObject } from "./resourceWorldObjectClientAdapter";
+import { getCommand, type StudioCommandContext } from "../../commands/studioCommands";
 import "./ResourcesModule.scss";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -76,8 +77,16 @@ export default function ResourcesModule() {
 
   const selectedId = useDevToolsStore((s) => s.selectedWorldObject?.id ?? null);
   const setSelected = useDevToolsStore((s) => s.setSelectedWorldObject);
+  const refreshKey = useDevToolsStore((s) => s.resourcesRefreshKey);
+  const incrementRefreshKey = useDevToolsStore((s) => s.incrementResourcesRefreshKey);
+  const clearSelected = useDevToolsStore((s) => s.clearSelectedWorldObject);
 
-  // ── Chargement initial ────────────────────────────────────────────────────
+  const cmdCtx: StudioCommandContext = {
+    clearSelectedWorldObject: clearSelected,
+    incrementResourcesRefreshKey: incrementRefreshKey,
+  };
+
+  // ── Chargement initial + refresh sur commande ─────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("token") ?? "";
     setStatus("loading");
@@ -87,7 +96,7 @@ export default function ResourcesModule() {
         setStatus("loaded");
       })
       .catch(() => setStatus("error"));
-  }, []);
+  }, [refreshKey]);
 
   // ── Synchronisation runtime via resource_update ───────────────────────────
   useEffect(() => {
@@ -122,7 +131,28 @@ export default function ResourcesModule() {
   return (
     <section className="devtools-resources" aria-label="Resources Studio module">
       <div className="devtools-resources__header">
-        <h3 className="devtools-resources__title">Resources (WOM)</h3>
+        <div className="devtools-resources__header-row">
+          <h3 className="devtools-resources__title">Resources (WOM)</h3>
+          <div className="devtools-resources__actions">
+            <button
+              className="devtools-resources__action-btn"
+              onClick={() => getCommand("resource.refresh")?.run(cmdCtx)}
+              title="Rafraîchir la liste"
+              aria-label="Rafraîchir"
+            >
+              ↺
+            </button>
+            <button
+              className="devtools-resources__action-btn"
+              onClick={() => getCommand("resource.clearSelection")?.run(cmdCtx)}
+              disabled={!selectedId}
+              title="Désélectionner"
+              aria-label="Désélectionner"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
         {status === "loading" && (
           <p className="devtools-resources__status">Chargement…</p>
         )}
