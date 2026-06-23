@@ -339,7 +339,10 @@ export default class WorldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
     // ── Studio SDK — overlay + sélection ──────────────────────────────────────
-    this.overlayManager = new DevToolsOverlayManager(this);
+    this.overlayManager = new DevToolsOverlayManager(this, (id) => {
+      const spawn = this.creatureSpawnData.get(id);
+      if (spawn) getAdminStore().getState().setSelectedWorldObject(spawn);
+    });
 
     this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;

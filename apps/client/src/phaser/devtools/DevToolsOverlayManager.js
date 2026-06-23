@@ -41,11 +41,12 @@ function makeLayer() {
 // ── DevToolsOverlayManager ────────────────────────────────────────────────────
 
 export class DevToolsOverlayManager {
-  constructor(scene) {
-    this._scene     = scene;
-    this._resources = makeLayer();
-    this._animals   = makeLayer();
-    this._spawns    = makeLayer();
+  constructor(scene, onSpawnClick = null) {
+    this._scene        = scene;
+    this._onSpawnClick = onSpawnClick;
+    this._resources    = makeLayer();
+    this._animals      = makeLayer();
+    this._spawns       = { ...makeLayer(), zones: new Map() };
   }
 
   // ── Helpers internes ────────────────────────────────────────────────────────
@@ -54,6 +55,10 @@ export class DevToolsOverlayManager {
     if (layer.graphics) layer.graphics.clear();
     for (const text of layer.labels.values()) text.destroy();
     layer.labels.clear();
+    if (layer.zones) {
+      for (const zone of layer.zones.values()) zone.destroy();
+      layer.zones.clear();
+    }
   }
 
   _ensureGraphics(layer) {
@@ -148,6 +153,14 @@ export class DevToolsOverlayManager {
 
       this._addLabel(this._spawns, id, x, y - dotRadius - 5, spawn.type, _shortId(id),
         isSelected ? "#f1c40f" : "#3498db");
+
+      if (this._onSpawnClick) {
+        const zone = this._scene.add.zone(x, y, 28, 28);
+        zone.setInteractive({ useHandCursor: true });
+        zone.setDepth(52);
+        zone.on("pointerdown", () => this._onSpawnClick(id));
+        this._spawns.zones.set(id, zone);
+      }
     }
   }
 
