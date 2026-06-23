@@ -1,7 +1,8 @@
 // apps/api-gateway/src/resources/resources.service.ts
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, IsNull, Repository } from 'typeorm';
+import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
@@ -15,8 +16,13 @@ export const RESOURCE_RESPAWN_DELAY_MS = 30_000;
 
 @Injectable()
 export class ResourcesService implements OnModuleInit {
+  private readonly logger = new Logger(ResourcesService.name);
+
   // IDs des ressources dont le respawn est déjà planifié (évite les doubles timers).
   private readonly pendingRespawns = new Set<string>();
+
+  // Serveur WebSocket injecté par le gateway via setServer() dans afterInit.
+  private server: Server | null = null;
 
   constructor(
     @InjectRepository(Resource)
@@ -25,8 +31,13 @@ export class ResourcesService implements OnModuleInit {
     private templateRepo: Repository<ResourceTemplate>,
   ) {}
 
+  setServer(server: Server): void {
+    this.server = server;
+  }
+
   async onModuleInit() {
     await this.templateRepo.upsert(RESOURCE_TEMPLATES, ['type']);
+    await this.reloadPendingRespawns();
   }
 
   async getDefaultRemainingLoots(type: string): Promise<number> {
@@ -38,9 +49,6 @@ export class ResourcesService implements OnModuleInit {
     return this.repo.find();
   }
 
-  /**
-   * Récupère une ressource par ID
-   */
   findOne(id: string) {
     return this.repo.findOne({ where: { id } });
   }
@@ -77,34 +85,75 @@ export class ResourcesService implements OnModuleInit {
 
   /**
    * Planifie le respawn d'une ressource morte.
+   * Persiste respawnAt en DB avant d'armer le timer.
    * Sans effet si un respawn est déjà en attente pour cet ID.
-   * Le callback onRespawned est appelé avec la ressource restaurée
-   * (utilisé par le gateway pour broadcaster resource_update).
    */
-  scheduleRespawn(
-    id: string,
-    onRespawned: (resource: Resource) => void,
-    delayMs = RESOURCE_RESPAWN_DELAY_MS,
-  ): void {
+  async scheduleRespawn(id: string, delayMs = RESOURCE_RESPAWN_DELAY_MS): Promise<void> {
     if (this.pendingRespawns.has(id)) return;
     this.pendingRespawns.add(id);
 
-    setTimeout(async () => {
-      this.pendingRespawns.delete(id);
-      const respawned = await this.doRespawn(id);
-      if (respawned) onRespawned(respawned);
-    }, delayMs);
+    const respawnAt = new Date(Date.now() + delayMs);
+    await this.repo.update(id, { respawnAt });
+
+    this.armRespawnTimer(id, delayMs);
   }
 
   /**
    * Remet une ressource en état alive avec ses loots restaurés depuis le template.
+   * Efface respawnAt.
    */
   async doRespawn(id: string): Promise<Resource | null> {
     const resource = await this.findOne(id);
     if (!resource) return null;
 
     const remainingLoots = await this.getDefaultRemainingLoots(resource.type);
-    await this.repo.update(id, { state: 'alive', remainingLoots });
-    return { ...resource, state: 'alive', remainingLoots };
+    await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
+    return { ...resource, state: 'alive', remainingLoots, respawnAt: null };
+  }
+
+  /**
+   * Au démarrage : replanifie les timers pour les resources mortes avec respawnAt persisté.
+   * Respawn immédiat si respawnAt est dans le passé.
+   * Les resources dead sans respawnAt ne sont pas touchées.
+   */
+  private async reloadPendingRespawns(): Promise<void> {
+    const pending = await this.repo.find({
+      where: { state: 'dead', respawnAt: Not(IsNull()) },
+    });
+
+    if (pending.length === 0) return;
+    this.logger.log(`Replanification de ${pending.length} resource(s) en attente de respawn`);
+
+    const now = Date.now();
+    for (const resource of pending) {
+      if (!resource.respawnAt) {
+        this.logger.warn(`Resource ${resource.id} dead sans respawnAt — ignorée`);
+        continue;
+      }
+      if (this.pendingRespawns.has(resource.id)) continue;
+      this.pendingRespawns.add(resource.id);
+
+      const remaining = resource.respawnAt.getTime() - now;
+      this.armRespawnTimer(resource.id, Math.max(remaining, 0));
+    }
+  }
+
+  /**
+   * Arme le setTimeout qui déclenche doRespawn et broadcast resource_update.
+   * Méthode interne partagée par scheduleRespawn et reloadPendingRespawns.
+   */
+  private armRespawnTimer(id: string, delayMs: number): void {
+    setTimeout(async () => {
+      this.pendingRespawns.delete(id);
+      const respawned = await this.doRespawn(id);
+      if (respawned && this.server) {
+        this.server.emit('resource_update', {
+          id: respawned.id,
+          state: respawned.state,
+          remainingLoots: respawned.remainingLoots,
+          respawnAt: null,
+        });
+      }
+    }, delayMs);
   }
 }

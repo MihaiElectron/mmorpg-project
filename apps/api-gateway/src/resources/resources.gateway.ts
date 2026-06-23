@@ -7,6 +7,7 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
@@ -41,10 +42,14 @@ type GatherSession = {
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class ResourcesGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
+
+  afterInit(server: Server) {
+    this.resources.setServer(server);
+  }
 
   /**
    * Cycle de récolte continue en cours, indexé par socket.id.
@@ -236,13 +241,7 @@ export class ResourcesGateway
     });
 
     if (updatedResource.state === 'dead') {
-      this.resources.scheduleRespawn(updatedResource.id, (respawned) => {
-        this.server.emit('resource_update', {
-          id: respawned.id,
-          state: respawned.state,
-          remainingLoots: respawned.remainingLoots,
-        });
-      });
+      await this.resources.scheduleRespawn(updatedResource.id);
       this.cancelGathering(client, targetId, 'depleted');
       return;
     }

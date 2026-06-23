@@ -30,4 +30,7 @@ export class Resource {
 
   @Column('int', { name: 'remaining_loots', default: 9999 })
   remainingLoots: number;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'respawn_at', default: null })
+  respawnAt: Date | null;
 }
