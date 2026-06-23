@@ -112,11 +112,14 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     instanceDeleteEvent: "admin:delete_resource",
     getInstanceDeletePayload: (r) => ({ id: r.id }),
     getInstanceInfoLine: (r) => {
+      const parts: string[] = [];
       if (r.worldX != null && r.worldY != null) {
         const mapPart = r.mapId != null ? `  map:${r.mapId}` : "";
-        return `WU: ${r.worldX}, ${r.worldY}${mapPart}`;
+        parts.push(`WU: ${r.worldX}, ${r.worldY}${mapPart}`);
       }
-      return null;
+      const respawn = formatRespawnAt(r.respawnAt);
+      if (respawn) parts.push(respawn);
+      return parts.length ? parts.join("  ·  ") : null;
     },
     instanceActions: [
       {
@@ -186,10 +189,23 @@ function wosToResourceInstances(wos: WorldObject[]): any[] {
     remainingLoots: wo.remainingLoots ?? 0,
     x: (wo.metadata.legacy as any)?.x ?? 0,
     y: (wo.metadata.legacy as any)?.y ?? 0,
-    worldX: wo.position?.worldX ?? null,
-    worldY: wo.position?.worldY ?? null,
-    mapId:  wo.mapId ?? null,
+    worldX:    wo.position?.worldX ?? null,
+    worldY:    wo.position?.worldY ?? null,
+    mapId:     wo.mapId ?? null,
+    respawnAt: wo.metadata.respawnAt ?? null,
   }));
+}
+
+function formatRespawnAt(raw: string | Date | null | undefined): string | null {
+  if (raw == null) return null;
+  const d = typeof raw === "string" ? new Date(raw) : raw;
+  if (isNaN(d.getTime())) return null;
+  const now = Date.now();
+  const diffMs = d.getTime() - now;
+  if (diffMs <= 0) return "respawn imminent";
+  const secs = Math.round(diffMs / 1000);
+  if (secs < 60) return `respawn dans ${secs}s`;
+  return `respawn dans ${Math.round(secs / 60)}min`;
 }
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────

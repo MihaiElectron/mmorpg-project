@@ -259,6 +259,19 @@ describe('toResourceWorldObject — metadata.lootPool', () => {
 
 // ─── Immutabilité ─────────────────────────────────────────────────────────────
 
+describe('toResourceWorldObject — metadata.respawnAt', () => {
+  it('null si resource.respawnAt est null', () => {
+    const wo = toResourceWorldObject(makeResource({ respawnAt: null }));
+    expect(wo.metadata.respawnAt).toBeNull();
+  });
+
+  it('reflète resource.respawnAt si une date est présente', () => {
+    const date = new Date('2026-06-24T10:00:00.000Z');
+    const wo = toResourceWorldObject(makeResource({ respawnAt: date }));
+    expect(wo.metadata.respawnAt).toBe(date);
+  });
+});
+
 describe('toResourceWorldObject — immutabilité', () => {
   it('le WorldObject retourné est frozen', () => {
     const wo = toResourceWorldObject(makeResource());

@@ -40,6 +40,8 @@ export interface ResourceMetadata {
   readonly lootPoolCount: number | null;
   /** itemId de chaque entrée valide du lootPool. Null si template absent. */
   readonly lootPoolItems: readonly string[] | null;
+  /** Date de réapparition prévue si la resource est dead et en attente de respawn. Null sinon. */
+  readonly respawnAt: Date | null;
 }
 
 /**
@@ -103,6 +105,7 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  * - capabilities : ensemble fixe des 5 capacités actuellement implémentées.
  * - respawnDelayMs exposé dans metadata si template fourni, null sinon.
  * - lootPoolCount/lootPoolItems extraits des entrées valides du template, null sinon.
+ * - respawnAt : date ISO de réapparition si resource.respawnAt est non-null, null sinon.
  */
 export function toResourceWorldObject(
   resource: Resource,
@@ -142,6 +145,7 @@ export function toResourceWorldObject(
         const lp = extractLootPool(template?.lootPool);
         return { lootPoolCount: lp?.count ?? null, lootPoolItems: lp ? Object.freeze(lp.items) : null };
       })(),
+      respawnAt: resource.respawnAt ?? null,
     }),
   });
 }
