@@ -6,6 +6,7 @@ import { CreatureSpawnsModule } from "./modules/CreatureSpawns";
 import WorldObjectInspector from "./WorldObjectInspector";
 import ValidationPanel from "./ValidationPanel";
 import OverlayControls from "./OverlayControls";
+import SelectedActionsPanel from "./SelectedActionsPanel";
 
 export default function DevToolsPanel() {
   return (
@@ -16,6 +17,7 @@ export default function DevToolsPanel() {
       <AnimalsModule />
       <CreatureSpawnsModule />
       <WorldObjectInspector />
+      <SelectedActionsPanel />
       <ValidationPanel />
       <AdminPanel />
     </>
