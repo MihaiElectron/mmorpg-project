@@ -1,5 +1,6 @@
 import { useDevToolsStore } from "../../store/devtools.store";
-import { validateWorldObject, type Diagnostic } from "./validation/validateWorldObject";
+import { capabilityRegistry, isValidationProvider } from "../../studio/sdk/capabilities";
+import type { Diagnostic } from "./validation/validateWorldObject";
 import "./ValidationPanel.scss";
 
 const ICON: Record<string, string> = {
@@ -27,7 +28,10 @@ export default function ValidationPanel() {
       {!obj ? (
         <p className="vp__empty">Sélectionner un WorldObject.</p>
       ) : (() => {
-        const diags = validateWorldObject(obj);
+        const diags: Diagnostic[] = capabilityRegistry
+          .getProvidersFor(obj)
+          .filter(isValidationProvider)
+          .flatMap((p) => p.validate(obj));
         return diags.length === 0 ? (
           <p className="vp__ok">✓ OK</p>
         ) : (
