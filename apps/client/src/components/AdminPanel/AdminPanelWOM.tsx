@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { getDevToolsStore } from "../../store/devtools.store";
+import { getDevToolsStore, useDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import { type WorldObject } from "../DevTools/types/worldObject.types";
@@ -231,6 +231,11 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
+  const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
+  const highlightIds: Record<string, string | null> = {
+    creatures: selectedWO?.category === "animal"   ? selectedWO.id : null,
+    resources: selectedWO?.category === "resource" ? selectedWO.id : null,
+  };
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
   const [groupData,    setGroupData]    = useState<Record<string, any[]>>({});
@@ -432,6 +437,7 @@ export default function AdminPanelWOM() {
           instances={instanceData[cfg.id] ?? []}
           onResult={pushResult}
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
+          highlightId={highlightIds[cfg.id] ?? null}
         />
       ))}
 

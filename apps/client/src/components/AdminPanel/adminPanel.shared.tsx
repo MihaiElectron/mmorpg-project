@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
 
@@ -386,6 +386,7 @@ type GroupedSectionProps = {
   instances: any[];
   onResult: (text: string, ok: boolean) => void;
   onInstanceDeleted: (instanceKey: string) => void;
+  highlightId?: string | null;
 };
 
 function InstanceActionButton({ action, inst, onResult }: { action: InstanceAction; inst: any; onResult: (text: string, ok: boolean) => void }) {
@@ -411,10 +412,11 @@ function InstanceActionButton({ action, inst, onResult }: { action: InstanceActi
   );
 }
 
-export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted }: GroupedSectionProps) {
+export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId }: GroupedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const scrollPending = useRef<string | null>(null);
 
   const filtered = groups.filter((g) =>
     config.getGroupName(g).toLowerCase().includes(search.toLowerCase())
@@ -423,6 +425,30 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
   const paginated = filtered.slice((pag.page - 1) * ITEMS_PER_PAGE, pag.page * ITEMS_PER_PAGE);
 
   useEffect(() => { pag.goToPage(1); }, [search]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const group = groups.find((g) =>
+      config.getInstancesForGroup(instances, g).some((i) => config.getInstanceKey(i) === highlightId)
+    );
+    if (!group) return;
+    const gk = config.getGroupKey(group);
+    setIsOpen(true);
+    setExpanded((prev) => new Set([...prev, gk]));
+    const groupIdx = groups.findIndex((g) => config.getGroupKey(g) === gk);
+    if (groupIdx >= 0) pag.goToPage(Math.floor(groupIdx / ITEMS_PER_PAGE) + 1);
+    scrollPending.current = highlightId;
+  }, [highlightId]);
+
+  useEffect(() => {
+    if (!scrollPending.current) return;
+    const id = scrollPending.current;
+    scrollPending.current = null;
+    setTimeout(() => {
+      document.querySelector(`[data-instance-id="${id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  });
 
   const groupDraft = useDraft(config.groupFields);
   const instDraft  = useDraft(config.instanceFields);
@@ -569,7 +595,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                         const badge = config.getInstanceBadge?.(inst);
                         const tpPos = config.getInstanceTpPosition?.(inst);
                         return (
-                          <div key={ik} className="admin-panel__instance-item">
+                          <div key={ik} data-instance-id={ik} className={`admin-panel__instance-item${ik === highlightId ? " is-highlighted" : ""}`}>
                             <div className="admin-panel__item-header">
                               <span
                                 className="admin-panel__instance-name admin-panel__instance-name--copyable"

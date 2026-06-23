@@ -398,6 +398,11 @@
 
     &:hover { border-color: vars.$panel-border; }
 
+    &.is-highlighted {
+      border-color: vars.$color-text-gold;
+      background: color.adjust(vars.$color-text-gold, $alpha: -0.88);
+    }
+
     // Stats + bouton Appliquer/Supprimer sur la même ligne
     .admin-panel__template-stats {
       align-items: flex-end;
