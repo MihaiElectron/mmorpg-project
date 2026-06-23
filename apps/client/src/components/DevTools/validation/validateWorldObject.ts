@@ -24,10 +24,10 @@ function validateGeneric(obj: WorldObject, out: Diagnostic[]): void {
     out.push({ severity: "error", code: "MISSING_STATE", message: "state absent" });
   }
   if (obj.mapId == null) {
-    out.push({ severity: "warning", code: "MISSING_MAP_ID", message: "mapId absent — resource hors carte" });
+    out.push({ severity: "warning", code: "MISSING_MAP_ID", message: "mapId absent — entité hors carte" });
   }
   if (obj.position == null) {
-    out.push({ severity: "warning", code: "MISSING_POSITION", message: "position WU absente — resource non localisée" });
+    out.push({ severity: "warning", code: "MISSING_POSITION", message: "position WU absente — entité non localisée" });
   }
   if (!obj.capabilities || obj.capabilities.length === 0) {
     out.push({ severity: "warning", code: "EMPTY_CAPABILITIES", message: "capabilities vides" });
@@ -64,11 +64,40 @@ function validateResource(obj: WorldObject, out: Diagnostic[]): void {
   }
 }
 
+// ── Règles spécifiques à la catégorie animal ──────────────────────────────────
+
+function validateAnimal(obj: WorldObject, out: Diagnostic[]): void {
+  if (obj.health == null || obj.health < 0) {
+    out.push({
+      severity: "error",
+      code: "ANIMAL_INVALID_HEALTH",
+      message: `health invalide (${obj.health ?? "absent"})`,
+    });
+  }
+
+  if (obj.state === "dead" && obj.health != null && obj.health > 0) {
+    out.push({
+      severity: "warning",
+      code: "ANIMAL_DEAD_WITH_HP",
+      message: `animal dead mais health = ${obj.health}`,
+    });
+  }
+
+  if ((obj.state === "alive" || obj.state === "fighting") && obj.health === 0) {
+    out.push({
+      severity: "warning",
+      code: "ANIMAL_ALIVE_NO_HP",
+      message: `animal ${obj.state} mais health = 0`,
+    });
+  }
+}
+
 // ── Registre de règles par catégorie ─────────────────────────────────────────
 // Ajouter une entrée ici pour brancher un validateur sur une nouvelle catégorie.
 
 const CATEGORY_VALIDATORS: Record<string, (obj: WorldObject, out: Diagnostic[]) => void> = {
   resource: validateResource,
+  animal: validateAnimal,
 };
 
 // ── Point d'entrée ────────────────────────────────────────────────────────────

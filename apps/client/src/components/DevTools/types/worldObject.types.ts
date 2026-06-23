@@ -19,6 +19,9 @@ export interface WorldObject {
   state: string;
   /** Présent uniquement pour les types qui ont des charges (Resource). */
   remainingLoots?: number;
+  /** Présent pour les entités avec barre de vie (Animal). */
+  health?: number;
+  maxHealth?: number;
   capabilities: string[];
   metadata: Record<string, unknown>;
 }

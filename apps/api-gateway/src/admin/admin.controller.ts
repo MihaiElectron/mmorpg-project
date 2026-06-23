@@ -23,6 +23,10 @@ export class AdminController {
   @Get('animals')
   getAnimals() { return this.animalsService.findAll(); }
 
+  /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
+  @Get('animals/world-objects')
+  getAnimalWorldObjects() { return this.adminService.getAnimalWorldObjects(); }
+
   // ── Créatures ─────────────────────────────────────────────────────────────
 
   @Get('templates')

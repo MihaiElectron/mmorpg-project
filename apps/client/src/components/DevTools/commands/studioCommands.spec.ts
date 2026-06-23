@@ -6,13 +6,14 @@ function makeCtx(overrides: Partial<StudioCommandContext> = {}): StudioCommandCo
   return {
     clearSelectedWorldObject: vi.fn(),
     incrementResourcesRefreshKey: vi.fn(),
+    incrementAnimalsRefreshKey: vi.fn(),
     ...overrides,
   };
 }
 
 describe("STUDIO_COMMANDS — registre", () => {
-  it("contient exactement deux commandes", () => {
-    expect(STUDIO_COMMANDS).toHaveLength(2);
+  it("contient exactement quatre commandes", () => {
+    expect(STUDIO_COMMANDS).toHaveLength(4);
   });
 
   it("toutes les commandes ont id, label, description, run", () => {

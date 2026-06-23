@@ -7,6 +7,7 @@
 export interface StudioCommandContext {
   clearSelectedWorldObject: () => void;
   incrementResourcesRefreshKey: () => void;
+  incrementAnimalsRefreshKey: () => void;
 }
 
 export interface StudioCommand {
@@ -29,6 +30,22 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = Object.freeze([
     id: "resource.clearSelection",
     label: "Désélectionner",
     description: "Vide la sélection WorldObject courante.",
+    run(ctx) {
+      ctx.clearSelectedWorldObject();
+    },
+  },
+  {
+    id: "animal.refresh",
+    label: "Rafraîchir",
+    description: "Recharge la liste des Animals depuis le serveur.",
+    run(ctx) {
+      ctx.incrementAnimalsRefreshKey();
+    },
+  },
+  {
+    id: "animal.clearSelection",
+    label: "Désélectionner",
+    description: "Vide la sélection WorldObject courante (depuis Animals).",
     run(ctx) {
       ctx.clearSelectedWorldObject();
     },

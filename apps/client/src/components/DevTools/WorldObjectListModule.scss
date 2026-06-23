@@ -1,7 +1,7 @@
-@use "../../../../styles/abstracts/variables" as vars;
-@use "../../../../styles/abstracts/mixins" as m;
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
 
-.devtools-resources {
+.devtools-wo-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -144,7 +144,7 @@
     white-space: nowrap;
   }
 
-  &__loots {
+  &__metric {
     color: vars.$color-text-primary;
     white-space: nowrap;
   }
@@ -173,5 +173,15 @@
   &__badge--dead {
     background: rgba(192, 57, 43, 0.25);
     color: #e74c3c;
+  }
+
+  &__badge--fighting {
+    background: rgba(231, 76, 60, 0.25);
+    color: #e74c3c;
+  }
+
+  &__badge--escaping {
+    background: rgba(243, 156, 18, 0.25);
+    color: #f39c12;
   }
 }

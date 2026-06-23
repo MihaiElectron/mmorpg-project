@@ -158,6 +158,22 @@ const storeLogic = (set, get) => ({
 
   toggleResourceOverlayEnabled: () =>
     set({ resourceOverlayEnabled: !get().resourceOverlayEnabled }),
+
+  // ── Commandes Studio — Animals ────────────────────────────────────────────
+  // Incrémenter force AnimalsModule à relancer son fetch initial.
+  animalsRefreshKey: 0,
+
+  incrementAnimalsRefreshKey: () =>
+    set({ animalsRefreshKey: get().animalsRefreshKey + 1 }),
+
+  // ── Overlay Studio — Animals ──────────────────────────────────────────────
+  animalOverlayEnabled: false,
+
+  setAnimalOverlayEnabled: (enabled: boolean) =>
+    set({ animalOverlayEnabled: enabled }),
+
+  toggleAnimalOverlayEnabled: () =>
+    set({ animalOverlayEnabled: !get().animalOverlayEnabled }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

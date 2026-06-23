@@ -10,6 +10,7 @@ import { ResourceTemplate } from '../resources/entities/resource-template.entity
 import { WorldService } from '../world/world.service';
 import { DEFAULT_MAP_ID, isoScreenToWorldWU } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
+import { toAnimalWorldObject, AnimalWorldObject } from '../animals/adapters/animal-world-object.adapter';
 
 @Injectable()
 export class AdminService {
@@ -97,6 +98,15 @@ export class AdminService {
   async getResourceWorldObjects(): Promise<ResourceWorldObject[]> {
     const resources = await this.resourceRepo.find({ order: { type: 'ASC' } });
     return resources.map(toResourceWorldObject);
+  }
+
+  /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
+  async getAnimalWorldObjects(): Promise<AnimalWorldObject[]> {
+    const animals = await this.animalRepo.find({
+      relations: ['spawn', 'spawn.template'],
+      order: { state: 'ASC' },
+    });
+    return animals.map(toAnimalWorldObject);
   }
 
   async updateResource(

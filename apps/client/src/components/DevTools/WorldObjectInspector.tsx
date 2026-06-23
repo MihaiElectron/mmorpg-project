@@ -60,6 +60,16 @@ export default function WorldObjectInspector() {
             </>
           )}
 
+          {obj.health != null && (
+            <>
+              <dt className="woi__label">health</dt>
+              <dd className="woi__value">
+                {obj.health}
+                {obj.maxHealth != null ? ` / ${obj.maxHealth}` : ""}
+              </dd>
+            </>
+          )}
+
           <dt className="woi__label">capabilities</dt>
           <dd className="woi__value">
             <ul className="woi__caps" aria-label="Capabilities">

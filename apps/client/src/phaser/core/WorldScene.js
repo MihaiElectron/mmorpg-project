@@ -9,10 +9,37 @@ import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
 import { getAdminStore } from "../../store/admin.store";
 
-// ── Studio SDK — WorldObject adapter (client-side mirror du backend adapter) ──
+// ── Studio SDK — WorldObject adapters (client-side mirror des backend adapters) ──
 const RESOURCE_WO_CAPABILITIES = Object.freeze([
   "transform", "harvestable", "loot", "persistence", "validation",
 ]);
+
+const ANIMAL_WO_CAPABILITIES = Object.freeze([
+  "transform", "combat", "health", "persistence", "validation",
+]);
+
+function animalToWorldObject(animal) {
+  const hasWU =
+    animal.worldX != null && animal.worldY != null && animal.mapId != null;
+  return {
+    kind: "entity",
+    category: "animal",
+    id: animal.id,
+    type: animal.type ?? "unknown",
+    mapId: animal.mapId ?? null,
+    position: hasWU ? { worldX: animal.worldX, worldY: animal.worldY } : null,
+    state: animal.state ?? "alive",
+    health:    animal.health    ?? null,
+    maxHealth: animal.maxHealth ?? null,
+    capabilities: ANIMAL_WO_CAPABILITIES,
+    metadata: {
+      legacy:
+        animal.x != null && animal.y != null
+          ? { x: animal.x, y: animal.y }
+          : null,
+    },
+  };
+}
 
 function resourceToWorldObject(resource) {
   const hasWU =
@@ -99,6 +126,8 @@ export default class WorldScene extends Phaser.Scene {
     this.resourceData = new Map();
     this.resourceOverlayGraphics = null;
     this.resourceOverlayLabels = new Map();
+    this.animalOverlayGraphics = null;
+    this.animalOverlayLabels = new Map();
     this.overlayStoreUnsub = null;
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
@@ -267,6 +296,10 @@ export default class WorldScene extends Phaser.Scene {
           const rd = this.resourceData.get(first.id);
           if (rd) getAdminStore().getState().setSelectedWorldObject(resourceToWorldObject(rd));
         }
+        if (first.kind === "animal") {
+          const entry = this.animalSprites.get(first.id);
+          if (entry?.animal) getAdminStore().getState().setSelectedWorldObject(animalToWorldObject(entry.animal));
+        }
 
         return;
       }
@@ -305,10 +338,14 @@ export default class WorldScene extends Phaser.Scene {
 
     // ── Studio SDK — overlay + sélection ──────────────────────────────────────
     this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
-      const overlayChanged = state.resourceOverlayEnabled !== prev.resourceOverlayEnabled;
+      const resourceOverlayChanged = state.resourceOverlayEnabled !== prev.resourceOverlayEnabled;
+      const animalOverlayChanged   = state.animalOverlayEnabled   !== prev.animalOverlayEnabled;
       const selectionChanged = state.selectedWorldObject?.id !== prev.selectedWorldObject?.id;
-      if (overlayChanged || selectionChanged) {
+      if (resourceOverlayChanged || selectionChanged) {
         this.redrawResourceOverlay();
+      }
+      if (animalOverlayChanged || selectionChanged) {
+        this.redrawAnimalOverlay();
       }
     });
 
@@ -777,6 +814,8 @@ export default class WorldScene extends Phaser.Scene {
     animals
       .filter((animal) => animal.state === "alive")
       .forEach((animal) => this.upsertAnimal(animal));
+
+    this.redrawAnimalOverlay();
   }
 
   upsertAnimal(animal) {
@@ -823,6 +862,51 @@ export default class WorldScene extends Phaser.Scene {
       kind: "animal",
       actions: ["attaquer"],
     });
+    this.redrawAnimalOverlay();
+  }
+
+  // ── Studio SDK — Animal Overlay ──────────────────────────────────────────
+
+  redrawAnimalOverlay() {
+    if (this.animalOverlayGraphics) {
+      this.animalOverlayGraphics.clear();
+    }
+    for (const text of this.animalOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.animalOverlayLabels.clear();
+
+    if (!getAdminStore().getState().animalOverlayEnabled) return;
+
+    if (!this.animalOverlayGraphics) {
+      this.animalOverlayGraphics = this.add.graphics();
+      this.animalOverlayGraphics.setDepth(50);
+    }
+
+    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
+
+    for (const [id, entry] of this.animalSprites.entries()) {
+      const animal = entry.animal;
+      const { x, y } = resolveScreen(animal);
+      const isSelected = id === selectedId;
+
+      const color = isSelected ? 0xf1c40f : 0xe74c3c;
+      const alpha = isSelected ? 1.0 : 0.75;
+      const radius = isSelected ? 14 : 9;
+
+      this.animalOverlayGraphics.lineStyle(isSelected ? 3 : 2, color, alpha);
+      this.animalOverlayGraphics.strokeCircle(x, y - 18, radius);
+
+      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
+      const label = this.add.text(x, y - 34, `${animal.type}\n${shortId}`, {
+        fontSize: "9px",
+        color: isSelected ? "#f1c40f" : "#e74c3c",
+        align: "center",
+      });
+      label.setOrigin(0.5, 1);
+      label.setDepth(51);
+      this.animalOverlayLabels.set(id, label);
+    }
   }
 
   // ── Studio SDK — Resource Overlay ─────────────────────────────────────────
@@ -892,6 +976,7 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.kind !== "animal",
     );
+    this.redrawAnimalOverlay();
   }
 
   removeResource(resourceId) {
@@ -923,6 +1008,7 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = this.interactionTargets.filter(
       (target) => target.id !== animalId,
     );
+    this.redrawAnimalOverlay();
   }
 
   destroy() {
@@ -960,6 +1046,15 @@ export default class WorldScene extends Phaser.Scene {
       text.destroy();
     }
     this.resourceOverlayLabels.clear();
+
+    if (this.animalOverlayGraphics) {
+      this.animalOverlayGraphics.destroy();
+      this.animalOverlayGraphics = null;
+    }
+    for (const text of this.animalOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.animalOverlayLabels.clear();
 
     this.clearResources();
     destroyHpBar(this.playerHpBar);
