@@ -35,6 +35,10 @@ export class AdminController {
   @Get('spawns')
   getSpawns() { return this.adminService.getSpawns(); }
 
+  /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
+  @Get('creature-spawns/world-objects')
+  getCreatureSpawnWorldObjects() { return this.adminService.getCreatureSpawnWorldObjects(); }
+
   @Patch('templates/:key')
   async updateTemplate(@Param('key') key: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateTemplate(key, fields);
