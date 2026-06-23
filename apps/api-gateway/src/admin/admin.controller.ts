@@ -63,6 +63,13 @@ export class AdminController {
   @Get('resource-templates')
   getResourceTemplates() { return this.adminService.getResourceTemplates(); }
 
+  @Patch('resource-templates/:type')
+  async updateResourceTemplate(@Param('type') type: string, @Body() fields: Record<string, number>) {
+    const updated = await this.adminService.updateResourceTemplate(type, fields);
+    if (!updated) throw new NotFoundException(`Template ressource "${type}" introuvable.`);
+    return updated;
+  }
+
   @Get('resources')
   getResources() { return this.adminService.getResources(); }
 

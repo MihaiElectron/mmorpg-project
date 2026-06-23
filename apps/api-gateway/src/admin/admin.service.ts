@@ -81,8 +81,16 @@ export class AdminService {
 
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots'>>,
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs'>>,
   ): Promise<ResourceTemplate | null> {
+    if (fields.respawnDelayMs !== undefined) {
+      const v = fields.respawnDelayMs;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v <= 0 || v > 86_400_000) {
+        throw new BadRequestException(
+          'respawnDelayMs doit être un entier > 0 et <= 86 400 000 ms (24h).',
+        );
+      }
+    }
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     if (!tpl) return null;
     Object.assign(tpl, fields);

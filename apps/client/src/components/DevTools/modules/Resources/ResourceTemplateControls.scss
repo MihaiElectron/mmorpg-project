@@ -1,0 +1,77 @@
+@use "../../../../styles/abstracts/variables" as vars;
+
+.rtc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid vars.$panel-border;
+  color: vars.$color-text-primary;
+
+  &__header {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__type {
+    color: vars.$color-text-gold;
+    font-weight: bold;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__label {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__input {
+    width: 90px;
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid vars.$panel-border;
+    border-radius: 3px;
+    color: vars.$color-text-primary;
+    font-size: 0.8rem;
+    font-family: monospace;
+
+    &:focus {
+      outline: none;
+      border-color: vars.$color-text-gold;
+    }
+  }
+
+  &__save {
+    padding: 3px 10px;
+    background: vars.$btn-success-bg;
+    border: none;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background: vars.$btn-success-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__error {
+    font-size: 0.75rem;
+    color: vars.$btn-danger-bg;
+    margin: 0;
+  }
+}
