@@ -41,11 +41,12 @@ function makeMockServer() {
 describe('ResourcesService', () => {
   let service: ResourcesService;
   let resourceRepo: { findOne: jest.Mock; find: jest.Mock; update: jest.Mock };
-  let templateRepo: { findOne: jest.Mock; upsert: jest.Mock };
+  let templateRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
 
   beforeEach(async () => {
     resourceRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), update: jest.fn() };
-    templateRepo = { findOne: jest.fn(), upsert: jest.fn().mockResolvedValue(undefined) };
+    const qb = { insert: jest.fn().mockReturnThis(), values: jest.fn().mockReturnThis(), orIgnore: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined) };
+    templateRepo = { findOne: jest.fn(), createQueryBuilder: jest.fn().mockReturnValue(qb) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -224,7 +225,7 @@ describe('ResourcesService', () => {
       });
     });
 
-    it("appelle server.emit après le délai avec la resource restaurée", async () => {
+    it("émet immédiatement avec respawnAt puis de nouveau avec state alive après le délai", async () => {
       const resource = makeResource({ state: 'dead', remainingLoots: 0 });
       resourceRepo.findOne.mockResolvedValue(resource);
       templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
@@ -235,10 +236,17 @@ describe('ResourcesService', () => {
 
       await service.scheduleRespawn('res-1', 100);
 
-      expect(mockServer.emit).not.toHaveBeenCalled();
+      // Premier emit : diffuse respawnAt immédiatement après la planification
+      expect(mockServer.emit).toHaveBeenCalledTimes(1);
+      expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
+        id: 'res-1',
+        state: 'dead',
+        respawnAt: expect.any(Date),
+      }));
 
       await jest.runAllTimersAsync();
 
+      // Deuxième emit : resource restaurée après le timer
       expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
         type: 'dead_tree',

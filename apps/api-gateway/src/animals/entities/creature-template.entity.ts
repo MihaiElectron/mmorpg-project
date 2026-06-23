@@ -43,4 +43,7 @@ export class CreatureTemplate {
 
   @Column('int', { default: 0 })
   fleeThresholdPct: number;
+
+  @Column('int', { default: 20000 })
+  respawnDelayMs: number;
 }

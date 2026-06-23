@@ -576,7 +576,11 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                         return (
                           <div key={ik} className="admin-panel__instance-item">
                             <div className="admin-panel__item-header">
-                              <span className="admin-panel__instance-name">{config.getInstanceName(inst)}</span>
+                              <span
+                                className="admin-panel__instance-name admin-panel__instance-name--copyable"
+                                title={`Copier UUID : ${ik}`}
+                                onClick={() => navigator.clipboard?.writeText(ik).catch(() => {})}
+                              >{config.getInstanceName(inst)}</span>
                               {badge && (
                                 <span className={`admin-panel__badge admin-panel__badge--${badge}`}>{badge}</span>
                               )}

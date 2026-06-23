@@ -58,6 +58,7 @@ function toDto(animal: Animal): AnimalDto {
     armor: t.baseArmor,
     attack: t.baseAttack,
     state: animal.state,
+    respawnAt: animal.respawnAt ?? null,
   };
 }
 
@@ -122,19 +123,31 @@ export class AnimalsService implements OnModuleInit {
       .where("state IN ('fighting', 'escaping')")
       .execute();
 
+    const now = Date.now();
     const animals = await this.animalRepository.find();
     for (const a of animals) {
       if (!a.spawn) continue;
       if (a.state === 'dead') {
-        a.state = 'alive';
-        a.health = a.spawn.template.baseHealth;
-        a.x = a.spawn.spawnX;
-        a.y = a.spawn.spawnY;
-        const wu = this.pixelToWUSafe(a.x, a.y);
-        if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
-        await this.animalRepository.save(a);
+        if (a.respawnAt && a.respawnAt.getTime() > now) {
+          // Timer encore en cours — replanifier pour le temps restant
+          this.liveAnimals.set(a.id, a);
+          const remaining = a.respawnAt.getTime() - now;
+          setTimeout(() => this.respawnAnimal(a.id), remaining);
+        } else {
+          // Timer expiré ou absent — respawn immédiat
+          a.state = 'alive';
+          a.health = a.spawn.template.baseHealth;
+          a.x = a.spawn.spawnX;
+          a.y = a.spawn.spawnY;
+          a.respawnAt = null;
+          const wu = this.pixelToWUSafe(a.x, a.y);
+          if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
+          await this.animalRepository.save(a);
+          this.liveAnimals.set(a.id, a);
+        }
+      } else {
+        this.liveAnimals.set(a.id, a);
       }
-      this.liveAnimals.set(a.id, a);
     }
   }
 
@@ -388,6 +401,7 @@ export class AnimalsService implements OnModuleInit {
     animal.health = template.baseHealth;
     animal.x = animal.spawn.spawnX;
     animal.y = animal.spawn.spawnY;
+    animal.respawnAt = null;
     const respawnWU = this.pixelToWUSafe(animal.x, animal.y);
     if (respawnWU) { animal.worldX = respawnWU.worldX; animal.worldY = respawnWU.worldY; animal.mapId = respawnWU.mapId; }
 
@@ -396,6 +410,7 @@ export class AnimalsService implements OnModuleInit {
       health: template.baseHealth,
       x: animal.spawn.spawnX,
       y: animal.spawn.spawnY,
+      respawnAt: null,
       ...(respawnWU ?? {}),
     });
 
@@ -443,7 +458,8 @@ export class AnimalsService implements OnModuleInit {
     if (animal.health === 0) {
       animal.state = 'dead';
       this.patrolStates.delete(animal.id);
-      const delay = animal.spawn.respawnDelayMs;
+      const delay = animal.spawn.respawnDelayMs ?? animal.spawn.template.respawnDelayMs;
+      animal.respawnAt = new Date(Date.now() + delay);
       setTimeout(() => this.respawnAnimal(animal.id), delay);
     }
     await this.animalRepository.save(animal);
@@ -486,8 +502,10 @@ export class AnimalsService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   private async seedTemplates() {
-    await this.templateRepository.upsert(
-      [
+    await this.templateRepository
+      .createQueryBuilder()
+      .insert()
+      .values([
         {
           key: 'turkey',
           name: 'Turkey',
@@ -502,6 +520,7 @@ export class AnimalsService implements OnModuleInit {
           pauseMaxMs: 12000,
           aggroRadius: 50,
           fleeThresholdPct: 75,
+          respawnDelayMs: 20000,
         },
         {
           key: 'goblin',
@@ -517,10 +536,11 @@ export class AnimalsService implements OnModuleInit {
           pauseMaxMs: 6000,
           aggroRadius: 120,
           fleeThresholdPct: 20,
+          respawnDelayMs: 30000,
         },
-      ],
-      ['key'],
-    );
+      ])
+      .orIgnore()
+      .execute();
   }
 
   async createAdminSpawn(

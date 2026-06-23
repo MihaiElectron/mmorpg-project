@@ -52,7 +52,12 @@ export class ResourcesService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.templateRepo.upsert(RESOURCE_TEMPLATES, ['type']);
+    await this.templateRepo
+      .createQueryBuilder()
+      .insert()
+      .values(RESOURCE_TEMPLATES as any[])
+      .orIgnore()
+      .execute();
     await this.reloadPendingRespawns();
   }
 
@@ -186,6 +191,12 @@ export class ResourcesService implements OnModuleInit {
     const respawnAt = new Date(Date.now() + resolvedDelay);
     await this.repo.update(id, { respawnAt });
 
+    // Broadcast avec respawnAt pour que le panneau admin affiche le timer
+    const resource = await this.findOne(id);
+    if (resource && this.server) {
+      this.server.emit('resource_update', this.buildResourceBroadcast({ ...resource, respawnAt }));
+    }
+
     this.armRespawnTimer(id, resolvedDelay, token);
   }
 
@@ -247,7 +258,7 @@ export class ResourcesService implements OnModuleInit {
    * Inclut type et coordonnées (legacy + WU) nécessaires au rendu Phaser.
    * Sans type/position, upsertResource ne peut pas recréer le sprite après un dead.
    */
-  private buildResourceBroadcast(resource: Resource): Record<string, unknown> {
+  buildResourceBroadcast(resource: Resource): Record<string, unknown> {
     return {
       id:            resource.id,
       type:          resource.type,

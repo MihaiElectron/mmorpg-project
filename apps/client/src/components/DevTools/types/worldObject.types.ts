@@ -24,7 +24,7 @@ export interface WorldObject {
   maxHealth?: number;
   capabilities: string[];
   metadata: Record<string, unknown> & {
-    /** Date ISO de réapparition si la resource est dead et en attente de respawn. */
-    respawnAt?: string | null;
+    /** Date ISO de réapparition si l'entité est dead et en attente de respawn (Resource ou Animal). */
+    respawnAt?: string | Date | null;
   };
 }

@@ -37,4 +37,7 @@ export class Animal {
 
   @Column({ default: 'alive' })
   state: 'alive' | 'fighting' | 'escaping' | 'dead';
+
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  respawnAt: Date | null;
 }

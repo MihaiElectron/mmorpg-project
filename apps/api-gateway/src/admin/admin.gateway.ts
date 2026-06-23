@@ -105,14 +105,18 @@ export class AdminGateway {
     }
 
     // Valider que les champs sont des nombres
-    const allowedFields = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius'];
+    const allowedFields = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs'];
     const safeFields: Record<string, number> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allowedFields.includes(k)) {
         return { success: false, message: `Champ "${k}" non modifiable.` };
       }
       const n = Number(v);
-      if (isNaN(n) || n < 0) {
+      if (k === 'respawnDelayMs') {
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > 86_400_000) {
+          return { success: false, message: 'respawnDelayMs doit être un entier > 0 et <= 86 400 000 ms (24h).' };
+        }
+      } else if (isNaN(n) || n < 0) {
         return { success: false, message: `Valeur invalide pour "${k}" : doit être >= 0.` };
       }
       safeFields[k] = n;

@@ -234,12 +234,8 @@ export class ResourcesGateway
       },
     });
 
-    // 🔄 Mise à jour visuelle pour tous
-    this.server.emit('resource_update', {
-      id: targetId,
-      state: updatedResource.state,
-      remainingLoots: updatedResource.remainingLoots,
-    });
+    // 🔄 Mise à jour visuelle pour tous (payload complet pour le rendu et l'admin panel)
+    this.server.emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any));
 
     if (updatedResource.state === 'dead') {
       await this.resources.scheduleRespawn(updatedResource.id);

@@ -10,4 +10,5 @@ export type AnimalDto = {
   armor: number;
   attack: number;
   state: 'alive' | 'fighting' | 'escaping' | 'dead';
+  respawnAt: Date | null;
 };

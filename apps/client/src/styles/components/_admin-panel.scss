@@ -415,6 +415,12 @@
     color: vars.$color-text-muted;
     font-family: 'Courier New', Courier, monospace;
     flex: 1;
+
+    &--copyable {
+      cursor: pointer;
+      &:hover { color: vars.$color-text-primary; text-decoration: underline dotted; }
+      &:active { opacity: 0.6; }
+    }
   }
 
   // ── Badges état ───────────────────────────────────────────────────────────

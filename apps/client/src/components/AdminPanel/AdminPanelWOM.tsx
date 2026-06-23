@@ -50,11 +50,12 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getGroupKey:  (t) => t.key,
     getGroupName: (t) => t.name,
     groupFields: [
-      { key: "baseHealth",       label: "PV",     min: 1 },
-      { key: "baseAttack",       label: "ATK",    min: 0 },
-      { key: "baseArmor",        label: "ARM",    min: 0 },
-      { key: "aggroRadius",      label: "Aggro",  min: 0 },
-      { key: "fleeThresholdPct", label: "Fuite%", min: 0 },
+      { key: "baseHealth",       label: "PV",          min: 1 },
+      { key: "baseAttack",       label: "ATK",         min: 0 },
+      { key: "baseArmor",        label: "ARM",         min: 0 },
+      { key: "aggroRadius",      label: "Aggro",       min: 0 },
+      { key: "fleeThresholdPct", label: "Fuite%",      min: 0 },
+      { key: "respawnDelayMs",   label: "Respawn (ms)", min: 1, step: 1000 },
     ],
     groupSaveEvent: "admin:update_template",
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
@@ -76,6 +77,10 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceTpPosition: (a) => ({ x: a.x, y: a.y }),
     instanceDeleteEvent: "admin:delete_animal",
     getInstanceDeletePayload: (a) => ({ id: a.id }),
+    getInstanceInfoLine: (a) => {
+      const respawn = formatRespawnAt(a.respawnAt);
+      return respawn ?? null;
+    },
   },
   {
     id: "resources",
@@ -163,6 +168,7 @@ function wosToAnimalInstances(wos: WorldObject[]): any[] {
     maxHealth: wo.maxHealth ?? 0,
     x: (wo.metadata.legacy as any)?.x ?? 0,
     y: (wo.metadata.legacy as any)?.y ?? 0,
+    respawnAt: wo.metadata.respawnAt ?? null,
   }));
 }
 

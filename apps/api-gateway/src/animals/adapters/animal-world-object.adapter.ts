@@ -21,6 +21,7 @@ export interface AnimalWorldObject {
   readonly capabilities: readonly AnimalCapability[];
   readonly metadata: {
     readonly legacy: { readonly x: number; readonly y: number } | null;
+    readonly respawnAt: Date | null;
   };
 }
 
@@ -52,6 +53,6 @@ export function toAnimalWorldObject(animal: Animal): AnimalWorldObject {
     health: animal.health,
     maxHealth: animal.spawn?.template?.baseHealth ?? null,
     capabilities: ANIMAL_CAPABILITIES,
-    metadata: Object.freeze({ legacy }),
+    metadata: Object.freeze({ legacy, respawnAt: animal.respawnAt ?? null }),
   });
 }
