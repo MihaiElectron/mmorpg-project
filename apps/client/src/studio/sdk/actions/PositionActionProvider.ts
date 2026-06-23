@@ -1,14 +1,7 @@
 import { getMainCamera } from "../../../components/DevTools/devtoolsBridge";
+import { wuToScreen } from "../../../phaser/utils/wuProjection";
 import type { ActionProvider, StudioAction } from "./ActionProvider";
 import type { WorldObject } from "../../../components/DevTools/types/worldObject.types";
-
-/** ADR-0001 : projection WU → pixels Phaser. screenX = 1000 + (wX - wY) / 16 ; screenY = (wX + wY) / 32 */
-function wuToScreen(worldX: number, worldY: number): { x: number; y: number } {
-  return {
-    x: Math.round(1000 + (worldX - worldY) / 16),
-    y: Math.round((worldX + worldY) / 32),
-  };
-}
 
 const focusCameraAction: StudioAction = {
   id: "worldObject.focusCamera",

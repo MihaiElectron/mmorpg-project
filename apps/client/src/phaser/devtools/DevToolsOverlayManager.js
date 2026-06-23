@@ -6,26 +6,20 @@
 //   - des appels redraw
 // Ce manager ne fait que gérer les objets Phaser Graphics/Text de chaque couche.
 
-// ── Helpers de projection (WU → pixels Phaser, ADR-0001) ─────────────────────
-// Formule identique à resolveScreen / resolveWomScreen dans WorldScene.js.
+import { wuToScreen } from "../utils/wuProjection";
 
-function _wu2px(worldX, worldY) {
-  return {
-    x: Math.round(1000 + (worldX - worldY) / 16),
-    y: Math.round((worldX + worldY) / 32),
-  };
-}
+// ── Helpers de projection (WU → pixels Phaser, ADR-0001) ─────────────────────
 
 function resolveScreen(entity) {
   if (Number.isFinite(entity.worldX) && Number.isFinite(entity.worldY)) {
-    return _wu2px(entity.worldX, entity.worldY);
+    return wuToScreen(entity.worldX, entity.worldY);
   }
   return { x: Math.round(entity.x), y: Math.round(entity.y) };
 }
 
 function resolveWomScreen(wo) {
   if (!wo.position) return null;
-  return _wu2px(wo.position.worldX, wo.position.worldY);
+  return wuToScreen(wo.position.worldX, wo.position.worldY);
 }
 
 function _shortId(id) {
