@@ -1,0 +1,118 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.cp {
+  @include m.panel-section;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 0.78rem;
+    font-family: vars.$coords-font-family;
+    outline: none;
+
+    &::placeholder {
+      color: vars.$color-text-muted;
+    }
+
+    &:focus {
+      border-color: vars.$color-text-gold;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__item {
+    display: contents;
+  }
+
+  &__item-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 8px;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 0.78rem;
+    font-family: vars.$coords-font-family;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.1s, background 0.1s;
+
+    &:hover:not(:disabled) {
+      border-color: vars.$color-text-gold;
+      background: vars.$panel-header-bg;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    &:focus-visible {
+      outline: 1px solid vars.$color-text-gold;
+    }
+
+    &--danger {
+      border-color: vars.$btn-danger-bg;
+      color: vars.$btn-danger-bg;
+
+      &:hover:not(:disabled) {
+        background: rgba(192, 57, 43, 0.1);
+      }
+    }
+  }
+
+  &__item-label {
+    font-weight: bold;
+  }
+
+  &__item-id {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__empty {
+    font-size: 0.75rem;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    padding: 2px 0;
+    margin: 0;
+  }
+}

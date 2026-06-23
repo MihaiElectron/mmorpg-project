@@ -7,6 +7,7 @@ import WorldObjectInspector from "./WorldObjectInspector";
 import ValidationPanel from "./ValidationPanel";
 import OverlayControls from "./OverlayControls";
 import SelectedActionsPanel from "./SelectedActionsPanel";
+import CommandPalette from "./CommandPalette";
 
 export default function DevToolsPanel() {
   return (
@@ -18,6 +19,7 @@ export default function DevToolsPanel() {
       <CreatureSpawnsModule />
       <WorldObjectInspector />
       <SelectedActionsPanel />
+      <CommandPalette />
       <ValidationPanel />
       <AdminPanel />
     </>
