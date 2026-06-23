@@ -191,12 +191,20 @@ describe("getActionsForWorldObject", () => {
     expect(ids).toContain("resource.forceRespawn");
   });
 
-  it("retourne [] pour un objet sans capability harvestable", () => {
-    const obj = makeWorldObject(["transform", "combat", "health", "validation"], "animal");
+  it("retourne [] pour un objet sans capability reconnue", () => {
+    const obj = makeWorldObject(["combat", "health", "validation"], "animal");
     expect(getActionsForWorldObject(obj)).toHaveLength(0);
   });
 
-  it("actionRegistry contient resourceActionProvider", () => {
-    expect(actionRegistry.getAllProviders()).toContain(resourceActionProvider);
+  it("retourne worldObject.focusCamera pour un objet avec transform", () => {
+    const obj = makeWorldObject(["transform", "combat", "health"], "animal");
+    const ids = getActionsForWorldObject(obj).map((a) => a.id);
+    expect(ids).toContain("worldObject.focusCamera");
+  });
+
+  it("actionRegistry contient resourceActionProvider et positionActionProvider", () => {
+    const providers = actionRegistry.getAllProviders();
+    expect(providers).toContain(resourceActionProvider);
+    expect(providers.some((p) => p.capabilities.includes("transform"))).toBe(true);
   });
 });
