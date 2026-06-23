@@ -240,19 +240,22 @@ export class AdminGateway {
     const { type, fields } = payload ?? {};
     if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
 
-    const allowed = ['defaultRemainingLoots'];
+    const allowed = ['defaultRemainingLoots', 'respawnDelayMs'];
     const safe: Record<string, number> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
       const n = Number(v);
-      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      if (isNaN(n) || n <= 0) return { success: false, message: `Valeur invalide pour "${k}" (doit être > 0).` };
       safe[k] = n;
     }
 
     const updated = await this.adminService.updateResourceTemplate(type, safe as any);
     if (!updated) return { success: false, message: `Template ressource "${type}" introuvable.` };
 
-    return { success: true, message: `Template "${type}" mis à jour : loots défaut → ${updated.defaultRemainingLoots}.`, data: updated };
+    const parts: string[] = [];
+    if (safe.defaultRemainingLoots !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
+    if (safe.respawnDelayMs        !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
+    return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
 
   @SubscribeMessage('admin:spawn_resource')

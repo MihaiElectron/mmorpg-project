@@ -7,6 +7,7 @@ import {
   type GroupedSectionConfig,
   type SectionConfig,
   type ConsoleLine,
+  type InstanceAction,
   fetchAdmin,
   ackPromise,
   getSocket,
@@ -14,6 +15,21 @@ import {
   GroupedSection,
   EntitySection,
 } from "./adminPanel.shared";
+
+const API = import.meta.env.VITE_API_URL as string;
+
+async function postAdmin(path: string): Promise<{ success: boolean; message: string }> {
+  const token = localStorage.getItem("token") ?? "";
+  const res = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  return {
+    success: res.ok,
+    message: (body as any).message ?? (res.ok ? "OK" : `Erreur ${res.status}`),
+  };
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,10 +83,16 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
-      { key: "defaultRemainingLoots", label: "Loots défaut", min: 0 },
+      { key: "defaultRemainingLoots", label: "Loots défaut", min: 1 },
+      { key: "respawnDelayMs",        label: "Respawn (ms)", min: 1, step: 1000 },
     ],
     groupSaveEvent: "admin:update_resource_template",
     getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
+    getGroupInfoLine: (t) => {
+      const items: string[] = t.lootPoolItems ?? [];
+      if (items.length === 0) return null;
+      return `Loot pool (lecture seule) : ${items.join(", ")}`;
+    },
     dragEvent: "admin:spawn_resource",
     getDragPayload: (t, x, y) => ({ type: t.type, x, y }),
     getInstancesForGroup: (resources, tpl) =>
@@ -80,15 +102,28 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceBadge: (r) => r.state,
     instanceFields: [
       { key: "state",          label: "État",  options: ["alive", "dead"] },
+      { key: "remainingLoots", label: "Loots", min: 0 },
       { key: "x",              label: "X",     min: 0 },
       { key: "y",              label: "Y",     min: 0 },
-      { key: "remainingLoots", label: "Loots", min: 0 },
     ],
     instanceSaveEvent: "admin:update_resource",
     getInstanceSavePayload: (r, fields) => ({ id: r.id, fields }),
     getInstanceTpPosition: (r) => ({ x: r.x, y: r.y }),
     instanceDeleteEvent: "admin:delete_resource",
     getInstanceDeletePayload: (r) => ({ id: r.id }),
+    getInstanceInfoLine: (r) => {
+      if (r.worldX != null && r.worldY != null) {
+        const mapPart = r.mapId != null ? `  map:${r.mapId}` : "";
+        return `WU: ${r.worldX}, ${r.worldY}${mapPart}`;
+      }
+      return null;
+    },
+    instanceActions: [
+      {
+        label: "Reset template",
+        run: (r) => postAdmin(`/admin/resources/${r.id}/reset-from-template`),
+      } satisfies InstanceAction,
+    ],
   },
 ];
 
@@ -135,6 +170,8 @@ function wosToResourceTemplates(wos: WorldObject[]): any[] {
       map.set(wo.type, {
         type: wo.type,
         defaultRemainingLoots: (wo.metadata.defaultRemainingLoots as number) ?? 0,
+        respawnDelayMs:        (wo.metadata.respawnDelayMs as number)        ?? 0,
+        lootPoolItems:         (wo.metadata.lootPoolItems as string[])       ?? [],
       });
     }
   }
@@ -149,6 +186,9 @@ function wosToResourceInstances(wos: WorldObject[]): any[] {
     remainingLoots: wo.remainingLoots ?? 0,
     x: (wo.metadata.legacy as any)?.x ?? 0,
     y: (wo.metadata.legacy as any)?.y ?? 0,
+    worldX: wo.position?.worldX ?? null,
+    worldY: wo.position?.worldY ?? null,
+    mapId:  wo.mapId ?? null,
   }));
 }
 

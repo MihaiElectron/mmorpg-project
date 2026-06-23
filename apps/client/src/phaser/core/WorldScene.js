@@ -906,7 +906,10 @@ export default class WorldScene extends Phaser.Scene {
     if (!enabled || this.creatureSpawnData.size > 0) return;
 
     // Premier toggle ON : charger les données depuis le backend, puis redraw.
-    fetch("/admin/creature-spawns/world-objects")
+    const token = localStorage.getItem("token") ?? "";
+    fetch(`${import.meta.env.VITE_API_URL}/admin/creature-spawns/world-objects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

@@ -33,6 +33,13 @@ export type SectionConfig = {
   getDragPayload?: (item: any, x: number, y: number) => object;
 };
 
+export type InstanceAction = {
+  label: string;
+  className?: string;
+  getDisabled?: (inst: any) => boolean;
+  run: (inst: any) => Promise<{ success: boolean; message: string }>;
+};
+
 export type GroupedSectionConfig = {
   id: string;
   title: string;
@@ -41,6 +48,8 @@ export type GroupedSectionConfig = {
   groupFields:  FieldDef[];
   groupSaveEvent?:      string;
   getGroupSavePayload?: (g: any, fields: Record<string, number | string>) => object;
+  /** Ligne d'info lecture seule sous le nom du groupe (ex: lootPool). */
+  getGroupInfoLine?: (g: any) => string | null;
   dragEvent?:           string;
   getDragPayload?:      (g: any, x: number, y: number) => object;
   getInstancesForGroup: (instances: any[], group: any) => any[];
@@ -53,6 +62,10 @@ export type GroupedSectionConfig = {
   getInstanceTpPosition?: (i: any) => { x: number; y: number } | null;
   instanceDeleteEvent?:      string;
   getInstanceDeletePayload?: (i: any) => object;
+  /** Ligne d'info lecture seule sous les champs de l'instance (ex: coordonnées WU). */
+  getInstanceInfoLine?: (i: any) => string | null;
+  /** Boutons d'action personnalisés par instance (ex: reset from template). */
+  instanceActions?: InstanceAction[];
 };
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -380,6 +393,29 @@ type GroupedSectionProps = {
   onInstanceDeleted: (instanceKey: string) => void;
 };
 
+function InstanceActionButton({ action, inst, onResult }: { action: InstanceAction; inst: any; onResult: (text: string, ok: boolean) => void }) {
+  const [running, setRunning] = useState(false);
+  const disabled = running || (action.getDisabled?.(inst) ?? false);
+  async function handleClick() {
+    setRunning(true);
+    try {
+      const result = await action.run(inst);
+      onResult(result.message, result.success);
+    } finally {
+      setRunning(false);
+    }
+  }
+  return (
+    <button
+      className={`admin-panel__apply-btn${action.className ? ` ${action.className}` : ""}`}
+      disabled={disabled}
+      onClick={handleClick}
+    >
+      {running ? "…" : action.label}
+    </button>
+  );
+}
+
 export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted }: GroupedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -522,6 +558,10 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                         {groupDraft.saving[gk] ? "…" : "Appliquer"}
                       </button>
                     )}
+                    {config.getGroupInfoLine && (() => {
+                      const info = config.getGroupInfoLine!(group);
+                      return info ? <p className="admin-panel__info-line">{info}</p> : null;
+                    })()}
                   </div>
 
                   {isExpanded && (
@@ -569,6 +609,18 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                                   {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Appliquer"}
                                 </button>
                               )}
+                              {config.getInstanceInfoLine && (() => {
+                                const info = config.getInstanceInfoLine!(inst);
+                                return info ? <p className="admin-panel__info-line">{info}</p> : null;
+                              })()}
+                              {config.instanceActions?.map((action, ai) => (
+                                <InstanceActionButton
+                                  key={ai}
+                                  action={action}
+                                  inst={inst}
+                                  onResult={onResult}
+                                />
+                              ))}
                             </div>
                           </div>
                         );

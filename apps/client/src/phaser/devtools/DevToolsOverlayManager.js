@@ -18,8 +18,15 @@ function resolveScreen(entity) {
 }
 
 function resolveWomScreen(wo) {
-  if (!wo.position) return null;
-  return wuToScreen(wo.position.worldX, wo.position.worldY);
+  if (wo.position) {
+    return wuToScreen(wo.position.worldX, wo.position.worldY);
+  }
+  // Fallback legacy pour les spawns sans coordonnées WU backfillées.
+  const leg = wo.metadata?.legacy;
+  if (leg && Number.isFinite(leg.spawnX) && Number.isFinite(leg.spawnY)) {
+    return { x: Math.round(leg.spawnX), y: Math.round(leg.spawnY) };
+  }
+  return null;
 }
 
 function _shortId(id) {
