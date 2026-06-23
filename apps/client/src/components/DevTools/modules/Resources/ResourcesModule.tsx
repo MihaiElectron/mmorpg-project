@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { useDevToolsStore } from "../../../../store/devtools.store";
+import { useDevToolsStore, getDevToolsStore } from "../../../../store/devtools.store";
+import { getDevToolsSocket } from "../../devtoolsBridge";
 import type { WorldObject } from "../../types/worldObject.types";
+import { patchClientWorldObject } from "./resourceWorldObjectClientAdapter";
 import "./ResourcesModule.scss";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -75,6 +77,7 @@ export default function ResourcesModule() {
   const selectedId = useDevToolsStore((s) => s.selectedWorldObject?.id ?? null);
   const setSelected = useDevToolsStore((s) => s.setSelectedWorldObject);
 
+  // ── Chargement initial ────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("token") ?? "";
     setStatus("loading");
@@ -84,6 +87,36 @@ export default function ResourcesModule() {
         setStatus("loaded");
       })
       .catch(() => setStatus("error"));
+  }, []);
+
+  // ── Synchronisation runtime via resource_update ───────────────────────────
+  useEffect(() => {
+    const socket = getDevToolsSocket();
+    if (!socket?.on) return;
+
+    function onResourceUpdate(data: Record<string, any>) {
+      setItems((prev) => {
+        const idx = prev.findIndex((wo) => wo.id === data.id);
+        if (idx < 0) return prev;
+
+        const updated = patchClientWorldObject(prev[idx], data);
+        const next = [...prev];
+        next[idx] = updated;
+
+        // Propager au store si cette resource est actuellement sélectionnée
+        const storeState = getDevToolsStore().getState();
+        if (storeState.selectedWorldObject?.id === data.id) {
+          storeState.setSelectedWorldObject(updated);
+        }
+
+        return next;
+      });
+    }
+
+    socket.on("resource_update", onResourceUpdate);
+    return () => {
+      socket.off?.("resource_update", onResourceUpdate);
+    };
   }, []);
 
   return (
