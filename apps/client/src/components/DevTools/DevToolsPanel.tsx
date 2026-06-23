@@ -5,11 +5,13 @@ import { AnimalsModule } from "./modules/Animals";
 import { CreatureSpawnsModule } from "./modules/CreatureSpawns";
 import WorldObjectInspector from "./WorldObjectInspector";
 import ValidationPanel from "./ValidationPanel";
+import OverlayControls from "./OverlayControls";
 
 export default function DevToolsPanel() {
   return (
     <>
       <WorldModule />
+      <OverlayControls />
       <ResourcesModule />
       <AnimalsModule />
       <CreatureSpawnsModule />

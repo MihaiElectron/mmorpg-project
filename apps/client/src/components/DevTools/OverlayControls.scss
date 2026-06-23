@@ -1,0 +1,98 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.oc {
+  @include m.panel-section;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+  }
+
+  &__label {
+    color: vars.$color-text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__category {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    padding: 1px 4px;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+  }
+
+  &__toggle {
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    font-family: vars.$coords-font-family;
+    padding: 1px 7px;
+    cursor: pointer;
+    min-width: 32px;
+    text-align: center;
+    line-height: 1.5;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+
+    &:hover:not(:disabled) {
+      color: vars.$color-text-primary;
+      border-color: vars.$panel-border;
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 1px solid vars.$color-text-gold;
+    }
+
+    &--on {
+      background: vars.$btn-success-bg;
+      border-color: vars.$btn-success-bg;
+      color: #fff;
+
+      &:hover:not(:disabled) {
+        background: vars.$btn-success-hover;
+        border-color: vars.$btn-success-hover;
+        color: #fff;
+      }
+    }
+  }
+}
