@@ -188,6 +188,30 @@ describe('toResourceWorldObject — metadata.respawnDelayMs', () => {
   });
 });
 
+// ─── Metadata defaultRemainingLoots ──────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.defaultRemainingLoots', () => {
+  it('présent si template fourni', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ defaultRemainingLoots: 9999 }));
+    expect(wo.metadata.defaultRemainingLoots).toBe(9999);
+  });
+
+  it('null si template absent', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.defaultRemainingLoots).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.defaultRemainingLoots).toBeNull();
+  });
+
+  it('reflète la valeur du template passé', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ defaultRemainingLoots: 5 }));
+    expect(wo.metadata.defaultRemainingLoots).toBe(5);
+  });
+});
+
 // ─── Metadata lootPool ───────────────────────────────────────────────────────
 
 describe('toResourceWorldObject — metadata.lootPool', () => {

@@ -100,6 +100,48 @@ describe('AdminService resources', () => {
       await expect(service.updateResourceTemplate('wood', { respawnDelayMs: Infinity }))
         .rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('met à jour defaultRemainingLoots si valeur valide', async () => {
+      const updated = await service.updateResourceTemplate('wood', { defaultRemainingLoots: 50 });
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultRemainingLoots: 50 }),
+      );
+      expect(updated?.defaultRemainingLoots).toBe(50);
+    });
+
+    it('rejette defaultRemainingLoots < 1', async () => {
+      await expect(service.updateResourceTemplate('wood', { defaultRemainingLoots: 0 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.updateResourceTemplate('wood', { defaultRemainingLoots: -5 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejette defaultRemainingLoots > 999_999', async () => {
+      await expect(service.updateResourceTemplate('wood', { defaultRemainingLoots: 1_000_000 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejette defaultRemainingLoots décimal', async () => {
+      await expect(service.updateResourceTemplate('wood', { defaultRemainingLoots: 5.5 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejette defaultRemainingLoots NaN', async () => {
+      await expect(service.updateResourceTemplate('wood', { defaultRemainingLoots: NaN }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('met à jour les deux champs simultanément si les deux sont valides', async () => {
+      const updated = await service.updateResourceTemplate('wood', {
+        respawnDelayMs: 45_000,
+        defaultRemainingLoots: 10,
+      });
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ respawnDelayMs: 45_000, defaultRemainingLoots: 10 }),
+      );
+      expect(updated?.respawnDelayMs).toBe(45_000);
+      expect(updated?.defaultRemainingLoots).toBe(10);
+    });
   });
 
   it('createResource écrit x/y pixels et worldX/worldY/mapId', async () => {

@@ -49,6 +49,11 @@
     }
   }
 
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
   &__save {
     padding: 3px 10px;
     background: vars.$btn-success-bg;

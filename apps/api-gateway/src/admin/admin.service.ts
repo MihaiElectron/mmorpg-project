@@ -91,6 +91,14 @@ export class AdminService {
         );
       }
     }
+    if (fields.defaultRemainingLoots !== undefined) {
+      const v = fields.defaultRemainingLoots;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 1 || v > 999_999) {
+        throw new BadRequestException(
+          'defaultRemainingLoots doit être un entier >= 1 et <= 999 999.',
+        );
+      }
+    }
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     if (!tpl) return null;
     Object.assign(tpl, fields);
