@@ -1,16 +1,35 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Item } from './entities/item.entity';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
+/** Items de loot garantis présents en DB au démarrage. */
+export const LOOT_ITEM_SEEDS: Pick<Item, 'name' | 'type' | 'category'>[] = [
+  { name: 'Bâton de bois',  type: 'material', category: 'wooden_stick' },
+  { name: 'Minerai de fer', type: 'material', category: 'iron_ore' },
+];
+
 @Injectable()
-export class ItemService {
+export class ItemService implements OnModuleInit {
   constructor(
     @InjectRepository(Item)
     private readonly repo: Repository<Item>,
   ) {}
+
+  async onModuleInit() {
+    await this.seedLootItems();
+  }
+
+  private async seedLootItems(): Promise<void> {
+    for (const seed of LOOT_ITEM_SEEDS) {
+      const exists = await this.repo.findOne({ where: { category: seed.category } });
+      if (!exists) {
+        await this.repo.save(this.repo.create(seed));
+      }
+    }
+  }
 
   async create(dto: CreateItemDto): Promise<Item> {
     const entity = this.repo.create(dto);
