@@ -344,6 +344,122 @@ describe('ResourcesService', () => {
     });
   });
 
+  // ── Token de génération (sécurité respawn) ───────────────────────────────────
+
+  describe('token de génération', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it("un timer planifié se déclenche normalement sans forceRespawn", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.scheduleRespawn('res-1', 100);
+      await jest.runAllTimersAsync();
+
+      expect(resourceRepo.update).toHaveBeenCalledWith('res-1', {
+        state: 'alive',
+        remainingLoots: 5,
+        respawnAt: null,
+      });
+    });
+
+    it("forceRespawn invalide le token : l'ancien timer devient no-op", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.scheduleRespawn('res-1', 100);
+      // Avant que le timer se déclenche, forceRespawn invalide le token
+      await service.forceRespawn('res-1');
+
+      // update appelé une fois pour respawnAt (scheduleRespawn) + une fois pour forceRespawn
+      const updateCallsBefore = resourceRepo.update.mock.calls.length;
+      resourceRepo.update.mockClear();
+
+      await jest.runAllTimersAsync();
+
+      // Le timer ne doit plus appeler update
+      expect(resourceRepo.update).not.toHaveBeenCalled();
+      void updateCallsBefore;
+    });
+
+    it("un nouveau schedule après forceRespawn reçoit un token distinct et fonctionne", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.scheduleRespawn('res-1', 100);
+      await service.forceRespawn('res-1');
+      // Nouveau schedule après forceRespawn
+      await service.scheduleRespawn('res-1', 50);
+
+      resourceRepo.update.mockClear();
+      await jest.runAllTimersAsync();
+
+      // Le nouveau timer doit avoir exécuté le respawn
+      expect(resourceRepo.update).toHaveBeenCalledWith('res-1', {
+        state: 'alive',
+        remainingLoots: 5,
+        respawnAt: null,
+      });
+    });
+
+    it("forceRespawn supprime le token actif", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate());
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      await service.scheduleRespawn('res-1', 100);
+      expect((service as any).pendingRespawnTokens.has('res-1')).toBe(true);
+
+      await service.forceRespawn('res-1');
+      expect((service as any).pendingRespawnTokens.has('res-1')).toBe(false);
+    });
+
+    it("doRespawn avec mauvais token retourne null sans modifier la DB", async () => {
+      resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+      templateRepo.findOne.mockResolvedValue(makeTemplate());
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      (service as any).pendingRespawnTokens.set('res-1', 7);
+
+      const result = await service.doRespawn('res-1', 999); // mauvais token
+      expect(result).toBeNull();
+      expect(resourceRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("doRespawn avec token correct respecte le token et efface l'entrée", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      (service as any).pendingRespawnTokens.set('res-1', 42);
+      (service as any).pendingRespawns.add('res-1');
+
+      const result = await service.doRespawn('res-1', 42);
+      expect(result?.state).toBe('alive');
+      expect((service as any).pendingRespawnTokens.has('res-1')).toBe(false);
+      expect((service as any).pendingRespawns.has('res-1')).toBe(false);
+    });
+
+    it("doRespawn sans token bypasse la vérification (compatibilité tests directs)", async () => {
+      const resource = makeResource({ state: 'dead', remainingLoots: 0 });
+      resourceRepo.findOne.mockResolvedValue(resource);
+      templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 5 }));
+      resourceRepo.update.mockResolvedValue(undefined);
+
+      // Aucun token en attente — doRespawn sans token doit quand même fonctionner
+      const result = await service.doRespawn('res-1');
+      expect(result?.state).toBe('alive');
+    });
+  });
+
   // ── reloadPendingRespawns (via onModuleInit) ──────────────────────────────────
 
   describe('onModuleInit — reloadPendingRespawns', () => {

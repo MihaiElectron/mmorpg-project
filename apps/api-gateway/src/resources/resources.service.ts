@@ -31,6 +31,12 @@ export class ResourcesService implements OnModuleInit {
   // IDs des ressources dont le respawn est déjà planifié (évite les doubles timers).
   private readonly pendingRespawns = new Set<string>();
 
+  // Token actif par resource. Chaque armRespawnTimer capture le token à sa création.
+  // Si le token a changé (forceRespawn ou nouveau schedule) quand le timer se déclenche,
+  // doRespawn détecte la discordance et abandonne sans toucher la DB.
+  private readonly pendingRespawnTokens = new Map<string, number>();
+  private nextRespawnToken = 0;
+
   // Serveur WebSocket injecté par le gateway via setServer() dans afterInit.
   private server: Server | null = null;
 
@@ -104,15 +110,14 @@ export class ResourcesService implements OnModuleInit {
 
   /**
    * Force le respawn immédiat d'une resource quelle que soit son état.
-   * Annule le respawn planifié s'il existe, restaure les loots depuis le template, émet resource_update.
-   * Si un timer précédemment armé se déclenche ultérieurement, il appellera doRespawn à nouveau —
-   * comportement bénin mais documenté comme limite connue.
+   * Invalide le token courant : tout ancien timer armé deviendra no-op à son expiration.
    */
   async forceRespawn(id: string): Promise<Resource | null> {
     const resource = await this.findOne(id);
     if (!resource) return null;
 
     this.pendingRespawns.delete(id);
+    this.pendingRespawnTokens.delete(id);
 
     const remainingLoots = await this.getDefaultRemainingLoots(resource.type);
     await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
@@ -149,18 +154,31 @@ export class ResourcesService implements OnModuleInit {
     if (this.pendingRespawns.has(id)) return;
     this.pendingRespawns.add(id);
 
+    const token = ++this.nextRespawnToken;
+    this.pendingRespawnTokens.set(id, token);
+
     const resolvedDelay = delayMs ?? await this.resolveRespawnDelay(id);
     const respawnAt = new Date(Date.now() + resolvedDelay);
     await this.repo.update(id, { respawnAt });
 
-    this.armRespawnTimer(id, resolvedDelay);
+    this.armRespawnTimer(id, resolvedDelay, token);
   }
 
   /**
    * Remet une ressource en état alive avec ses loots restaurés depuis le template.
    * Efface respawnAt.
+   *
+   * Si token est fourni (appel interne depuis armRespawnTimer), vérifie qu'il correspond
+   * au token actif : retourne null sans modifier la DB en cas de discordance.
+   * Appelé sans token (tests directs) : bypass du check pour compatibilité.
    */
-  async doRespawn(id: string): Promise<Resource | null> {
+  async doRespawn(id: string, token?: number): Promise<Resource | null> {
+    if (token !== undefined) {
+      if (this.pendingRespawnTokens.get(id) !== token) return null;
+      this.pendingRespawnTokens.delete(id);
+      this.pendingRespawns.delete(id);
+    }
+
     const resource = await this.findOne(id);
     if (!resource) return null;
 
@@ -191,19 +209,22 @@ export class ResourcesService implements OnModuleInit {
       if (this.pendingRespawns.has(resource.id)) continue;
       this.pendingRespawns.add(resource.id);
 
+      const token = ++this.nextRespawnToken;
+      this.pendingRespawnTokens.set(resource.id, token);
+
       const remaining = resource.respawnAt.getTime() - now;
-      this.armRespawnTimer(resource.id, Math.max(remaining, 0));
+      this.armRespawnTimer(resource.id, Math.max(remaining, 0), token);
     }
   }
 
   /**
    * Arme le setTimeout qui déclenche doRespawn et broadcast resource_update.
-   * Méthode interne partagée par scheduleRespawn et reloadPendingRespawns.
+   * Le token capturé est passé à doRespawn : si le token a été invalidé entre-temps
+   * (forceRespawn ou double schedule), doRespawn retourne null sans toucher la DB.
    */
-  private armRespawnTimer(id: string, delayMs: number): void {
+  private armRespawnTimer(id: string, delayMs: number, token: number): void {
     setTimeout(async () => {
-      this.pendingRespawns.delete(id);
-      const respawned = await this.doRespawn(id);
+      const respawned = await this.doRespawn(id, token);
       if (respawned && this.server) {
         this.server.emit('resource_update', {
           id: respawned.id,
