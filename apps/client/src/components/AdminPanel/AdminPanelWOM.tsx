@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { getAdminStore } from "../../store/admin.store";
+import { getDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import { type WorldObject } from "../DevTools/types/worldObject.types";
@@ -353,12 +353,12 @@ export default function AdminPanelWOM() {
       socket, token,
       getTarget: () => null,
       getCharacterPos: () => null,
-      getLastClickedPos: () => getAdminStore().getState().lastClickedPos,
+      getLastClickedPos: () => getDevToolsStore().getState().lastClickedPos,
       getTemplateKeys: () => (groupData["creatures"] ?? []).map((t: any) => t.key),
     };
     const result = await def.handler(parsed.args, parsed.flags, ctx);
     pushResult(result.message, result.success);
-    getAdminStore().getState().addToHistory(raw.trim());
+    getDevToolsStore().getState().addToHistory(raw.trim());
   }
 
   async function onConsoleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -370,8 +370,8 @@ export default function AdminPanelWOM() {
       await runCommand(cmd);
       return;
     }
-    if (e.key === "ArrowUp")   { e.preventDefault(); setCommand(getAdminStore().getState().navigateHistory("up",   command)); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); setCommand(getAdminStore().getState().navigateHistory("down", command)); return; }
+    if (e.key === "ArrowUp")   { e.preventDefault(); setCommand(getDevToolsStore().getState().navigateHistory("up",   command)); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setCommand(getDevToolsStore().getState().navigateHistory("down", command)); return; }
     if (e.key === "Tab") {
       e.preventDefault();
       const parts = command.split(/\s+/);

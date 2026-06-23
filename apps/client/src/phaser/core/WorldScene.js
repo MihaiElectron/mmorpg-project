@@ -7,7 +7,7 @@ import { setSpriteDepth } from "../utils/depth";
 
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
-import { getAdminStore } from "../../store/admin.store";
+import { getDevToolsStore } from "../../store/devtools.store";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
 
 // ── Studio SDK — WorldObject adapters (client-side mirror des backend adapters) ──
@@ -296,11 +296,11 @@ export default class WorldScene extends Phaser.Scene {
 
         if (first.kind === "resource") {
           const rd = this.resourceData.get(first.id);
-          if (rd) getAdminStore().getState().setSelectedWorldObject(resourceToWorldObject(rd));
+          if (rd) getDevToolsStore().getState().setSelectedWorldObject(resourceToWorldObject(rd));
         }
         if (first.kind === "animal") {
           const entry = this.animalSprites.get(first.id);
-          if (entry?.animal) getAdminStore().getState().setSelectedWorldObject(animalToWorldObject(entry.animal));
+          if (entry?.animal) getDevToolsStore().getState().setSelectedWorldObject(animalToWorldObject(entry.animal));
         }
 
         return;
@@ -311,8 +311,8 @@ export default class WorldScene extends Phaser.Scene {
       // Inverse de la projection isométrique ADR-0001 (mapId hardcodé = 1, carte unique)
       const wuX = Math.round(8 * (worldX - 1000) + 16 * worldY);
       const wuY = Math.round(-8 * (worldX - 1000) + 16 * worldY);
-      getAdminStore().getState().setLastClickedPos({ x: sx, y: sy });
-      getAdminStore().getState().setLastClickedContext({
+      getDevToolsStore().getState().setLastClickedPos({ x: sx, y: sy });
+      getDevToolsStore().getState().setLastClickedContext({
         screenPoint: { x: sx, y: sy },
         worldPoint:  { mapId: 1, worldX: wuX, worldY: wuY },
         tilePoint:   { mapId: 1, tileX: wuX >> 10, tileY: wuY >> 10 },
@@ -341,10 +341,10 @@ export default class WorldScene extends Phaser.Scene {
     // ── Studio SDK — overlay + sélection ──────────────────────────────────────
     this.overlayManager = new DevToolsOverlayManager(this, (id) => {
       const spawn = this.creatureSpawnData.get(id);
-      if (spawn) getAdminStore().getState().setSelectedWorldObject(spawn);
+      if (spawn) getDevToolsStore().getState().setSelectedWorldObject(spawn);
     });
 
-    this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
+    this.overlayStoreUnsub = getDevToolsStore().subscribe((state, prev) => {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
       const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
       const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
@@ -879,7 +879,7 @@ export default class WorldScene extends Phaser.Scene {
   // ── Studio SDK — Animal Overlay ──────────────────────────────────────────
 
   redrawAnimalOverlay() {
-    const state = getAdminStore().getState();
+    const state = getDevToolsStore().getState();
     this.overlayManager.redrawAnimals(
       this.animalSprites, state.animalOverlayEnabled, state.selectedWorldObject?.id ?? null,
     );
@@ -888,7 +888,7 @@ export default class WorldScene extends Phaser.Scene {
   // ── Studio SDK — Resource Overlay ─────────────────────────────────────────
 
   redrawResourceOverlay() {
-    const state = getAdminStore().getState();
+    const state = getDevToolsStore().getState();
     this.overlayManager.redrawResources(
       this.resourceData, state.resourceOverlayEnabled, state.selectedWorldObject?.id ?? null,
     );
@@ -897,7 +897,7 @@ export default class WorldScene extends Phaser.Scene {
   // ── Studio SDK — CreatureSpawn Overlay ──────────────────────────────────────
 
   redrawCreatureSpawnOverlay() {
-    const state = getAdminStore().getState();
+    const state = getDevToolsStore().getState();
     const enabled    = state.creatureSpawnOverlayEnabled;
     const selectedId = state.selectedWorldObject?.id ?? null;
 
@@ -918,8 +918,8 @@ export default class WorldScene extends Phaser.Scene {
         for (const item of items) {
           this.creatureSpawnData.set(item.id, item);
         }
-        if (getAdminStore().getState().creatureSpawnOverlayEnabled) {
-          const s = getAdminStore().getState();
+        if (getDevToolsStore().getState().creatureSpawnOverlayEnabled) {
+          const s = getDevToolsStore().getState();
           this.overlayManager.redrawCreatureSpawns(this.creatureSpawnData, true, s.selectedWorldObject?.id ?? null);
         }
       })

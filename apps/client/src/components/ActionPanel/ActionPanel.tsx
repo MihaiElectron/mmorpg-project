@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
-import { getAdminStore } from "../../store/admin.store";
+import { getDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import HealthBar from "../HealthBar/HealthBar";
@@ -71,12 +71,12 @@ export default function ActionPanel() {
   }
 
   function onFocus() {
-    getAdminStore().getState().setConsoleActive(true);
+    getDevToolsStore().getState().setConsoleActive(true);
     getPhaserKeyboard()?.disableGlobalCapture();
   }
 
   function onBlur() {
-    getAdminStore().getState().setConsoleActive(false);
+    getDevToolsStore().getState().setConsoleActive(false);
     getPhaserKeyboard()?.enableGlobalCapture();
   }
 
@@ -113,13 +113,13 @@ export default function ActionPanel() {
       getTarget: () => target,
       getCharacterPos: () =>
         character ? { x: character.positionX ?? 400, y: character.positionY ?? 300 } : null,
-      getLastClickedPos: () => getAdminStore().getState().lastClickedPos,
+      getLastClickedPos: () => getDevToolsStore().getState().lastClickedPos,
       getTemplateKeys,
     };
 
     const result = await def.handler(parsed.args, parsed.flags, ctx);
     pushResult(result.message, result.success);
-    getAdminStore().getState().addToHistory(raw.trim());
+    getDevToolsStore().getState().addToHistory(raw.trim());
   }
 
   function pushResult(text: string, ok: boolean) {
@@ -139,14 +139,14 @@ export default function ActionPanel() {
 
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      const prev = getAdminStore().getState().navigateHistory("up", command);
+      const prev = getDevToolsStore().getState().navigateHistory("up", command);
       setCommand(prev);
       return;
     }
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      const next = getAdminStore().getState().navigateHistory("down", command);
+      const next = getDevToolsStore().getState().navigateHistory("down", command);
       setCommand(next);
       return;
     }

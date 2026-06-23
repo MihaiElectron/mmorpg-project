@@ -1,4 +1,4 @@
-import { getAdminStore } from "../../store/admin.store";
+import { getDevToolsStore } from "../../store/devtools.store";
 
 export default class PlayerController {
   constructor(scene, player) {
@@ -115,7 +115,7 @@ export default class PlayerController {
     let vx = 0;
     let vy = 0;
 
-    if (!getAdminStore().getState().isConsoleActive) {
+    if (!getDevToolsStore().getState().isConsoleActive) {
       if (this.cursors.left.isDown) vx = -speed;
       if (this.cursors.right.isDown) vx = speed;
       if (this.cursors.up.isDown) vy = -speed;

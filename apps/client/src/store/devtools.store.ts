@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import type { WorldObject } from "../components/DevTools/types/worldObject.types";
 
-// ── Types legacy ───────────────────────────────────────────────────────────────
-// DevToolsPos : conservé pour compatibilité avec getAdminStore().setLastClickedPos()
 export type DevToolsPos = { x: number; y: number };
 
 // ── Types espaces de coordonnées ───────────────────────────────────────────────
@@ -93,7 +91,6 @@ const storeLogic = (set, get) => ({
 
   resetPanelPosition: () => set({ panelPosition: DEFAULT_PANEL_POSITION }),
 
-  // ── Dernier clic — legacy (compatibilité admin.store) ────────────────────────
   lastClickedPos: null as DevToolsPos | null,
 
   setLastClickedPos: (pos: DevToolsPos) => set({ lastClickedPos: pos }),

@@ -1,10 +1,5 @@
-/**
- * adminPanel.shared.tsx
- * Utilitaires communs à AdminPanel (legacy) et AdminPanelWOM.
- * Ne contient aucune logique de données — uniquement rendu et helpers.
- */
 import { useEffect, useState } from "react";
-import { getAdminStore } from "../../store/admin.store";
+import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -77,8 +72,8 @@ function getPhaserKeyboard() {
 }
 
 export const kbHandlers = {
-  onFocus: () => { getAdminStore().getState().setConsoleActive(true);  getPhaserKeyboard()?.disableGlobalCapture(); },
-  onBlur:  () => { getAdminStore().getState().setConsoleActive(false); getPhaserKeyboard()?.enableGlobalCapture(); },
+  onFocus: () => { getDevToolsStore().getState().setConsoleActive(true);  getPhaserKeyboard()?.disableGlobalCapture(); },
+  onBlur:  () => { getDevToolsStore().getState().setConsoleActive(false); getPhaserKeyboard()?.enableGlobalCapture(); },
 };
 
 // ── Helpers réseau ────────────────────────────────────────────────────────────
