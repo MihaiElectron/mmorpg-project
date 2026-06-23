@@ -12,10 +12,18 @@ function formatPos(position: { worldX: number; worldY: number } | null): string 
 
 export default function WorldObjectInspector() {
   const obj = useDevToolsStore((s) => s.selectedWorldObject);
+  const clear = useDevToolsStore((s) => s.clearSelectedWorldObject);
 
   return (
     <section className="woi" aria-label="WorldObject Inspector">
-      <h3 className="woi__title">Inspector</h3>
+      <div className="woi__header">
+        <h3 className="woi__title">Inspector</h3>
+        {obj && (
+          <button className="woi__deselect" onClick={clear} aria-label="Désélectionner">
+            ✕
+          </button>
+        )}
+      </div>
       {!obj ? (
         <p className="woi__empty">Aucun WorldObject sélectionné.</p>
       ) : (

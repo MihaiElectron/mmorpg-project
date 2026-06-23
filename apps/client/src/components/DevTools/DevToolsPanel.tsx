@@ -6,9 +6,9 @@ import WorldObjectInspector from "./WorldObjectInspector";
 export default function DevToolsPanel() {
   return (
     <>
-      <WorldObjectInspector />
       <WorldModule />
       <ResourcesModule />
+      <WorldObjectInspector />
       <AdminPanel />
     </>
   );
