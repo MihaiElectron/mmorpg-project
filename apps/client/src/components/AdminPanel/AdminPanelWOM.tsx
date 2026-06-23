@@ -2,9 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { getAdminStore } from "../../store/admin.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
-import { getDevToolsSocket } from "../DevTools/devtoolsBridge";
+import { type WorldObject } from "../DevTools/types/worldObject.types";
 import {
-  type FieldDef,
   type GroupedSectionConfig,
   type SectionConfig,
   type ConsoleLine,
@@ -16,7 +15,7 @@ import {
   EntitySection,
 } from "./adminPanel.shared";
 
-// ── Types locaux ──────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type Overview = {
   templates: number;
@@ -26,7 +25,7 @@ type Overview = {
   registeredCharacters: number;
 };
 
-// ── Configs ────────────────────────────────────────────────────────────────────
+// ── Configs (identiques au legacy) ────────────────────────────────────────────
 
 const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
   {
@@ -115,9 +114,47 @@ const SECTION_CONFIGS: SectionConfig[] = [
   },
 ];
 
-// ── AdminPanel ────────────────────────────────────────────────────────────────
+// ── Adapters WOM → formes legacy ──────────────────────────────────────────────
 
-export default function AdminPanel() {
+function wosToAnimalInstances(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    templateKey: wo.type,
+    state: wo.state,
+    health: wo.health ?? 0,
+    maxHealth: wo.maxHealth ?? 0,
+    x: (wo.metadata.legacy as any)?.x ?? 0,
+    y: (wo.metadata.legacy as any)?.y ?? 0,
+  }));
+}
+
+function wosToResourceTemplates(wos: WorldObject[]): any[] {
+  const map = new Map<string, any>();
+  for (const wo of wos) {
+    if (!map.has(wo.type)) {
+      map.set(wo.type, {
+        type: wo.type,
+        defaultRemainingLoots: (wo.metadata.defaultRemainingLoots as number) ?? 0,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function wosToResourceInstances(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    type: wo.type,
+    state: wo.state,
+    remainingLoots: wo.remainingLoots ?? 0,
+    x: (wo.metadata.legacy as any)?.x ?? 0,
+    y: (wo.metadata.legacy as any)?.y ?? 0,
+  }));
+}
+
+// ── AdminPanelWOM ─────────────────────────────────────────────────────────────
+
+export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
@@ -130,22 +167,23 @@ export default function AdminPanel() {
 
   useEffect(() => {
     const fetches: Promise<any>[] = [
+      // Overview et joueurs : REST identique au legacy
       fetchAdmin<Overview>("/admin/overview", token).then(setOverview),
       fetchAdmin<any[]>("/admin/characters", token).then((data) =>
         setSectionData((prev) => ({ ...prev, players: data }))
       ),
+      // Créatures : templates via REST, instances via WOM
       fetchAdmin<any[]>("/admin/templates", token).then((data) =>
         setGroupData((prev) => ({ ...prev, creatures: data }))
       ),
-      fetchAdmin<any[]>("/admin/animals", token).then((data) =>
-        setInstanceData((prev) => ({ ...prev, creatures: data }))
+      fetchAdmin<WorldObject[]>("/admin/animals/world-objects", token).then((wos) =>
+        setInstanceData((prev) => ({ ...prev, creatures: wosToAnimalInstances(wos) }))
       ),
-      fetchAdmin<any[]>("/admin/resource-templates", token).then((data) =>
-        setGroupData((prev) => ({ ...prev, resources: data }))
-      ),
-      fetchAdmin<any[]>("/admin/resources", token).then((data) =>
-        setInstanceData((prev) => ({ ...prev, resources: data }))
-      ),
+      // Ressources : templates dérivés du WOM, instances du WOM
+      fetchAdmin<WorldObject[]>("/admin/resources/world-objects", token).then((wos) => {
+        setGroupData((prev)    => ({ ...prev, resources: wosToResourceTemplates(wos) }));
+        setInstanceData((prev) => ({ ...prev, resources: wosToResourceInstances(wos) }));
+      }),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
@@ -173,7 +211,7 @@ export default function AdminPanel() {
         }
         if (dto.state === 'dead') return prev;
         scheduleOverviewRefresh();
-        return { ...prev, creatures: [...list, dto] };
+        return { ...prev, creatures: [...list, { ...dto, templateKey: dto.templateKey ?? "" }] };
       });
     }
 
