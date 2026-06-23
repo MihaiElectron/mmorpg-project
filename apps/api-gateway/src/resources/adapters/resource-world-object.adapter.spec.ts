@@ -26,6 +26,7 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
     type: 'dead_tree',
     defaultRemainingLoots: 5,
     respawnDelayMs: 60_000,
+    lootPool: null,
     ...overrides,
   } as ResourceTemplate;
 }
@@ -184,6 +185,51 @@ describe('toResourceWorldObject — metadata.respawnDelayMs', () => {
   it('reflète respawnDelayMs du template passé', () => {
     const wo = toResourceWorldObject(makeResource(), makeTemplate({ respawnDelayMs: 45_000 }));
     expect(wo.metadata.respawnDelayMs).toBe(45_000);
+  });
+});
+
+// ─── Metadata lootPool ───────────────────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.lootPool', () => {
+  it('lootPoolCount et lootPoolItems présents si template avec pool valide', () => {
+    const pool = [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 1 }];
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ lootPool: pool }));
+    expect(wo.metadata.lootPoolCount).toBe(1);
+    expect(wo.metadata.lootPoolItems).toEqual(['wooden_stick']);
+  });
+
+  it('null si template absent', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.lootPoolCount).toBeNull();
+    expect(wo.metadata.lootPoolItems).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.lootPoolCount).toBeNull();
+    expect(wo.metadata.lootPoolItems).toBeNull();
+  });
+
+  it('lootPoolCount 0 si pool tableau vide', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ lootPool: [] }));
+    expect(wo.metadata.lootPoolCount).toBe(0);
+    expect(wo.metadata.lootPoolItems).toEqual([]);
+  });
+
+  it('entrées avec itemId vide sont ignorées dans le décompte', () => {
+    const pool = [
+      { itemId: '', minQty: 1, maxQty: 1, probability: 1 },
+      { itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 1 },
+    ];
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ lootPool: pool }));
+    expect(wo.metadata.lootPoolCount).toBe(1);
+    expect(wo.metadata.lootPoolItems).toEqual(['iron_ore']);
+  });
+
+  it('pool non-tableau (corromptu) → null', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ lootPool: 'bad' as any }));
+    expect(wo.metadata.lootPoolCount).toBeNull();
+    expect(wo.metadata.lootPoolItems).toBeNull();
   });
 });
 

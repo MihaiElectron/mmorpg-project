@@ -20,6 +20,12 @@ function metaNum(meta: Record<string, unknown>, key: string): number | null {
   return typeof v === "number" ? v : null;
 }
 
+function metaArr(meta: Record<string, unknown>, key: string): string[] | null {
+  const v = meta[key];
+  if (!Array.isArray(v)) return null;
+  return v.every((x) => typeof x === "string") ? (v as string[]) : null;
+}
+
 export default function WorldObjectInspector() {
   const obj = useDevToolsStore((s) => s.selectedWorldObject);
   const clear = useDevToolsStore((s) => s.clearSelectedWorldObject);
@@ -105,6 +111,20 @@ export default function WorldObjectInspector() {
             <>
               <dt className="woi__label">respawnDelay</dt>
               <dd className="woi__value">{metaNum(obj.metadata, "respawnDelayMs")} ms</dd>
+            </>
+          )}
+
+          {metaNum(obj.metadata, "lootPoolCount") != null && (
+            <>
+              <dt className="woi__label">lootPool</dt>
+              <dd className="woi__value">
+                {metaNum(obj.metadata, "lootPoolCount")} entrée(s)
+                {metaArr(obj.metadata, "lootPoolItems") != null && (
+                  <span className="woi__value--muted">
+                    {" "}— {metaArr(obj.metadata, "lootPoolItems")!.join(", ") || "∅"}
+                  </span>
+                )}
+              </dd>
             </>
           )}
 

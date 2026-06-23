@@ -40,12 +40,32 @@ function validateResource(obj: WorldObject, out: Diagnostic[]): void {
   const loots = obj.remainingLoots;
   const respawnDelayMs = typeof obj.metadata?.respawnDelayMs === "number"
     ? obj.metadata.respawnDelayMs : null;
+  const lootPoolCount = typeof obj.metadata?.lootPoolCount === "number"
+    ? obj.metadata.lootPoolCount : null;
+  const lootPoolItems = Array.isArray(obj.metadata?.lootPoolItems)
+    ? (obj.metadata.lootPoolItems as string[]) : null;
 
   if (respawnDelayMs != null && respawnDelayMs <= 0) {
     out.push({
       severity: "error",
       code: "RESOURCE_INVALID_RESPAWN_DELAY",
       message: `respawnDelayMs invalide (${respawnDelayMs}) — doit être > 0`,
+    });
+  }
+
+  if (lootPoolCount != null && lootPoolCount === 0) {
+    out.push({
+      severity: "warning",
+      code: "RESOURCE_EMPTY_LOOT_POOL",
+      message: "lootPool vide — aucun item ne sera looté (fallback legacy actif)",
+    });
+  }
+
+  if (lootPoolCount != null && lootPoolCount > 0 && lootPoolItems != null && lootPoolItems.length === 0) {
+    out.push({
+      severity: "warning",
+      code: "RESOURCE_LOOT_POOL_ITEMS_MISMATCH",
+      message: "lootPoolCount > 0 mais lootPoolItems vide — données incohérentes",
     });
   }
 

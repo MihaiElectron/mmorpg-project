@@ -34,6 +34,10 @@ export interface ResourceMetadata {
   readonly legacy: { readonly x: number; readonly y: number } | null;
   /** Délai de respawn en ms depuis le ResourceTemplate. Null si template absent. */
   readonly respawnDelayMs: number | null;
+  /** Nombre d'entrées valides dans le lootPool du template. Null si template absent. */
+  readonly lootPoolCount: number | null;
+  /** itemId de chaque entrée valide du lootPool. Null si template absent. */
+  readonly lootPoolItems: readonly string[] | null;
 }
 
 /**
@@ -56,6 +60,19 @@ export interface ResourceWorldObject {
   readonly remainingLoots: number;
   readonly capabilities: readonly ResourceCapability[];
   readonly metadata: ResourceMetadata;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function extractLootPool(pool: any[] | null | undefined): { count: number; items: string[] } | null {
+  if (!Array.isArray(pool)) return null;
+  const items = pool
+    .filter(
+      (e): e is { itemId: string } =>
+        typeof e === 'object' && e !== null && typeof e.itemId === 'string' && e.itemId.length > 0,
+    )
+    .map((e) => e.itemId);
+  return { count: items.length, items };
 }
 
 // ─── Capacités constantes ─────────────────────────────────────────────────────
@@ -83,10 +100,11 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  * - x/y legacy toujours inclus dans metadata.legacy si les valeurs sont finies.
  * - capabilities : ensemble fixe des 5 capacités actuellement implémentées.
  * - respawnDelayMs exposé dans metadata si template fourni, null sinon.
+ * - lootPoolCount/lootPoolItems extraits des entrées valides du template, null sinon.
  */
 export function toResourceWorldObject(
   resource: Resource,
-  template?: Pick<ResourceTemplate, 'respawnDelayMs'> | null,
+  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'lootPool'> | null,
 ): ResourceWorldObject {
   const hasWU =
     resource.worldX != null &&
@@ -114,6 +132,13 @@ export function toResourceWorldObject(
     state: resource.state,
     remainingLoots: resource.remainingLoots,
     capabilities: RESOURCE_CAPABILITIES,
-    metadata: Object.freeze({ legacy, respawnDelayMs: template?.respawnDelayMs ?? null }),
+    metadata: Object.freeze({
+      legacy,
+      respawnDelayMs: template?.respawnDelayMs ?? null,
+      ...(() => {
+        const lp = extractLootPool(template?.lootPool);
+        return { lootPoolCount: lp?.count ?? null, lootPoolItems: lp ? Object.freeze(lp.items) : null };
+      })(),
+    }),
   });
 }

@@ -139,6 +139,38 @@ describe("validateWorldObject — règles resource", () => {
     ).filter((c) => c === "RESOURCE_INVALID_RESPAWN_DELAY");
     expect(triggered).toHaveLength(0);
   });
+
+  it("lootPoolCount === 0 → RESOURCE_EMPTY_LOOT_POOL warning", () => {
+    const diags = validateWorldObject(
+      makeResource({ metadata: { legacy: null, lootPoolCount: 0, lootPoolItems: [] } }),
+    );
+    const d = diags.find((x) => x.code === "RESOURCE_EMPTY_LOOT_POOL");
+    expect(d).toBeDefined();
+    expect(d?.severity).toBe("warning");
+  });
+
+  it("lootPoolCount > 0 et lootPoolItems vide → RESOURCE_LOOT_POOL_ITEMS_MISMATCH warning", () => {
+    const diags = validateWorldObject(
+      makeResource({ metadata: { legacy: null, lootPoolCount: 2, lootPoolItems: [] } }),
+    );
+    const d = diags.find((x) => x.code === "RESOURCE_LOOT_POOL_ITEMS_MISMATCH");
+    expect(d).toBeDefined();
+    expect(d?.severity).toBe("warning");
+  });
+
+  it("lootPoolCount absent → pas de règle lootPool déclenchée", () => {
+    const triggered = codes(
+      makeResource({ metadata: { legacy: null } }),
+    ).filter((c) => c === "RESOURCE_EMPTY_LOOT_POOL" || c === "RESOURCE_LOOT_POOL_ITEMS_MISMATCH");
+    expect(triggered).toHaveLength(0);
+  });
+
+  it("lootPoolCount > 0 et lootPoolItems non vide → pas de warning lootPool", () => {
+    const triggered = codes(
+      makeResource({ metadata: { legacy: null, lootPoolCount: 1, lootPoolItems: ["wooden_stick"] } }),
+    ).filter((c) => c === "RESOURCE_EMPTY_LOOT_POOL" || c === "RESOURCE_LOOT_POOL_ITEMS_MISMATCH");
+    expect(triggered).toHaveLength(0);
+  });
 });
 
 // ── Catégorie inconnue ────────────────────────────────────────────────────────
