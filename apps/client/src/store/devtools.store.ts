@@ -181,6 +181,15 @@ const storeLogic = (set, get) => ({
 
   incrementCreatureSpawnsRefreshKey: () =>
     set({ creatureSpawnsRefreshKey: get().creatureSpawnsRefreshKey + 1 }),
+
+  // ── Overlay Studio — CreatureSpawns ───────────────────────────────────────
+  creatureSpawnOverlayEnabled: false,
+
+  setCreatureSpawnOverlayEnabled: (enabled: boolean) =>
+    set({ creatureSpawnOverlayEnabled: enabled }),
+
+  toggleCreatureSpawnOverlayEnabled: () =>
+    set({ creatureSpawnOverlayEnabled: !get().creatureSpawnOverlayEnabled }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────

@@ -111,6 +111,16 @@ function resolveScreen(entity) {
   return { x: Math.round(entity.x), y: Math.round(entity.y) };
 }
 
+// Convertit un WorldObject WOM (position: {worldX, worldY}) en pixels Phaser.
+// Retourne null si position absente (entité non localisée).
+function resolveWomScreen(wo) {
+  if (!wo.position) return null;
+  return {
+    x: Math.round(1000 + (wo.position.worldX - wo.position.worldY) / 16),
+    y: Math.round((wo.position.worldX + wo.position.worldY) / 32),
+  };
+}
+
 export default class WorldScene extends Phaser.Scene {
   constructor() {
     super({ key: "WorldScene" });
@@ -128,6 +138,9 @@ export default class WorldScene extends Phaser.Scene {
     this.resourceOverlayLabels = new Map();
     this.animalOverlayGraphics = null;
     this.animalOverlayLabels = new Map();
+    this.creatureSpawnData = new Map();
+    this.creatureSpawnOverlayGraphics = null;
+    this.creatureSpawnOverlayLabels = new Map();
     this.overlayStoreUnsub = null;
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
@@ -338,14 +351,18 @@ export default class WorldScene extends Phaser.Scene {
 
     // ── Studio SDK — overlay + sélection ──────────────────────────────────────
     this.overlayStoreUnsub = getAdminStore().subscribe((state, prev) => {
-      const resourceOverlayChanged = state.resourceOverlayEnabled !== prev.resourceOverlayEnabled;
-      const animalOverlayChanged   = state.animalOverlayEnabled   !== prev.animalOverlayEnabled;
+      const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
+      const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
+      const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
       const selectionChanged = state.selectedWorldObject?.id !== prev.selectedWorldObject?.id;
       if (resourceOverlayChanged || selectionChanged) {
         this.redrawResourceOverlay();
       }
       if (animalOverlayChanged || selectionChanged) {
         this.redrawAnimalOverlay();
+      }
+      if (creatureSpawnOverlayChanged || selectionChanged) {
+        this.redrawCreatureSpawnOverlay();
       }
     });
 
@@ -953,6 +970,94 @@ export default class WorldScene extends Phaser.Scene {
     }
   }
 
+  // ── Studio SDK — CreatureSpawn Overlay ──────────────────────────────────────
+
+  _clearCreatureSpawnOverlay() {
+    if (this.creatureSpawnOverlayGraphics) {
+      this.creatureSpawnOverlayGraphics.clear();
+    }
+    for (const text of this.creatureSpawnOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.creatureSpawnOverlayLabels.clear();
+  }
+
+  _drawCreatureSpawnOverlay() {
+    if (!this.creatureSpawnOverlayGraphics) {
+      this.creatureSpawnOverlayGraphics = this.add.graphics();
+      this.creatureSpawnOverlayGraphics.setDepth(50);
+    }
+
+    const selectedId = getAdminStore().getState().selectedWorldObject?.id ?? null;
+
+    for (const [id, spawn] of this.creatureSpawnData.entries()) {
+      const pos = resolveWomScreen(spawn);
+      if (!pos) continue;
+
+      const { x, y } = pos;
+      const isSelected  = id === selectedId;
+      const dotColor    = isSelected ? 0xf1c40f : 0x3498db;
+      const alpha       = isSelected ? 1.0 : 0.8;
+      const dotRadius   = isSelected ? 12 : 7;
+
+      // Centre du spawn
+      this.creatureSpawnOverlayGraphics.lineStyle(isSelected ? 3 : 2, dotColor, alpha);
+      this.creatureSpawnOverlayGraphics.strokeCircle(x, y, dotRadius);
+
+      // Rayon de patrouille legacy en pixels — dette : patrolRadius est en px legacy,
+      // pas en WU. Affiché tel quel jusqu'à migration WU complète.
+      const patrolRadius = typeof spawn.metadata?.patrolRadius === "number"
+        ? spawn.metadata.patrolRadius
+        : null;
+      if (patrolRadius != null && patrolRadius > 0) {
+        this.creatureSpawnOverlayGraphics.lineStyle(1, dotColor, isSelected ? 0.5 : 0.3);
+        this.creatureSpawnOverlayGraphics.strokeCircle(x, y, patrolRadius);
+      }
+
+      // Label : type + id court
+      const shortId = id.length > 7 ? id.slice(0, 7) + "…" : id;
+      const label = this.add.text(x, y - dotRadius - 5, `${spawn.type}\n${shortId}`, {
+        fontSize: "9px",
+        color: isSelected ? "#f1c40f" : "#3498db",
+        align: "center",
+      });
+      label.setOrigin(0.5, 1);
+      label.setDepth(51);
+      this.creatureSpawnOverlayLabels.set(id, label);
+    }
+  }
+
+  redrawCreatureSpawnOverlay() {
+    this._clearCreatureSpawnOverlay();
+
+    if (!getAdminStore().getState().creatureSpawnOverlayEnabled) return;
+
+    // Données déjà chargées : dessiner directement.
+    if (this.creatureSpawnData.size > 0) {
+      this._drawCreatureSpawnOverlay();
+      return;
+    }
+
+    // Premier affichage : fetch depuis le backend, puis redraw.
+    fetch("/admin/creature-spawns/world-objects")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((items) => {
+        for (const item of items) {
+          this.creatureSpawnData.set(item.id, item);
+        }
+        // Vérifier que l'overlay est toujours actif avant de dessiner.
+        if (getAdminStore().getState().creatureSpawnOverlayEnabled) {
+          this._drawCreatureSpawnOverlay();
+        }
+      })
+      .catch((err) => {
+        console.warn("[CreatureSpawnOverlay] fetch failed:", err);
+      });
+  }
+
   clearResources() {
     for (const sprite of this.resourceSprites.values()) {
       sprite.destroy();
@@ -1055,6 +1160,16 @@ export default class WorldScene extends Phaser.Scene {
       text.destroy();
     }
     this.animalOverlayLabels.clear();
+
+    if (this.creatureSpawnOverlayGraphics) {
+      this.creatureSpawnOverlayGraphics.destroy();
+      this.creatureSpawnOverlayGraphics = null;
+    }
+    for (const text of this.creatureSpawnOverlayLabels.values()) {
+      text.destroy();
+    }
+    this.creatureSpawnOverlayLabels.clear();
+    this.creatureSpawnData.clear();
 
     this.clearResources();
     destroyHpBar(this.playerHpBar);
