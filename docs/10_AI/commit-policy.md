@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-22
+- Last updated: 2026-06-24
 - Depends on: docs/10_AI/session-workflow.md, CLAUDE.md, docs/09_Workflow/development.md
 - Used by: Claude Code, Codex, tout agent IA qui propose ou crée des commits sur ce projet
 
@@ -27,14 +27,19 @@ Tous les messages de commit sont **en français**.
 ### Format Conventional Commits
 
 ```
-type(scope): description courte en français
+type(scope): action principale — détails clés séparés par virgules
 ```
 
 - La description commence par une minuscule.
-- La description ne dépasse pas 72 caractères.
+- La ligne principale ne dépasse pas 72 caractères.
 - Pas de point final.
-- Le présent de l'indicatif est utilisé ("ajouter", "corriger", "migrer",
-  non "ajouté", "corrigé", "migré").
+- L'infinitif est préféré pour les verbes d'action ("ajouter", "corriger",
+  "migrer"). Les formes nominales sont acceptées quand elles sont plus
+  concises ("persistance respawnAt", "mise à jour session N").
+- Le tiret em `—` (optionnel) sépare l'action principale des points clés
+  sur la même ligne : `feat(admin): ajouter respawnDelayMs — resources, creatures`.
+- Plusieurs scopes sont séparés par une virgule sans espace :
+  `feat(creatures,resources): …`.
 
 ---
 
@@ -86,36 +91,31 @@ du fichier principal modifié.
 
 ## 4. Exemples adaptés au projet
 
+Ligne simple (action courte) :
+
 ```
 feat(devtools): ajouter le module d'overlay chunks
-
 fix(world): corriger la validation des coordonnées serveur
-
-docs(ai): formaliser le workflow de session
-
-refactor(resources): isoler la logique de portée d'interaction
-
-test(combat): couvrir la portée d'attaque en WU
-
-feat(admin): rendre les spawns créatables depuis le panneau
-
-fix(characters): corriger la validation d'ownership dans equipItem
-
-feat(animals): persister les timers de respawn via Redis
-
-docs(architecture): ajouter l'audit complet du projet
-
-chore(config): importer ItemModule dans AppModule
-
-test(world): ajouter les cas limites de updatePlayer
-
-feat(phaser): brancher MapLoader dans WorldScene
-
-fix(db): ajouter la valeur par défaut sur la colonne worldX
-
-refactor(admin): paginer les endpoints /admin/animals et /admin/resources
-
 style(phaser): corriger le formatage de WorldScene
+chore(config): importer ItemModule dans AppModule
+test(world): ajouter les cas limites de updatePlayer
+```
+
+Ligne principale avec em dash (action + points clés) :
+
+```
+feat(admin): respawnDelayMs par instance ressource et créature, WU sur instances créatures
+feat(creatures,resources): persistance respawnAt, insert-or-ignore seeds, UUID copie
+docs(status): mise à jour session 8 — AdminPanelWOM, fixes overlays et respawn
+docs(schema,admin,glossary): mise à jour session 9 — respawnDelayMs, respawnAt, WU instances
+feat(world): character_respawn et character_teleport transmettent worldX/worldY/mapId
+```
+
+Scopes multiples (deux domaines également impactés) :
+
+```
+feat(creatures,resources): persistance respawnAt, insert-or-ignore seeds, UUID copie
+fix(world,animals): corriger la détection de position hors-carte
 ```
 
 ---
@@ -124,11 +124,10 @@ style(phaser): corriger le formatage de WorldScene
 
 Pour les changements non triviaux, ajouter un corps après une ligne vide.
 
-Le corps doit mentionner :
+Structure recommandée :
 
-- Pourquoi ce changement (contexte, bug reproduit, objectif).
-- Ce qui a changé concrètement (fichiers principaux, comportement avant/après).
-- Ce qui n'est pas fait (hors scope, dette laissée).
+1. **Détails** : contexte, bug reproduit, fichiers clés, comportement avant/après.
+2. **Dette technique** (si applicable) : ce qui n'est pas fait, ce qui reste en dette, hors scope explicite.
 
 ```
 feat(admin): ajouter la pagination serveur sur /admin/animals
@@ -137,9 +136,12 @@ Les endpoints admin renvoyaient toutes les entités en une seule réponse.
 Ajout de ?page= et ?limit= sur /admin/animals, /admin/resources et
 /admin/characters.
 
-Hors scope : pagination côté frontend (AdminPanel.tsx) — à faire dans un
-second commit.
+Dette : pagination côté frontend (AdminPanel.tsx) non couverte — à faire
+dans un second commit.
 ```
+
+Quand la ligne principale avec em dash suffit à résumer les changements,
+le corps peut être omis.
 
 ---
 
