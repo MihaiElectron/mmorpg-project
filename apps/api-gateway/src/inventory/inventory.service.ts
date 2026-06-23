@@ -70,6 +70,13 @@ export class InventoryService {
       if (item) return item;
     }
 
+    // Priorité aux items de type 'material' : évite l'ambiguïté quand plusieurs
+    // items partagent la même category (ex. earring, earring +1, earring +2).
+    const material = await this.itemRepository.findOne({
+      where: { category: itemRef, type: 'material' },
+    });
+    if (material) return material;
+
     return this.itemRepository.findOne({
       where: [{ type: itemRef }, { category: itemRef }],
     });
