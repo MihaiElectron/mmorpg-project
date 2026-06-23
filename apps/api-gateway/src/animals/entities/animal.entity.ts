@@ -40,4 +40,8 @@ export class Animal {
 
   @Column({ type: 'timestamptz', nullable: true, default: null })
   respawnAt: Date | null;
+
+  // Override par instance (null = hérite du spawn, puis du template)
+  @Column({ type: 'int', nullable: true, default: null })
+  respawnDelayMs: number | null;
 }

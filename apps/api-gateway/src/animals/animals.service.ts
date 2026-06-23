@@ -458,7 +458,7 @@ export class AnimalsService implements OnModuleInit {
     if (animal.health === 0) {
       animal.state = 'dead';
       this.patrolStates.delete(animal.id);
-      const delay = animal.spawn.respawnDelayMs ?? animal.spawn.template.respawnDelayMs;
+      const delay = animal.respawnDelayMs ?? animal.spawn.respawnDelayMs ?? animal.spawn.template.respawnDelayMs;
       animal.respawnAt = new Date(Date.now() + delay);
       setTimeout(() => this.respawnAnimal(animal.id), delay);
     }
@@ -623,7 +623,7 @@ export class AnimalsService implements OnModuleInit {
 
   async adminUpdateAnimal(
     id: string,
-    fields: Partial<{ health: number; x: number; y: number; state: string }>,
+    fields: Partial<{ health: number; x: number; y: number; state: string; respawnDelayMs: number | null }>,
   ): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(id);
     if (!animal) return null;
@@ -644,6 +644,11 @@ export class AnimalsService implements OnModuleInit {
       this.patrolStates.delete(id);
       const updateWU = this.pixelToWUSafe(animal.x, animal.y);
       if (updateWU) { animal.worldX = updateWU.worldX; animal.worldY = updateWU.worldY; animal.mapId = updateWU.mapId; }
+    }
+
+    // 0 → null (hérite du spawn/template)
+    if ('respawnDelayMs' in fields) {
+      animal.respawnDelayMs = (fields.respawnDelayMs != null && fields.respawnDelayMs > 0) ? fields.respawnDelayMs : null;
     }
 
     await this.animalRepository.save(animal);

@@ -141,7 +141,7 @@ export class AdminService {
 
   async updateResource(
     id: string,
-    fields: Partial<Pick<Resource, 'x' | 'y' | 'remainingLoots' | 'state'>>,
+    fields: Partial<Pick<Resource, 'x' | 'y' | 'remainingLoots' | 'state' | 'respawnDelayMs'>>,
   ): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { id } });
     if (!resource) return null;

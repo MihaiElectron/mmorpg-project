@@ -22,6 +22,8 @@ export interface AnimalWorldObject {
   readonly metadata: {
     readonly legacy: { readonly x: number; readonly y: number } | null;
     readonly respawnAt: Date | null;
+    /** Override de délai par instance (null = hérite du spawn/template). */
+    readonly instanceRespawnDelayMs: number | null;
   };
 }
 
@@ -53,6 +55,10 @@ export function toAnimalWorldObject(animal: Animal): AnimalWorldObject {
     health: animal.health,
     maxHealth: animal.spawn?.template?.baseHealth ?? null,
     capabilities: ANIMAL_CAPABILITIES,
-    metadata: Object.freeze({ legacy, respawnAt: animal.respawnAt ?? null }),
+    metadata: Object.freeze({
+      legacy,
+      respawnAt: animal.respawnAt ?? null,
+      instanceRespawnDelayMs: animal.respawnDelayMs ?? null,
+    }),
   });
 }

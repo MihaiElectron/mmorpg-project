@@ -10,6 +10,7 @@ import type { WorldSocket } from '../types/world-socket';
 import { AnimalsService } from '../animals/animals.service';
 import { WorldService } from '../world/world.service';
 import { AdminService } from './admin.service';
+import { ResourcesService } from '../resources/resources.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 type SpawnPayload = { templateKey: string; x: number; y: number };
@@ -30,6 +31,7 @@ export class AdminGateway {
     private readonly animalsService: AnimalsService,
     private readonly worldService: WorldService,
     private readonly adminService: AdminService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   @SubscribeMessage('admin:spawn')
@@ -211,13 +213,18 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const numericAllowed = ['health', 'x', 'y'];
+    const numericAllowed = ['health', 'x', 'y', 'respawnDelayMs'];
     const validStates = ['alive', 'fighting', 'escaping', 'dead'];
-    const safe: Record<string, number | string> = {};
+    const safe: Record<string, number | string | null> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (k === 'state') {
         if (!validStates.includes(String(v))) return { success: false, message: `État invalide : "${v}". Valeurs : ${validStates.join(', ')}.` };
         safe[k] = String(v);
+      } else if (k === 'respawnDelayMs') {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return { success: false, message: 'Valeur invalide pour "respawnDelayMs" : doit être >= 0 (0 = hérite du template).' };
+        if (n > 0 && n > 86_400_000) return { success: false, message: 'respawnDelayMs doit être <= 86 400 000 ms (24h).' };
+        safe[k] = n === 0 ? null : n;
       } else if (numericAllowed.includes(k)) {
         const n = Number(v);
         if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
@@ -358,13 +365,18 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const numericAllowed = ['x', 'y', 'remainingLoots'];
+    const numericAllowed = ['x', 'y', 'remainingLoots', 'respawnDelayMs'];
     const validResourceStates = ['alive', 'dead'];
-    const safe: Record<string, number | string> = {};
+    const safe: Record<string, number | string | null> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (k === 'state') {
         if (!validResourceStates.includes(String(v))) return { success: false, message: `État invalide : "${v}". Valeurs : ${validResourceStates.join(', ')}.` };
         safe[k] = String(v);
+      } else if (k === 'respawnDelayMs') {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return { success: false, message: 'Valeur invalide pour "respawnDelayMs" : doit être >= 0 (0 = hérite du template).' };
+        if (n > 0 && n > 86_400_000) return { success: false, message: 'respawnDelayMs doit être <= 86 400 000 ms (24h).' };
+        safe[k] = n === 0 ? null : n;
       } else if (numericAllowed.includes(k)) {
         const n = Number(v);
         if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
@@ -377,14 +389,7 @@ export class AdminGateway {
     const updated = await this.adminService.updateResource(id, safe as any);
     if (!updated) return { success: false, message: `Ressource "${id}" introuvable.` };
 
-    this.server.emit('resource_update', {
-      id: updated.id,
-      type: updated.type,
-      x: updated.x,
-      y: updated.y,
-      state: updated.state,
-      remainingLoots: updated.remainingLoots,
-    });
+    this.server.emit('resource_update', this.resourcesService.buildResourceBroadcast(updated));
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `Ressource "${updated.type}" mis à jour : ${changes}.`, data: updated };

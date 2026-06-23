@@ -67,10 +67,11 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceName: (a) => a.id.slice(0, 8),
     getInstanceBadge: (a) => a.state,
     instanceFields: [
-      { key: "state",  label: "État", options: ["alive", "fighting", "escaping", "dead"] },
-      { key: "health", label: "HP",   min: 0 },
-      { key: "x",      label: "X",    min: 0 },
-      { key: "y",      label: "Y",    min: 0 },
+      { key: "state",          label: "État",         options: ["alive", "fighting", "escaping", "dead"] },
+      { key: "health",         label: "HP",            min: 0 },
+      { key: "respawnDelayMs", label: "Respawn (ms)",  min: 0, step: 1000 },
+      { key: "x",              label: "X",             min: 0 },
+      { key: "y",              label: "Y",             min: 0 },
     ],
     instanceSaveEvent: "admin:update_animal",
     getInstanceSavePayload: (a, fields) => ({ id: a.id, fields }),
@@ -78,8 +79,14 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     instanceDeleteEvent: "admin:delete_animal",
     getInstanceDeletePayload: (a) => ({ id: a.id }),
     getInstanceInfoLine: (a) => {
+      const parts: string[] = [];
+      if (a.worldX != null && a.worldY != null) {
+        const mapPart = a.mapId != null ? `  map:${a.mapId}` : "";
+        parts.push(`WU: ${a.worldX}, ${a.worldY}${mapPart}`);
+      }
       const respawn = formatRespawnAt(a.respawnAt);
-      return respawn ?? null;
+      if (respawn) parts.push(respawn);
+      return parts.length ? parts.join("  ·  ") : null;
     },
   },
   {
@@ -106,10 +113,11 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getInstanceName: (r) => r.id.slice(0, 8),
     getInstanceBadge: (r) => r.state,
     instanceFields: [
-      { key: "state",          label: "État",  options: ["alive", "dead"] },
-      { key: "remainingLoots", label: "Loots", min: 0 },
-      { key: "x",              label: "X",     min: 0 },
-      { key: "y",              label: "Y",     min: 0 },
+      { key: "state",          label: "État",         options: ["alive", "dead"] },
+      { key: "remainingLoots", label: "Loots",        min: 0 },
+      { key: "respawnDelayMs", label: "Respawn (ms)", min: 0, step: 1000 },
+      { key: "x",              label: "X",            min: 0 },
+      { key: "y",              label: "Y",            min: 0 },
     ],
     instanceSaveEvent: "admin:update_resource",
     getInstanceSavePayload: (r, fields) => ({ id: r.id, fields }),
@@ -168,7 +176,11 @@ function wosToAnimalInstances(wos: WorldObject[]): any[] {
     maxHealth: wo.maxHealth ?? 0,
     x: (wo.metadata.legacy as any)?.x ?? 0,
     y: (wo.metadata.legacy as any)?.y ?? 0,
-    respawnAt: wo.metadata.respawnAt ?? null,
+    worldX:          wo.position?.worldX ?? null,
+    worldY:          wo.position?.worldY ?? null,
+    mapId:           wo.mapId ?? null,
+    respawnAt:       wo.metadata.respawnAt ?? null,
+    respawnDelayMs:  (wo.metadata.instanceRespawnDelayMs as number | null) ?? 0,
   }));
 }
 
@@ -195,10 +207,11 @@ function wosToResourceInstances(wos: WorldObject[]): any[] {
     remainingLoots: wo.remainingLoots ?? 0,
     x: (wo.metadata.legacy as any)?.x ?? 0,
     y: (wo.metadata.legacy as any)?.y ?? 0,
-    worldX:    wo.position?.worldX ?? null,
-    worldY:    wo.position?.worldY ?? null,
-    mapId:     wo.mapId ?? null,
-    respawnAt: wo.metadata.respawnAt ?? null,
+    worldX:         wo.position?.worldX ?? null,
+    worldY:         wo.position?.worldY ?? null,
+    mapId:          wo.mapId ?? null,
+    respawnAt:      wo.metadata.respawnAt ?? null,
+    respawnDelayMs: (wo.metadata.instanceRespawnDelayMs as number | null) ?? 0,
   }));
 }
 

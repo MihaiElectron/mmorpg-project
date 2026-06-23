@@ -34,6 +34,8 @@ export interface ResourceMetadata {
   readonly legacy: { readonly x: number; readonly y: number } | null;
   /** Délai de respawn en ms depuis le ResourceTemplate. Null si template absent. */
   readonly respawnDelayMs: number | null;
+  /** Override de délai par instance (null = hérite du template). */
+  readonly instanceRespawnDelayMs: number | null;
   /** Nombre de loots par défaut à la réapparition, depuis le ResourceTemplate. Null si template absent. */
   readonly defaultRemainingLoots: number | null;
   /** Nombre d'entrées valides dans le lootPool du template. Null si template absent. */
@@ -140,6 +142,7 @@ export function toResourceWorldObject(
     metadata: Object.freeze({
       legacy,
       respawnDelayMs: template?.respawnDelayMs ?? null,
+      instanceRespawnDelayMs: resource.respawnDelayMs ?? null,
       defaultRemainingLoots: template?.defaultRemainingLoots ?? null,
       ...(() => {
         const lp = extractLootPool(template?.lootPool);

@@ -77,6 +77,7 @@ export class ResourcesService implements OnModuleInit {
   private async resolveRespawnDelay(resourceId: string): Promise<number> {
     const resource = await this.findOne(resourceId);
     if (!resource) return RESOURCE_RESPAWN_DELAY_MS;
+    if (resource.respawnDelayMs != null && resource.respawnDelayMs > 0) return resource.respawnDelayMs;
     const tpl = await this.templateRepo.findOne({ where: { type: resource.type } });
     const delay = tpl?.respawnDelayMs;
     return delay != null && delay > 0 ? delay : RESOURCE_RESPAWN_DELAY_MS;
@@ -260,16 +261,17 @@ export class ResourcesService implements OnModuleInit {
    */
   buildResourceBroadcast(resource: Resource): Record<string, unknown> {
     return {
-      id:            resource.id,
-      type:          resource.type,
-      state:         resource.state,
+      id:             resource.id,
+      type:           resource.type,
+      state:          resource.state,
       remainingLoots: resource.remainingLoots,
-      respawnAt:     resource.respawnAt ?? null,
-      x:             resource.x,
-      y:             resource.y,
-      worldX:        resource.worldX  ?? null,
-      worldY:        resource.worldY  ?? null,
-      mapId:         resource.mapId   ?? null,
+      respawnAt:      resource.respawnAt      ?? null,
+      respawnDelayMs: resource.respawnDelayMs ?? null,
+      x:              resource.x,
+      y:              resource.y,
+      worldX:         resource.worldX  ?? null,
+      worldY:         resource.worldY  ?? null,
+      mapId:          resource.mapId   ?? null,
     };
   }
 

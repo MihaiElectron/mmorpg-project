@@ -33,4 +33,8 @@ export class Resource {
 
   @Column({ type: 'timestamptz', nullable: true, name: 'respawn_at', default: null })
   respawnAt: Date | null;
+
+  // Override par instance (null = hérite du template)
+  @Column({ type: 'int', nullable: true, name: 'respawn_delay_ms', default: null })
+  respawnDelayMs: number | null;
 }
