@@ -33,4 +33,11 @@ export class CapabilityRegistry {
   getProvidersFor(obj: WorldObject): CapabilityProvider[] {
     return this.getProviders(obj.capabilities);
   }
+
+  /**
+   * Retourne tous les providers enregistrés, dans l'ordre d'inscription.
+   */
+  getAllProviders(): CapabilityProvider[] {
+    return [...this._providers];
+  }
 }

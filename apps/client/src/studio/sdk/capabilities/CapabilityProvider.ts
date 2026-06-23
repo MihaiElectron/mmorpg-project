@@ -40,3 +40,34 @@ export interface CommandProvider extends CapabilityProvider {
 export function isCommandProvider(p: CapabilityProvider): p is CommandProvider {
   return (p as CommandProvider).kind === "command";
 }
+
+// ── Overlay ───────────────────────────────────────────────────────────────────
+
+/**
+ * Définition déclarative d'un overlay Studio.
+ * Décrit l'overlay sans contenir de logique de rendu — le rendu reste dans Phaser/WorldScene.
+ */
+export interface StudioOverlayDefinition {
+  /** Identifiant unique : "resource.overlay", "animal.overlay", etc. */
+  readonly id: string;
+  /** Libellé affiché dans l'UI (bouton, légende). */
+  readonly label: string;
+  /** Catégorie WorldObject concernée. */
+  readonly category: string;
+  /** Capability qui déclenche ce provider. */
+  readonly capability: string;
+  readonly description?: string;
+}
+
+/**
+ * Provider exposant des définitions d'overlays pour les WorldObjects portant ses capabilities.
+ * worldObject est optionnel pour permettre getAllOverlayDefinitions() sans objet spécifique.
+ */
+export interface OverlayProvider extends CapabilityProvider {
+  readonly kind: "overlay";
+  getOverlays(worldObject?: WorldObject): StudioOverlayDefinition[];
+}
+
+export function isOverlayProvider(p: CapabilityProvider): p is OverlayProvider {
+  return (p as OverlayProvider).kind === "overlay";
+}
