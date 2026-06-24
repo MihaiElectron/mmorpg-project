@@ -489,4 +489,160 @@ export class AdminGateway {
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `Ressource "${updated.type}" mis à jour : ${changes}.`, data: updated };
   }
+
+  // ── CraftingRecipes ──────────────────────────────────────────────────────
+
+  @SubscribeMessage('admin:create_crafting_recipe')
+  async onCreateCraftingRecipe(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { fields: Record<string, unknown> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const fields = payload?.fields;
+    if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
+
+    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (numericFields.includes(k)) {
+        safe[k] = Number(v);
+      } else if (k === 'enabled' || k === 'consumeIngredientsOnFailure') {
+        safe[k] = v === true || v === 'true';
+      } else {
+        safe[k] = v != null ? String(v) : null;
+      }
+    }
+
+    let recipe: import('../crafting/entities/crafting-recipe.entity').CraftingRecipe;
+    try {
+      recipe = await this.adminService.createCraftingRecipe(safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+    return { success: true, message: `Recette "${recipe.key}" créée.`, data: recipe };
+  }
+
+  @SubscribeMessage('admin:update_crafting_recipe')
+  async onUpdateCraftingRecipe(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string; fields: Record<string, unknown> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const ALLOWED = ['name', 'description', 'category', 'requiredSkillKey', 'requiredSkillLevel',
+      'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate',
+      'xpReward', 'consumeIngredientsOnFailure', 'craftTimeMs', 'stationType', 'enabled'];
+    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs'];
+    const safe: Record<string, unknown> = {};
+
+    for (const [k, v] of Object.entries(fields)) {
+      if (!ALLOWED.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (numericFields.includes(k)) {
+        safe[k] = Number(v);
+      } else if (k === 'enabled' || k === 'consumeIngredientsOnFailure') {
+        safe[k] = v === true || v === 'true';
+      } else {
+        safe[k] = v != null ? String(v) : null;
+      }
+    }
+
+    let updated: import('../crafting/entities/crafting-recipe.entity').CraftingRecipe | null;
+    try {
+      updated = await this.adminService.updateCraftingRecipe(id, safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+    if (!updated) return { success: false, message: `Recette "${id}" introuvable.` };
+
+    return { success: true, message: `Recette "${updated.key}" mise à jour.`, data: updated };
+  }
+
+  @SubscribeMessage('admin:add_ingredient')
+  async onAddIngredient(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { recipeId: string; itemId: string; requiredQuantity: number },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { recipeId, itemId, requiredQuantity } = payload ?? {};
+    if (!recipeId || !itemId) return { success: false, message: 'Payload invalide : recipeId et itemId requis.' };
+
+    let ing: import('../crafting/entities/crafting-ingredient.entity').CraftingIngredient;
+    try {
+      ing = await this.adminService.addIngredient(recipeId, itemId, Number(requiredQuantity) || 1);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur.' };
+    }
+    return { success: true, message: `Ingrédient ajouté (item: ${ing.itemId}, qty: ${ing.requiredQuantity}).`, data: ing };
+  }
+
+  @SubscribeMessage('admin:remove_ingredient')
+  async onRemoveIngredient(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { ingredientId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { ingredientId } = payload ?? {};
+    if (!ingredientId) return { success: false, message: 'Payload invalide : ingredientId requis.' };
+
+    const removed = await this.adminService.removeIngredient(ingredientId);
+    if (!removed) return { success: false, message: `Ingrédient "${ingredientId}" introuvable.` };
+    return { success: true, message: `Ingrédient supprimé.`, data: removed };
+  }
+
+  @SubscribeMessage('admin:add_result')
+  async onAddResult(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { recipeId: string; itemId: string; producedQuantity: number; chance: number },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { recipeId, itemId, producedQuantity, chance } = payload ?? {};
+    if (!recipeId || !itemId) return { success: false, message: 'Payload invalide : recipeId et itemId requis.' };
+
+    let res: import('../crafting/entities/crafting-result.entity').CraftingResult;
+    try {
+      res = await this.adminService.addResult(recipeId, itemId, Number(producedQuantity) || 1, Number(chance) ?? 1);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur.' };
+    }
+    return { success: true, message: `Résultat ajouté (item: ${res.itemId}, qty: ${res.producedQuantity}, chance: ${res.chance}).`, data: res };
+  }
+
+  @SubscribeMessage('admin:remove_result')
+  async onRemoveResult(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { resultId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { resultId } = payload ?? {};
+    if (!resultId) return { success: false, message: 'Payload invalide : resultId requis.' };
+
+    const removed = await this.adminService.removeResult(resultId);
+    if (!removed) return { success: false, message: `Résultat "${resultId}" introuvable.` };
+    return { success: true, message: `Résultat supprimé.`, data: removed };
+  }
+
+  @SubscribeMessage('admin:validate_crafting_recipe')
+  async onValidateCraftingRecipe(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { recipeId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { recipeId } = payload ?? {};
+    if (!recipeId) return { success: false, message: 'Payload invalide : recipeId requis.' };
+
+    const result = await this.adminService.validateCraftingRecipe(recipeId);
+    const summary = result.valid
+      ? `Recette valide${result.warnings.length ? ` (${result.warnings.length} avertissement(s))` : ''}.`
+      : `Recette invalide : ${result.errors.join('; ')}`;
+    return { success: result.valid, message: summary, data: result };
+  }
 }

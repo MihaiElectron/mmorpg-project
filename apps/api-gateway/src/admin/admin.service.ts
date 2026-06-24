@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, MoreThan } from 'typeorm';
+import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
+import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
+import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { Item } from '../items/entities/item.entity';
+import { toCraftingRecipeWorldObject, CraftingRecipeWorldObject } from '../crafting/adapters/crafting-recipe-world-object.adapter';
 import { CreatureTemplate } from '../animals/entities/creature-template.entity';
 import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
 import { Animal } from '../animals/entities/animal.entity';
@@ -35,6 +40,14 @@ export class AdminService {
     private readonly skillDefinitionRepo: Repository<SkillDefinition>,
     @InjectRepository(PlayerSkill)
     private readonly playerSkillRepo: Repository<PlayerSkill>,
+    @InjectRepository(CraftingRecipe)
+    private readonly recipeRepo: Repository<CraftingRecipe>,
+    @InjectRepository(CraftingIngredient)
+    private readonly ingredientRepo: Repository<CraftingIngredient>,
+    @InjectRepository(CraftingResult)
+    private readonly craftingResultRepo: Repository<CraftingResult>,
+    @InjectRepository(Item)
+    private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
   ) {}
 
@@ -359,6 +372,240 @@ export class AdminService {
     }
 
     return this.skillDefinitionRepo.save(sd);
+  }
+
+  // ── Items ────────────────────────────────────────────────────────────────
+
+  getItems(): Promise<Item[]> {
+    return this.itemRepo.find({ order: { category: 'ASC', name: 'ASC' } });
+  }
+
+  // ── CraftingRecipes ───────────────────────────────────────────────────────
+
+  private static validateSuccessRate(v: number, label: string): void {
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      throw new BadRequestException(`${label} doit être un nombre entre 0 et 1.`);
+    }
+  }
+
+  private static validateRequiredSkillLevel(v: number): void {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v < 1 || v > 999) {
+      throw new BadRequestException('requiredSkillLevel doit être un entier entre 1 et 999.');
+    }
+  }
+
+  listCraftingRecipes(): Promise<CraftingRecipe[]> {
+    return this.recipeRepo.find({
+      relations: ['ingredients', 'results'],
+      order: { key: 'ASC' },
+    });
+  }
+
+  async getCraftingRecipeWorldObjects(): Promise<CraftingRecipeWorldObject[]> {
+    const recipes = await this.listCraftingRecipes();
+    return recipes.map(toCraftingRecipeWorldObject);
+  }
+
+  async createCraftingRecipe(
+    fields: Pick<CraftingRecipe, 'key' | 'name'> &
+      Partial<Pick<CraftingRecipe,
+        'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
+        'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
+        'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled'
+      >>,
+  ): Promise<CraftingRecipe> {
+    if (!fields.key || typeof fields.key !== 'string') {
+      throw new BadRequestException('key est requis.');
+    }
+    AdminService.validateSnakeCase(fields.key, 'key');
+
+    const existing = await this.recipeRepo.findOne({ where: { key: fields.key } });
+    if (existing) throw new BadRequestException(`Recette "${fields.key}" existe déjà.`);
+
+    if (!fields.name || typeof fields.name !== 'string' || fields.name.trim() === '') {
+      throw new BadRequestException('name est requis et non vide.');
+    }
+    if (fields.name.length > 256) throw new BadRequestException('name doit être <= 256 caractères.');
+
+    if (fields.requiredSkillKey !== undefined) {
+      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
+      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
+    }
+    if (fields.requiredSkillLevel !== undefined) {
+      AdminService.validateRequiredSkillLevel(fields.requiredSkillLevel);
+    }
+    if (fields.baseSuccessRate !== undefined) AdminService.validateSuccessRate(fields.baseSuccessRate, 'baseSuccessRate');
+    if (fields.successBonusPerLevel !== undefined) AdminService.validateSuccessRate(fields.successBonusPerLevel, 'successBonusPerLevel');
+    if (fields.minSuccessRate !== undefined) AdminService.validateSuccessRate(fields.minSuccessRate, 'minSuccessRate');
+    if (fields.maxSuccessRate !== undefined) AdminService.validateSuccessRate(fields.maxSuccessRate, 'maxSuccessRate');
+
+    const min = fields.minSuccessRate ?? 0.05;
+    const max = fields.maxSuccessRate ?? 1.0;
+    if (min > max) throw new BadRequestException('minSuccessRate ne peut pas être > maxSuccessRate.');
+
+    if (fields.xpReward !== undefined) {
+      if (!Number.isFinite(fields.xpReward) || !Number.isInteger(fields.xpReward) || fields.xpReward < 0) {
+        throw new BadRequestException('xpReward doit être un entier >= 0.');
+      }
+    }
+    if (fields.craftTimeMs !== undefined) {
+      if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) {
+        throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
+      }
+    }
+
+    const toCreate: Partial<CraftingRecipe> = {
+      key: fields.key,
+      name: fields.name.trim(),
+      description: fields.description ?? null,
+      category: fields.category ?? 'smithing',
+      requiredSkillKey: fields.requiredSkillKey ?? 'smithing',
+      requiredSkillLevel: fields.requiredSkillLevel ?? 1,
+      baseSuccessRate: fields.baseSuccessRate ?? 1.0,
+      successBonusPerLevel: fields.successBonusPerLevel ?? 0.02,
+      minSuccessRate: fields.minSuccessRate ?? 0.05,
+      maxSuccessRate: fields.maxSuccessRate ?? 1.0,
+      xpReward: fields.xpReward ?? 10,
+      consumeIngredientsOnFailure: fields.consumeIngredientsOnFailure ?? true,
+      craftTimeMs: fields.craftTimeMs ?? 0,
+      stationType: fields.stationType ?? 'none',
+      enabled: fields.enabled ?? true,
+      isDefault: false,
+    };
+
+    return this.recipeRepo.save(this.recipeRepo.create(toCreate));
+  }
+
+  async updateCraftingRecipe(
+    id: string,
+    fields: Partial<Pick<CraftingRecipe,
+      'name' | 'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
+      'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
+      'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled'
+    >>,
+  ): Promise<CraftingRecipe | null> {
+    const recipe = await this.recipeRepo.findOne({ where: { id }, relations: ['ingredients', 'results'] });
+    if (!recipe) return null;
+
+    if (fields.name !== undefined) {
+      if (typeof fields.name !== 'string' || fields.name.trim() === '') throw new BadRequestException('name ne peut pas être vide.');
+      if (fields.name.length > 256) throw new BadRequestException('name doit être <= 256 caractères.');
+      recipe.name = fields.name.trim();
+    }
+    if ('description' in fields) recipe.description = fields.description ?? null;
+    if (fields.category !== undefined) {
+      AdminService.validateSnakeCase(fields.category, 'category');
+      recipe.category = fields.category;
+    }
+    if (fields.requiredSkillKey !== undefined) {
+      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
+      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
+      recipe.requiredSkillKey = fields.requiredSkillKey;
+    }
+    if (fields.requiredSkillLevel !== undefined) {
+      AdminService.validateRequiredSkillLevel(fields.requiredSkillLevel);
+      recipe.requiredSkillLevel = fields.requiredSkillLevel;
+    }
+    if (fields.baseSuccessRate !== undefined)    { AdminService.validateSuccessRate(fields.baseSuccessRate, 'baseSuccessRate'); recipe.baseSuccessRate = fields.baseSuccessRate; }
+    if (fields.successBonusPerLevel !== undefined) { AdminService.validateSuccessRate(fields.successBonusPerLevel, 'successBonusPerLevel'); recipe.successBonusPerLevel = fields.successBonusPerLevel; }
+    if (fields.minSuccessRate !== undefined)     { AdminService.validateSuccessRate(fields.minSuccessRate, 'minSuccessRate'); recipe.minSuccessRate = fields.minSuccessRate; }
+    if (fields.maxSuccessRate !== undefined)     { AdminService.validateSuccessRate(fields.maxSuccessRate, 'maxSuccessRate'); recipe.maxSuccessRate = fields.maxSuccessRate; }
+
+    const effMin = fields.minSuccessRate ?? recipe.minSuccessRate;
+    const effMax = fields.maxSuccessRate ?? recipe.maxSuccessRate;
+    if (effMin > effMax) throw new BadRequestException('minSuccessRate ne peut pas être > maxSuccessRate.');
+
+    if (fields.xpReward !== undefined) {
+      if (!Number.isFinite(fields.xpReward) || !Number.isInteger(fields.xpReward) || fields.xpReward < 0) throw new BadRequestException('xpReward doit être un entier >= 0.');
+      recipe.xpReward = fields.xpReward;
+    }
+    if (fields.consumeIngredientsOnFailure !== undefined) recipe.consumeIngredientsOnFailure = Boolean(fields.consumeIngredientsOnFailure);
+    if (fields.craftTimeMs !== undefined) {
+      if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
+      recipe.craftTimeMs = fields.craftTimeMs;
+    }
+    if (fields.stationType !== undefined) recipe.stationType = fields.stationType;
+    if (fields.enabled !== undefined) recipe.enabled = Boolean(fields.enabled);
+
+    return this.recipeRepo.save(recipe);
+  }
+
+  async addIngredient(recipeId: string, itemId: string, requiredQuantity: number): Promise<CraftingIngredient> {
+    const recipe = await this.recipeRepo.findOne({ where: { id: recipeId } });
+    if (!recipe) throw new BadRequestException(`Recette "${recipeId}" introuvable.`);
+
+    const item = await this.itemRepo.findOne({ where: { id: itemId } });
+    if (!item) throw new BadRequestException(`Item "${itemId}" introuvable.`);
+
+    if (!Number.isFinite(requiredQuantity) || !Number.isInteger(requiredQuantity) || requiredQuantity < 1) {
+      throw new BadRequestException('requiredQuantity doit être un entier >= 1.');
+    }
+
+    return this.ingredientRepo.save(this.ingredientRepo.create({ recipeId, itemId, requiredQuantity }));
+  }
+
+  async removeIngredient(ingredientId: string): Promise<CraftingIngredient | null> {
+    const ing = await this.ingredientRepo.findOne({ where: { id: ingredientId } });
+    if (!ing) return null;
+    await this.ingredientRepo.delete(ingredientId);
+    return ing;
+  }
+
+  async addResult(recipeId: string, itemId: string, producedQuantity: number, chance: number): Promise<CraftingResult> {
+    const recipe = await this.recipeRepo.findOne({ where: { id: recipeId } });
+    if (!recipe) throw new BadRequestException(`Recette "${recipeId}" introuvable.`);
+
+    const item = await this.itemRepo.findOne({ where: { id: itemId } });
+    if (!item) throw new BadRequestException(`Item "${itemId}" introuvable.`);
+
+    if (!Number.isFinite(producedQuantity) || !Number.isInteger(producedQuantity) || producedQuantity < 1) {
+      throw new BadRequestException('producedQuantity doit être un entier >= 1.');
+    }
+    AdminService.validateSuccessRate(chance, 'chance');
+
+    return this.craftingResultRepo.save(this.craftingResultRepo.create({ recipeId, itemId, producedQuantity, chance }));
+  }
+
+  async removeResult(resultId: string): Promise<CraftingResult | null> {
+    const res = await this.craftingResultRepo.findOne({ where: { id: resultId } });
+    if (!res) return null;
+    await this.craftingResultRepo.delete(resultId);
+    return res;
+  }
+
+  async validateCraftingRecipe(recipeId: string): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
+    const recipe = await this.recipeRepo.findOne({ where: { id: recipeId }, relations: ['ingredients', 'results'] });
+    if (!recipe) {
+      return { valid: false, errors: [`Recette "${recipeId}" introuvable.`], warnings: [] };
+    }
+
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if ((recipe.ingredients ?? []).length === 0) errors.push('La recette n\'a aucun ingrédient.');
+    if ((recipe.results ?? []).length === 0) errors.push('La recette n\'a aucun résultat.');
+
+    const sd = await this.skillDefinitionRepo.findOne({ where: { key: recipe.requiredSkillKey } });
+    if (!sd) errors.push(`Skill requis "${recipe.requiredSkillKey}" inexistant dans SkillDefinition.`);
+
+    for (const ing of recipe.ingredients ?? []) {
+      const item = await this.itemRepo.findOne({ where: { id: ing.itemId } });
+      if (!item) errors.push(`Ingrédient item "${ing.itemId}" introuvable.`);
+    }
+    for (const res of recipe.results ?? []) {
+      const item = await this.itemRepo.findOne({ where: { id: res.itemId } });
+      if (!item) errors.push(`Résultat item "${res.itemId}" introuvable.`);
+    }
+
+    if (recipe.minSuccessRate > recipe.maxSuccessRate) {
+      errors.push(`minSuccessRate (${recipe.minSuccessRate}) > maxSuccessRate (${recipe.maxSuccessRate}).`);
+    }
+
+    if (!recipe.enabled) warnings.push('La recette est désactivée.');
+    if (recipe.baseSuccessRate < 0.1) warnings.push(`Taux de succès de base faible (${recipe.baseSuccessRate}).`);
+    if (recipe.xpReward === 0) warnings.push('xpReward est 0 — aucune XP accordée pour cette recette.');
+
+    return { valid: errors.length === 0, errors, warnings };
   }
 
   // ── Vue d'ensemble ────────────────────────────────────────────────────────

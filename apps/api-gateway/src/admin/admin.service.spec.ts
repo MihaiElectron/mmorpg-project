@@ -10,7 +10,13 @@ import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
+import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
+import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
+import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { Item } from '../items/entities/item.entity';
 import { WorldService } from '../world/world.service';
+
+const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
 
 describe('AdminService resources', () => {
   let service: AdminService;
@@ -43,24 +49,21 @@ describe('AdminService resources', () => {
       save: jest.fn(),
     };
 
-    const emptyRepo = {
-      count: jest.fn(),
-      find: jest.fn(),
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
-        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
-        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
-        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
-        { provide: getRepositoryToken(Character), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: resourceRepo },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
         { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
         { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
     }).compile();
@@ -297,19 +300,22 @@ describe('AdminService — createSkillDefinition', () => {
       save: jest.fn().mockImplementation((v) => Promise.resolve({ ...v, id: 'new-uuid', createdAt: new Date(), updatedAt: new Date() })),
     };
     playerSkillRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
-    const emptyRepo = { count: jest.fn(), find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
-        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
-        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
-        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
-        { provide: getRepositoryToken(Character), useValue: emptyRepo },
-        { provide: getRepositoryToken(Resource), useValue: emptyRepo },
-        { provide: getRepositoryToken(ResourceTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
         { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
     }).compile();
@@ -394,19 +400,22 @@ describe('AdminService — updateSkillDefinition', () => {
       save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
     };
     playerSkillRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
-    const emptyRepo = { count: jest.fn(), find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
-        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
-        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
-        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
-        { provide: getRepositoryToken(Character), useValue: emptyRepo },
-        { provide: getRepositoryToken(Resource), useValue: emptyRepo },
-        { provide: getRepositoryToken(ResourceTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
         { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
     }).compile();
@@ -456,5 +465,225 @@ describe('AdminService — updateSkillDefinition', () => {
   it('rejette name vide', async () => {
     await expect(service.updateSkillDefinition('sd-1', { name: '' }))
       .rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+// ─── AdminService — CraftingRecipes ───────────────────────────────────────────
+
+function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo: any, itemRepo: any, sdRepo: any) {
+  return Test.createTestingModule({
+    providers: [
+      AdminService,
+      { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(SkillDefinition), useValue: sdRepo },
+      { provide: getRepositoryToken(PlayerSkill), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(CraftingRecipe), useValue: recipeRepo },
+      { provide: getRepositoryToken(CraftingIngredient), useValue: ingredientRepo },
+      { provide: getRepositoryToken(CraftingResult), useValue: resultRepo },
+      { provide: getRepositoryToken(Item), useValue: itemRepo },
+      { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
+    ],
+  }).compile();
+}
+
+describe('AdminService — createCraftingRecipe', () => {
+  let service: AdminService;
+  let recipeRepo: Record<string, jest.Mock>;
+  let sdRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    recipeRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((v) => v),
+      save: jest.fn().mockImplementation((v) => Promise.resolve({ ...v, id: 'rec-new' })),
+    };
+    sdRepo = { findOne: jest.fn().mockResolvedValue({ key: 'smithing' }), find: jest.fn().mockResolvedValue([]) };
+    const module = await makeCraftingTestModule(recipeRepo, BASE_EMPTY_REPO(), BASE_EMPTY_REPO(), BASE_EMPTY_REPO(), sdRepo);
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('crée une recette avec les champs valides', async () => {
+    const r = await service.createCraftingRecipe({ key: 'test_recipe', name: 'Test', requiredSkillKey: 'smithing' });
+    expect(recipeRepo.save).toHaveBeenCalled();
+    expect(r.key).toBe('test_recipe');
+  });
+
+  it('applique les valeurs par défaut', async () => {
+    await service.createCraftingRecipe({ key: 'test_recipe', name: 'Test' });
+    const created = recipeRepo.create.mock.calls[0][0];
+    expect(created.enabled).toBe(true);
+    expect(created.xpReward).toBe(10);
+    expect(created.stationType).toBe('none');
+  });
+
+  it('rejette une key dupliquée', async () => {
+    recipeRepo.findOne.mockResolvedValue({ key: 'test_recipe' });
+    await expect(service.createCraftingRecipe({ key: 'test_recipe', name: 'Test' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une key en CamelCase', async () => {
+    await expect(service.createCraftingRecipe({ key: 'TestRecipe', name: 'Test' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette requiredSkillKey inexistant', async () => {
+    sdRepo.findOne.mockResolvedValue(null);
+    await expect(service.createCraftingRecipe({ key: 'test_r', name: 'Test', requiredSkillKey: 'unknown' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette baseSuccessRate > 1', async () => {
+    await expect(service.createCraftingRecipe({ key: 'test_r', name: 'Test', baseSuccessRate: 1.5 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette minSuccessRate > maxSuccessRate', async () => {
+    await expect(service.createCraftingRecipe({ key: 'test_r', name: 'Test', minSuccessRate: 0.8, maxSuccessRate: 0.5 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette xpReward négatif', async () => {
+    await expect(service.createCraftingRecipe({ key: 'test_r', name: 'Test', xpReward: -1 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('AdminService — addIngredient / addResult', () => {
+  let service: AdminService;
+  let recipeRepo: Record<string, jest.Mock>;
+  let ingredientRepo: Record<string, jest.Mock>;
+  let resultRepo: Record<string, jest.Mock>;
+  let itemRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    recipeRepo = { findOne: jest.fn().mockResolvedValue({ id: 'rec-1', key: 'r' }), find: jest.fn().mockResolvedValue([]), create: jest.fn().mockImplementation((v) => v), save: jest.fn().mockImplementation((v) => Promise.resolve(v)) };
+    ingredientRepo = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation((v) => v), save: jest.fn().mockImplementation((v) => Promise.resolve(v)), delete: jest.fn() };
+    resultRepo = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn().mockImplementation((v) => v), save: jest.fn().mockImplementation((v) => Promise.resolve(v)), delete: jest.fn() };
+    itemRepo = { findOne: jest.fn().mockResolvedValue({ id: 'item-1', name: 'Iron Ore' }), find: jest.fn().mockResolvedValue([]) };
+    const module = await makeCraftingTestModule(recipeRepo, ingredientRepo, resultRepo, itemRepo, BASE_EMPTY_REPO());
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('addIngredient crée un ingrédient valide', async () => {
+    const ing = await service.addIngredient('rec-1', 'item-1', 3);
+    expect(ingredientRepo.save).toHaveBeenCalled();
+    expect(ing.requiredQuantity).toBe(3);
+  });
+
+  it('addIngredient rejette item inexistant', async () => {
+    itemRepo.findOne.mockResolvedValue(null);
+    await expect(service.addIngredient('rec-1', 'bad-item', 1))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('addIngredient rejette quantity < 1', async () => {
+    await expect(service.addIngredient('rec-1', 'item-1', 0))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('addResult crée un résultat valide', async () => {
+    const res = await service.addResult('rec-1', 'item-1', 1, 0.8);
+    expect(resultRepo.save).toHaveBeenCalled();
+    expect(res.chance).toBe(0.8);
+  });
+
+  it('addResult rejette item inexistant', async () => {
+    itemRepo.findOne.mockResolvedValue(null);
+    await expect(service.addResult('rec-1', 'bad-item', 1, 1.0))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('addResult rejette chance > 1', async () => {
+    await expect(service.addResult('rec-1', 'item-1', 1, 1.5))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('removeIngredient retourne null si introuvable', async () => {
+    const result = await service.removeIngredient('unknown');
+    expect(result).toBeNull();
+  });
+
+  it('removeIngredient supprime et retourne', async () => {
+    const existing = { id: 'ing-1', itemId: 'item-1', requiredQuantity: 2 };
+    ingredientRepo.findOne.mockResolvedValue(existing);
+    const removed = await service.removeIngredient('ing-1');
+    expect(ingredientRepo.delete).toHaveBeenCalledWith('ing-1');
+    expect(removed).toEqual(existing);
+  });
+});
+
+describe('AdminService — validateCraftingRecipe', () => {
+  let service: AdminService;
+  let recipeRepo: Record<string, jest.Mock>;
+  let sdRepo: Record<string, jest.Mock>;
+  let itemRepo: Record<string, jest.Mock>;
+
+  function makeFullRecipe(): any {
+    return {
+      id: 'rec-1',
+      key: 'iron_bar_from_ore',
+      name: 'Lingot de fer',
+      enabled: true,
+      requiredSkillKey: 'smithing',
+      baseSuccessRate: 1.0,
+      minSuccessRate: 0.05,
+      maxSuccessRate: 1.0,
+      xpReward: 10,
+      ingredients: [{ id: 'ing-1', itemId: 'item-1', requiredQuantity: 3 }],
+      results: [{ id: 'res-1', itemId: 'item-2', producedQuantity: 1, chance: 1.0 }],
+    };
+  }
+
+  beforeEach(async () => {
+    recipeRepo = { findOne: jest.fn().mockResolvedValue(makeFullRecipe()), find: jest.fn().mockResolvedValue([]), create: jest.fn().mockImplementation((v) => v), save: jest.fn().mockImplementation((v) => Promise.resolve(v)) };
+    sdRepo = { findOne: jest.fn().mockResolvedValue({ key: 'smithing' }), find: jest.fn().mockResolvedValue([]) };
+    itemRepo = { findOne: jest.fn().mockResolvedValue({ id: 'item-1' }), find: jest.fn().mockResolvedValue([]) };
+    const module = await makeCraftingTestModule(recipeRepo, BASE_EMPTY_REPO(), BASE_EMPTY_REPO(), itemRepo, sdRepo);
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('retourne valid=true pour une recette complète', async () => {
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('erreur si aucun ingrédient', async () => {
+    recipeRepo.findOne.mockResolvedValue({ ...makeFullRecipe(), ingredients: [] });
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /ingrédient/i.test(e))).toBe(true);
+  });
+
+  it('erreur si skill inexistant', async () => {
+    sdRepo.findOne.mockResolvedValue(null);
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /skill/i.test(e))).toBe(true);
+  });
+
+  it('avertissement si recette désactivée', async () => {
+    recipeRepo.findOne.mockResolvedValue({ ...makeFullRecipe(), enabled: false });
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.warnings.some((w) => /désactivée/i.test(w))).toBe(true);
+  });
+
+  it('avertissement si xpReward = 0', async () => {
+    recipeRepo.findOne.mockResolvedValue({ ...makeFullRecipe(), xpReward: 0 });
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.warnings.some((w) => /xpReward/i.test(w))).toBe(true);
+  });
+
+  it('retourne valid=false si recette introuvable', async () => {
+    recipeRepo.findOne.mockResolvedValue(null);
+    const result = await service.validateCraftingRecipe('unknown');
+    expect(result.valid).toBe(false);
   });
 });

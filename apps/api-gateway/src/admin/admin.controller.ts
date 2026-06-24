@@ -107,4 +107,20 @@ export class AdminController {
 
   @Get('skill-definitions/world-objects')
   getSkillDefinitionWorldObjects() { return this.adminService.getSkillDefinitionWorldObjects(); }
+
+  // ── Items ─────────────────────────────────────────────────────────────────
+
+  @Get('items')
+  getItems() { return this.adminService.getItems(); }
+
+  // ── CraftingRecipes ───────────────────────────────────────────────────────
+
+  @Get('crafting-recipes')
+  listCraftingRecipes() { return this.adminService.listCraftingRecipes(); }
+
+  @Get('crafting-recipes/world-objects')
+  getCraftingRecipeWorldObjects() { return this.adminService.getCraftingRecipeWorldObjects(); }
+
+  @Get('crafting-recipes/:id/validate')
+  validateCraftingRecipe(@Param('id') id: string) { return this.adminService.validateCraftingRecipe(id); }
 }

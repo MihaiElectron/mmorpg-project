@@ -15,6 +15,7 @@ import {
   GroupedSection,
   EntitySection,
 } from "./adminPanel.shared";
+import RecipesSection from "./RecipesSection";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -280,6 +281,8 @@ export default function AdminPanelWOM() {
   const [newSkillOpen, setNewSkillOpen] = useState(false);
   const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
   const [creating, setCreating] = useState(false);
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
 
   const groupedConfigs = useMemo(
     () => buildGroupedSectionConfigs((sectionData["skills"] ?? []).map((sd: any) => sd.key)),
@@ -310,6 +313,10 @@ export default function AdminPanelWOM() {
       fetchAdmin<any[]>("/admin/skill-definitions", token).then((data) =>
         setSectionData((prev) => ({ ...prev, skills: data }))
       ),
+      // Items : pour les sélecteurs ingrédients/résultats
+      fetchAdmin<any[]>("/admin/items", token).then(setItems),
+      // Recettes crafting
+      fetchAdmin<any[]>("/admin/crafting-recipes", token).then(setRecipes),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
@@ -565,6 +572,27 @@ export default function AdminPanelWOM() {
         config={SKILLS_SECTION_CONFIG}
         items={sectionData["skills"] ?? []}
         onResult={pushResult}
+      />
+
+      <RecipesSection
+        recipes={recipes}
+        skillKeys={(sectionData["skills"] ?? []).map((sd: any) => sd.key)}
+        items={items}
+        onResult={pushResult}
+        onRecipeCreated={(r) => setRecipes((prev) => [...prev, r])}
+        onRecipeUpdated={(r) => setRecipes((prev) => prev.map((x) => x.id === r.id ? { ...x, ...r } : x))}
+        onIngredientAdded={(recipeId, ing) =>
+          setRecipes((prev) => prev.map((x) => x.id === recipeId ? { ...x, ingredients: [...x.ingredients, ing] } : x))
+        }
+        onIngredientRemoved={(recipeId, ingId) =>
+          setRecipes((prev) => prev.map((x) => x.id === recipeId ? { ...x, ingredients: x.ingredients.filter((i: any) => i.id !== ingId) } : x))
+        }
+        onResultAdded={(recipeId, res) =>
+          setRecipes((prev) => prev.map((x) => x.id === recipeId ? { ...x, results: [...x.results, res] } : x))
+        }
+        onResultRemoved={(recipeId, resId) =>
+          setRecipes((prev) => prev.map((x) => x.id === recipeId ? { ...x, results: x.results.filter((r: any) => r.id !== resId) } : x))
+        }
       />
     </div>
   );

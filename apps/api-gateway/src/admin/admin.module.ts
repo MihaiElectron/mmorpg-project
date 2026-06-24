@@ -8,6 +8,10 @@ import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
+import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
+import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
+import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { Item } from '../items/entities/item.entity';
 import { AnimalsModule } from '../animals/animals.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { WorldModule } from '../world/world.module';
@@ -18,7 +22,12 @@ import { AdminGateway } from './admin.gateway';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CreatureTemplate, CreatureSpawn, Animal, Character, Resource, ResourceTemplate, SkillDefinition, PlayerSkill]),
+    TypeOrmModule.forFeature([
+      CreatureTemplate, CreatureSpawn, Animal, Character,
+      Resource, ResourceTemplate,
+      SkillDefinition, PlayerSkill,
+      CraftingRecipe, CraftingIngredient, CraftingResult, Item,
+    ]),
     AnimalsModule,
     ResourcesModule,
     WorldModule,
