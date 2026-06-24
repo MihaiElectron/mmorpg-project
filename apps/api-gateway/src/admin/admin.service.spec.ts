@@ -8,12 +8,14 @@ import { Animal } from '../animals/entities/animal.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { WorldService } from '../world/world.service';
 
 describe('AdminService resources', () => {
   let service: AdminService;
   let resourceRepo: Record<string, jest.Mock>;
   let resourceTemplateRepo: Record<string, jest.Mock>;
+  let skillDefinitionRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     resourceRepo = {
@@ -23,9 +25,12 @@ describe('AdminService resources', () => {
       create: jest.fn().mockImplementation((resource) => resource),
     };
     resourceTemplateRepo = {
-      findOne: jest.fn().mockResolvedValue({ type: 'wood', defaultRemainingLoots: 7, respawnDelayMs: 30_000, lootPool: null }),
+      findOne: jest.fn().mockResolvedValue({ type: 'wood', defaultRemainingLoots: 7, respawnDelayMs: 30_000, lootPool: null, skillKey: null, gatheringXpReward: 0 }),
       find: jest.fn().mockResolvedValue([]),
       save: jest.fn().mockImplementation((tpl) => Promise.resolve(tpl)),
+    };
+    skillDefinitionRepo = {
+      findOne: jest.fn().mockResolvedValue({ key: 'woodcutting' }),
     };
 
     const emptyRepo = {
@@ -44,6 +49,7 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(Character), useValue: emptyRepo },
         { provide: getRepositoryToken(Resource), useValue: resourceRepo },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
+        { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
     }).compile();
@@ -141,6 +147,57 @@ describe('AdminService resources', () => {
       );
       expect(updated?.respawnDelayMs).toBe(45_000);
       expect(updated?.defaultRemainingLoots).toBe(10);
+    });
+
+    it('met à jour gatheringXpReward si valeur valide', async () => {
+      const updated = await service.updateResourceTemplate('wood', { gatheringXpReward: 10 });
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ gatheringXpReward: 10 }),
+      );
+      expect(updated?.gatheringXpReward).toBe(10);
+    });
+
+    it('accepte gatheringXpReward = 0 (désactivation XP)', async () => {
+      const updated = await service.updateResourceTemplate('wood', { gatheringXpReward: 0 });
+      expect(updated?.gatheringXpReward).toBe(0);
+    });
+
+    it('rejette gatheringXpReward < 0', async () => {
+      await expect(service.updateResourceTemplate('wood', { gatheringXpReward: -1 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejette gatheringXpReward décimal', async () => {
+      await expect(service.updateResourceTemplate('wood', { gatheringXpReward: 2.5 }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('met à jour skillKey si skill connu', async () => {
+      skillDefinitionRepo.findOne.mockResolvedValue({ key: 'woodcutting' });
+      const updated = await service.updateResourceTemplate('wood', { skillKey: 'woodcutting' });
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ skillKey: 'woodcutting' }),
+      );
+      expect(updated?.skillKey).toBe('woodcutting');
+    });
+
+    it('accepte skillKey = null (suppression du skill)', async () => {
+      const updated = await service.updateResourceTemplate('wood', { skillKey: null });
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ skillKey: null }),
+      );
+      expect(updated?.skillKey).toBeNull();
+    });
+
+    it('rejette skillKey inexistant dans SkillDefinition', async () => {
+      skillDefinitionRepo.findOne.mockResolvedValue(null);
+      await expect(service.updateResourceTemplate('wood', { skillKey: 'unknown_skill' }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("rejette skillKey chaîne vide", async () => {
+      await expect(service.updateResourceTemplate('wood', { skillKey: '' as any }))
+        .rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

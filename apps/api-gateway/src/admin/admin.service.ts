@@ -7,6 +7,7 @@ import { Animal } from '../animals/entities/animal.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { WorldService } from '../world/world.service';
 import { DEFAULT_MAP_ID, isoScreenToWorldWU } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
@@ -28,6 +29,8 @@ export class AdminService {
     private readonly resourceRepo: Repository<Resource>,
     @InjectRepository(ResourceTemplate)
     private readonly resourceTemplateRepo: Repository<ResourceTemplate>,
+    @InjectRepository(SkillDefinition)
+    private readonly skillDefinitionRepo: Repository<SkillDefinition>,
     private readonly worldService: WorldService,
   ) {}
 
@@ -81,7 +84,7 @@ export class AdminService {
 
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs'>>,
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward'>> & { skillKey?: string | null },
   ): Promise<ResourceTemplate | null> {
     if (fields.respawnDelayMs !== undefined) {
       const v = fields.respawnDelayMs;
@@ -97,6 +100,26 @@ export class AdminService {
         throw new BadRequestException(
           'defaultRemainingLoots doit être un entier >= 1 et <= 999 999.',
         );
+      }
+    }
+    if (fields.gatheringXpReward !== undefined) {
+      const v = fields.gatheringXpReward;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 999_999) {
+        throw new BadRequestException(
+          'gatheringXpReward doit être un entier >= 0 et <= 999 999.',
+        );
+      }
+    }
+    if ('skillKey' in fields) {
+      const v = fields.skillKey;
+      if (v !== null) {
+        if (typeof v !== 'string' || v.trim() === '') {
+          throw new BadRequestException('skillKey doit être une chaîne non vide ou null.');
+        }
+        const exists = await this.skillDefinitionRepo.findOne({ where: { key: v } });
+        if (!exists) {
+          throw new BadRequestException(`Skill "${v}" inexistant dans SkillDefinition.`);
+        }
       }
     }
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });

@@ -27,6 +27,8 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
     defaultRemainingLoots: 5,
     respawnDelayMs: 60_000,
     lootPool: null,
+    skillKey: null,
+    gatheringXpReward: 0,
     ...overrides,
   } as ResourceTemplate;
 }
@@ -341,5 +343,53 @@ describe('toResourceWorldObject — cas nominaux', () => {
     expect(wo.position).toBeNull();
     expect(wo.mapId).toBeNull();
     expect(wo.metadata.legacy).toEqual({ x: 600, y: 400 });
+  });
+});
+
+// ─── Metadata skillKey ────────────────────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.skillKey', () => {
+  it('null si template absent', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.skillKey).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.skillKey).toBeNull();
+  });
+
+  it('null si template.skillKey est null', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ skillKey: null }));
+    expect(wo.metadata.skillKey).toBeNull();
+  });
+
+  it('reflète le skillKey du template', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ skillKey: 'woodcutting' }));
+    expect(wo.metadata.skillKey).toBe('woodcutting');
+  });
+});
+
+// ─── Metadata gatheringXpReward ───────────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.gatheringXpReward', () => {
+  it('null si template absent', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.gatheringXpReward).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.gatheringXpReward).toBeNull();
+  });
+
+  it('0 si template.gatheringXpReward vaut 0', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ gatheringXpReward: 0 }));
+    expect(wo.metadata.gatheringXpReward).toBe(0);
+  });
+
+  it('reflète la valeur du template', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ gatheringXpReward: 5 }));
+    expect(wo.metadata.gatheringXpReward).toBe(5);
   });
 });

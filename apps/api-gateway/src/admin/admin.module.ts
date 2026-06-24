@@ -6,6 +6,7 @@ import { Animal } from '../animals/entities/animal.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { AnimalsModule } from '../animals/animals.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { WorldModule } from '../world/world.module';
@@ -16,7 +17,7 @@ import { AdminGateway } from './admin.gateway';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CreatureTemplate, CreatureSpawn, Animal, Character, Resource, ResourceTemplate]),
+    TypeOrmModule.forFeature([CreatureTemplate, CreatureSpawn, Animal, Character, Resource, ResourceTemplate, SkillDefinition]),
     AnimalsModule,
     ResourcesModule,
     WorldModule,

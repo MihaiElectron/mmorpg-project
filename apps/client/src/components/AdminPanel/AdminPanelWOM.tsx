@@ -95,8 +95,10 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
-      { key: "defaultRemainingLoots", label: "Loots défaut", min: 1 },
-      { key: "respawnDelayMs",        label: "Respawn (ms)", min: 1, step: 1000 },
+      { key: "defaultRemainingLoots", label: "Loots défaut",  min: 1 },
+      { key: "respawnDelayMs",        label: "Respawn (ms)",  min: 1, step: 1000 },
+      { key: "gatheringXpReward",     label: "XP récolte",    min: 0 },
+      { key: "skillKey",              label: "Skill",         options: ["", "woodcutting", "mining"] },
     ],
     groupSaveEvent: "admin:update_resource_template",
     getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
@@ -193,6 +195,8 @@ function wosToResourceTemplates(wos: WorldObject[]): any[] {
         defaultRemainingLoots: (wo.metadata.defaultRemainingLoots as number) ?? 0,
         respawnDelayMs:        (wo.metadata.respawnDelayMs as number)        ?? 0,
         lootPoolItems:         (wo.metadata.lootPoolItems as string[])       ?? [],
+        skillKey:              (wo.metadata.skillKey as string | null)       ?? null,
+        gatheringXpReward:     (wo.metadata.gatheringXpReward as number)     ?? 0,
       });
     }
   }

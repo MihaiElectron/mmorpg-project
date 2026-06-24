@@ -244,28 +244,51 @@ export class AdminGateway {
   @SubscribeMessage('admin:update_resource_template')
   async onUpdateResourceTemplate(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { type: string; fields: Record<string, number> },
+    @MessageBody() payload: { type: string; fields: Record<string, number | string | null> },
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
 
     const { type, fields } = payload ?? {};
     if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
 
-    const allowed = ['defaultRemainingLoots', 'respawnDelayMs'];
-    const safe: Record<string, number> = {};
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatheringXpReward'];
+    const allowed = [...numericFields, 'skillKey'];
+    const safe: Record<string, number | string | null> = {};
+
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
-      const n = Number(v);
-      if (isNaN(n) || n <= 0) return { success: false, message: `Valeur invalide pour "${k}" (doit être > 0).` };
-      safe[k] = n;
+
+      if (k === 'skillKey') {
+        if (v !== null && (typeof v !== 'string' || (v as string).trim() === '')) {
+          return { success: false, message: 'skillKey doit être une chaîne non vide ou null.' };
+        }
+        safe.skillKey = v === null || v === '' ? null : (v as string).trim();
+      } else {
+        const n = Number(v);
+        if (isNaN(n)) return { success: false, message: `Valeur invalide pour "${k}" (doit être un nombre).` };
+        if ((k === 'defaultRemainingLoots' || k === 'respawnDelayMs') && n <= 0) {
+          return { success: false, message: `Valeur invalide pour "${k}" (doit être > 0).` };
+        }
+        if (k === 'gatheringXpReward' && n < 0) {
+          return { success: false, message: 'gatheringXpReward doit être >= 0.' };
+        }
+        safe[k] = n;
+      }
     }
 
-    const updated = await this.adminService.updateResourceTemplate(type, safe as any);
+    let updated: import('../resources/entities/resource-template.entity').ResourceTemplate | null;
+    try {
+      updated = await this.adminService.updateResourceTemplate(type, safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
     if (!updated) return { success: false, message: `Template ressource "${type}" introuvable.` };
 
     const parts: string[] = [];
     if (safe.defaultRemainingLoots !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
     if (safe.respawnDelayMs        !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
+    if (safe.gatheringXpReward     !== undefined) parts.push(`xp récolte → ${updated.gatheringXpReward}`);
+    if ('skillKey' in safe) parts.push(`skill → ${updated.skillKey ?? 'aucun'}`);
     return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
 

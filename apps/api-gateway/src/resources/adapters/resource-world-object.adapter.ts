@@ -44,6 +44,10 @@ export interface ResourceMetadata {
   readonly lootPoolItems: readonly string[] | null;
   /** Date de réapparition prévue si la resource est dead et en attente de respawn. Null sinon. */
   readonly respawnAt: Date | null;
+  /** Clé du skill de récolte (ex: 'woodcutting'). Null si template absent ou non configuré. */
+  readonly skillKey: string | null;
+  /** XP accordée par tick de récolte réussi. Null si template absent. */
+  readonly gatheringXpReward: number | null;
 }
 
 /**
@@ -111,7 +115,7 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  */
 export function toResourceWorldObject(
   resource: Resource,
-  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool'> | null,
+  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool' | 'skillKey' | 'gatheringXpReward'> | null,
 ): ResourceWorldObject {
   const hasWU =
     resource.worldX != null &&
@@ -149,6 +153,8 @@ export function toResourceWorldObject(
         return { lootPoolCount: lp?.count ?? null, lootPoolItems: lp ? Object.freeze(lp.items) : null };
       })(),
       respawnAt: resource.respawnAt ?? null,
+      skillKey: template?.skillKey ?? null,
+      gatheringXpReward: template != null ? (template.gatheringXpReward ?? 0) : null,
     }),
   });
 }
