@@ -10,6 +10,8 @@ export type FieldDef = {
   min?: number;
   step?: number;
   options?: string[];
+  /** Labels lisibles parallèles à `options` (même index). Si absent, affiche la valeur brute. */
+  optionLabels?: string[];
   /** Rendu comme <input type="text"> — dirty détecté par comparaison de chaînes. */
   type?: 'text';
 };
@@ -254,7 +256,11 @@ export function StatField({ def, dirty, value, onChange }: StatFieldProps) {
   if (def.options) {
     return (
       <select className={cls} value={value} onChange={(e) => onChange(e.target.value)} {...kbHandlers}>
-        {def.options.map((opt) => <option key={opt} value={opt}>{opt || "—"}</option>)}
+        {def.options.map((opt, i) => (
+          <option key={opt} value={opt}>
+            {(def.optionLabels?.[i] ?? opt) || "—"}
+          </option>
+        ))}
       </select>
     );
   }

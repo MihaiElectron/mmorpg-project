@@ -281,19 +281,23 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    align-items: flex-start;
   }
 
   &__template-stat {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    align-items: center;
+    align-items: stretch;
+    flex: 1;
+    min-width: 72px;
 
     &-label {
       font-size: 0.68rem;
       color: vars.$color-text-disabled;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      white-space: nowrap;
     }
 
     &-input,
@@ -306,6 +310,7 @@
       text-align: center;
       padding: 3px 4px;
       outline: none;
+      width: 100%;
       transition: color 0.2s, border-color 0.2s;
 
       &:focus { border-color: vars.$color-metal-silver; }
@@ -317,16 +322,15 @@
     }
 
     &-input {
-      width: 52px;
       appearance: textfield;
+
+      &[type="text"] { text-align: left; }
 
       &::-webkit-inner-spin-button,
       &::-webkit-outer-spin-button { appearance: none; }
     }
 
     &-select {
-      width: auto;
-      min-width: 72px;
       cursor: pointer;
       appearance: none;
       padding-right: 14px;
@@ -335,6 +339,114 @@
       background-position: right 4px center;
       text-align: left;
     }
+
+    select { // select rendered with admin-panel__template-stat-input class
+      text-align: left;
+      cursor: pointer;
+    }
+  }
+
+  // ── Champ hint ────────────────────────────────────────────────────────────
+  &__field-hint {
+    font-size: 0.65rem;
+    color: vars.$color-text-disabled;
+    font-style: italic;
+    line-height: 1.3;
+    margin-top: 2px;
+  }
+
+  // ── Recettes : header structuré ──────────────────────────────────────────
+  &__template-header {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid vars.$panel-border-subtle;
+
+    &:hover .admin-panel__template-name { color: vars.$color-metal-silver; }
+  }
+
+  &__recipe-header-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__recipe-subtext {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding-left: 16px;
+    font-size: 0.72rem;
+    color: vars.$color-text-disabled;
+  }
+
+  &__recipe-key {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.7rem;
+  }
+
+  &__recipe-sep {
+    color: vars.$panel-border;
+    font-size: 0.7rem;
+  }
+
+  &__recipe-cat {
+    color: vars.$color-text-muted;
+  }
+
+  &__recipe-skill {
+    color: vars.$color-magic-amber;
+    opacity: 0.8;
+  }
+
+  // ── Actions recette / ligne ingrédient / résultat ─────────────────────────
+  &__template-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  &__instance-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    font-size: 0.8rem;
+  }
+
+  &__delete-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-disabled;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover {
+      color: vars.$btn-danger-bg;
+      border-color: vars.$btn-danger-bg;
+    }
+  }
+
+  &__count-badge {
+    font-size: 0.72rem;
+    color: vars.$color-text-muted;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: 8px;
+    padding: 1px 6px;
+    flex-shrink: 0;
   }
 
   // ── Groupes (deux niveaux : template → instances) ─────────────────────────

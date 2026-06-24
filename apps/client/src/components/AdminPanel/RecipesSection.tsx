@@ -27,10 +27,11 @@ type Recipe = {
 };
 
 type ItemOption = { id: string; name: string; category: string };
+type SkillDef   = { key: string; name: string };
 
 type Props = {
   recipes: Recipe[];
-  skillKeys: string[];
+  skillDefinitions: SkillDef[];
   items: ItemOption[];
   onResult: (msg: string, ok: boolean) => void;
   onRecipeCreated: (r: Recipe) => void;
@@ -42,24 +43,29 @@ type Props = {
 };
 
 // ── Constantes ────────────────────────────────────────────────────────────────
+// TODO: ces listes deviendront data-driven via API quand les entités correspondantes existeront.
+
+const RECIPE_CATEGORIES = ["smithing", "woodworking", "cooking", "alchemy", "tailoring", "jewelry", "general"] as const;
+
+const STATION_TYPES = ["none", "forge", "workbench", "cooking_station", "alchemy_table", "tailoring_station", "jewelry_table"] as const;
 
 const RECIPE_FIELDS: FieldDef[] = [
-  { key: "name",                    label: "Nom",                  type: "text" },
-  { key: "category",                label: "Catégorie",            type: "text" },
-  { key: "requiredSkillKey",        label: "Skill requis",         options: [] },
-  { key: "requiredSkillLevel",      label: "Niv. requis",          min: 1 },
-  { key: "baseSuccessRate",         label: "Taux succès base",     min: 0, step: 0.05 },
-  { key: "successBonusPerLevel",    label: "Bonus/niv",            min: 0, step: 0.01 },
-  { key: "minSuccessRate",          label: "Taux min",             min: 0, step: 0.05 },
-  { key: "maxSuccessRate",          label: "Taux max",             min: 0, step: 0.05 },
-  { key: "xpReward",                label: "XP récompense",        min: 0 },
-  { key: "craftTimeMs",             label: "Durée (ms)",           min: 0, step: 100 },
-  { key: "stationType",             label: "Station",              type: "text" },
-  { key: "enabled",                 label: "Actif",                options: ["true", "false"] },
-  { key: "consumeIngredientsOnFailure", label: "Consomme si échec", options: ["true", "false"] },
+  { key: "name",                       label: "Nom",                  type: "text" },
+  { key: "category",                   label: "Catégorie",            options: [...RECIPE_CATEGORIES] },
+  { key: "requiredSkillKey",           label: "Skill requis",         options: [] },
+  { key: "requiredSkillLevel",         label: "Niv. requis",          min: 1 },
+  { key: "baseSuccessRate",            label: "Taux base",            min: 0, step: 0.05 },
+  { key: "successBonusPerLevel",       label: "Bonus/niv",            min: 0, step: 0.01 },
+  { key: "minSuccessRate",             label: "Taux min",             min: 0, step: 0.05 },
+  { key: "maxSuccessRate",             label: "Taux max",             min: 0, step: 0.05 },
+  { key: "xpReward",                   label: "XP",                   min: 0 },
+  { key: "craftTimeMs",                label: "Durée (ms)",           min: 0, step: 100 },
+  { key: "stationType",                label: "Station",              options: [...STATION_TYPES] },
+  { key: "enabled",                    label: "Actif",                options: ["true", "false"] },
+  { key: "consumeIngredientsOnFailure", label: "Consomme si échec",   options: ["true", "false"] },
 ];
 
-const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "smithing", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "none" };
+const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "none" };
 const NEW_ING_DEFAULT = { itemId: "", requiredQuantity: 1 };
 const NEW_RES_DEFAULT = { itemId: "", producedQuantity: 1, chance: 1.0 };
 
@@ -73,7 +79,7 @@ function fieldValue(recipe: Recipe, key: string): string {
 
 // ── RecipesSection ────────────────────────────────────────────────────────────
 
-export default function RecipesSection({ recipes, skillKeys, items, onResult, onRecipeCreated, onRecipeUpdated, onIngredientAdded, onIngredientRemoved, onResultAdded, onResultRemoved }: Props) {
+export default function RecipesSection({ recipes, skillDefinitions, items, onResult, onRecipeCreated, onRecipeUpdated, onIngredientAdded, onIngredientRemoved, onResultAdded, onResultRemoved }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
   const [createOpen, setCreateOpen] = useState(false);
@@ -83,7 +89,9 @@ export default function RecipesSection({ recipes, skillKeys, items, onResult, on
   const [newRes, setNewRes] = useState<Record<string, typeof NEW_RES_DEFAULT>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
 
-  const skillKeyOptions = ["", ...skillKeys];
+  const skillKeyOptions = ["", ...skillDefinitions.map((sd) => sd.key)];
+  const skillKeyLabels  = ["—", ...skillDefinitions.map((sd) => `${sd.name} (${sd.key})`)];
+  const skillNameByKey  = Object.fromEntries(skillDefinitions.map((sd) => [sd.key, sd.name]));
 
   function setDraftField(recipeId: string, field: string, value: string) {
     setDrafts((prev) => ({ ...prev, [recipeId]: { ...(prev[recipeId] ?? {}), [field]: value } }));
@@ -209,9 +217,9 @@ export default function RecipesSection({ recipes, skillKeys, items, onResult, on
       {createOpen && (
         <div className="admin-panel__template-item">
           <div className="admin-panel__template-stats">
-            {(["key", "name", "category", "stationType"] as const).map((f) => (
+            {(["key", "name"] as const).map((f) => (
               <label key={f} className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">{f}</span>
+                <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
                 <input className="admin-panel__template-stat-input" type="text"
                   value={(newRecipe as any)[f]}
                   onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: e.target.value }))}
@@ -219,18 +227,45 @@ export default function RecipesSection({ recipes, skillKeys, items, onResult, on
               </label>
             ))}
             <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">requiredSkillKey</span>
+              <span className="admin-panel__template-stat-label">Catégorie</span>
+              <select className="admin-panel__template-stat-input"
+                value={newRecipe.category}
+                onChange={(e) => setNewRecipe((prev) => ({ ...prev, category: e.target.value }))}
+                {...kbHandlers}>
+                {RECIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Station</span>
+              <select className="admin-panel__template-stat-input"
+                value={newRecipe.stationType}
+                onChange={(e) => setNewRecipe((prev) => ({ ...prev, stationType: e.target.value }))}
+                {...kbHandlers}>
+                {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Skill requis</span>
               <select className="admin-panel__template-stat-input"
                 value={newRecipe.requiredSkillKey}
                 onChange={(e) => setNewRecipe((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
                 {...kbHandlers}>
-                {skillKeyOptions.map((k) => <option key={k} value={k}>{k || "—"}</option>)}
+                {skillKeyOptions.map((k, i) => (
+                  <option key={k} value={k}>{skillKeyLabels[i]}</option>
+                ))}
               </select>
             </label>
-            {(["requiredSkillLevel", "baseSuccessRate", "minSuccessRate", "maxSuccessRate", "xpReward", "craftTimeMs"] as const).map((f) => (
+            {([
+              { f: "requiredSkillLevel",   label: "Niv. requis",  step: 1 },
+              { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
+              { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
+              { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
+              { f: "xpReward",             label: "XP",           step: 1 },
+              { f: "craftTimeMs",          label: "Durée (ms)",   step: 100 },
+            ] as const).map(({ f, label, step }) => (
               <label key={f} className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">{f}</span>
-                <input className="admin-panel__template-stat-input" type="number" min={0} step={f.includes("Rate") ? 0.05 : 1}
+                <span className="admin-panel__template-stat-label">{label}</span>
+                <input className="admin-panel__template-stat-input" type="number" min={0} step={step}
                   value={(newRecipe as any)[f]}
                   onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: Number(e.target.value) }))}
                   {...kbHandlers} />
@@ -252,10 +287,26 @@ export default function RecipesSection({ recipes, skillKeys, items, onResult, on
         return (
           <div key={recipe.id} className="admin-panel__template-group">
             <div className="admin-panel__template-header" onClick={() => setExpandedId(expanded ? null : recipe.id)}>
-              <span className="admin-panel__chevron">{expanded ? "▼" : "▶"}</span>
-              <span className="admin-panel__template-name">{recipe.name}</span>
-              <span className="admin-panel__instance-badge">{recipe.enabled ? "actif" : "désactivé"}</span>
-              <span className="admin-panel__template-key">{recipe.key}</span>
+              <div className="admin-panel__recipe-header-main">
+                <span className="admin-panel__section-chevron">{expanded ? "▼" : "▶"}</span>
+                <span className="admin-panel__template-name">{recipe.name}</span>
+                <span className={`admin-panel__badge admin-panel__badge--${recipe.enabled ? "alive" : "dead"}`}>
+                  {recipe.enabled ? "actif" : "désactivé"}
+                </span>
+              </div>
+              <div className="admin-panel__recipe-subtext">
+                <span className="admin-panel__recipe-key">{recipe.key}</span>
+                {recipe.category && (
+                  <><span className="admin-panel__recipe-sep"> · </span>
+                  <span className="admin-panel__recipe-cat">{recipe.category}</span></>
+                )}
+                {recipe.requiredSkillKey && (
+                  <><span className="admin-panel__recipe-sep"> · </span>
+                  <span className="admin-panel__recipe-skill">
+                    skill: {skillNameByKey[recipe.requiredSkillKey] ?? recipe.requiredSkillKey}
+                  </span></>
+                )}
+              </div>
             </div>
 
             {expanded && (
@@ -264,7 +315,7 @@ export default function RecipesSection({ recipes, skillKeys, items, onResult, on
                 <div className="admin-panel__template-stats">
                   {RECIPE_FIELDS.map((def) => {
                     const fieldDef: FieldDef = def.key === "requiredSkillKey"
-                      ? { ...def, options: skillKeyOptions }
+                      ? { ...def, options: skillKeyOptions, optionLabels: skillKeyLabels }
                       : def;
                     return (
                       <label key={def.key} className="admin-panel__template-stat">

@@ -513,15 +513,21 @@ export default function AdminPanelWOM() {
         {newSkillOpen && (
           <div className="admin-panel__template-item">
             <div className="admin-panel__template-stats">
-              {(["key", "name"] as const).map((f) => (
-                <label key={f} className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">{f}</span>
-                  <input className="admin-panel__template-stat-input" type="text"
-                    value={(newSkill as any)[f]}
-                    onChange={(e) => setNewSkill((prev) => ({ ...prev, [f]: e.target.value }))}
-                    {...kbHandlers} />
-                </label>
-              ))}
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Key</span>
+                <input className="admin-panel__template-stat-input" type="text"
+                  value={newSkill.key}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, key: e.target.value }))}
+                  {...kbHandlers} />
+                <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Nom</span>
+                <input className="admin-panel__template-stat-input" type="text"
+                  value={newSkill.name}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, name: e.target.value }))}
+                  {...kbHandlers} />
+              </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Catégorie</span>
                 <select className="admin-panel__template-stat-input"
@@ -531,17 +537,22 @@ export default function AdminPanelWOM() {
                   {SKILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
-              {(["maxLevel", "baseXpPerLevel"] as const).map((f) => (
-                <label key={f} className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">{f}</span>
-                  <input className="admin-panel__template-stat-input" type="number" min={1}
-                    value={(newSkill as any)[f]}
-                    onChange={(e) => setNewSkill((prev) => ({ ...prev, [f]: Number(e.target.value) }))}
-                    {...kbHandlers} />
-                </label>
-              ))}
               <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">xpCurveExponent</span>
+                <span className="admin-panel__template-stat-label">Niv. max</span>
+                <input className="admin-panel__template-stat-input" type="number" min={1}
+                  value={newSkill.maxLevel}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, maxLevel: Number(e.target.value) }))}
+                  {...kbHandlers} />
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">XP/niv</span>
+                <input className="admin-panel__template-stat-input" type="number" min={1}
+                  value={newSkill.baseXpPerLevel}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, baseXpPerLevel: Number(e.target.value) }))}
+                  {...kbHandlers} />
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Exposant XP</span>
                 <input className="admin-panel__template-stat-input" type="number" min={1} max={3} step={0.1}
                   value={newSkill.xpCurveExponent}
                   onChange={(e) => setNewSkill((prev) => ({ ...prev, xpCurveExponent: Number(e.target.value) }))}
@@ -576,7 +587,7 @@ export default function AdminPanelWOM() {
 
       <RecipesSection
         recipes={recipes}
-        skillKeys={(sectionData["skills"] ?? []).map((sd: any) => sd.key)}
+        skillDefinitions={sectionData["skills"] ?? []}
         items={items}
         onResult={pushResult}
         onRecipeCreated={(r) => setRecipes((prev) => [...prev, r])}

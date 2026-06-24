@@ -54,13 +54,17 @@
   right: 16px;
   z-index: 1190;
   width: min(430px, calc(100vw - 32px));
+  min-width: 280px;
+  min-height: 160px;
   max-height: calc(100vh - 132px);
+  max-width: calc(100vw - 32px);
   transform: translate(var(--devtools-panel-x), var(--devtools-panel-y));
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px;
-  overflow: hidden;
+  overflow: auto;
+  resize: both;
   background: vars.$panel-bg;
   border: 1px solid vars.$panel-border;
   border-radius: vars.$panel-radius-card;
@@ -103,6 +107,7 @@
   }
 
   &__body {
+    flex: 1;
     min-height: 0;
     overflow-y: auto;
   }
