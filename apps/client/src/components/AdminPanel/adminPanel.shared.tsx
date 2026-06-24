@@ -10,6 +10,8 @@ export type FieldDef = {
   min?: number;
   step?: number;
   options?: string[];
+  /** Rendu comme <input type="text"> — dirty détecté par comparaison de chaînes. */
+  type?: 'text';
 };
 
 export type ConsoleLine = { text: string; ok: boolean };
@@ -165,7 +167,7 @@ export function useDraft(fields: FieldDef[]) {
     const draft = drafts[dk]?.[field];
     if (draft === undefined || draft === "") return false;
     const def = fields.find((f) => f.key === field);
-    if (def?.options) return draft !== String(item[field] ?? "");
+    if (def?.options || def?.type === 'text') return draft !== String(item[field] ?? "");
     return Number(draft) !== Number(item[field]);
   }
 
@@ -186,7 +188,7 @@ export function useDraft(fields: FieldDef[]) {
     for (const f of fields) {
       if (!isDirty(dk, f.key, item)) continue;
       const raw = drafts[dk]?.[f.key] ?? "";
-      if (f.options) {
+      if (f.options || f.type === 'text') {
         result[f.key] = raw;
       } else {
         const val = Number(raw);
@@ -252,8 +254,15 @@ export function StatField({ def, dirty, value, onChange }: StatFieldProps) {
   if (def.options) {
     return (
       <select className={cls} value={value} onChange={(e) => onChange(e.target.value)} {...kbHandlers}>
-        {def.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+        {def.options.map((opt) => <option key={opt} value={opt}>{opt || "—"}</option>)}
       </select>
+    );
+  }
+  if (def.type === 'text') {
+    return (
+      <input className={cls} type="text"
+        value={value} onChange={(e) => onChange(e.target.value)}
+        {...kbHandlers} />
     );
   }
   return (

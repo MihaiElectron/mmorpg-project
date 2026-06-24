@@ -9,6 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
+import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { WorldService } from '../world/world.service';
 
 describe('AdminService resources', () => {
@@ -16,6 +17,7 @@ describe('AdminService resources', () => {
   let resourceRepo: Record<string, jest.Mock>;
   let resourceTemplateRepo: Record<string, jest.Mock>;
   let skillDefinitionRepo: Record<string, jest.Mock>;
+  let playerSkillRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     resourceRepo = {
@@ -31,6 +33,14 @@ describe('AdminService resources', () => {
     };
     skillDefinitionRepo = {
       findOne: jest.fn().mockResolvedValue({ key: 'woodcutting' }),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((v) => v),
+      save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+    };
+    playerSkillRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn(),
     };
 
     const emptyRepo = {
@@ -50,6 +60,7 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(Resource), useValue: resourceRepo },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
         { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
+        { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
     }).compile();
@@ -268,5 +279,182 @@ describe('AdminService resources', () => {
 
     expect(result[1].position).toBeNull();
     expect(result[1].state).toBe('dead');
+  });
+});
+
+// ─── AdminService — SkillDefinitions ─────────────────────────────────────────
+
+describe('AdminService — createSkillDefinition', () => {
+  let service: AdminService;
+  let skillDefinitionRepo: Record<string, jest.Mock>;
+  let playerSkillRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    skillDefinitionRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((v) => v),
+      save: jest.fn().mockImplementation((v) => Promise.resolve({ ...v, id: 'new-uuid', createdAt: new Date(), updatedAt: new Date() })),
+    };
+    playerSkillRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
+    const emptyRepo = { count: jest.fn(), find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
+        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
+        { provide: getRepositoryToken(Character), useValue: emptyRepo },
+        { provide: getRepositoryToken(Resource), useValue: emptyRepo },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
+        { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
+      ],
+    }).compile();
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('crée un skill avec les champs valides', async () => {
+    const sd = await service.createSkillDefinition({ key: 'fishing', name: 'Fishing', category: 'gathering' });
+    expect(skillDefinitionRepo.save).toHaveBeenCalled();
+    expect(sd.key).toBe('fishing');
+    expect(sd.name).toBe('Fishing');
+  });
+
+  it('applique les valeurs par défaut si champs optionnels absents', async () => {
+    await service.createSkillDefinition({ key: 'skinning', name: 'Skinning' });
+    const created = skillDefinitionRepo.create.mock.calls[0][0];
+    expect(created.category).toBe('general');
+    expect(created.maxLevel).toBe(100);
+    expect(created.baseXpPerLevel).toBe(100);
+    expect(created.xpCurveExponent).toBe(1.5);
+    expect(created.enabled).toBe(true);
+  });
+
+  it('rejette une key dupliquée', async () => {
+    skillDefinitionRepo.findOne.mockResolvedValue({ key: 'woodcutting' });
+    await expect(service.createSkillDefinition({ key: 'woodcutting', name: 'Woodcutting' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une key en CamelCase (pas snake_case)', async () => {
+    await expect(service.createSkillDefinition({ key: 'FishingSkill', name: 'Fishing' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une key trop courte (1 caractère)', async () => {
+    await expect(service.createSkillDefinition({ key: 'f', name: 'Fishing' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une key avec tiret', async () => {
+    await expect(service.createSkillDefinition({ key: 'fish-ing', name: 'Fishing' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette un name vide', async () => {
+    await expect(service.createSkillDefinition({ key: 'fishing', name: '' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une category invalide', async () => {
+    await expect(service.createSkillDefinition({ key: 'fishing', name: 'Fishing', category: 'My Category' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette maxLevel < 2', async () => {
+    await expect(service.createSkillDefinition({ key: 'fishing', name: 'Fishing', maxLevel: 1 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette xpCurveExponent hors bornes 1.0–3.0', async () => {
+    await expect(service.createSkillDefinition({ key: 'fishing', name: 'Fishing', xpCurveExponent: 0.5 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createSkillDefinition({ key: 'fishing', name: 'Fishing', xpCurveExponent: 3.1 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('AdminService — updateSkillDefinition', () => {
+  let service: AdminService;
+  let skillDefinitionRepo: Record<string, jest.Mock>;
+  let playerSkillRepo: Record<string, jest.Mock>;
+
+  function makeSd(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return { id: 'sd-1', key: 'woodcutting', name: 'Woodcutting', category: 'gathering', maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true, ...overrides };
+  }
+
+  beforeEach(async () => {
+    skillDefinitionRepo = {
+      findOne: jest.fn().mockResolvedValue(makeSd()),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((v) => v),
+      save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+    };
+    playerSkillRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
+    const emptyRepo = { count: jest.fn(), find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getRepositoryToken(CreatureTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: emptyRepo },
+        { provide: getRepositoryToken(Animal), useValue: emptyRepo },
+        { provide: getRepositoryToken(Character), useValue: emptyRepo },
+        { provide: getRepositoryToken(Resource), useValue: emptyRepo },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: emptyRepo },
+        { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
+        { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
+      ],
+    }).compile();
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('met à jour les champs autorisés', async () => {
+    const updated = await service.updateSkillDefinition('sd-1', { name: 'Bûcheronnage', maxLevel: 50, enabled: false });
+    expect(updated?.name).toBe('Bûcheronnage');
+    expect(updated?.maxLevel).toBe(50);
+    expect(updated?.enabled).toBe(false);
+  });
+
+  it('retourne null si id introuvable', async () => {
+    skillDefinitionRepo.findOne.mockResolvedValue(null);
+    const result = await service.updateSkillDefinition('unknown', { name: 'X' });
+    expect(result).toBeNull();
+  });
+
+  it('rejette xpCurveExponent > 3.0', async () => {
+    await expect(service.updateSkillDefinition('sd-1', { xpCurveExponent: 4.0 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette xpCurveExponent < 1.0', async () => {
+    await expect(service.updateSkillDefinition('sd-1', { xpCurveExponent: 0.9 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("rejette maxLevel sous le niveau d'un PlayerSkill existant", async () => {
+    playerSkillRepo.count.mockResolvedValue(1);
+    await expect(service.updateSkillDefinition('sd-1', { maxLevel: 5 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("accepte maxLevel réduit si aucun joueur n'est au-dessus", async () => {
+    playerSkillRepo.count.mockResolvedValue(0);
+    const updated = await service.updateSkillDefinition('sd-1', { maxLevel: 50 });
+    expect(updated?.maxLevel).toBe(50);
+  });
+
+  it('rejette category invalide', async () => {
+    await expect(service.updateSkillDefinition('sd-1', { category: 'my-category' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette name vide', async () => {
+    await expect(service.updateSkillDefinition('sd-1', { name: '' }))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -99,4 +99,12 @@ export class AdminController {
     if (!updated) throw new NotFoundException(`Ressource "${id}" introuvable.`);
     return updated;
   }
+
+  // ── Skills ────────────────────────────────────────────────────────────────
+
+  @Get('skill-definitions')
+  getSkillDefinitions() { return this.adminService.getSkillDefinitions(); }
+
+  @Get('skill-definitions/world-objects')
+  getSkillDefinitionWorldObjects() { return this.adminService.getSkillDefinitionWorldObjects(); }
 }

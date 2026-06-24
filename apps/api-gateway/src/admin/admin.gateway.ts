@@ -19,6 +19,8 @@ type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
 type MoveAnimalPayload = { animalId: string; x: number; y: number };
 type UpdateEntityPayload = { id: string; fields: Record<string, number> };
+type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
+type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -376,6 +378,76 @@ export class AdminGateway {
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
+  }
+
+  @SubscribeMessage('admin:create_skill_definition')
+  async onCreateSkillDefinition(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: SkillDefinitionCreatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const fields = payload?.fields;
+    if (!fields || typeof fields !== 'object') {
+      return { success: false, message: 'Payload invalide : fields requis.' };
+    }
+
+    const { key, name, category, maxLevel, baseXpPerLevel, xpCurveExponent, enabled } = fields as Record<string, unknown>;
+
+    let sd: import('../skills/entities/skill-definition.entity').SkillDefinition;
+    try {
+      sd = await this.adminService.createSkillDefinition({
+        key:   typeof key  === 'string' ? key  : '',
+        name:  typeof name === 'string' ? name : '',
+        ...(category         !== undefined && { category: String(category) }),
+        ...(maxLevel         !== undefined && { maxLevel: Number(maxLevel) }),
+        ...(baseXpPerLevel   !== undefined && { baseXpPerLevel: Number(baseXpPerLevel) }),
+        ...(xpCurveExponent  !== undefined && { xpCurveExponent: Number(xpCurveExponent) }),
+        ...(enabled          !== undefined && { enabled: enabled === true || enabled === 'true' }),
+      });
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+
+    return { success: true, message: `Skill "${sd.key}" créé.`, data: sd };
+  }
+
+  @SubscribeMessage('admin:update_skill_definition')
+  async onUpdateSkillDefinition(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: SkillDefinitionUpdatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const ALLOWED = ['name', 'category', 'maxLevel', 'baseXpPerLevel', 'xpCurveExponent', 'enabled'];
+    const safe: Record<string, unknown> = {};
+
+    for (const [k, v] of Object.entries(fields)) {
+      if (!ALLOWED.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (k === 'name' || k === 'category') {
+        safe[k] = String(v);
+      } else if (k === 'enabled') {
+        safe[k] = v === true || v === 'true';
+      } else {
+        const n = Number(v);
+        if (isNaN(n)) return { success: false, message: `Valeur invalide pour "${k}".` };
+        safe[k] = n;
+      }
+    }
+
+    let updated: import('../skills/entities/skill-definition.entity').SkillDefinition | null;
+    try {
+      updated = await this.adminService.updateSkillDefinition(id, safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+    if (!updated) return { success: false, message: `Skill "${id}" introuvable.` };
+
+    const changes = Object.keys(safe).join(', ');
+    return { success: true, message: `Skill "${updated.key}" mis à jour : ${changes}.`, data: updated };
   }
 
   @SubscribeMessage('admin:update_resource')

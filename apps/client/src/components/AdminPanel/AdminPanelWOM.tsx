@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { getDevToolsStore, useDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
@@ -41,9 +41,35 @@ type Overview = {
   registeredCharacters: number;
 };
 
+// ── Constantes skills ─────────────────────────────────────────────────────────
+
+const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
+
+const SKILL_FIELDS = [
+  { key: "name",            label: "Nom",       type: "text" as const },
+  { key: "category",        label: "Catégorie", options: SKILL_CATEGORIES },
+  { key: "maxLevel",        label: "Niv. max",  min: 2 },
+  { key: "baseXpPerLevel",  label: "XP/niv",    min: 1 },
+  { key: "xpCurveExponent", label: "Courbe",    min: 1, step: 0.1 },
+  { key: "enabled",         label: "Actif",     options: ["true", "false"] },
+];
+
+const SKILLS_SECTION_CONFIG: SectionConfig = {
+  id: "skills",
+  title: "Skills",
+  fetchPath: "/admin/skill-definitions",
+  saveEvent: "admin:update_skill_definition",
+  getEntityKey:  (sd) => sd.id,
+  getDisplayKey: (sd) => sd.key,
+  getName: (sd) => `${sd.name} (${sd.key})`,
+  fields: SKILL_FIELDS,
+};
+
 // ── Configs (identiques au legacy) ────────────────────────────────────────────
 
-const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
+function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[] {
+  const skillKeyOptions = ["", ...skillKeys];
+  return [
   {
     id: "creatures",
     title: "Créatures",
@@ -98,7 +124,7 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
       { key: "defaultRemainingLoots", label: "Loots défaut",  min: 1 },
       { key: "respawnDelayMs",        label: "Respawn (ms)",  min: 1, step: 1000 },
       { key: "gatheringXpReward",     label: "XP récolte",    min: 0 },
-      { key: "skillKey",              label: "Skill",         options: ["", "woodcutting", "mining"] },
+      { key: "skillKey",              label: "Skill",         options: skillKeyOptions },
     ],
     groupSaveEvent: "admin:update_resource_template",
     getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
@@ -143,7 +169,8 @@ const GROUPED_SECTION_CONFIGS: GroupedSectionConfig[] = [
       } satisfies InstanceAction,
     ],
   },
-];
+  ];
+}
 
 const SECTION_CONFIGS: SectionConfig[] = [
   {
@@ -233,6 +260,8 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
+const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
+
 export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
@@ -248,6 +277,15 @@ export default function AdminPanelWOM() {
   const [command, setCommand] = useState("");
   const [results, setResults] = useState<ConsoleLine[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [newSkillOpen, setNewSkillOpen] = useState(false);
+  const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
+  const [creating, setCreating] = useState(false);
+
+  const groupedConfigs = useMemo(
+    () => buildGroupedSectionConfigs((sectionData["skills"] ?? []).map((sd: any) => sd.key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sectionData["skills"]],
+  );
 
   useEffect(() => {
     const fetches: Promise<any>[] = [
@@ -268,6 +306,10 @@ export default function AdminPanelWOM() {
         setGroupData((prev)    => ({ ...prev, resources: wosToResourceTemplates(wos) }));
         setInstanceData((prev) => ({ ...prev, resources: wosToResourceInstances(wos) }));
       }),
+      // Skills : liste via REST
+      fetchAdmin<any[]>("/admin/skill-definitions", token).then((data) =>
+        setSectionData((prev) => ({ ...prev, skills: data }))
+      ),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
@@ -333,8 +375,8 @@ export default function AdminPanelWOM() {
     setInstanceData((prev) => ({
       ...prev,
       [sectionId]: (prev[sectionId] ?? []).filter((i) => {
-        const cfg = GROUPED_SECTION_CONFIGS.find((c) => c.id === sectionId)!;
-        return cfg.getInstanceKey(i) !== instanceKey;
+        const cfg = groupedConfigs.find((c) => c.id === sectionId);
+        return cfg ? cfg.getInstanceKey(i) !== instanceKey : true;
       }),
     }));
   }
@@ -433,7 +475,7 @@ export default function AdminPanelWOM() {
         </section>
       )}
 
-      {GROUPED_SECTION_CONFIGS.map((cfg) => (
+      {groupedConfigs.map((cfg) => (
         <GroupedSection
           key={cfg.id}
           config={cfg}
@@ -453,6 +495,77 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
         />
       ))}
+
+      <section className="admin-panel__section">
+        <div className="admin-panel__section-header" onClick={() => setNewSkillOpen((o) => !o)}>
+          <span className="admin-panel__section-toggle">
+            <span className="admin-panel__section-chevron">{newSkillOpen ? "▼" : "▶"}</span>
+            Créer un skill
+          </span>
+        </div>
+        {newSkillOpen && (
+          <div className="admin-panel__template-item">
+            <div className="admin-panel__template-stats">
+              {(["key", "name"] as const).map((f) => (
+                <label key={f} className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">{f}</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={(newSkill as any)[f]}
+                    onChange={(e) => setNewSkill((prev) => ({ ...prev, [f]: e.target.value }))}
+                    {...kbHandlers} />
+                </label>
+              ))}
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Catégorie</span>
+                <select className="admin-panel__template-stat-input"
+                  value={newSkill.category}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, category: e.target.value }))}
+                  {...kbHandlers}>
+                  {SKILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              {(["maxLevel", "baseXpPerLevel"] as const).map((f) => (
+                <label key={f} className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">{f}</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1}
+                    value={(newSkill as any)[f]}
+                    onChange={(e) => setNewSkill((prev) => ({ ...prev, [f]: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+              ))}
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">xpCurveExponent</span>
+                <input className="admin-panel__template-stat-input" type="number" min={1} max={3} step={0.1}
+                  value={newSkill.xpCurveExponent}
+                  onChange={(e) => setNewSkill((prev) => ({ ...prev, xpCurveExponent: Number(e.target.value) }))}
+                  {...kbHandlers} />
+              </label>
+            </div>
+            <button className="admin-panel__apply-btn" disabled={creating}
+              onClick={async () => {
+                const socket = getSocket();
+                if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                setCreating(true);
+                const result = await ackPromise(socket, "admin:create_skill_definition", { fields: newSkill });
+                setCreating(false);
+                pushResult(result.message, result.success);
+                if (result.success && result.data) {
+                  setSectionData((prev) => ({ ...prev, skills: [...(prev["skills"] ?? []), result.data as any] }));
+                  setNewSkill({ ...NEW_SKILL_DEFAULT });
+                  setNewSkillOpen(false);
+                }
+              }}>
+              {creating ? "…" : "Créer"}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <EntitySection
+        config={SKILLS_SECTION_CONFIG}
+        items={sectionData["skills"] ?? []}
+        onResult={pushResult}
+      />
     </div>
   );
 }
