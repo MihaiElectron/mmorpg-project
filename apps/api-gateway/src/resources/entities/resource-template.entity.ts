@@ -24,4 +24,8 @@ export class ResourceTemplate {
   /** XP accordée par tick de récolte réussi. 0 → pas d'XP. */
   @Column('int', { name: 'gathering_xp_reward', default: 0 })
   gatheringXpReward: number;
+
+  /** Clé Phaser du sprite (ex: 'dead_tree'). Utilisée par WorldScene pour charger la texture. */
+  @Column({ type: 'varchar', length: 64, name: 'texture_key', default: 'dead_tree' })
+  textureKey: string;
 }

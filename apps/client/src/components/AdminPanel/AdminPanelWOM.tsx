@@ -50,6 +50,11 @@ type MovementMetrics = {
   mapMismatch: number;
 };
 
+// ── Constantes assets ─────────────────────────────────────────────────────────
+
+const CREATURE_TEXTURES = ["turkey"];
+const RESOURCE_TEXTURES = ["dead_tree", "fire_camp"];
+
 // ── Constantes skills ─────────────────────────────────────────────────────────
 
 const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
@@ -86,11 +91,13 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupKey:  (t) => t.key,
     getGroupName: (t) => t.name,
     groupFields: [
-      { key: "baseHealth",       label: "PV",          min: 1 },
-      { key: "baseAttack",       label: "ATK",         min: 0 },
-      { key: "baseArmor",        label: "ARM",         min: 0 },
-      { key: "aggroRadius",      label: "Aggro",       min: 0 },
-      { key: "fleeThresholdPct", label: "Fuite%",      min: 0 },
+      { key: "name",             label: "Nom",          type: "text" as const },
+      { key: "textureKey",       label: "Texture",      options: CREATURE_TEXTURES },
+      { key: "baseHealth",       label: "PV",           min: 1 },
+      { key: "baseAttack",       label: "ATK",          min: 0 },
+      { key: "baseArmor",        label: "ARM",          min: 0 },
+      { key: "aggroRadius",      label: "Aggro",        min: 0 },
+      { key: "fleeThresholdPct", label: "Fuite%",       min: 0 },
       { key: "respawnDelayMs",   label: "Respawn (ms)", min: 1, step: 1000 },
     ],
     groupSaveEvent: "admin:update_template",
@@ -131,6 +138,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
+      { key: "textureKey",            label: "Texture",       options: RESOURCE_TEXTURES },
       { key: "defaultRemainingLoots", label: "Loots défaut",  min: 1 },
       { key: "respawnDelayMs",        label: "Respawn (ms)",  min: 1, step: 1000 },
       { key: "gatheringXpReward",     label: "XP récolte",    min: 0 },
@@ -264,6 +272,7 @@ function wosToResourceTemplates(wos: WorldObject[]): any[] {
     if (!map.has(wo.type)) {
       map.set(wo.type, {
         type: wo.type,
+        textureKey:            (wo.metadata.textureKey as string | null)     ?? 'dead_tree',
         defaultRemainingLoots: (wo.metadata.defaultRemainingLoots as number) ?? 0,
         respawnDelayMs:        (wo.metadata.respawnDelayMs as number)        ?? 0,
         lootPoolItems:         (wo.metadata.lootPoolItems as string[])       ?? [],
@@ -345,6 +354,8 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
 const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
+const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
+const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatheringXpReward: 0, skillKey: "" };
 const NEW_STATION_TEMPLATE_DEFAULT = {
   key: "",
   name: "",
@@ -384,6 +395,10 @@ export default function AdminPanelWOM() {
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [createSkillOpen, setCreateSkillOpen] = useState(false);
   const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
+  const [createCreatureOpen, setCreateCreatureOpen] = useState(false);
+  const [newCreature, setNewCreature] = useState({ ...NEW_CREATURE_DEFAULT });
+  const [createResourceTemplateOpen, setCreateResourceTemplateOpen] = useState(false);
+  const [newResourceTemplate, setNewResourceTemplate] = useState({ ...NEW_RESOURCE_TEMPLATE_DEFAULT });
   const [newStationTemplateOpen, setNewStationTemplateOpen] = useState(false);
   const [newStationTemplate, setNewStationTemplate] = useState({ ...NEW_STATION_TEMPLATE_DEFAULT });
   const [creating, setCreating] = useState(false);
@@ -698,7 +713,7 @@ export default function AdminPanelWOM() {
         )}
       </section>
 
-      {groupedConfigs.filter((cfg) => cfg.id !== "craftingStations").map((cfg) => (
+      {groupedConfigs.filter((cfg) => cfg.id === "creatures").map((cfg) => (
         <GroupedSection
           key={cfg.id}
           config={cfg}
@@ -707,6 +722,193 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
+          rightHeader={
+            <div className="admin-panel__section-toggle" onClick={() => setCreateCreatureOpen((o) => !o)}>
+              Créer Créature
+              <span className="admin-panel__section-chevron">{createCreatureOpen ? "▼" : "▶"}</span>
+            </div>
+          }
+          rightContent={createCreatureOpen ? (
+            <div className="admin-panel__template-item">
+              <div className="admin-panel__template-stats">
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Key</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newCreature.key}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, key: e.target.value }))}
+                    {...kbHandlers} />
+                  <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Nom</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newCreature.name}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, name: e.target.value }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Texture</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newCreature.textureKey}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, textureKey: e.target.value }))}
+                    {...kbHandlers}>
+                    {CREATURE_TEXTURES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">PV</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1}
+                    value={newCreature.baseHealth}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, baseHealth: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">ATK</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.baseAttack}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, baseAttack: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">ARM</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.baseArmor}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, baseArmor: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Aggro</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.aggroRadius}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, aggroRadius: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Respawn (ms)</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1} step={1000}
+                    value={newCreature.respawnDelayMs}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, respawnDelayMs: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+              </div>
+              <button className="admin-panel__apply-btn" disabled={creating}
+                onClick={async () => {
+                  const socket = getSocket();
+                  if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                  setCreating(true);
+                  const result = await ackPromise(socket, "admin:create_creature_template", { fields: newCreature });
+                  setCreating(false);
+                  pushResult(result.message, result.success);
+                  if (result.success && result.data) {
+                    setGroupData((prev) => ({ ...prev, creatures: [...(prev.creatures ?? []), result.data as any] }));
+                    setNewCreature({ ...NEW_CREATURE_DEFAULT });
+                    setCreateCreatureOpen(false);
+                  }
+                }}>
+                {creating ? "…" : "Créer"}
+              </button>
+            </div>
+          ) : null}
+        />
+      ))}
+
+      {groupedConfigs.filter((cfg) => cfg.id === "resources").map((cfg) => (
+        <GroupedSection
+          key={cfg.id}
+          config={cfg}
+          groups={groupData[cfg.id] ?? []}
+          instances={instanceData[cfg.id] ?? []}
+          onResult={pushResult}
+          onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
+          highlightId={highlightIds[cfg.id] ?? null}
+          rightHeader={
+            <div className="admin-panel__section-toggle" onClick={() => setCreateResourceTemplateOpen((o) => !o)}>
+              Créer Ressource
+              <span className="admin-panel__section-chevron">{createResourceTemplateOpen ? "▼" : "▶"}</span>
+            </div>
+          }
+          rightContent={createResourceTemplateOpen ? (
+            <div className="admin-panel__template-item">
+              <div className="admin-panel__template-stats">
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Type</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newResourceTemplate.type}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, type: e.target.value }))}
+                    {...kbHandlers} />
+                  <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Texture</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newResourceTemplate.textureKey}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, textureKey: e.target.value }))}
+                    {...kbHandlers}>
+                    {RESOURCE_TEXTURES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Loots défaut</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1}
+                    value={newResourceTemplate.defaultRemainingLoots}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, defaultRemainingLoots: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Respawn (ms)</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1} step={1000}
+                    value={newResourceTemplate.respawnDelayMs}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, respawnDelayMs: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">XP récolte</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newResourceTemplate.gatheringXpReward}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, gatheringXpReward: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Skill</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newResourceTemplate.skillKey}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, skillKey: e.target.value }))}
+                    {...kbHandlers}>
+                    <option value="">—</option>
+                    {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
+                  </select>
+                </label>
+              </div>
+              <button className="admin-panel__apply-btn" disabled={creating}
+                onClick={async () => {
+                  const socket = getSocket();
+                  if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                  setCreating(true);
+                  const result = await ackPromise(socket, "admin:create_resource_template", { fields: newResourceTemplate });
+                  setCreating(false);
+                  pushResult(result.message, result.success);
+                  if (result.success && result.data) {
+                    const tpl = result.data as any;
+                    setGroupData((prev) => ({
+                      ...prev,
+                      resources: [...(prev.resources ?? []), {
+                        type: tpl.type,
+                        textureKey: tpl.textureKey ?? 'dead_tree',
+                        defaultRemainingLoots: tpl.defaultRemainingLoots,
+                        respawnDelayMs: tpl.respawnDelayMs,
+                        lootPoolItems: [],
+                        skillKey: tpl.skillKey ?? null,
+                        gatheringXpReward: tpl.gatheringXpReward ?? 0,
+                      }],
+                    }));
+                    setNewResourceTemplate({ ...NEW_RESOURCE_TEMPLATE_DEFAULT });
+                    setCreateResourceTemplateOpen(false);
+                  }
+                }}>
+                {creating ? "…" : "Créer"}
+              </button>
+            </div>
+          ) : null}
         />
       ))}
 

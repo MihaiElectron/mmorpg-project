@@ -110,22 +110,30 @@ export class AdminGateway {
       return { success: false, message: 'Payload invalide : key et fields requis.' };
     }
 
-    // Valider que les champs sont des nombres
-    const allowedFields = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs'];
-    const safeFields: Record<string, number> = {};
+    const numericAllowed = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs'];
+    const stringAllowed = ['name', 'textureKey'];
+    const allAllowed = [...numericAllowed, ...stringAllowed];
+    const safeFields: Record<string, number | string> = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (!allowedFields.includes(k)) {
+      if (!allAllowed.includes(k)) {
         return { success: false, message: `Champ "${k}" non modifiable.` };
       }
-      const n = Number(v);
-      if (k === 'respawnDelayMs') {
-        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > 86_400_000) {
-          return { success: false, message: 'respawnDelayMs doit être un entier > 0 et <= 86 400 000 ms (24h).' };
+      if (stringAllowed.includes(k)) {
+        if (typeof v !== 'string' || String(v).trim() === '') {
+          return { success: false, message: `"${k}" doit être une chaîne non vide.` };
         }
-      } else if (isNaN(n) || n < 0) {
-        return { success: false, message: `Valeur invalide pour "${k}" : doit être >= 0.` };
+        safeFields[k] = String(v).trim();
+      } else {
+        const n = Number(v);
+        if (k === 'respawnDelayMs') {
+          if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > 86_400_000) {
+            return { success: false, message: 'respawnDelayMs doit être un entier > 0 et <= 86 400 000 ms (24h).' };
+          }
+        } else if (isNaN(n) || n < 0) {
+          return { success: false, message: `Valeur invalide pour "${k}" : doit être >= 0.` };
+        }
+        safeFields[k] = n;
       }
-      safeFields[k] = n;
     }
 
     // Lire les valeurs actuelles pour le message avant/après
@@ -135,12 +143,12 @@ export class AdminGateway {
       return { success: false, message: `Template "${key}" introuvable.` };
     }
 
-    const beforeValues: Record<string, number> = {};
+    const beforeValues: Record<string, number | string> = {};
     for (const k of Object.keys(safeFields)) {
       beforeValues[k] = (current as any)[k];
     }
 
-    const updated = await this.adminService.updateTemplate(key, safeFields);
+    const updated = await this.adminService.updateTemplate(key, safeFields as any);
     if (!updated) {
       return { success: false, message: `Échec de la mise à jour du template "${key}".` };
     }
@@ -149,7 +157,7 @@ export class AdminGateway {
       .map(([k, v]) => `${k} ${beforeValues[k]}→${v}`)
       .join(', ');
 
-    this.animalsService.refreshTemplateInMemory(key, safeFields);
+    this.animalsService.refreshTemplateInMemory(key, safeFields as any);
     this.server.emit('category:updated', updated);
     return {
       success: true,
@@ -256,7 +264,7 @@ export class AdminGateway {
     if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
 
     const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatheringXpReward'];
-    const allowed = [...numericFields, 'skillKey'];
+    const allowed = [...numericFields, 'skillKey', 'textureKey'];
     const safe: Record<string, number | string | null> = {};
 
     for (const [k, v] of Object.entries(fields)) {
@@ -267,6 +275,11 @@ export class AdminGateway {
           return { success: false, message: 'skillKey doit être une chaîne non vide ou null.' };
         }
         safe.skillKey = v === null || v === '' ? null : (v as string).trim();
+      } else if (k === 'textureKey') {
+        if (typeof v !== 'string' || (v as string).trim() === '') {
+          return { success: false, message: 'textureKey doit être une chaîne non vide.' };
+        }
+        safe.textureKey = (v as string).trim();
       } else {
         const n = Number(v);
         if (isNaN(n)) return { success: false, message: `Valeur invalide pour "${k}" (doit être un nombre).` };
@@ -293,6 +306,7 @@ export class AdminGateway {
     if (safe.respawnDelayMs        !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
     if (safe.gatheringXpReward     !== undefined) parts.push(`xp récolte → ${updated.gatheringXpReward}`);
     if ('skillKey' in safe) parts.push(`skill → ${updated.skillKey ?? 'aucun'}`);
+    if (safe.textureKey            !== undefined) parts.push(`texture → ${updated.textureKey}`);
     return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
 
@@ -373,6 +387,66 @@ export class AdminGateway {
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
+  }
+
+  @SubscribeMessage('admin:create_creature_template')
+  async onCreateCreatureTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { fields: Record<string, unknown> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const fields = payload?.fields;
+    if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
+
+    const numericFields = ['baseHealth', 'baseAttack', 'baseArmor', 'aggroRadius', 'fleeThresholdPct', 'patrolRadius', 'speedMin', 'speedMax', 'respawnDelayMs'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (numericFields.includes(k)) {
+        safe[k] = Number(v);
+      } else {
+        safe[k] = v != null ? String(v) : '';
+      }
+    }
+
+    let tpl: import('../animals/entities/creature-template.entity').CreatureTemplate;
+    try {
+      tpl = await this.adminService.createCreatureTemplate(safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+    return { success: true, message: `Créature "${tpl.key}" créée.`, data: tpl };
+  }
+
+  @SubscribeMessage('admin:create_resource_template')
+  async onCreateResourceTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { fields: Record<string, unknown> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const fields = payload?.fields;
+    if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
+
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatheringXpReward'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (numericFields.includes(k)) {
+        safe[k] = Number(v);
+      } else if (k === 'skillKey') {
+        safe[k] = v === '' ? null : (v != null ? String(v) : null);
+      } else {
+        safe[k] = v != null ? String(v) : '';
+      }
+    }
+
+    let tpl: import('../resources/entities/resource-template.entity').ResourceTemplate;
+    try {
+      tpl = await this.adminService.createResourceTemplate(safe as any);
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+    return { success: true, message: `Template ressource "${tpl.type}" créé.`, data: tpl };
   }
 
   @SubscribeMessage('admin:create_skill_definition')

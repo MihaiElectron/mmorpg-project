@@ -45,6 +45,11 @@ export class AdminController {
   @Get('templates')
   getTemplates() { return this.adminService.getTemplates(); }
 
+  @Post('templates')
+  async createTemplate(@Body() body: { fields: Record<string, unknown> }) {
+    return this.adminService.createCreatureTemplate((body?.fields ?? {}) as any);
+  }
+
   @Get('spawns')
   getSpawns() { return this.adminService.getSpawns(); }
 
@@ -75,6 +80,11 @@ export class AdminController {
 
   @Get('resource-templates')
   getResourceTemplates() { return this.adminService.getResourceTemplates(); }
+
+  @Post('resource-templates')
+  async createResourceTemplate(@Body() body: { fields: Record<string, unknown> }) {
+    return this.adminService.createResourceTemplate((body?.fields ?? {}) as any);
+  }
 
   @Patch('resource-templates/:type')
   async updateResourceTemplate(@Param('type') type: string, @Body() fields: Record<string, number>) {

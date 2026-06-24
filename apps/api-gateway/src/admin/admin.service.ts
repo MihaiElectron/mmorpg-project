@@ -85,9 +85,41 @@ export class AdminService {
     });
   }
 
+  async createCreatureTemplate(
+    fields: Pick<CreatureTemplate, 'key' | 'name'> &
+      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs'>>,
+  ): Promise<CreatureTemplate> {
+    if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
+    AdminService.validateSnakeCase(fields.key, 'key');
+    const existing = await this.templateRepo.findOne({ where: { key: fields.key } });
+    if (existing) throw new BadRequestException(`Créature "${fields.key}" existe déjà.`);
+    if (!fields.name || typeof fields.name !== 'string' || fields.name.trim() === '') {
+      throw new BadRequestException('name est requis et non vide.');
+    }
+    if (fields.textureKey !== undefined) {
+      if (typeof fields.textureKey !== 'string' || fields.textureKey.trim() === '') {
+        throw new BadRequestException('textureKey doit être une chaîne non vide.');
+      }
+    }
+    return this.templateRepo.save(this.templateRepo.create({
+      key: fields.key,
+      name: fields.name.trim(),
+      textureKey: fields.textureKey?.trim() ?? 'turkey',
+      baseHealth: fields.baseHealth ?? 30,
+      baseAttack: fields.baseAttack ?? 3,
+      baseArmor: fields.baseArmor ?? 0,
+      aggroRadius: fields.aggroRadius ?? 0,
+      fleeThresholdPct: fields.fleeThresholdPct ?? 0,
+      patrolRadius: fields.patrolRadius ?? 100,
+      speedMin: fields.speedMin ?? 60,
+      speedMax: fields.speedMax ?? 100,
+      respawnDelayMs: fields.respawnDelayMs ?? 20_000,
+    }));
+  }
+
   async updateTemplate(
     key: string,
-    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs'>>,
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'name' | 'textureKey'>>,
   ): Promise<CreatureTemplate | null> {
     const template = await this.templateRepo.findOne({ where: { key } });
     if (!template) return null;
@@ -121,9 +153,37 @@ export class AdminService {
     return this.resourceTemplateRepo.find({ order: { type: 'ASC' } });
   }
 
+  async createResourceTemplate(
+    fields: Pick<ResourceTemplate, 'type'> &
+      Partial<Pick<ResourceTemplate, 'textureKey' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward'>> & { skillKey?: string | null },
+  ): Promise<ResourceTemplate> {
+    if (!fields.type || typeof fields.type !== 'string') throw new BadRequestException('type est requis.');
+    AdminService.validateSnakeCase(fields.type, 'type');
+    const existing = await this.resourceTemplateRepo.findOne({ where: { type: fields.type } });
+    if (existing) throw new BadRequestException(`Template ressource "${fields.type}" existe déjà.`);
+    if (fields.textureKey !== undefined) {
+      if (typeof fields.textureKey !== 'string' || fields.textureKey.trim() === '') {
+        throw new BadRequestException('textureKey doit être une chaîne non vide.');
+      }
+    }
+    if ('skillKey' in fields && fields.skillKey != null) {
+      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.skillKey } });
+      if (!sd) throw new BadRequestException(`Skill "${fields.skillKey}" inexistant dans SkillDefinition.`);
+    }
+    return this.resourceTemplateRepo.save(this.resourceTemplateRepo.create({
+      type: fields.type,
+      textureKey: fields.textureKey?.trim() ?? 'dead_tree',
+      defaultRemainingLoots: fields.defaultRemainingLoots ?? 4,
+      respawnDelayMs: fields.respawnDelayMs ?? 30_000,
+      gatheringXpReward: fields.gatheringXpReward ?? 0,
+      skillKey: fields.skillKey === '' ? null : fields.skillKey ?? null,
+      lootPool: null,
+    }));
+  }
+
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward'>> & { skillKey?: string | null },
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'textureKey'>> & { skillKey?: string | null },
   ): Promise<ResourceTemplate | null> {
     if (fields.respawnDelayMs !== undefined) {
       const v = fields.respawnDelayMs;
@@ -159,6 +219,11 @@ export class AdminService {
         if (!exists) {
           throw new BadRequestException(`Skill "${v}" inexistant dans SkillDefinition.`);
         }
+      }
+    }
+    if (fields.textureKey !== undefined) {
+      if (typeof fields.textureKey !== 'string' || fields.textureKey.trim() === '') {
+        throw new BadRequestException('textureKey doit être une chaîne non vide.');
       }
     }
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });

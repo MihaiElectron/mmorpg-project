@@ -745,3 +745,162 @@ describe('AdminService — validateCraftingRecipe', () => {
     expect(result.valid).toBe(false);
   });
 });
+
+describe('createCreatureTemplate', () => {
+  let service: AdminService;
+  let templateRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    templateRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)),
+      create: jest.fn().mockImplementation((v: any) => v),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(SkillDefinition), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(PlayerSkill), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
+        { provide: WorldService, useValue: { getMovementMetrics: jest.fn(), resetMovementMetrics: jest.fn(), getConnectedCount: jest.fn().mockReturnValue(0) } },
+      ],
+    }).compile();
+
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('crée une créature avec les valeurs par défaut', async () => {
+    const result = await service.createCreatureTemplate({ key: 'test_mob', name: 'Test Mob' });
+    expect(result.key).toBe('test_mob');
+    expect(result.name).toBe('Test Mob');
+    expect(result.textureKey).toBe('turkey');
+    expect(result.baseHealth).toBe(30);
+    expect(result.baseAttack).toBe(3);
+    expect(result.respawnDelayMs).toBe(20_000);
+    expect(templateRepo.save).toHaveBeenCalled();
+  });
+
+  it('crée avec textureKey fourni', async () => {
+    const result = await service.createCreatureTemplate({ key: 'goblin', name: 'Goblin', textureKey: 'goblin_sprite' });
+    expect(result.textureKey).toBe('goblin_sprite');
+  });
+
+  it('refuse une key non snake_case', async () => {
+    await expect(service.createCreatureTemplate({ key: 'Bad Key', name: 'x' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse une key dupliquée', async () => {
+    templateRepo.findOne.mockResolvedValue({ key: 'turkey' });
+    await expect(service.createCreatureTemplate({ key: 'turkey', name: 'Turkey' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse un name vide', async () => {
+    await expect(service.createCreatureTemplate({ key: 'new_mob', name: '' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse un textureKey vide', async () => {
+    await expect(service.createCreatureTemplate({ key: 'new_mob', name: 'Mob', textureKey: '' })).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('createResourceTemplate', () => {
+  let service: AdminService;
+  let resourceTemplateRepo: Record<string, jest.Mock>;
+  let skillDefinitionRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    resourceTemplateRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)),
+      create: jest.fn().mockImplementation((v: any) => v),
+    };
+    skillDefinitionRepo = {
+      findOne: jest.fn().mockResolvedValue({ key: 'woodcutting' }),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((v: any) => v),
+      save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)),
+      count: jest.fn().mockResolvedValue(0),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
+        { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
+        { provide: getRepositoryToken(PlayerSkill), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
+        { provide: WorldService, useValue: { getMovementMetrics: jest.fn(), resetMovementMetrics: jest.fn(), getConnectedCount: jest.fn().mockReturnValue(0) } },
+      ],
+    }).compile();
+
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it('crée un template ressource avec les valeurs par défaut', async () => {
+    const result = await service.createResourceTemplate({ type: 'oak_tree' });
+    expect(result.type).toBe('oak_tree');
+    expect(result.textureKey).toBe('dead_tree');
+    expect(result.defaultRemainingLoots).toBe(4);
+    expect(result.respawnDelayMs).toBe(30_000);
+    expect(result.gatheringXpReward).toBe(0);
+    expect(result.lootPool).toBeNull();
+    expect(resourceTemplateRepo.save).toHaveBeenCalled();
+  });
+
+  it('crée avec textureKey fourni', async () => {
+    const result = await service.createResourceTemplate({ type: 'fire_pit', textureKey: 'fire_camp' });
+    expect(result.textureKey).toBe('fire_camp');
+  });
+
+  it('crée avec skillKey valide', async () => {
+    const result = await service.createResourceTemplate({ type: 'birch', skillKey: 'woodcutting' });
+    expect(result.skillKey).toBe('woodcutting');
+  });
+
+  it('skillKey vide est converti en null', async () => {
+    const result = await service.createResourceTemplate({ type: 'stone', skillKey: '' });
+    expect(result.skillKey).toBeNull();
+  });
+
+  it('refuse un type non snake_case', async () => {
+    await expect(service.createResourceTemplate({ type: 'Bad Type' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse un type dupliqué', async () => {
+    resourceTemplateRepo.findOne.mockResolvedValue({ type: 'dead_tree' });
+    await expect(service.createResourceTemplate({ type: 'dead_tree' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse un textureKey vide', async () => {
+    await expect(service.createResourceTemplate({ type: 'my_rock', textureKey: '' })).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuse un skillKey inexistant dans SkillDefinition', async () => {
+    skillDefinitionRepo.findOne.mockResolvedValue(null);
+    await expect(service.createResourceTemplate({ type: 'my_node', skillKey: 'unknown_skill' })).rejects.toThrow(BadRequestException);
+  });
+});

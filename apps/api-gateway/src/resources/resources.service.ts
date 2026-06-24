@@ -8,10 +8,11 @@ import { ResourceTemplate } from './entities/resource-template.entity';
 
 export const RESOURCE_TEMPLATES: Pick<
   ResourceTemplate,
-  'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool' | 'skillKey' | 'gatheringXpReward'
+  'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool' | 'skillKey' | 'gatheringXpReward' | 'textureKey'
 >[] = [
   {
     type: 'dead_tree',
+    textureKey: 'dead_tree',
     defaultRemainingLoots: 4,
     respawnDelayMs: 60_000,
     lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 1 }],
@@ -20,6 +21,7 @@ export const RESOURCE_TEMPLATES: Pick<
   },
   {
     type: 'ore',
+    textureKey: 'dead_tree',
     defaultRemainingLoots: 6,
     respawnDelayMs: 120_000,
     lootPool: [{ itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 1 }],

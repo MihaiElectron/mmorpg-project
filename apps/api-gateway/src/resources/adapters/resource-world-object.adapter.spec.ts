@@ -24,6 +24,7 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
   return {
     id: 'tpl-1',
     type: 'dead_tree',
+    textureKey: 'dead_tree',
     defaultRemainingLoots: 5,
     respawnDelayMs: 60_000,
     lootPool: null,
@@ -391,5 +392,29 @@ describe('toResourceWorldObject — metadata.gatheringXpReward', () => {
   it('reflète la valeur du template', () => {
     const wo = toResourceWorldObject(makeResource(), makeTemplate({ gatheringXpReward: 5 }));
     expect(wo.metadata.gatheringXpReward).toBe(5);
+  });
+});
+
+// ─── Metadata textureKey ─────────────────────────────────────────────────────
+
+describe('toResourceWorldObject — metadata.textureKey', () => {
+  it('null si template absent', () => {
+    const wo = toResourceWorldObject(makeResource());
+    expect(wo.metadata.textureKey).toBeNull();
+  });
+
+  it('null si template explicitement null', () => {
+    const wo = toResourceWorldObject(makeResource(), null);
+    expect(wo.metadata.textureKey).toBeNull();
+  });
+
+  it('reflète la valeur du template', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ textureKey: 'fire_camp' }));
+    expect(wo.metadata.textureKey).toBe('fire_camp');
+  });
+
+  it('dead_tree par défaut quand textureKey est la valeur par défaut', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate());
+    expect(wo.metadata.textureKey).toBe('dead_tree');
   });
 });

@@ -48,6 +48,8 @@ export interface ResourceMetadata {
   readonly skillKey: string | null;
   /** XP accordée par tick de récolte réussi. Null si template absent. */
   readonly gatheringXpReward: number | null;
+  /** Clé Phaser du sprite (ex: 'dead_tree'). Null si template absent. */
+  readonly textureKey: string | null;
 }
 
 /**
@@ -115,7 +117,7 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  */
 export function toResourceWorldObject(
   resource: Resource,
-  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool' | 'skillKey' | 'gatheringXpReward'> | null,
+  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool' | 'skillKey' | 'gatheringXpReward' | 'textureKey'> | null,
 ): ResourceWorldObject {
   const hasWU =
     resource.worldX != null &&
@@ -155,6 +157,7 @@ export function toResourceWorldObject(
       respawnAt: resource.respawnAt ?? null,
       skillKey: template?.skillKey ?? null,
       gatheringXpReward: template != null ? (template.gatheringXpReward ?? 0) : null,
+      textureKey: template?.textureKey ?? null,
     }),
   });
 }
