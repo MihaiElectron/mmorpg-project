@@ -6,15 +6,21 @@ import { Animal } from './entities/animal.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { AnimalDto } from './dto/animal.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
+import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 
 const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
 // Portée mêlée pour attack() en WU — temporaire (legacyRadiusToWU(60) = 960)
 const MELEE_RANGE_WU = 960;
+
+// XP accordée au kill — valeur temporaire Phase 1.
+// Phase 2 : dériver du CreatureTemplate ou d'une FormulaDefinition.
+const KILL_XP = 10;
 const RANGED_RANGE_DEFAULT = 300;
 const ATTACK_COOLDOWN_MS = 700;
 const AUTO_ATTACK_COOLDOWN_MS = 1500;
@@ -85,6 +91,23 @@ export function isAttackFailure(result: AttackResult): result is AttackFailure {
   return result.success === false;
 }
 
+/**
+ * Résout le skill de combat à créditer depuis l'équipement du personnage.
+ * - RANGED_WEAPON catégorie 'crossbow' → 'crossbow'
+ * - RANGED_WEAPON autre → 'bow'
+ * - arme de mêlée RIGHT_HAND / LEFT_HAND → 'two_handed'
+ * - sans arme → 'two_handed' (fallback temporaire Phase 1)
+ */
+export function resolveCombatSkill(equipment: CharacterEquipment[]): string {
+  const ranged = equipment.find(
+    (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
+  );
+  if (ranged) {
+    return ranged.item?.category === 'crossbow' ? 'crossbow' : 'bow';
+  }
+  return 'two_handed';
+}
+
 @Injectable()
 export class AnimalsService implements OnModuleInit {
   private readonly lastAttackAt = new Map<string, number>();
@@ -103,6 +126,7 @@ export class AnimalsService implements OnModuleInit {
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
+    private readonly skills: SkillsService,
   ) {}
 
   async onModuleInit() {
@@ -463,6 +487,17 @@ export class AnimalsService implements OnModuleInit {
       setTimeout(() => this.respawnAnimal(animal.id), delay);
     }
     await this.animalRepository.save(animal);
+
+    // XP de combat accordée uniquement au kill confirmé serveur.
+    // characterId provient du paramètre, jamais du client.
+    if (animal.health === 0) {
+      const skillKey = resolveCombatSkill(character.equipment ?? []);
+      try {
+        await this.skills.addXp(characterId, skillKey, KILL_XP);
+      } catch (err) {
+        console.warn(`[AnimalsService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
+      }
+    }
 
     let riposte: { damage: number; characterHealth: number } | undefined;
     if ((animal.state === 'alive' || animal.state === 'fighting') && distance <= MELEE_RANGE_WU) {

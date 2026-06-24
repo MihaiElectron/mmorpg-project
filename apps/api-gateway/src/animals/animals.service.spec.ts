@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AnimalsService } from './animals.service';
+import { AnimalsService, resolveCombatSkill } from './animals.service';
 import { Animal } from './entities/animal.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
+import { EquipmentSlot } from '../characters/dto/equip-item.dto';
+import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
 import { wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 
@@ -72,12 +75,47 @@ function makeCharacter(overrides: Partial<Character> = {}): Partial<Character> {
 // Suite
 // ---------------------------------------------------------------------------
 
+// Helper : équipement ranged factice
+function makeRangedEquipment(category: string): CharacterEquipment {
+  return {
+    slot: EquipmentSlot.RANGED_WEAPON,
+    item: { category } as any,
+  } as CharacterEquipment;
+}
+
+// Helper : équipement mêlée factice
+function makeMeleeEquipment(): CharacterEquipment {
+  return {
+    slot: EquipmentSlot.RIGHT_HAND,
+    item: { type: 'weapon', category: 'sword' } as any,
+  } as CharacterEquipment;
+}
+
+describe('resolveCombatSkill', () => {
+  it('retourne two_handed sans équipement', () => {
+    expect(resolveCombatSkill([])).toBe('two_handed');
+  });
+
+  it('retourne bow pour une arme à distance non-crossbow', () => {
+    expect(resolveCombatSkill([makeRangedEquipment('bow')])).toBe('bow');
+  });
+
+  it('retourne crossbow pour une arme à distance catégorie crossbow', () => {
+    expect(resolveCombatSkill([makeRangedEquipment('crossbow')])).toBe('crossbow');
+  });
+
+  it('retourne two_handed pour une arme de mêlée RIGHT_HAND', () => {
+    expect(resolveCombatSkill([makeMeleeEquipment()])).toBe('two_handed');
+  });
+});
+
 describe('AnimalsService', () => {
   let service: AnimalsService;
   let animalRepository: Record<string, jest.Mock>;
   let characterRepository: Record<string, jest.Mock>;
   let templateRepository: Record<string, jest.Mock>;
   let spawnRepository: Record<string, jest.Mock>;
+  let skillsService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     animalRepository = {
@@ -108,6 +146,9 @@ describe('AnimalsService', () => {
       update: jest.fn().mockResolvedValue({}),
       create: jest.fn().mockImplementation((a) => a),
     };
+    skillsService = {
+      addXp: jest.fn().mockResolvedValue({ level: 1, xp: 10 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -117,6 +158,7 @@ describe('AnimalsService', () => {
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
+        { provide: SkillsService, useValue: skillsService },
       ],
     }).compile();
 
@@ -242,6 +284,75 @@ describe('AnimalsService', () => {
       const result = await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result).toEqual({ success: false, error: 'Attack on cooldown' });
+    });
+
+    it('accorde XP two_handed au kill sans équipement', async () => {
+      jest.useFakeTimers();
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'two_handed', 10);
+      jest.useRealTimers();
+    });
+
+    it('accorde XP bow pour une arme à distance (catégorie bow)', async () => {
+      jest.useFakeTimers();
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      const equipment = [makeRangedEquipment('bow')];
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'bow', 10);
+      jest.useRealTimers();
+    });
+
+    it('accorde XP crossbow pour une arme catégorie crossbow', async () => {
+      jest.useFakeTimers();
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      const equipment = [makeRangedEquipment('crossbow')];
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'crossbow', 10);
+      jest.useRealTimers();
+    });
+
+    it("n'accorde pas XP si l'animal survit", async () => {
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).not.toHaveBeenCalled();
+    });
+
+    it("n'accorde pas XP si l'animal est déjà mort", async () => {
+      const animal = makeAnimal({ state: 'dead' });
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      await service.attack(animal.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).not.toHaveBeenCalled();
+    });
+
+    it('utilise le characterId serveur (paramètre), pas une donnée client', async () => {
+      jest.useFakeTimers();
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 1 });
+      (service as any).liveAnimals.set(animal.id, animal);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
+
+      await service.attack(animal.id, 'server-resolved-char-id', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(skillsService.addXp).toHaveBeenCalledWith('server-resolved-char-id', expect.any(String), expect.any(Number));
+      jest.useRealTimers();
     });
   });
 
