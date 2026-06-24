@@ -53,21 +53,6 @@
     }
   }
 
-  // ── Onglet bientôt ────────────────────────────────────────────────────────
-  &__tab--soon {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  &__tab-soon-badge {
-    display: block;
-    font-size: 0.55rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: vars.$color-text-muted;
-    line-height: 1;
-  }
-
   // ── Contenus ─────────────────────────────────────────────────────────────
   &__content {
     flex: 1;

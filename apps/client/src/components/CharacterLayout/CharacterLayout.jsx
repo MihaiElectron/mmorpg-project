@@ -7,8 +7,8 @@ import { useCharacterStore } from "../../store/character.store";
 const TABS = [
   { id: "perso",        label: "Perso" },
   { id: "skills",       label: "Skills" },
-  { id: "talents",      label: "Talents",  soon: true },
-  { id: "achievements", label: "Succès",   soon: true },
+  { id: "talents",      label: "Talents" },
+  { id: "achievements", label: "Succès" },
 ];
 
 export default function CharacterLayout() {
@@ -31,15 +31,13 @@ export default function CharacterLayout() {
   return (
     <div className={`character-layout ${isOpen ? "is-open" : "is-closed"}`}>
       <div className="character-layout__tabs">
-        {TABS.map(({ id, label, soon }) => (
+        {TABS.map(({ id, label }) => (
           <button
             key={id}
-            className={`character-layout__tab${activeTab === id && isOpen ? " character-layout__tab--active" : ""}${soon ? " character-layout__tab--soon" : ""}`}
-            onClick={() => !soon && handleTabClick(id)}
-            title={soon ? "À venir" : undefined}
+            className={`character-layout__tab${activeTab === id && isOpen ? " character-layout__tab--active" : ""}`}
+            onClick={() => handleTabClick(id)}
           >
             {label}
-            {soon && <span className="character-layout__tab-soon-badge">bientôt</span>}
           </button>
         ))}
       </div>
@@ -58,6 +56,24 @@ export default function CharacterLayout() {
       {activeTab === "skills" && isOpen && (
         <div className="character-layout__content character-layout__content--full">
           <SkillsTab />
+        </div>
+      )}
+
+      {activeTab === "talents" && isOpen && (
+        <div className="character-layout__content character-layout__content--full">
+          <div className="placeholder-tab">
+            <span className="placeholder-tab__icon">✦</span>
+            <p className="placeholder-tab__title">Système de talents à venir</p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "achievements" && isOpen && (
+        <div className="character-layout__content character-layout__content--full">
+          <div className="placeholder-tab">
+            <span className="placeholder-tab__icon">★</span>
+            <p className="placeholder-tab__title">Système de succès à venir</p>
+          </div>
         </div>
       )}
     </div>
