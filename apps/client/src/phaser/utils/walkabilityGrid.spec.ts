@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createNavGridFromWalkabilityGrid,
   createWalkabilityGridFromMap,
   getWalkabilityAtTile,
   getWalkabilityGridSize,
   getWalkabilityGridStats,
   isTileInWalkabilityGrid,
+  isNavCellInNavGrid,
 } from "./walkabilityGrid";
 
 describe("walkabilityGrid", () => {
@@ -66,6 +68,58 @@ describe("walkabilityGrid", () => {
     expect(getWalkabilityAtTile(grid, 0, 0)).toBe(true);
     expect(getWalkabilityAtTile(grid, 1, 0)).toBe(false);
     expect(getWalkabilityAtTile(grid, -1, 0)).toBe(null);
+  });
+});
+
+describe("createNavGridFromWalkabilityGrid", () => {
+  it("retourne une grille vide si walkabilityGrid nulle ou vide", () => {
+    expect(createNavGridFromWalkabilityGrid(null)).toEqual([]);
+    expect(createNavGridFromWalkabilityGrid(undefined)).toEqual([]);
+    expect(createNavGridFromWalkabilityGrid([])).toEqual([]);
+  });
+
+  it("génère 8×8 nav cells par tile walkable", () => {
+    const nav = createNavGridFromWalkabilityGrid([[0]], 8);
+    expect(nav).toHaveLength(8);
+    expect(nav[0]).toHaveLength(8);
+    expect(nav.flat()).toEqual(Array(64).fill(0));
+  });
+
+  it("une tile bloquée génère 64 nav cells bloquées", () => {
+    const nav = createNavGridFromWalkabilityGrid([[1]], 8);
+    expect(nav.flat()).toEqual(Array(64).fill(1));
+  });
+
+  it("tile bloquée au centre d'une grille 3×3 → 64 cells bloquées sur 576 totales", () => {
+    const wg: (0 | 1)[][] = [[0, 0, 0], [0, 1, 0], [0, 0, 0]];
+    const nav = createNavGridFromWalkabilityGrid(wg, 8);
+    expect(nav).toHaveLength(24);
+    expect(nav[0]).toHaveLength(24);
+    const blocked = nav.flat().filter((v) => v === 1).length;
+    expect(blocked).toBe(64);
+  });
+
+  it("reflète le bloc 5×5 bloqué dans une map 64×64 → 25×64=1600 nav cells bloquées", () => {
+    const wg = Array.from({ length: 64 }, (_, y) =>
+      Array.from({ length: 64 }, (_, x): 0 | 1 =>
+        x >= 8 && x <= 12 && y >= 8 && y <= 12 ? 1 : 0,
+      ),
+    );
+    const nav = createNavGridFromWalkabilityGrid(wg, 8);
+    expect(nav).toHaveLength(512);
+    expect(nav[0]).toHaveLength(512);
+    const stats = getWalkabilityGridStats(nav);
+    expect(stats.blocked).toBe(25 * 64);
+    expect(stats.walkable).toBe(512 * 512 - 25 * 64);
+  });
+
+  it("isNavCellInNavGrid — même logique que isTileInWalkabilityGrid", () => {
+    const nav = createNavGridFromWalkabilityGrid([[0, 0], [0, 0]], 8); // 16×16
+    expect(isNavCellInNavGrid(nav, 0, 0)).toBe(true);
+    expect(isNavCellInNavGrid(nav, 15, 15)).toBe(true);
+    expect(isNavCellInNavGrid(nav, 16, 0)).toBe(false);
+    expect(isNavCellInNavGrid(nav, 0, 16)).toBe(false);
+    expect(isNavCellInNavGrid(null, 0, 0)).toBe(false);
   });
 });
 

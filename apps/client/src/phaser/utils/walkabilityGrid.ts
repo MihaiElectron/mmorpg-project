@@ -1,5 +1,9 @@
+import { NAV_CELLS_PER_TILE } from "./worldCoordinates";
+
 export type WalkabilityCell = 0 | 1;
 export type WalkabilityGrid = WalkabilityCell[][];
+// NavGrid : même structure que WalkabilityGrid, résolution finer (NAV_CELLS_PER_TILE² par tile)
+export type NavGrid = WalkabilityGrid;
 
 type TileLike = {
   collides?: boolean;
@@ -79,6 +83,28 @@ export function getWalkabilityGridStats(grid: WalkabilityGrid | null | undefined
   }
   const total = grid.length * (grid[0]?.length ?? 0);
   return { walkable: total - blocked, blocked };
+}
+
+export function createNavGridFromWalkabilityGrid(
+  walkabilityGrid: WalkabilityGrid | null | undefined,
+  subdivisions: number = NAV_CELLS_PER_TILE,
+): NavGrid {
+  if (!walkabilityGrid || walkabilityGrid.length === 0) return [];
+  const tileH = walkabilityGrid.length;
+  const tileW = walkabilityGrid[0]?.length ?? 0;
+  return Array.from({ length: tileH * subdivisions }, (_, navY) =>
+    Array.from({ length: tileW * subdivisions }, (_, navX): WalkabilityCell =>
+      walkabilityGrid[Math.floor(navY / subdivisions)]?.[Math.floor(navX / subdivisions)] ?? 0,
+    ),
+  );
+}
+
+export function isNavCellInNavGrid(
+  navGrid: NavGrid | null | undefined,
+  navX: number,
+  navY: number,
+): boolean {
+  return isTileInWalkabilityGrid(navGrid, navX, navY);
 }
 
 export function getWalkabilityAtTile(

@@ -72,6 +72,20 @@ export default function CoordinateInspector() {
             ["blocked", terrainMapInfo.blockedCount],
           ]}
         />
+        <CoordinateRow
+          label="Nav Grid"
+          values={[
+            ["w", terrainMapInfo.navGridWidth],
+            ["h", terrainMapInfo.navGridHeight],
+          ]}
+        />
+        <CoordinateRow
+          label="Nav Cells"
+          values={[
+            ["walk", terrainMapInfo.walkableNavCount],
+            ["blk", terrainMapInfo.blockedNavCount],
+          ]}
+        />
         <CoordinateRow label="Screen" values={[["x", cursorScreenPoint?.x], ["y", cursorScreenPoint?.y]]} />
         <CoordinateRow
           label="World"

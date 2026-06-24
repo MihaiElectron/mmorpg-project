@@ -2,12 +2,12 @@ import { getDevToolsStore } from "../../store/devtools.store";
 import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import {
   screenToWorldWU,
-  tileToWorldWU,
+  navCellToWorldWU,
   worldWUToScreen,
-  worldWUToTile,
-  TILE_SIZE_WU,
+  worldWUToNavCell,
+  NAV_CELL_SIZE_WU,
 } from "../utils/worldCoordinates";
-import { isTileInWalkabilityGrid } from "../utils/walkabilityGrid";
+import { isNavCellInNavGrid } from "../utils/walkabilityGrid";
 
 export const MOUSE_HOLD_THRESHOLD_MS = 150;
 
@@ -152,14 +152,14 @@ export default class PlayerController {
     }
 
     const startWU = screenToWorldWU(this.player.x, this.player.y);
-    const startTile = worldWUToTile(startWU.worldX, startWU.worldY);
+    const startCell = worldWUToNavCell(startWU.worldX, startWU.worldY);
     const endWU = screenToWorldWU(targetX, targetY);
-    const endTile = worldWUToTile(endWU.worldX, endWU.worldY);
+    const endCell = worldWUToNavCell(endWU.worldX, endWU.worldY);
 
-    // Fallback si la cible est hors des limites de la grille
+    // Fallback si la cible est hors des limites de la nav grid
     if (
-      this.scene.walkabilityGrid &&
-      !isTileInWalkabilityGrid(this.scene.walkabilityGrid, endTile.tileX, endTile.tileY)
+      this.scene.navGrid &&
+      !isNavCellInNavGrid(this.scene.navGrid, endCell.navX, endCell.navY)
     ) {
       pushDebugEvent({
         source: "PlayerController",
@@ -177,10 +177,10 @@ export default class PlayerController {
     }
 
     const newPath = this.scene.pathfinder.findPath(
-      startTile.tileX,
-      startTile.tileY,
-      endTile.tileX,
-      endTile.tileY,
+      startCell.navX,
+      startCell.navY,
+      endCell.navX,
+      endCell.navY,
     );
 
     if (newPath && newPath.length > 0) {
@@ -323,9 +323,9 @@ export default class PlayerController {
     }
 
     const waypoint = this.path[this.currentPathIndex];
-    // Centre de la tuile en WU puis projection écran (ADR-0001)
-    const wu = tileToWorldWU(waypoint.x, waypoint.y);
-    const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
+    // Centre de la nav cell en WU puis projection écran (ADR-0001, 8×8 cells/tile)
+    const wu = navCellToWorldWU(waypoint.x, waypoint.y);
+    const center = worldWUToScreen(wu.worldX + NAV_CELL_SIZE_WU / 2, wu.worldY + NAV_CELL_SIZE_WU / 2);
 
     const dx = center.x - this.player.x;
     const dy = center.y - this.player.y;

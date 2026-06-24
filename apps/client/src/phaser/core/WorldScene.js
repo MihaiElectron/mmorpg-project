@@ -12,7 +12,8 @@ import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
 import {
   screenToWorldWU,
-  tileToWorldWU,
+  navCellToWorldWU,
+  NAV_CELL_SIZE_WU,
   TILE_SIZE_WU,
   worldWUToChunk,
   worldWUToScreen,
@@ -20,6 +21,7 @@ import {
 } from "../utils/worldCoordinates";
 import Pathfinder from "../utils/pathfinding";
 import {
+  createNavGridFromWalkabilityGrid,
   createWalkabilityGridFromMap,
   getWalkabilityAtTile,
   getWalkabilityGridSize,
@@ -168,6 +170,7 @@ export default class WorldScene extends Phaser.Scene {
     this.terrainMap = null;
     this.terrainLayer = null;
     this.walkabilityGrid = null;
+    this.navGrid = null;
     this.walkabilityOverlayGraphics = null;
     this.walkabilityHoverGraphics = null;
     this.walkabilityHoverLabel = null;
@@ -269,7 +272,8 @@ export default class WorldScene extends Phaser.Scene {
             this.terrainMap = map;
             this.terrainLayer = layer;
             this.walkabilityGrid = createWalkabilityGridFromMap(map, layer);
-            this.pathfinder = new Pathfinder(this.walkabilityGrid);
+            this.navGrid = createNavGridFromWalkabilityGrid(this.walkabilityGrid);
+            this.pathfinder = new Pathfinder(this.navGrid);
           }
         }
       } catch (e) {
@@ -592,6 +596,8 @@ export default class WorldScene extends Phaser.Scene {
   updateTerrainMapInfo() {
     const gridSize = getWalkabilityGridSize(this.walkabilityGrid);
     const gridStats = getWalkabilityGridStats(this.walkabilityGrid);
+    const navSize = getWalkabilityGridSize(this.navGrid);
+    const navStats = getWalkabilityGridStats(this.navGrid);
     getDevToolsStore().getState().setTerrainMapInfo({
       loaded: Boolean(this.terrainMap && this.terrainLayer),
       key: this.terrainMap ? "terrain_pipeline_test" : null,
@@ -604,6 +610,10 @@ export default class WorldScene extends Phaser.Scene {
       walkabilityGridHeight: gridSize.height,
       walkableCount: gridStats.walkable,
       blockedCount: gridStats.blocked,
+      navGridWidth: navSize.width,
+      navGridHeight: navSize.height,
+      walkableNavCount: navStats.walkable,
+      blockedNavCount: navStats.blocked,
     });
   }
 
@@ -1240,11 +1250,11 @@ export default class WorldScene extends Phaser.Scene {
     const enabled = getDevToolsStore().getState().walkabilityOverlayEnabled;
     if (!enabled || !path || path.length === 0) return;
 
-    // Ligne reliant les centres de tuiles
+    // Ligne reliant les centres des nav cells
     this.pathOverlayGraphics.lineStyle(2, 0xf1c40f, 0.85);
     for (let i = 0; i < path.length; i++) {
-      const wu = tileToWorldWU(path[i].x, path[i].y);
-      const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
+      const wu = navCellToWorldWU(path[i].x, path[i].y);
+      const center = worldWUToScreen(wu.worldX + NAV_CELL_SIZE_WU / 2, wu.worldY + NAV_CELL_SIZE_WU / 2);
       if (i === 0) this.pathOverlayGraphics.moveTo(center.x, center.y);
       else this.pathOverlayGraphics.lineTo(center.x, center.y);
     }
@@ -1253,8 +1263,8 @@ export default class WorldScene extends Phaser.Scene {
     // Points aux sommets du chemin
     this.pathOverlayGraphics.fillStyle(0xf1c40f, 0.9);
     for (const wp of path) {
-      const wu = tileToWorldWU(wp.x, wp.y);
-      const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
+      const wu = navCellToWorldWU(wp.x, wp.y);
+      const center = worldWUToScreen(wu.worldX + NAV_CELL_SIZE_WU / 2, wu.worldY + NAV_CELL_SIZE_WU / 2);
       this.pathOverlayGraphics.fillCircle(center.x, center.y, 3);
     }
   }
