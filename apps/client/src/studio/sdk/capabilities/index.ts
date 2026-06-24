@@ -4,6 +4,7 @@ import { resourceCommandProvider } from "./ResourceCommandProvider";
 import { resourceOverlayProvider } from "./ResourceOverlayProvider";
 import { animalOverlayProvider } from "./AnimalOverlayProvider";
 import { creatureSpawnOverlayProvider } from "./CreatureSpawnOverlayProvider";
+import { walkabilityOverlayProvider } from "./WalkabilityOverlayProvider";
 import { isCommandProvider, isOverlayProvider } from "./CapabilityProvider";
 import type { StudioCommand, StudioCommandContext } from "../../../components/DevTools/commands/studioCommands";
 import type { WorldObject } from "../../../components/DevTools/types/worldObject.types";
@@ -15,6 +16,7 @@ capabilityRegistry.register(resourceCommandProvider);
 capabilityRegistry.register(resourceOverlayProvider);
 capabilityRegistry.register(animalOverlayProvider);
 capabilityRegistry.register(creatureSpawnOverlayProvider);
+capabilityRegistry.register(walkabilityOverlayProvider);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

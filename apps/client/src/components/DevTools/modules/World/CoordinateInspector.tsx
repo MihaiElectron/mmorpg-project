@@ -35,10 +35,6 @@ export default function CoordinateInspector() {
   const cursorChunkPoint = useDevToolsStore((s) => s.currentCursorChunkPoint);
   const cursorWalkable = useDevToolsStore((s) => s.currentCursorWalkable);
   const terrainMapInfo = useDevToolsStore((s) => s.terrainMapInfo);
-  const walkabilityOverlayEnabled = useDevToolsStore((s) => s.walkabilityOverlayEnabled);
-  const tileCoordinatesOverlayEnabled = useDevToolsStore((s) => s.tileCoordinatesOverlayEnabled);
-  const toggleWalkabilityOverlayEnabled = useDevToolsStore((s) => s.toggleWalkabilityOverlayEnabled);
-  const toggleTileCoordinatesOverlayEnabled = useDevToolsStore((s) => s.toggleTileCoordinatesOverlayEnabled);
 
   return (
     <section className="devtools-world__inspector" aria-label="Coordinate inspector">
@@ -69,26 +65,6 @@ export default function CoordinateInspector() {
             ["h", terrainMapInfo.walkabilityGridHeight],
           ]}
         />
-        <div className="devtools-world__overlay-toggles">
-          <label className="devtools-world__overlay-toggle">
-            <input
-              className="devtools-world__overlay-checkbox"
-              type="checkbox"
-              checked={walkabilityOverlayEnabled}
-              onChange={toggleWalkabilityOverlayEnabled}
-            />
-            <span>Walkability Overlay</span>
-          </label>
-          <label className="devtools-world__overlay-toggle">
-            <input
-              className="devtools-world__overlay-checkbox"
-              type="checkbox"
-              checked={tileCoordinatesOverlayEnabled}
-              onChange={toggleTileCoordinatesOverlayEnabled}
-            />
-            <span>Tile Coordinates</span>
-          </label>
-        </div>
         <CoordinateRow label="Screen" values={[["x", cursorScreenPoint?.x], ["y", cursorScreenPoint?.y]]} />
         <CoordinateRow
           label="World"

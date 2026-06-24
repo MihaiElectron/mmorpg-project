@@ -105,16 +105,18 @@ describe("CapabilityRegistry — overlay providers", () => {
 // ── getAllOverlayDefinitions ───────────────────────────────────────────────────
 
 describe("getAllOverlayDefinitions", () => {
-  it("retourne exactement 3 définitions (resource, animal, creature_spawn)", () => {
+  it("retourne exactement 5 définitions (resource, animal, creature_spawn, walkability, tile_coordinates)", () => {
     const defs = getAllOverlayDefinitions();
-    expect(defs).toHaveLength(3);
+    expect(defs).toHaveLength(5);
   });
 
-  it("contient resource.overlay, animal.overlay, creature_spawn.overlay", () => {
+  it("contient resource.overlay, animal.overlay, creature_spawn.overlay, walkability.overlay, tile_coordinates.overlay", () => {
     const ids = getAllOverlayDefinitions().map((d) => d.id);
     expect(ids).toContain("resource.overlay");
     expect(ids).toContain("animal.overlay");
     expect(ids).toContain("creature_spawn.overlay");
+    expect(ids).toContain("walkability.overlay");
+    expect(ids).toContain("tile_coordinates.overlay");
   });
 
   it("chaque définition a id, label, category, capability non vides", () => {

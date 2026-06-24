@@ -12,6 +12,14 @@ function useOverlayBindingsMap(): OverlayBindingsMap {
   const toggleCreatureSpawnOverlayEnabled = useDevToolsStore(
     (s) => s.toggleCreatureSpawnOverlayEnabled,
   );
+  const walkabilityOverlayEnabled = useDevToolsStore((s) => s.walkabilityOverlayEnabled);
+  const toggleWalkabilityOverlayEnabled = useDevToolsStore(
+    (s) => s.toggleWalkabilityOverlayEnabled,
+  );
+  const tileCoordinatesOverlayEnabled = useDevToolsStore((s) => s.tileCoordinatesOverlayEnabled);
+  const toggleTileCoordinatesOverlayEnabled = useDevToolsStore(
+    (s) => s.toggleTileCoordinatesOverlayEnabled,
+  );
 
   return {
     resourceOverlayEnabled,
@@ -20,6 +28,10 @@ function useOverlayBindingsMap(): OverlayBindingsMap {
     toggleAnimalOverlayEnabled,
     creatureSpawnOverlayEnabled,
     toggleCreatureSpawnOverlayEnabled,
+    walkabilityOverlayEnabled,
+    toggleWalkabilityOverlayEnabled,
+    tileCoordinatesOverlayEnabled,
+    toggleTileCoordinatesOverlayEnabled,
   };
 }
 

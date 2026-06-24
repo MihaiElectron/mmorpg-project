@@ -15,6 +15,10 @@ export interface OverlayBindingsMap {
   toggleAnimalOverlayEnabled: () => void;
   creatureSpawnOverlayEnabled: boolean;
   toggleCreatureSpawnOverlayEnabled: () => void;
+  walkabilityOverlayEnabled: boolean;
+  toggleWalkabilityOverlayEnabled: () => void;
+  tileCoordinatesOverlayEnabled: boolean;
+  toggleTileCoordinatesOverlayEnabled: () => void;
 }
 
 /**
@@ -34,6 +38,16 @@ export function getOverlayBinding(
       return {
         enabled: map.creatureSpawnOverlayEnabled,
         toggle: map.toggleCreatureSpawnOverlayEnabled,
+      };
+    case "walkability.overlay":
+      return {
+        enabled: map.walkabilityOverlayEnabled,
+        toggle: map.toggleWalkabilityOverlayEnabled,
+      };
+    case "tile_coordinates.overlay":
+      return {
+        enabled: map.tileCoordinatesOverlayEnabled,
+        toggle: map.toggleTileCoordinatesOverlayEnabled,
       };
     default:
       return null;
