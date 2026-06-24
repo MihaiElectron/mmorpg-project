@@ -4,6 +4,12 @@ export type PanelTarget = {
   id: string;
   type: string;
   kind: string;
+  name?: string;
+  stationType?: string;
+  worldX?: number;
+  worldY?: number;
+  interactionRadiusWU?: number;
+  enabled?: boolean;
   health: number | null;
   maxHealth: number | null;
 };

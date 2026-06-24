@@ -3,6 +3,7 @@ import { CapabilityRegistry } from "./CapabilityRegistry";
 import { resourceOverlayProvider } from "./ResourceOverlayProvider";
 import { animalOverlayProvider } from "./AnimalOverlayProvider";
 import { creatureSpawnOverlayProvider } from "./CreatureSpawnOverlayProvider";
+import { stationRadiusOverlayProvider } from "./StationRadiusOverlayProvider";
 import { isOverlayProvider } from "./CapabilityProvider";
 import { getAllOverlayDefinitions, getOverlaysForWorldObject } from "./index";
 import type { WorldObject } from "../../../components/DevTools/types/worldObject.types";
@@ -43,6 +44,12 @@ describe("providers — structure", () => {
     expect(creatureSpawnOverlayProvider.capabilities).toContain("spawn");
     expect(isOverlayProvider(creatureSpawnOverlayProvider)).toBe(true);
   });
+
+  it("stationRadiusOverlayProvider : kind overlay, capability crafting_station", () => {
+    expect(stationRadiusOverlayProvider.kind).toBe("overlay");
+    expect(stationRadiusOverlayProvider.capabilities).toContain("crafting_station");
+    expect(isOverlayProvider(stationRadiusOverlayProvider)).toBe(true);
+  });
 });
 
 describe("providers — getOverlays()", () => {
@@ -66,6 +73,13 @@ describe("providers — getOverlays()", () => {
     expect(defs[0].id).toBe("creature_spawn.overlay");
     expect(defs[0].category).toBe("creature_spawn");
   });
+
+  it("stationRadiusOverlayProvider retourne station_radius.overlay", () => {
+    const defs = stationRadiusOverlayProvider.getOverlays();
+    expect(defs).toHaveLength(1);
+    expect(defs[0].id).toBe("station_radius.overlay");
+    expect(defs[0].category).toBe("crafting_station");
+  });
 });
 
 // ── Via CapabilityRegistry ────────────────────────────────────────────────────
@@ -78,6 +92,7 @@ describe("CapabilityRegistry — overlay providers", () => {
     registry.register(resourceOverlayProvider);
     registry.register(animalOverlayProvider);
     registry.register(creatureSpawnOverlayProvider);
+    registry.register(stationRadiusOverlayProvider);
   });
 
   it("WorldObject harvestable → resourceOverlayProvider retourné", () => {
@@ -95,6 +110,11 @@ describe("CapabilityRegistry — overlay providers", () => {
     expect(registry.getProvidersFor(obj)).toContain(creatureSpawnOverlayProvider);
   });
 
+  it("WorldObject crafting_station → stationRadiusOverlayProvider retourné", () => {
+    const obj = makeWorldObject(["crafting_station", "placement", "validation"], "crafting_station");
+    expect(registry.getProvidersFor(obj)).toContain(stationRadiusOverlayProvider);
+  });
+
   it("WorldObject sans capability connue → aucun overlay provider", () => {
     const obj = makeWorldObject(["transform", "persistence"]);
     const overlayProviders = registry.getProvidersFor(obj).filter(isOverlayProvider);
@@ -105,16 +125,17 @@ describe("CapabilityRegistry — overlay providers", () => {
 // ── getAllOverlayDefinitions ───────────────────────────────────────────────────
 
 describe("getAllOverlayDefinitions", () => {
-  it("retourne exactement 5 définitions (resource, animal, creature_spawn, walkability, tile_coordinates)", () => {
+  it("retourne exactement 6 définitions", () => {
     const defs = getAllOverlayDefinitions();
-    expect(defs).toHaveLength(5);
+    expect(defs).toHaveLength(6);
   });
 
-  it("contient resource.overlay, animal.overlay, creature_spawn.overlay, walkability.overlay, tile_coordinates.overlay", () => {
+  it("contient les overlays connus", () => {
     const ids = getAllOverlayDefinitions().map((d) => d.id);
     expect(ids).toContain("resource.overlay");
     expect(ids).toContain("animal.overlay");
     expect(ids).toContain("creature_spawn.overlay");
+    expect(ids).toContain("station_radius.overlay");
     expect(ids).toContain("walkability.overlay");
     expect(ids).toContain("tile_coordinates.overlay");
   });
@@ -143,6 +164,12 @@ describe("getOverlaysForWorldObject", () => {
     const obj = makeWorldObject(["transform", "combat", "health", "persistence", "validation"], "animal");
     const defs = getOverlaysForWorldObject(obj);
     expect(defs.find((d) => d.id === "animal.overlay")).toBeDefined();
+  });
+
+  it("crafting station WorldObject → station_radius.overlay", () => {
+    const obj = makeWorldObject(["crafting_station", "placement", "validation"], "crafting_station");
+    const defs = getOverlaysForWorldObject(obj);
+    expect(defs.find((d) => d.id === "station_radius.overlay")).toBeDefined();
   });
 
   it("capability inconnue → tableau vide", () => {

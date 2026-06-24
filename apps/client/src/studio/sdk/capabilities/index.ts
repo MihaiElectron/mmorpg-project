@@ -4,6 +4,7 @@ import { resourceCommandProvider } from "./ResourceCommandProvider";
 import { resourceOverlayProvider } from "./ResourceOverlayProvider";
 import { animalOverlayProvider } from "./AnimalOverlayProvider";
 import { creatureSpawnOverlayProvider } from "./CreatureSpawnOverlayProvider";
+import { stationRadiusOverlayProvider } from "./StationRadiusOverlayProvider";
 import { walkabilityOverlayProvider } from "./WalkabilityOverlayProvider";
 import { isCommandProvider, isOverlayProvider } from "./CapabilityProvider";
 import type { StudioCommand, StudioCommandContext } from "../../../components/DevTools/commands/studioCommands";
@@ -16,6 +17,7 @@ capabilityRegistry.register(resourceCommandProvider);
 capabilityRegistry.register(resourceOverlayProvider);
 capabilityRegistry.register(animalOverlayProvider);
 capabilityRegistry.register(creatureSpawnOverlayProvider);
+capabilityRegistry.register(stationRadiusOverlayProvider);
 capabilityRegistry.register(walkabilityOverlayProvider);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

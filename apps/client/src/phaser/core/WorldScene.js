@@ -172,6 +172,11 @@ function craftingStationToWorldObject(station) {
   };
 }
 
+function craftingStationActionLabel(station) {
+  const raw = station.name || station.stationType || station.type || "station";
+  return `Ouvrir ${raw.replace(/_/g, " ")}`;
+}
+
 // ── HP bar constants (mirrors SCSS variables) ──────────────────────────────
 const HP_BAR_WIDTH = 40;
 const HP_BAR_HEIGHT = 6;
@@ -506,6 +511,7 @@ export default class WorldScene extends Phaser.Scene {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
       const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
       const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
+      const stationRadiusOverlayChanged = state.stationRadiusOverlayEnabled !== prev.stationRadiusOverlayEnabled;
       const walkabilityOverlayChanged   = state.walkabilityOverlayEnabled   !== prev.walkabilityOverlayEnabled;
       const tileCoordinatesChanged      = state.tileCoordinatesOverlayEnabled !== prev.tileCoordinatesOverlayEnabled;
       const cursorTileChanged =
@@ -520,6 +526,9 @@ export default class WorldScene extends Phaser.Scene {
       }
       if (creatureSpawnOverlayChanged || selectionChanged) {
         this.redrawCreatureSpawnOverlay();
+      }
+      if (stationRadiusOverlayChanged) {
+        this.redrawCraftingStationRadiusOverlay();
       }
       if (walkabilityOverlayChanged) {
         this.redrawWalkabilityOverlay();
@@ -1239,6 +1248,22 @@ export default class WorldScene extends Phaser.Scene {
     );
     square.on("pointerdown", (_pointer, _localX, _localY, event) => {
       event?.stopPropagation();
+      getActionPanelStore().getState().openPanel(
+        {
+          id: station.id,
+          type: station.stationType,
+          kind: "crafting_station",
+          name: station.name,
+          stationType: station.stationType,
+          worldX: station.worldX,
+          worldY: station.worldY,
+          interactionRadiusWU: station.interactionRadiusWU,
+          enabled: station.enabled,
+          health: null,
+          maxHealth: null,
+        },
+        [craftingStationActionLabel(station)],
+      );
       getDevToolsStore().getState().setSelectedWorldObject(craftingStationToWorldObject(station));
     });
 
@@ -1252,6 +1277,9 @@ export default class WorldScene extends Phaser.Scene {
 
   drawCraftingStationRadius(graphics, x, y, radiusWU, color) {
     graphics.clear();
+    graphics.setVisible(getDevToolsStore().getState().stationRadiusOverlayEnabled);
+    if (!getDevToolsStore().getState().stationRadiusOverlayEnabled) return;
+
     const radius = Number(radiusWU);
     if (!Number.isFinite(radius) || radius <= 0) return;
 
@@ -1259,6 +1287,14 @@ export default class WorldScene extends Phaser.Scene {
     const height = Math.max(radius / 16, 4);
     graphics.lineStyle(1, color, 0.42);
     graphics.strokeEllipse(x, y, width, height);
+  }
+
+  redrawCraftingStationRadiusOverlay() {
+    for (const entry of this.craftingStationDebugObjects.values()) {
+      const { x, y } = resolveScreen(entry.station);
+      const color = CRAFTING_STATION_COLORS[entry.station.stationType] ?? CRAFTING_STATION_FALLBACK_COLOR;
+      this.drawCraftingStationRadius(entry.radius, x, y, entry.station.interactionRadiusWU, color);
+    }
   }
 
   renderAnimals(animals) {

@@ -144,4 +144,126 @@
       margin-top: 4px;
     }
   }
+
+  // ── Craft runtime ────────────────────────────────────────────────────────
+  &__crafting {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(420px, calc(100vw - 48px));
+    max-height: 58vh;
+    overflow-y: auto;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 10px;
+  }
+
+  &__crafting-header,
+  &__recipe-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__crafting-title,
+  &__recipe-name {
+    font-weight: 700;
+    color: vars.$color-text-primary;
+  }
+
+  &__crafting-close {
+    width: 28px;
+    height: 28px;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+  }
+
+  &__crafting-muted,
+  &__crafting-error {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  &__crafting-muted {
+    color: vars.$color-text-muted;
+  }
+
+  &__crafting-error {
+    color: #ff9f9f;
+  }
+
+  &__recipe-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__recipe {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-card;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 10px;
+  }
+
+  &__recipe-rate,
+  &__recipe-skill,
+  &__recipe-label,
+  &__recipe-line {
+    font-size: 0.78rem;
+  }
+
+  &__recipe-rate,
+  &__recipe-skill,
+  &__recipe-label {
+    color: vars.$color-text-muted;
+  }
+
+  &__recipe-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  &__recipe-label,
+  &__recipe-line,
+  &__craft-result span {
+    display: block;
+  }
+
+  &__recipe-label {
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  &__recipe-line {
+    color: vars.$color-text-primary;
+    line-height: 1.35;
+  }
+
+  &__craft-result {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: vars.$panel-radius-card;
+    padding: 8px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+
+    &--ok {
+      background: rgba(126, 207, 126, 0.1);
+      border: 1px solid rgba(126, 207, 126, 0.35);
+    }
+
+    &--fail {
+      background: rgba(207, 126, 126, 0.1);
+      border: 1px solid rgba(207, 126, 126, 0.35);
+    }
+  }
 }

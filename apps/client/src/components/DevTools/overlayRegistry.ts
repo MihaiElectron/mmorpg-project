@@ -15,6 +15,8 @@ export interface OverlayBindingsMap {
   toggleAnimalOverlayEnabled: () => void;
   creatureSpawnOverlayEnabled: boolean;
   toggleCreatureSpawnOverlayEnabled: () => void;
+  stationRadiusOverlayEnabled: boolean;
+  toggleStationRadiusOverlayEnabled: () => void;
   walkabilityOverlayEnabled: boolean;
   toggleWalkabilityOverlayEnabled: () => void;
   tileCoordinatesOverlayEnabled: boolean;
@@ -38,6 +40,11 @@ export function getOverlayBinding(
       return {
         enabled: map.creatureSpawnOverlayEnabled,
         toggle: map.toggleCreatureSpawnOverlayEnabled,
+      };
+    case "station_radius.overlay":
+      return {
+        enabled: map.stationRadiusOverlayEnabled,
+        toggle: map.toggleStationRadiusOverlayEnabled,
       };
     case "walkability.overlay":
       return {

@@ -6,6 +6,8 @@ import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import HealthBar from "../HealthBar/HealthBar";
 import { getDevToolsSocket, getWorldScene } from "../DevTools/devtoolsBridge";
+import CraftingRuntimePanel from "./CraftingRuntimePanel";
+import type { CraftingStationTarget } from "./craftingRuntime";
 
 type ConsoleLine = { text: string; ok: boolean };
 
@@ -35,6 +37,7 @@ export default function ActionPanel() {
 
   const [command, setCommand]   = useState("");
   const [results, setResults]   = useState<ConsoleLine[]>([]);
+  const [craftingStation, setCraftingStation] = useState<CraftingStationTarget | null>(null);
 
   const token   = localStorage.getItem("token") ?? "";
   const isAdmin = decodeJwtRole(token) === "admin";
@@ -63,6 +66,7 @@ export default function ActionPanel() {
     } else {
       setCommand("");
     }
+    setCraftingStation(null);
   }, [isAdmin, hasOverlap, target?.id]);
 
   // ── Gestion du focus → store admin + désactivation capture clavier Phaser ─
@@ -173,7 +177,7 @@ export default function ActionPanel() {
   // ── Suppression admin ─────────────────────────────────────────────────────
   function handleAdminDelete() {
     const socket = getDevToolsSocket();
-    if (!socket?.connected || !target) return;
+    if (!socket?.connected || !target || target.kind === "crafting_station") return;
 
     const event = target.kind === "animal" ? "admin:delete_animal" : "admin:delete_resource";
     socket.emit(event, { id: target.id }, (res: any) => {
@@ -184,6 +188,11 @@ export default function ActionPanel() {
 
   // ── Actions gameplay ──────────────────────────────────────────────────────
   function handleAction(action: string) {
+    if (target?.kind === "crafting_station") {
+      setCraftingStation(target as CraftingStationTarget);
+      return;
+    }
+
     const socket = getDevToolsSocket();
     if (!socket?.connected || !character?.id) { closePanel(); return; }
 
@@ -201,7 +210,7 @@ export default function ActionPanel() {
   return (
     <div className="action-panel" ref={panelRef}>
       <div className="action-panel__title">
-        {target.type.replace(/_/g, " ").toUpperCase()}
+        {(target.name ?? target.type).replace(/_/g, " ").toUpperCase()}
       </div>
 
       {target.kind === "animal" &&
@@ -272,7 +281,7 @@ export default function ActionPanel() {
               {action}
             </button>
           ))}
-          {isAdmin && (
+          {isAdmin && target.kind !== "crafting_station" && (
             <button
               className="action-panel__button action-panel__button--danger"
               onClick={() => handleAdminDelete()}
@@ -281,6 +290,13 @@ export default function ActionPanel() {
             </button>
           )}
         </div>
+      )}
+
+      {target.kind === "crafting_station" && craftingStation && (
+        <CraftingRuntimePanel
+          station={craftingStation}
+          onClose={() => setCraftingStation(null)}
+        />
       )}
     </div>
   );

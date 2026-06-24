@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { NotFoundException } from '@nestjs/common';
@@ -7,6 +8,7 @@ import { CraftingService } from './crafting.service';
 import { CharacterService } from '../characters/character.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
 import { Character } from '../characters/entities/character.entity';
+import { CraftingRecipe } from './entities/crafting-recipe.entity';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,7 @@ describe('CraftingController', () => {
   let controller: CraftingController;
   let craftingService: Record<string, jest.Mock>;
   let characterService: Record<string, jest.Mock>;
+  let recipeRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     craftingService = {
@@ -97,16 +100,70 @@ describe('CraftingController', () => {
     characterService = {
       findFirstByUser: jest.fn(),
     };
+    recipeRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CraftingController],
       providers: [
         { provide: CraftingService, useValue: craftingService },
         { provide: CharacterService, useValue: characterService },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: recipeRepo },
       ],
     }).compile();
 
     controller = module.get<CraftingController>(CraftingController);
+  });
+
+  it('available-recipes retourne les recettes enabled avec ingrédients et résultats', async () => {
+    recipeRepo.find.mockResolvedValue([
+      {
+        id: 'rec-1',
+        key: 'forge_recipe',
+        name: 'Forge Recipe',
+        description: null,
+        category: 'smithing',
+        requiredSkillKey: 'smithing',
+        requiredSkillLevel: 1,
+        baseSuccessRate: 1,
+        successBonusPerLevel: 0,
+        minSuccessRate: 1,
+        maxSuccessRate: 1,
+        xpReward: 10,
+        craftTimeMs: 1000,
+        stationType: 'forge',
+        ingredients: [
+          { id: 'ing-1', itemId: 'item-ore', item: { name: 'Iron Ore', category: 'iron_ore' }, requiredQuantity: 3 },
+        ],
+        results: [
+          { id: 'res-1', itemId: 'item-bar', item: { name: 'Iron Bar', category: 'iron_bar' }, producedQuantity: 1, chance: 1 },
+        ],
+      } as Partial<CraftingRecipe>,
+    ]);
+
+    const result = await controller.getAvailableRecipes();
+
+    expect(recipeRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: { enabled: true },
+      relations: ['ingredients', 'ingredients.item', 'results', 'results.item'],
+    }));
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'rec-1',
+        stationType: 'forge',
+        ingredients: [expect.objectContaining({ itemName: 'Iron Ore', requiredQuantity: 3 })],
+        results: [expect.objectContaining({ itemName: 'Iron Bar', producedQuantity: 1 })],
+      }),
+    ]);
+  });
+
+  it('available-recipes filtre par stationType si fourni', async () => {
+    await controller.getAvailableRecipes('forge');
+
+    expect(recipeRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: { enabled: true, stationType: 'forge' },
+    }));
   });
 
   it('résout le characterId depuis req.user.userId et appelle craft()', async () => {

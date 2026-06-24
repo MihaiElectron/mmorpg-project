@@ -261,6 +261,15 @@ const storeLogic = (set, get) => ({
 
   toggleCreatureSpawnOverlayEnabled: () =>
     set({ creatureSpawnOverlayEnabled: !get().creatureSpawnOverlayEnabled }),
+
+  // ── Overlay Studio — Crafting Stations ───────────────────────────────────
+  stationRadiusOverlayEnabled: false,
+
+  setStationRadiusOverlayEnabled: (enabled: boolean) =>
+    set({ stationRadiusOverlayEnabled: enabled }),
+
+  toggleStationRadiusOverlayEnabled: () =>
+    set({ stationRadiusOverlayEnabled: !get().stationRadiusOverlayEnabled }),
 });
 
 // ── Singleton global (partagé React + Phaser) ──────────────────────────────────
