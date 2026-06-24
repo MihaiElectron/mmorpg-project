@@ -353,6 +353,34 @@ describe('SkillsService', () => {
       expect(mgr.save).toHaveBeenCalledTimes(1);
       expect(result.skillDefinition).toBe(def);
     });
+
+    it('recharge le PlayerSkill existant si conflit concurrent (code 23505)', async () => {
+      const def = makeSkillDef();
+      const existing = makePlayerSkill();
+      const pgError = Object.assign(new Error('unique violation'), { code: '23505' });
+
+      mgr.findOne
+        .mockResolvedValueOnce(null)     // première recherche : absent
+        .mockResolvedValueOnce(existing); // rechargé après le conflit
+      mgr.save.mockRejectedValue(pgError);
+
+      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+
+      expect(result).toBe(existing);
+      expect(mgr.findOne).toHaveBeenCalledTimes(2);
+    });
+
+    it('remonte les erreurs non-23505', async () => {
+      const def = makeSkillDef();
+      const unexpectedError = Object.assign(new Error('DB crash'), { code: '08006' });
+
+      mgr.findOne.mockResolvedValue(null);
+      mgr.save.mockRejectedValue(unexpectedError);
+
+      await expect(
+        service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any),
+      ).rejects.toThrow('DB crash');
+    });
   });
 
   // ─── applyXpInTx ─────────────────────────────────────────────────────────

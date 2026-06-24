@@ -181,15 +181,29 @@ export class SkillsService implements OnModuleInit {
     });
     if (existing) return existing;
 
-    const created = manager.create(PlayerSkill, {
-      characterId,
-      skillDefinitionId: skillDef.id,
-      level: 1,
-      xp: 0,
-    });
-    const saved = await manager.save(PlayerSkill, created);
-    saved.skillDefinition = skillDef;
-    return saved;
+    try {
+      const created = manager.create(PlayerSkill, {
+        characterId,
+        skillDefinitionId: skillDef.id,
+        level: 1,
+        xp: 0,
+      });
+      const saved = await manager.save(PlayerSkill, created);
+      saved.skillDefinition = skillDef;
+      return saved;
+    } catch (error: unknown) {
+      // Conflit UNIQUE(characterId, skillDefinitionId) — création concurrente
+      // PostgreSQL unique violation code 23505
+      const pgError = error as { code?: string };
+      if (pgError.code === '23505') {
+        const reload = await manager.findOne(PlayerSkill, {
+          where: { characterId, skillDefinitionId: skillDef.id },
+          relations: ['skillDefinition'],
+        });
+        if (reload) return reload;
+      }
+      throw error;
+    }
   }
 
   /**
