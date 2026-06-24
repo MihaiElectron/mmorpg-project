@@ -21,6 +21,8 @@ type MoveAnimalPayload = { animalId: string; worldX: number; worldY: number };
 type UpdateEntityPayload = { id: string; fields: Record<string, number> };
 type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
 type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
+type CraftingStationTemplateCreatePayload = { fields: Record<string, unknown> };
+type CraftingStationTemplateUpdatePayload = { id: string; fields: Record<string, unknown> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -637,5 +639,129 @@ export class AdminGateway {
       ? `Recette valide${result.warnings.length ? ` (${result.warnings.length} avertissement(s))` : ''}.`
       : `Recette invalide : ${result.errors.join('; ')}`;
     return { success: result.valid, message: summary, data: result };
+  }
+
+  // ── CraftingStations ─────────────────────────────────────────────────────
+
+  @SubscribeMessage('admin:create_crafting_station_template')
+  async onCreateCraftingStationTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: CraftingStationTemplateCreatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const fields = payload?.fields;
+    if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
+
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (k === 'interactionRadiusWU') safe[k] = Number(v);
+      else if (k === 'enabled') safe[k] = v === true || v === 'true';
+      else safe[k] = v == null || v === '' ? null : String(v);
+    }
+
+    try {
+      const template = await this.adminService.createCraftingStationTemplate(safe as any);
+      return { success: true, message: `Station template "${template.key}" créé.`, data: template };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+  }
+
+  @SubscribeMessage('admin:update_crafting_station_template')
+  async onUpdateCraftingStationTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: CraftingStationTemplateUpdatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['name', 'stationType', 'category', 'requiredSkillKey', 'interactionRadiusWU', 'enabled'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (k === 'interactionRadiusWU') safe[k] = Number(v);
+      else if (k === 'enabled') safe[k] = v === true || v === 'true';
+      else safe[k] = v == null || v === '' ? null : String(v);
+    }
+
+    try {
+      const updated = await this.adminService.updateCraftingStationTemplate(id, safe as any);
+      if (!updated) return { success: false, message: `Station template "${id}" introuvable.` };
+      return { success: true, message: `Station template "${updated.key}" mis à jour.`, data: updated };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+  }
+
+  @SubscribeMessage('admin:create_crafting_station')
+  async onCreateCraftingStation(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { templateId: string; worldX: number; worldY: number; mapId?: number },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { templateId, worldX, worldY, mapId } = payload ?? {};
+    if (!templateId || typeof worldX !== 'number' || typeof worldY !== 'number') {
+      return { success: false, message: 'Payload invalide : templateId, worldX, worldY requis.' };
+    }
+
+    try {
+      const station = await this.adminService.createCraftingStation(templateId, worldX, worldY, mapId);
+      this.server.emit('crafting_station_update', station);
+      return {
+        success: true,
+        message: `Station "${station.template?.key ?? station.templateId}" créée en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${station.id}`,
+        data: station,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+  }
+
+  @SubscribeMessage('admin:update_crafting_station')
+  async onUpdateCraftingStation(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string; fields: Record<string, unknown> },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['worldX', 'worldY', 'mapId', 'enabled'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (k === 'enabled') safe[k] = v === true || v === 'true';
+      else safe[k] = Number(v);
+    }
+
+    try {
+      const updated = await this.adminService.updateCraftingStation(id, safe as any);
+      if (!updated) return { success: false, message: `Station "${id}" introuvable.` };
+      this.server.emit('crafting_station_update', updated);
+      return { success: true, message: `Station "${updated.template?.key ?? updated.templateId}" mise à jour.`, data: updated };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+  }
+
+  @SubscribeMessage('admin:delete_crafting_station')
+  async onDeleteCraftingStation(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { id } = payload ?? {};
+    if (!id) return { success: false, message: 'Payload invalide : id requis.' };
+
+    const deleted = await this.adminService.deleteCraftingStation(id);
+    if (!deleted) return { success: false, message: `Station "${id}" introuvable.` };
+    this.server.emit('crafting_station_update', { id: deleted.id, deleted: true });
+    return { success: true, message: `Station "${deleted.template?.key ?? deleted.templateId}" supprimée.`, data: deleted };
   }
 }

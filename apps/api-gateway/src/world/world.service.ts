@@ -445,6 +445,13 @@ export class WorldService implements OnModuleInit {
     return null;
   }
 
+  getConnectedPlayerByCharacterId(characterId: string): ConnectedPlayer | null {
+    for (const player of this.connectedPlayers.values()) {
+      if (player.characterId === characterId) return { ...player };
+    }
+    return null;
+  }
+
   findPlayerByNameOrId(nameOrId: string): ConnectedPlayer | null {
     const lower = nameOrId.toLowerCase();
     for (const player of this.connectedPlayers.values()) {

@@ -53,6 +53,7 @@ type MovementMetrics = {
 // ── Constantes skills ─────────────────────────────────────────────────────────
 
 const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
+const STATION_TYPES = ["forge", "workbench", "sawmill", "alchemy_table", "cooking_station", "tailoring_station", "jewelry_table"];
 
 const SKILL_FIELDS = [
   { key: "name",            label: "Nom",       type: "text" as const },
@@ -178,6 +179,41 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       } satisfies InstanceAction,
     ],
   },
+  {
+    id: "craftingStations",
+    title: "Crafting Stations",
+    getGroupKey:  (t) => t.id,
+    getGroupName: (t) => `${t.name} (${t.stationType})`,
+    groupFields: [
+      { key: "name",                label: "Nom",          type: "text" as const },
+      { key: "stationType",         label: "Station",      options: STATION_TYPES },
+      { key: "category",            label: "Catégorie",    options: ["smithing", "woodworking", "alchemy", "cooking", "crafting", "general"] },
+      { key: "requiredSkillKey",    label: "Skill requis", options: skillKeyOptions },
+      { key: "interactionRadiusWU", label: "Rayon WU",     min: 1 },
+      { key: "enabled",             label: "Actif",        options: ["true", "false"] },
+    ],
+    groupSaveEvent: "admin:update_crafting_station_template",
+    getGroupSavePayload: (t, fields) => ({ id: t.id, fields }),
+    dragEvent: "admin:create_crafting_station",
+    getDragPayload: (t, worldX, worldY) => ({ templateId: t.id, worldX, worldY, mapId: 1 }),
+    getInstancesForGroup: (stations, tpl) =>
+      stations.filter((s) => s.templateId === tpl.id),
+    getInstanceKey:  (s) => s.id,
+    getInstanceName: (s) => s.id.slice(0, 8),
+    getInstanceBadge: (s) => s.enabled ? "enabled" : "disabled",
+    instanceFields: [
+      { key: "enabled", label: "Actif", options: ["true", "false"] },
+      { key: "worldX",  label: "WU X",  min: 0 },
+      { key: "worldY",  label: "WU Y",  min: 0 },
+      { key: "mapId",   label: "Map",   min: 1 },
+    ],
+    instanceSaveEvent: "admin:update_crafting_station",
+    getInstanceSavePayload: (s, fields) => ({ id: s.id, fields }),
+    getInstanceTpPosition: (s) => (s.worldX != null && s.worldY != null ? { worldX: s.worldX, worldY: s.worldY } : null),
+    instanceDeleteEvent: "admin:delete_crafting_station",
+    getInstanceDeletePayload: (s) => ({ id: s.id }),
+    getInstanceInfoLine: (s) => `WU: ${s.worldX}, ${s.worldY}  ·  map:${s.mapId}`,
+  },
   ];
 }
 
@@ -255,6 +291,45 @@ function wosToResourceInstances(wos: WorldObject[]): any[] {
   }));
 }
 
+function wosToCraftingStationTemplates(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    key: wo.type,
+    name: (wo.metadata.name as string) ?? wo.type,
+    stationType: (wo.metadata.stationType as string) ?? wo.type,
+    category: (wo.metadata.category as string) ?? "crafting",
+    requiredSkillKey: (wo.metadata.requiredSkillKey as string | null) ?? "",
+    interactionRadiusWU: (wo.metadata.interactionRadiusWU as number) ?? 1536,
+    enabled: wo.state === "enabled",
+  }));
+}
+
+function stationToInstance(station: any): any {
+  return {
+    id: station.id,
+    templateId: station.templateId ?? station.template?.id,
+    templateKey: station.template?.key ?? station.templateKey ?? "",
+    stationType: station.template?.stationType ?? station.stationType ?? "",
+    mapId: station.mapId ?? 1,
+    worldX: station.worldX,
+    worldY: station.worldY,
+    enabled: Boolean(station.enabled),
+  };
+}
+
+function wosToCraftingStationInstances(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    templateId: (wo.metadata.templateId as string) ?? "",
+    templateKey: (wo.metadata.templateKey as string) ?? wo.type,
+    stationType: (wo.metadata.stationType as string) ?? "",
+    mapId: wo.mapId ?? 1,
+    worldX: wo.position?.worldX ?? 0,
+    worldY: wo.position?.worldY ?? 0,
+    enabled: wo.state === "enabled",
+  }));
+}
+
 function formatRespawnAt(raw: string | Date | null | undefined): string | null {
   if (raw == null) return null;
   const d = typeof raw === "string" ? new Date(raw) : raw;
@@ -270,6 +345,15 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
 const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
+const NEW_STATION_TEMPLATE_DEFAULT = {
+  key: "",
+  name: "",
+  stationType: "forge",
+  category: "smithing",
+  requiredSkillKey: "",
+  interactionRadiusWU: 1536,
+  enabled: true,
+};
 
 const EMPTY_MOVEMENT_METRICS: MovementMetrics = {
   totalMoves: 0,
@@ -296,6 +380,8 @@ export default function AdminPanelWOM() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [newSkillOpen, setNewSkillOpen] = useState(false);
   const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
+  const [newStationTemplateOpen, setNewStationTemplateOpen] = useState(false);
+  const [newStationTemplate, setNewStationTemplate] = useState({ ...NEW_STATION_TEMPLATE_DEFAULT });
   const [creating, setCreating] = useState(false);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -327,6 +413,12 @@ export default function AdminPanelWOM() {
         setGroupData((prev)    => ({ ...prev, resources: wosToResourceTemplates(wos) }));
         setInstanceData((prev) => ({ ...prev, resources: wosToResourceInstances(wos) }));
       }),
+      fetchAdmin<WorldObject[]>("/admin/crafting-station-templates/world-objects", token).then((wos) =>
+        setGroupData((prev) => ({ ...prev, craftingStations: wosToCraftingStationTemplates(wos) }))
+      ),
+      fetchAdmin<WorldObject[]>("/admin/crafting-stations/world-objects", token).then((wos) =>
+        setInstanceData((prev) => ({ ...prev, craftingStations: wosToCraftingStationInstances(wos) }))
+      ),
       // Skills : liste via REST
       fetchAdmin<any[]>("/admin/skill-definitions", token).then((data) =>
         setSectionData((prev) => ({ ...prev, skills: data }))
@@ -381,16 +473,32 @@ export default function AdminPanelWOM() {
       });
     }
 
+    function onCraftingStationUpdate(data: any) {
+      setInstanceData((prev) => {
+        const list: any[] = prev.craftingStations ?? [];
+        if (data.deleted) return { ...prev, craftingStations: list.filter((s) => s.id !== data.id) };
+        const nextStation = stationToInstance(data);
+        const idx = list.findIndex((s) => s.id === data.id);
+        if (idx >= 0) {
+          const next = [...list]; next[idx] = { ...next[idx], ...nextStation };
+          return { ...prev, craftingStations: next };
+        }
+        return { ...prev, craftingStations: [...list, nextStation] };
+      });
+    }
+
     function onPlayerJoined() { setOverview((prev) => prev ? { ...prev, connectedPlayers: prev.connectedPlayers + 1 } : prev); }
     function onPlayerLeft()   { setOverview((prev) => prev ? { ...prev, connectedPlayers: Math.max(0, prev.connectedPlayers - 1) } : prev); }
 
     socket.on('animal_update', onAnimalUpdate);
     socket.on('resource_update', onResourceUpdate);
+    socket.on('crafting_station_update', onCraftingStationUpdate);
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_left', onPlayerLeft);
     return () => {
       socket.off('animal_update', onAnimalUpdate);
       socket.off('resource_update', onResourceUpdate);
+      socket.off('crafting_station_update', onCraftingStationUpdate);
       socket.off('player_joined', onPlayerJoined);
       socket.off('player_left', onPlayerLeft);
       if (overviewTimer.current) clearTimeout(overviewTimer.current);
@@ -583,6 +691,79 @@ export default function AdminPanelWOM() {
           highlightId={highlightIds[cfg.id] ?? null}
         />
       ))}
+
+      <section className="admin-panel__section">
+        <div className="admin-panel__section-header" onClick={() => setNewStationTemplateOpen((o) => !o)}>
+          <span className="admin-panel__section-toggle">
+            <span className="admin-panel__section-chevron">{newStationTemplateOpen ? "▼" : "▶"}</span>
+            Créer une station
+          </span>
+        </div>
+        {newStationTemplateOpen && (
+          <div className="admin-panel__template-item">
+            <div className="admin-panel__template-stats">
+              {(["key", "name"] as const).map((f) => (
+                <label key={f} className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newStationTemplate[f]}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, [f]: e.target.value }))}
+                    {...kbHandlers} />
+                </label>
+              ))}
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Station</span>
+                <select className="admin-panel__template-stat-input"
+                  value={newStationTemplate.stationType}
+                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, stationType: e.target.value }))}
+                  {...kbHandlers}>
+                  {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Catégorie</span>
+                <input className="admin-panel__template-stat-input" type="text"
+                  value={newStationTemplate.category}
+                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, category: e.target.value }))}
+                  {...kbHandlers} />
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Skill requis</span>
+                <select className="admin-panel__template-stat-input"
+                  value={newStationTemplate.requiredSkillKey}
+                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
+                  {...kbHandlers}>
+                  <option value="">—</option>
+                  {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
+                </select>
+              </label>
+              <label className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">Rayon WU</span>
+                <input className="admin-panel__template-stat-input" type="number" min={1}
+                  value={newStationTemplate.interactionRadiusWU}
+                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, interactionRadiusWU: Number(e.target.value) }))}
+                  {...kbHandlers} />
+              </label>
+            </div>
+            <button className="admin-panel__apply-btn" disabled={creating}
+              onClick={async () => {
+                const socket = getSocket();
+                if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                setCreating(true);
+                const result = await ackPromise(socket, "admin:create_crafting_station_template", { fields: newStationTemplate });
+                setCreating(false);
+                pushResult(result.message, result.success);
+                if (result.success && result.data) {
+                  setGroupData((prev) => ({ ...prev, craftingStations: [...(prev.craftingStations ?? []), result.data as any] }));
+                  setNewStationTemplate({ ...NEW_STATION_TEMPLATE_DEFAULT });
+                  setNewStationTemplateOpen(false);
+                }
+              }}>
+              {creating ? "…" : "Créer"}
+            </button>
+          </div>
+        )}
+      </section>
 
       {SECTION_CONFIGS.map((cfg) => (
         <EntitySection

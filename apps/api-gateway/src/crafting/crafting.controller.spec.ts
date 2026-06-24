@@ -72,11 +72,13 @@ describe('CraftRequestDto — validation', () => {
     expect(errors.some((e) => e.property === 'recipeId')).toBe(true);
   });
 
-  it("n'a pas de champ characterId — le client ne peut pas le fournir", () => {
+  it("n'a pas de champ characterId ni stationId — le client ne peut pas les fournir", () => {
     const dto = new CraftRequestDto();
     expect(Object.prototype.hasOwnProperty.call(dto, 'characterId')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(dto, 'stationId')).toBe(false);
     const keys = Object.getOwnPropertyNames(CraftRequestDto.prototype);
     expect(keys).not.toContain('characterId');
+    expect(keys).not.toContain('stationId');
   });
 });
 

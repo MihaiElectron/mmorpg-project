@@ -6,16 +6,20 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Item } from '../items/entities/item.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { SkillsService } from '../skills/skills.service';
+import { WorldService } from '../world/world.service';
+import { euclideanDistanceWU } from '../common/world-coordinates';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
+import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
+import { CraftingStation } from './entities/crafting-station.entity';
 
 // ─── Seed definitions ─────────────────────────────────────────────────────────
 // Les itemCategory réfèrent à Item.category (cherché par (category, 'material')
@@ -52,6 +56,23 @@ interface RecipeDef {
   ingredients: IngredientDef[];
   results: ResultDef[];
 }
+
+interface StationTemplateDef {
+  key: string;
+  name: string;
+  stationType: string;
+  category: string;
+  requiredSkillKey?: string | null;
+  interactionRadiusWU?: number;
+}
+
+export const DEFAULT_CRAFTING_STATION_TEMPLATES: StationTemplateDef[] = [
+  { key: 'forge', name: 'Forge', stationType: 'forge', category: 'smithing', requiredSkillKey: 'smithing' },
+  { key: 'workbench', name: 'Workbench', stationType: 'workbench', category: 'woodworking', requiredSkillKey: 'woodworking' },
+  { key: 'sawmill', name: 'Sawmill', stationType: 'sawmill', category: 'woodworking', requiredSkillKey: 'woodworking' },
+  { key: 'alchemy_table', name: 'Alchemy Table', stationType: 'alchemy_table', category: 'alchemy', requiredSkillKey: 'alchemy' },
+  { key: 'cooking_station', name: 'Cooking Station', stationType: 'cooking_station', category: 'cooking', requiredSkillKey: 'cooking' },
+];
 
 /**
  * Recettes de référence Phase 1.
@@ -182,12 +203,16 @@ export class CraftingService implements OnModuleInit {
     private readonly ingredientRepo: Repository<CraftingIngredient>,
     @InjectRepository(CraftingResult)
     private readonly resultRepo: Repository<CraftingResult>,
+    @InjectRepository(CraftingStationTemplate)
+    private readonly stationTemplateRepo: Repository<CraftingStationTemplate>,
     private readonly dataSource: DataSource,
     private readonly skillsService: SkillsService,
+    private readonly worldService: WorldService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.seedDefaultRecipes();
+    await this.seedDefaultStationTemplates();
   }
 
   // ---------------------------------------------------------------------------
@@ -270,6 +295,28 @@ export class CraftingService implements OnModuleInit {
     }
   }
 
+  /**
+   * Seed non destructif — insère uniquement les templates de station absents.
+   */
+  async seedDefaultStationTemplates(): Promise<void> {
+    for (const def of DEFAULT_CRAFTING_STATION_TEMPLATES) {
+      const existing = await this.stationTemplateRepo.findOne({ where: { key: def.key } });
+      if (existing) continue;
+
+      const template = this.stationTemplateRepo.create({
+        key: def.key,
+        name: def.name,
+        stationType: def.stationType,
+        category: def.category,
+        requiredSkillKey: def.requiredSkillKey ?? null,
+        interactionRadiusWU: def.interactionRadiusWU ?? 1536,
+        enabled: true,
+      });
+      await this.stationTemplateRepo.save(template);
+      this.logger.log(`[seed] Station template seedé : ${def.key}`);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Runtime craft — transactionnel
   // ---------------------------------------------------------------------------
@@ -310,6 +357,10 @@ export class CraftingService implements OnModuleInit {
       if (!recipe) throw new NotFoundException(`Recette ${recipeId} introuvable`);
       if (!recipe.enabled) {
         throw new BadRequestException(`Recette "${recipe.key}" désactivée`);
+      }
+
+      if (recipe.stationType !== 'none') {
+        await this.findNearestCompatibleStationOrThrow(characterId, recipe, manager);
       }
 
       // ── 3. SkillDefinition ────────────────────────────────────────────────
@@ -507,5 +558,52 @@ export class CraftingService implements OnModuleInit {
       items.push(item);
     }
     return items;
+  }
+
+  /**
+   * Validation runtime station de craft.
+   *
+   * Distance : euclidienne en WU. Le client ne fournit jamais stationId en Phase 1 ;
+   * le serveur choisit implicitement la station compatible la plus proche.
+   */
+  private async findNearestCompatibleStationOrThrow(
+    characterId: string,
+    recipe: CraftingRecipe,
+    manager: EntityManager,
+  ): Promise<CraftingStation> {
+    const player = this.worldService.getConnectedPlayerByCharacterId(characterId);
+    if (!player) {
+      throw new BadRequestException(
+        `La recette "${recipe.key}" nécessite une station "${recipe.stationType}" proche, mais le personnage n'est pas connecté au monde.`,
+      );
+    }
+
+    const stations = await manager.find(CraftingStation, {
+      where: { enabled: true, mapId: player.mapId },
+      relations: ['template'],
+    });
+
+    let nearest: { station: CraftingStation; distance: number } | null = null;
+    for (const station of stations) {
+      if (!station.enabled) continue;
+      if (station.mapId !== player.mapId) continue;
+      const template = station.template;
+      if (!template?.enabled) continue;
+      if (template.stationType !== recipe.stationType) continue;
+      if (template.interactionRadiusWU <= 0) continue;
+
+      const distance = euclideanDistanceWU(player, station);
+      if (distance <= template.interactionRadiusWU) {
+        if (!nearest || distance < nearest.distance) nearest = { station, distance };
+      }
+    }
+
+    if (!nearest) {
+      throw new BadRequestException(
+        `Station "${recipe.stationType}" requise : aucune station compatible active à portée.`,
+      );
+    }
+
+    return nearest.station;
   }
 }

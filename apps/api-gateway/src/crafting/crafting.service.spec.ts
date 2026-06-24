@@ -2,16 +2,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { CraftingService, DEFAULT_RECIPES } from './crafting.service';
+import { CraftingService, DEFAULT_CRAFTING_STATION_TEMPLATES, DEFAULT_RECIPES } from './crafting.service';
 import { Item } from '../items/entities/item.entity';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
+import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
+import { CraftingStation } from './entities/crafting-station.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { SkillsService } from '../skills/skills.service';
+import { WorldService } from '../world/world.service';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -31,6 +34,7 @@ describe('CraftingService — seedDefaultRecipes', () => {
   let recipeRepo: Record<string, jest.Mock>;
   let ingredientRepo: Record<string, jest.Mock>;
   let resultRepo: Record<string, jest.Mock>;
+  let stationTemplateRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     itemRepo = {
@@ -52,6 +56,11 @@ describe('CraftingService — seedDefaultRecipes', () => {
       create: jest.fn((x) => x),
       save: jest.fn(async (x) => x),
     };
+    stationTemplateRepo = {
+      findOne: jest.fn(),
+      create: jest.fn((x) => x),
+      save: jest.fn(async (x) => x),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,12 +69,31 @@ describe('CraftingService — seedDefaultRecipes', () => {
         { provide: getRepositoryToken(CraftingRecipe), useValue: recipeRepo },
         { provide: getRepositoryToken(CraftingIngredient), useValue: ingredientRepo },
         { provide: getRepositoryToken(CraftingResult), useValue: resultRepo },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: stationTemplateRepo },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: SkillsService, useValue: {} },
+        { provide: WorldService, useValue: { getConnectedPlayerByCharacterId: jest.fn() } },
       ],
     }).compile();
 
     service = module.get<CraftingService>(CraftingService);
+  });
+
+  it('ne recrée pas un station template déjà existant (seed non destructif)', async () => {
+    stationTemplateRepo.findOne.mockResolvedValue({ key: 'forge' });
+
+    await service.seedDefaultStationTemplates();
+
+    expect(stationTemplateRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('insère les station templates absents du seed minimum', async () => {
+    stationTemplateRepo.findOne.mockResolvedValue(null);
+
+    await service.seedDefaultStationTemplates();
+
+    const savedKeys = stationTemplateRepo.save.mock.calls.map((call) => call[0].key);
+    expect(savedKeys).toEqual(DEFAULT_CRAFTING_STATION_TEMPLATES.map((tpl) => tpl.key));
   });
 
   // ─── Non destructif ───────────────────────────────────────────────────────
@@ -326,6 +354,7 @@ describe('CraftingService — craft()', () => {
   let mockManager: Record<string, jest.Mock>;
   let mockDataSource: { transaction: jest.Mock };
   let mockSkillsService: Partial<Record<keyof SkillsService, jest.Mock>>;
+  let mockWorldService: { getConnectedPlayerByCharacterId: jest.Mock };
 
   beforeEach(async () => {
     mockManager = {
@@ -345,6 +374,18 @@ describe('CraftingService — craft()', () => {
       applyXpInTx: jest.fn().mockImplementation(async (ps) => ps),
       getNextLevelXp: jest.fn().mockReturnValue(100),
     };
+    mockWorldService = {
+      getConnectedPlayerByCharacterId: jest.fn().mockReturnValue({
+        socketId: 'socket-1',
+        characterId: 'char-1',
+        name: 'Hero',
+        worldX: 1000,
+        worldY: 1000,
+        mapId: 1,
+        x: 100,
+        y: 100,
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -353,8 +394,10 @@ describe('CraftingService — craft()', () => {
         { provide: getRepositoryToken(CraftingRecipe), useValue: {} },
         { provide: getRepositoryToken(CraftingIngredient), useValue: {} },
         { provide: getRepositoryToken(CraftingResult), useValue: {} },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: {} },
         { provide: DataSource, useValue: mockDataSource },
         { provide: SkillsService, useValue: mockSkillsService },
+        { provide: WorldService, useValue: mockWorldService },
       ],
     }).compile();
 
@@ -410,6 +453,136 @@ describe('CraftingService — craft()', () => {
       expect.anything(),
       mockManager,
     );
+  });
+
+  it('recette stationType none fonctionne sans station', async () => {
+    setupHappyPath(1);
+
+    const result = await service.craft('char-1', 'recipe-1', 1);
+
+    expect(result.successes).toBe(1);
+    expect(mockWorldService.getConnectedPlayerByCharacterId).not.toHaveBeenCalled();
+  });
+
+  it('recette forge échoue sans forge proche', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      return Promise.resolve(null);
+    });
+    mockManager.find.mockResolvedValue([]);
+
+    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    expect(mockSkillsService.getOrCreatePlayerSkillInTx).not.toHaveBeenCalled();
+  });
+
+  it('recette forge réussit avec forge proche', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+      if (entity === Inventory) return Promise.resolve(null);
+      return Promise.resolve(null);
+    });
+    mockManager.find
+      .mockResolvedValueOnce([
+        {
+          id: 'station-1',
+          templateId: 'tpl-forge',
+          mapId: 1,
+          worldX: 1200,
+          worldY: 1000,
+          enabled: true,
+          template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+        } as CraftingStation,
+      ])
+      .mockResolvedValueOnce([makeInventoryRow('item-iron_ore', 13)]);
+
+    const result = await service.craft('char-1', 'recipe-1', 1);
+
+    expect(result.successes).toBe(1);
+  });
+
+  it('station disabled ignorée', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      return Promise.resolve(null);
+    });
+    mockManager.find.mockResolvedValue([
+      {
+        mapId: 1,
+        worldX: 1000,
+        worldY: 1000,
+        enabled: false,
+        template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+      } as CraftingStation,
+    ]);
+
+    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+  });
+
+  it('template disabled ignoré', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      return Promise.resolve(null);
+    });
+    mockManager.find.mockResolvedValue([
+      {
+        mapId: 1,
+        worldX: 1000,
+        worldY: 1000,
+        enabled: true,
+        template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: false },
+      } as CraftingStation,
+    ]);
+
+    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+  });
+
+  it('mauvaise map ignorée', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      return Promise.resolve(null);
+    });
+    mockManager.find.mockResolvedValue([
+      {
+        mapId: 2,
+        worldX: 1000,
+        worldY: 1000,
+        enabled: true,
+        template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+      } as CraftingStation,
+    ]);
+
+    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+  });
+
+  it('station trop loin ignorée', async () => {
+    setupHappyPath(1);
+    mockManager.findOne.mockImplementation((entity: any) => {
+      if (entity === Character) return Promise.resolve(makeCharacter());
+      if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe({ stationType: 'forge' }));
+      return Promise.resolve(null);
+    });
+    mockManager.find.mockResolvedValue([
+      {
+        mapId: 1,
+        worldX: 5000,
+        worldY: 1000,
+        enabled: true,
+        template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+      } as CraftingStation,
+    ]);
+
+    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
   });
 
   it('inventaire insuffisant : throw BadRequestException sans aucun changement', async () => {

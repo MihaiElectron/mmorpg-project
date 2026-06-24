@@ -134,4 +134,18 @@ export class AdminController {
 
   @Get('crafting-recipes/:id/validate')
   validateCraftingRecipe(@Param('id') id: string) { return this.adminService.validateCraftingRecipe(id); }
+
+  // ── CraftingStations ─────────────────────────────────────────────────────
+
+  @Get('crafting-station-templates')
+  listCraftingStationTemplates() { return this.adminService.listCraftingStationTemplates(); }
+
+  @Get('crafting-station-templates/world-objects')
+  getCraftingStationTemplateWorldObjects() { return this.adminService.getCraftingStationTemplateWorldObjects(); }
+
+  @Get('crafting-stations')
+  listCraftingStations() { return this.adminService.listCraftingStations(); }
+
+  @Get('crafting-stations/world-objects')
+  getCraftingStationWorldObjects() { return this.adminService.getCraftingStationWorldObjects(); }
 }

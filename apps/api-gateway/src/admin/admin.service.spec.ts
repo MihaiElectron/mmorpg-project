@@ -13,6 +13,8 @@ import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { CraftingStationTemplate } from '../crafting/entities/crafting-station-template.entity';
+import { CraftingStation } from '../crafting/entities/crafting-station.entity';
 import { Item } from '../items/entities/item.entity';
 import { WorldService } from '../world/world.service';
 
@@ -81,6 +83,8 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: worldService },
       ],
@@ -363,6 +367,8 @@ describe('AdminService — createSkillDefinition', () => {
         { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
@@ -463,6 +469,8 @@ describe('AdminService — updateSkillDefinition', () => {
         { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
         { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
       ],
@@ -533,6 +541,8 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       { provide: getRepositoryToken(CraftingRecipe), useValue: recipeRepo },
       { provide: getRepositoryToken(CraftingIngredient), useValue: ingredientRepo },
       { provide: getRepositoryToken(CraftingResult), useValue: resultRepo },
+      { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Item), useValue: itemRepo },
       { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
     ],

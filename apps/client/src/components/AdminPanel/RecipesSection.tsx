@@ -47,7 +47,7 @@ type Props = {
 
 const RECIPE_CATEGORIES = ["smithing", "woodworking", "cooking", "alchemy", "tailoring", "jewelry", "general"] as const;
 
-const STATION_TYPES = ["none", "forge", "workbench", "cooking_station", "alchemy_table", "tailoring_station", "jewelry_table"] as const;
+const STATION_TYPES = ["none", "forge", "workbench", "sawmill", "cooking_station", "alchemy_table", "tailoring_station", "jewelry_table"] as const;
 
 const RECIPE_FIELDS: FieldDef[] = [
   { key: "name",                       label: "Nom",                  type: "text" },

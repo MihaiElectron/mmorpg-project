@@ -4,8 +4,16 @@ import { Repository, Not, MoreThan } from 'typeorm';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { CraftingStationTemplate } from '../crafting/entities/crafting-station-template.entity';
+import { CraftingStation } from '../crafting/entities/crafting-station.entity';
 import { Item } from '../items/entities/item.entity';
 import { toCraftingRecipeWorldObject, CraftingRecipeWorldObject } from '../crafting/adapters/crafting-recipe-world-object.adapter';
+import {
+  toCraftingStationTemplateWorldObject,
+  toCraftingStationWorldObject,
+  CraftingStationTemplateWorldObject,
+  CraftingStationWorldObject,
+} from '../crafting/adapters/crafting-station-world-object.adapter';
 import { CreatureTemplate } from '../animals/entities/creature-template.entity';
 import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
 import { Animal } from '../animals/entities/animal.entity';
@@ -46,6 +54,10 @@ export class AdminService {
     private readonly ingredientRepo: Repository<CraftingIngredient>,
     @InjectRepository(CraftingResult)
     private readonly craftingResultRepo: Repository<CraftingResult>,
+    @InjectRepository(CraftingStationTemplate)
+    private readonly stationTemplateRepo: Repository<CraftingStationTemplate>,
+    @InjectRepository(CraftingStation)
+    private readonly stationRepo: Repository<CraftingStation>,
     @InjectRepository(Item)
     private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
@@ -400,6 +412,20 @@ export class AdminService {
     }
   }
 
+  private static validateInteractionRadiusWU(v: number): void {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v <= 0 || v > 1_048_576) {
+      throw new BadRequestException('interactionRadiusWU doit être un entier > 0 et <= 1 048 576 WU.');
+    }
+  }
+
+  private static validateStationType(value: string, allowNone = false): void {
+    if (value === 'none') {
+      if (allowNone) return;
+      throw new BadRequestException('stationType "none" est réservé aux recettes, interdit pour une station.');
+    }
+    AdminService.validateSnakeCase(value, 'stationType');
+  }
+
   listCraftingRecipes(): Promise<CraftingRecipe[]> {
     return this.recipeRepo.find({
       relations: ['ingredients', 'results'],
@@ -444,6 +470,14 @@ export class AdminService {
     if (fields.successBonusPerLevel !== undefined) AdminService.validateSuccessRate(fields.successBonusPerLevel, 'successBonusPerLevel');
     if (fields.minSuccessRate !== undefined) AdminService.validateSuccessRate(fields.minSuccessRate, 'minSuccessRate');
     if (fields.maxSuccessRate !== undefined) AdminService.validateSuccessRate(fields.maxSuccessRate, 'maxSuccessRate');
+
+    if (fields.stationType !== undefined) {
+      AdminService.validateStationType(fields.stationType, true);
+      if (fields.stationType !== 'none') {
+        const tpl = await this.stationTemplateRepo.findOne({ where: { stationType: fields.stationType } });
+        if (!tpl) throw new BadRequestException(`StationType "${fields.stationType}" sans CraftingStationTemplate.`);
+      }
+    }
 
     const min = fields.minSuccessRate ?? 0.05;
     const max = fields.maxSuccessRate ?? 1.0;
@@ -530,7 +564,14 @@ export class AdminService {
       if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
       recipe.craftTimeMs = fields.craftTimeMs;
     }
-    if (fields.stationType !== undefined) recipe.stationType = fields.stationType;
+    if (fields.stationType !== undefined) {
+      AdminService.validateStationType(fields.stationType, true);
+      if (fields.stationType !== 'none') {
+        const tpl = await this.stationTemplateRepo.findOne({ where: { stationType: fields.stationType } });
+        if (!tpl) throw new BadRequestException(`StationType "${fields.stationType}" sans CraftingStationTemplate.`);
+      }
+      recipe.stationType = fields.stationType;
+    }
     if (fields.enabled !== undefined) recipe.enabled = Boolean(fields.enabled);
 
     return this.recipeRepo.save(recipe);
@@ -608,10 +649,174 @@ export class AdminService {
     }
 
     if (!recipe.enabled) warnings.push('La recette est désactivée.');
+    const recipeStationType = recipe.stationType ?? 'none';
+    if (recipeStationType !== 'none') {
+      const stationTemplate = await this.stationTemplateRepo.findOne({ where: { stationType: recipeStationType } });
+      if (!stationTemplate) {
+        errors.push(`stationType "${recipeStationType}" sans CraftingStationTemplate.`);
+      } else if (!stationTemplate.enabled) {
+        warnings.push(`Le template de station "${stationTemplate.key}" est désactivé.`);
+      }
+    }
     if (recipe.baseSuccessRate < 0.1) warnings.push(`Taux de succès de base faible (${recipe.baseSuccessRate}).`);
     if (recipe.xpReward === 0) warnings.push('xpReward est 0 — aucune XP accordée pour cette recette.');
 
     return { valid: errors.length === 0, errors, warnings };
+  }
+
+  // ── CraftingStations ─────────────────────────────────────────────────────
+
+  listCraftingStationTemplates(): Promise<CraftingStationTemplate[]> {
+    return this.stationTemplateRepo.find({ order: { key: 'ASC' } });
+  }
+
+  listCraftingStations(): Promise<CraftingStation[]> {
+    return this.stationRepo.find({ relations: ['template'], order: { mapId: 'ASC', worldX: 'ASC', worldY: 'ASC' } });
+  }
+
+  async getCraftingStationTemplateWorldObjects(): Promise<CraftingStationTemplateWorldObject[]> {
+    const templates = await this.listCraftingStationTemplates();
+    return templates.map(toCraftingStationTemplateWorldObject);
+  }
+
+  async getCraftingStationWorldObjects(): Promise<CraftingStationWorldObject[]> {
+    const stations = await this.listCraftingStations();
+    return stations.map(toCraftingStationWorldObject);
+  }
+
+  async createCraftingStationTemplate(
+    fields: Pick<CraftingStationTemplate, 'key' | 'name' | 'stationType'> &
+      Partial<Pick<CraftingStationTemplate, 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'enabled'>>,
+  ): Promise<CraftingStationTemplate> {
+    if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
+    AdminService.validateSnakeCase(fields.key, 'key');
+    if (!fields.name || typeof fields.name !== 'string' || fields.name.trim() === '') {
+      throw new BadRequestException('name est requis et non vide.');
+    }
+    if (!fields.stationType || typeof fields.stationType !== 'string') {
+      throw new BadRequestException('stationType est requis.');
+    }
+    AdminService.validateStationType(fields.stationType);
+
+    const existingKey = await this.stationTemplateRepo.findOne({ where: { key: fields.key } });
+    if (existingKey) throw new BadRequestException(`Station template "${fields.key}" existe déjà.`);
+    const existingType = await this.stationTemplateRepo.findOne({ where: { stationType: fields.stationType } });
+    if (existingType) throw new BadRequestException(`stationType "${fields.stationType}" existe déjà.`);
+
+    if (fields.category !== undefined) AdminService.validateSnakeCase(fields.category, 'category');
+    if (fields.requiredSkillKey !== undefined && fields.requiredSkillKey !== null && fields.requiredSkillKey !== '') {
+      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
+      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
+    }
+    if (fields.interactionRadiusWU !== undefined) {
+      AdminService.validateInteractionRadiusWU(fields.interactionRadiusWU);
+    }
+
+    return this.stationTemplateRepo.save(this.stationTemplateRepo.create({
+      key: fields.key,
+      name: fields.name.trim(),
+      stationType: fields.stationType,
+      category: fields.category ?? 'crafting',
+      requiredSkillKey: fields.requiredSkillKey === '' ? null : fields.requiredSkillKey ?? null,
+      interactionRadiusWU: fields.interactionRadiusWU ?? 1536,
+      enabled: fields.enabled ?? true,
+    }));
+  }
+
+  async updateCraftingStationTemplate(
+    id: string,
+    fields: Partial<Pick<CraftingStationTemplate, 'name' | 'stationType' | 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'enabled'>>,
+  ): Promise<CraftingStationTemplate | null> {
+    const template = await this.stationTemplateRepo.findOne({ where: { id } });
+    if (!template) return null;
+
+    if (fields.name !== undefined) {
+      if (typeof fields.name !== 'string' || fields.name.trim() === '') throw new BadRequestException('name ne peut pas être vide.');
+      template.name = fields.name.trim();
+    }
+    if (fields.stationType !== undefined) {
+      AdminService.validateStationType(fields.stationType);
+      const existing = await this.stationTemplateRepo.findOne({ where: { stationType: fields.stationType } });
+      if (existing && existing.id !== id) throw new BadRequestException(`stationType "${fields.stationType}" existe déjà.`);
+      template.stationType = fields.stationType;
+    }
+    if (fields.category !== undefined) {
+      AdminService.validateSnakeCase(fields.category, 'category');
+      template.category = fields.category;
+    }
+    if ('requiredSkillKey' in fields) {
+      const skillKey = fields.requiredSkillKey;
+      if (skillKey === null || skillKey === '') {
+        template.requiredSkillKey = null;
+      } else {
+        const sd = await this.skillDefinitionRepo.findOne({ where: { key: skillKey } });
+        if (!sd) throw new BadRequestException(`Skill "${skillKey}" inexistant dans SkillDefinition.`);
+        template.requiredSkillKey = skillKey!;
+      }
+    }
+    if (fields.interactionRadiusWU !== undefined) {
+      AdminService.validateInteractionRadiusWU(fields.interactionRadiusWU);
+      template.interactionRadiusWU = fields.interactionRadiusWU;
+    }
+    if (fields.enabled !== undefined) template.enabled = Boolean(fields.enabled);
+
+    return this.stationTemplateRepo.save(template);
+  }
+
+  async createCraftingStation(templateId: string, worldX: number, worldY: number, mapId = DEFAULT_MAP_ID): Promise<CraftingStation> {
+    const template = await this.stationTemplateRepo.findOne({ where: { id: templateId } });
+    if (!template) throw new BadRequestException(`Station template "${templateId}" introuvable.`);
+
+    const targetWorldX = Math.round(worldX);
+    const targetWorldY = Math.round(worldY);
+    const targetMapId = Math.round(mapId);
+    if (!Number.isFinite(targetWorldX) || !Number.isFinite(targetWorldY) || !Number.isFinite(targetMapId)) {
+      throw new BadRequestException('Coordonnées station invalides : mapId, worldX et worldY doivent être finis.');
+    }
+
+    const station = this.stationRepo.create({
+      templateId: template.id,
+      template,
+      mapId: targetMapId,
+      worldX: targetWorldX,
+      worldY: targetWorldY,
+      enabled: true,
+    });
+    return this.stationRepo.save(station);
+  }
+
+  async updateCraftingStation(
+    id: string,
+    fields: Partial<Pick<CraftingStation, 'worldX' | 'worldY' | 'mapId' | 'enabled'>>,
+  ): Promise<CraftingStation | null> {
+    const station = await this.stationRepo.findOne({ where: { id }, relations: ['template'] });
+    if (!station) return null;
+
+    if (fields.worldX !== undefined) {
+      const n = Math.round(fields.worldX);
+      if (!Number.isFinite(n)) throw new BadRequestException('worldX doit être fini.');
+      station.worldX = n;
+    }
+    if (fields.worldY !== undefined) {
+      const n = Math.round(fields.worldY);
+      if (!Number.isFinite(n)) throw new BadRequestException('worldY doit être fini.');
+      station.worldY = n;
+    }
+    if (fields.mapId !== undefined) {
+      const n = Math.round(fields.mapId);
+      if (!Number.isFinite(n)) throw new BadRequestException('mapId doit être fini.');
+      station.mapId = n;
+    }
+    if (fields.enabled !== undefined) station.enabled = Boolean(fields.enabled);
+
+    return this.stationRepo.save(station);
+  }
+
+  async deleteCraftingStation(id: string): Promise<CraftingStation | null> {
+    const station = await this.stationRepo.findOne({ where: { id }, relations: ['template'] });
+    if (!station) return null;
+    await this.stationRepo.delete(id);
+    return station;
   }
 
   // ── Vue d'ensemble ────────────────────────────────────────────────────────

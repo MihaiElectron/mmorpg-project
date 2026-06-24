@@ -11,6 +11,8 @@ import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { CraftingStationTemplate } from '../crafting/entities/crafting-station-template.entity';
+import { CraftingStation } from '../crafting/entities/crafting-station.entity';
 import { Item } from '../items/entities/item.entity';
 import { AnimalsModule } from '../animals/animals.module';
 import { ResourcesModule } from '../resources/resources.module';
@@ -26,7 +28,9 @@ import { AdminGateway } from './admin.gateway';
       CreatureTemplate, CreatureSpawn, Animal, Character,
       Resource, ResourceTemplate,
       SkillDefinition, PlayerSkill,
-      CraftingRecipe, CraftingIngredient, CraftingResult, Item,
+      CraftingRecipe, CraftingIngredient, CraftingResult,
+      CraftingStationTemplate, CraftingStation,
+      Item,
     ]),
     AnimalsModule,
     ResourcesModule,

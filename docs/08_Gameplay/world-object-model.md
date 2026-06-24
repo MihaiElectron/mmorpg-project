@@ -173,6 +173,19 @@ D'autres catégories pourront être introduites sans modifier le WOM :
 | Timeline | Séquence d'événements mondiaux planifiés |
 | Decoration | Objet visuel non interactif posé dans la scène |
 
+### Note d'implémentation — Crafting Stations Phase 1
+
+Les `CraftingStationTemplate` et `CraftingStation` sont des World Objects
+persistés et administrables via WOM/AdminPanel. En Phase 1, leur rôle runtime
+est la validation serveur des recettes de craft qui déclarent un
+`stationType != "none"` : le serveur choisit une station compatible proche du
+joueur en coordonnées WU.
+
+Le rendu sprite direct dans `WorldScene` n'est pas requis pour cette phase.
+L'affichage in-world dédié des stations est prévu pour une Phase 2, afin de
+choisir des assets et interactions visuelles cohérents sans déplacer la logique
+métier côté client.
+
 ---
 
 ## 4. Contrat minimal d'un World Object
