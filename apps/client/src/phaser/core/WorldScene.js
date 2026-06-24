@@ -56,6 +56,29 @@ const ANIMAL_WO_CAPABILITIES = Object.freeze([
   "transform", "combat", "health", "persistence", "validation",
 ]);
 
+const CRAFTING_STATION_WO_CAPABILITIES = Object.freeze([
+  "crafting_station", "placement", "validation",
+]);
+
+const CRAFTING_STATION_COLORS = Object.freeze({
+  forge: 0xff8a00,
+  workbench: 0x2f80ed,
+  sawmill: 0x2ecc71,
+  alchemy_table: 0x9b51e0,
+  cooking_station: 0xe74c3c,
+});
+
+const CRAFTING_STATION_FALLBACK_COLOR = 0x8e8e8e;
+const CRAFTING_STATION_SIZE = 22;
+const CRAFTING_STATION_DEPTH = 12;
+const CRAFTING_STATION_LABEL_STYLE = Object.freeze({
+  fontFamily: "monospace",
+  fontSize: "11px",
+  color: "#ffffff",
+  backgroundColor: "rgba(0,0,0,0.62)",
+  padding: { x: 4, y: 2 },
+});
+
 function animalToWorldObject(animal) {
   const hasWU =
     animal.worldX != null && animal.worldY != null && animal.mapId != null;
@@ -97,6 +120,54 @@ function resourceToWorldObject(resource) {
         resource.x != null && resource.y != null
           ? { x: resource.x, y: resource.y }
           : null,
+    },
+  };
+}
+
+function normalizeCraftingStation(station) {
+  const metadata = station.metadata ?? {};
+  const template = station.template ?? {};
+  const position = station.position ?? {};
+  const worldX = station.worldX ?? position.worldX;
+  const worldY = station.worldY ?? position.worldY;
+  const stationType = metadata.stationType ?? template.stationType ?? station.stationType ?? station.type ?? "unknown";
+  const templateKey = metadata.templateKey ?? template.key ?? station.templateKey ?? station.type ?? stationType;
+
+  return {
+    id: station.id,
+    templateId: metadata.templateId ?? station.templateId ?? template.id ?? null,
+    templateKey,
+    name: metadata.name ?? template.name ?? station.name ?? templateKey,
+    stationType,
+    mapId: station.mapId ?? 1,
+    worldX,
+    worldY,
+    enabled: station.enabled ?? station.state === "enabled",
+    templateEnabled: metadata.templateEnabled ?? template.enabled ?? true,
+    interactionRadiusWU: metadata.interactionRadiusWU ?? template.interactionRadiusWU ?? station.interactionRadiusWU ?? 1536,
+  };
+}
+
+function craftingStationToWorldObject(station) {
+  const normalized = normalizeCraftingStation(station);
+  const hasWU = Number.isFinite(normalized.worldX) && Number.isFinite(normalized.worldY);
+  return {
+    kind: "entity",
+    category: "crafting_station",
+    id: normalized.id,
+    type: normalized.templateKey,
+    mapId: normalized.mapId ?? null,
+    position: hasWU ? { worldX: normalized.worldX, worldY: normalized.worldY } : null,
+    state: normalized.enabled ? "enabled" : "disabled",
+    capabilities: CRAFTING_STATION_WO_CAPABILITIES,
+    metadata: {
+      templateId: normalized.templateId,
+      templateKey: normalized.templateKey,
+      name: normalized.name,
+      stationType: normalized.stationType,
+      interactionRadiusWU: normalized.interactionRadiusWU,
+      templateEnabled: normalized.templateEnabled,
+      enabled: normalized.enabled,
     },
   };
 }
@@ -160,6 +231,8 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = [];
     this.resourceSprites = new Map();
     this.resourceData = new Map();
+    this.craftingStationDebugObjects = new Map();
+    this.craftingStationData = new Map();
     this.resourceOverlayGraphics = null;
     this.resourceOverlayLabels = new Map();
     this.creatureSpawnData = new Map();
@@ -457,6 +530,7 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    this.loadCraftingStations();
     this.joinWorld();
   }
 
@@ -750,6 +824,14 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    this.socket.on("crafting_station_update", (station) => {
+      if (station.deleted) {
+        this.removeCraftingStation(station.id);
+        return;
+      }
+      this.upsertCraftingStation(station);
+    });
+
     this.socket.on("current_players", (players) => {
       this.clearRemotePlayers();
       players.forEach((player) => this.upsertRemotePlayer(player));
@@ -806,6 +888,7 @@ export default class WorldScene extends Phaser.Scene {
     if (this.socket.connected) {
       this.socket.emit("get_resources");
       this.socket.emit("get_animals");
+      this.loadCraftingStations();
       this.joinWorld();
     }
   }
@@ -1080,6 +1163,102 @@ export default class WorldScene extends Phaser.Scene {
       actions: ["ramasser", "gathering"],
     });
     this.redrawResourceOverlay();
+  }
+
+  // ── Crafting Stations debug render ───────────────────────────────────────
+
+  loadCraftingStations() {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) return;
+
+    fetch(`${import.meta.env.VITE_API_URL}/admin/crafting-stations/world-objects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((stations) => this.renderCraftingStations(stations))
+      .catch((err) => {
+        console.warn("[CraftingStationsDebug] fetch failed:", err);
+      });
+  }
+
+  renderCraftingStations(stations) {
+    this.clearCraftingStations();
+    stations
+      .map((station) => normalizeCraftingStation(station))
+      .filter((station) =>
+        station.enabled &&
+        station.templateEnabled &&
+        Number.isFinite(station.worldX) &&
+        Number.isFinite(station.worldY),
+      )
+      .forEach((station) => this.upsertCraftingStation(station));
+  }
+
+  upsertCraftingStation(rawStation) {
+    const station = normalizeCraftingStation(rawStation);
+    if (!station.enabled || !station.templateEnabled) {
+      this.removeCraftingStation(station.id);
+      return;
+    }
+    if (!Number.isFinite(station.worldX) || !Number.isFinite(station.worldY)) return;
+
+    const { x, y } = resolveScreen(station);
+    const color = CRAFTING_STATION_COLORS[station.stationType] ?? CRAFTING_STATION_FALLBACK_COLOR;
+    const existing = this.craftingStationDebugObjects.get(station.id);
+    const labelText = station.name || station.stationType;
+
+    if (existing) {
+      existing.station = station;
+      existing.square.setPosition(x, y);
+      existing.square.setFillStyle(color, 0.92);
+      existing.label.setPosition(x, y - 25);
+      existing.label.setText(labelText);
+      this.drawCraftingStationRadius(existing.radius, x, y, station.interactionRadiusWU, color);
+      this.craftingStationData.set(station.id, station);
+      return;
+    }
+
+    const radius = this.add.graphics();
+    radius.setDepth(CRAFTING_STATION_DEPTH - 1);
+    this.drawCraftingStationRadius(radius, x, y, station.interactionRadiusWU, color);
+
+    const square = this.add.rectangle(x, y, CRAFTING_STATION_SIZE, CRAFTING_STATION_SIZE, color, 0.92);
+    square.setStrokeStyle(2, 0x111111, 0.75);
+    square.setDepth(CRAFTING_STATION_DEPTH);
+    square.setInteractive(
+      new Phaser.Geom.Rectangle(
+        -CRAFTING_STATION_SIZE / 2,
+        -CRAFTING_STATION_SIZE / 2,
+        CRAFTING_STATION_SIZE,
+        CRAFTING_STATION_SIZE,
+      ),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    square.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      event?.stopPropagation();
+      getDevToolsStore().getState().setSelectedWorldObject(craftingStationToWorldObject(station));
+    });
+
+    const label = this.add.text(x, y - 25, labelText, CRAFTING_STATION_LABEL_STYLE);
+    label.setOrigin(0.5, 1);
+    label.setDepth(CRAFTING_STATION_DEPTH + 1);
+
+    this.craftingStationDebugObjects.set(station.id, { square, label, radius, station });
+    this.craftingStationData.set(station.id, station);
+  }
+
+  drawCraftingStationRadius(graphics, x, y, radiusWU, color) {
+    graphics.clear();
+    const radius = Number(radiusWU);
+    if (!Number.isFinite(radius) || radius <= 0) return;
+
+    const width = Math.max(radius / 8, 8);
+    const height = Math.max(radius / 16, 4);
+    graphics.lineStyle(1, color, 0.42);
+    graphics.strokeEllipse(x, y, width, height);
   }
 
   renderAnimals(animals) {
@@ -1377,6 +1556,27 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawResourceOverlay();
   }
 
+  clearCraftingStations() {
+    for (const entry of this.craftingStationDebugObjects.values()) {
+      entry.square.destroy();
+      entry.label.destroy();
+      entry.radius.destroy();
+    }
+    this.craftingStationDebugObjects.clear();
+    this.craftingStationData.clear();
+  }
+
+  removeCraftingStation(stationId) {
+    const entry = this.craftingStationDebugObjects.get(stationId);
+    if (entry) {
+      entry.square.destroy();
+      entry.label.destroy();
+      entry.radius.destroy();
+      this.craftingStationDebugObjects.delete(stationId);
+    }
+    this.craftingStationData.delete(stationId);
+  }
+
   removeAnimal(animalId) {
     const entry = this.animalSprites.get(animalId);
 
@@ -1403,6 +1603,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("gather_tick");
       this.socket.off("gather_stopped");
       this.socket.off("animal_update");
+      this.socket.off("crafting_station_update");
       this.socket.off("current_players");
       this.socket.off("world_joined");
       this.socket.off("player_joined");
@@ -1427,6 +1628,7 @@ export default class WorldScene extends Phaser.Scene {
     this.creatureSpawnData.clear();
 
     this.clearResources();
+    this.clearCraftingStations();
     destroyHpBar(this.playerHpBar);
     this.playerHpBar = null;
     this.clearAnimals();

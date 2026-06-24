@@ -209,7 +209,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     ],
     instanceSaveEvent: "admin:update_crafting_station",
     getInstanceSavePayload: (s, fields) => ({ id: s.id, fields }),
-    getInstanceTpPosition: (s) => (s.worldX != null && s.worldY != null ? { worldX: s.worldX, worldY: s.worldY } : null),
+    getInstanceTpPosition: (s) => (s.worldX != null && s.worldY != null ? { worldX: s.worldX + 256, worldY: s.worldY } : null),
     instanceDeleteEvent: "admin:delete_crafting_station",
     getInstanceDeletePayload: (s) => ({ id: s.id }),
     getInstanceInfoLine: (s) => `WU: ${s.worldX}, ${s.worldY}  ·  map:${s.mapId}`,
@@ -369,6 +369,7 @@ export default function AdminPanelWOM() {
   const highlightIds: Record<string, string | null> = {
     creatures: selectedWO?.category === "animal"   ? selectedWO.id : null,
     resources: selectedWO?.category === "resource" ? selectedWO.id : null,
+    craftingStations: selectedWO?.category === "crafting_station" ? selectedWO.id : null,
   };
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
