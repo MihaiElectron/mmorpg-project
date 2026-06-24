@@ -261,8 +261,9 @@ describe('AdminService resources', () => {
     });
   });
 
-  it('createResource écrit x/y pixels et worldX/worldY/mapId', async () => {
-    const resource = await service.createResource('wood', 600.4, 300.2);
+  it('createResource WU-only : calcule pixel cache et écrit worldX/worldY/mapId', async () => {
+    // worldX=1600, worldY=8000 → screenX=600, screenY=300
+    const resource = await service.createResource('wood', 1600, 8000);
 
     expect(resourceRepo.create).toHaveBeenCalledWith({
       type: 'wood',
@@ -276,11 +277,12 @@ describe('AdminService resources', () => {
     expect(resource).toMatchObject({ x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1 });
   });
 
-  it('updateResource recalcule worldX/worldY/mapId quand x change', async () => {
+  it('updateResource recalcule x/y pixel cache depuis worldX/worldY', async () => {
     const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'dead', remainingLoots: 0 } as Resource;
     resourceRepo.findOne.mockResolvedValue(resource);
 
-    const updated = await service.updateResource('resource-1', { x: 700 });
+    // worldX=2400, worldY=7200 → screenX=700, screenY=300
+    const updated = await service.updateResource('resource-1', { worldX: 2400, worldY: 7200 });
 
     expect(resourceRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       x: 700,
@@ -298,7 +300,7 @@ describe('AdminService resources', () => {
     const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'alive', remainingLoots: 5 } as Resource;
     resourceRepo.findOne.mockResolvedValue(resource);
 
-    await expect(service.updateResource('resource-1', { x: Infinity })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateResource('resource-1', { worldX: Infinity })).rejects.toBeInstanceOf(BadRequestException);
     expect(resourceRepo.save).not.toHaveBeenCalled();
   });
 

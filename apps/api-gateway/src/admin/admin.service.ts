@@ -16,7 +16,7 @@ import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../skills/adapters/skill-definition-world-object.adapter';
 import { type MovementMetrics, WorldService } from '../world/world.service';
-import { DEFAULT_MAP_ID, isoScreenToWorldWU } from '../common/world-coordinates';
+import { DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toAnimalWorldObject, AnimalWorldObject } from '../animals/adapters/animal-world-object.adapter';
 import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../animals/adapters/creature-spawn-world-object.adapter';
@@ -191,49 +191,45 @@ export class AdminService {
 
   async updateResource(
     id: string,
-    fields: Partial<Pick<Resource, 'x' | 'y' | 'remainingLoots' | 'state' | 'respawnDelayMs'>>,
+    fields: Partial<Pick<Resource, 'worldX' | 'worldY' | 'remainingLoots' | 'state' | 'respawnDelayMs'>>,
   ): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { id } });
     if (!resource) return null;
-    Object.assign(resource, fields);
     // Un déplacement sans changement d'état explicite remet la ressource en jeu
-    if (('x' in fields || 'y' in fields) && !('state' in fields)) {
+    if (('worldX' in fields || 'worldY' in fields) && !('state' in fields)) {
       resource.state = 'alive';
       if (resource.remainingLoots === 0) resource.remainingLoots = 5;
     }
-    if ('x' in fields || 'y' in fields) {
-      if (!Number.isFinite(resource.x) || !Number.isFinite(resource.y)) {
-        throw new BadRequestException('Coordonnées ressource invalides : x et y doivent être finis.');
+    if ('worldX' in fields || 'worldY' in fields) {
+      const targetWorldX = Math.round(fields.worldX ?? resource.worldX ?? 0);
+      const targetWorldY = Math.round(fields.worldY ?? resource.worldY ?? 0);
+      if (!Number.isFinite(targetWorldX) || !Number.isFinite(targetWorldY)) {
+        throw new BadRequestException('Coordonnées ressource invalides : worldX et worldY doivent être finis.');
       }
-      let wu: ReturnType<typeof isoScreenToWorldWU>;
-      try {
-        wu = isoScreenToWorldWU(resource.x, resource.y);
-      } catch {
-        throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
-      }
-      resource.worldX = wu.worldX;
-      resource.worldY = wu.worldY;
+      resource.worldX = targetWorldX;
+      resource.worldY = targetWorldY;
+      resource.x = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
+      resource.y = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
       resource.mapId = DEFAULT_MAP_ID;
     }
+    if ('remainingLoots' in fields) resource.remainingLoots = fields.remainingLoots!;
+    if ('state' in fields) resource.state = fields.state!;
+    if ('respawnDelayMs' in fields) resource.respawnDelayMs = fields.respawnDelayMs!;
     return this.resourceRepo.save(resource);
   }
 
-  async createResource(type: string, x: number, y: number): Promise<Resource> {
-    const rx = Math.round(x);
-    const ry = Math.round(y);
-    if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
-      throw new BadRequestException('Coordonnées ressource invalides : x et y doivent être finis.');
+  async createResource(type: string, worldX: number, worldY: number): Promise<Resource> {
+    const targetWorldX = Math.round(worldX);
+    const targetWorldY = Math.round(worldY);
+    if (!Number.isFinite(targetWorldX) || !Number.isFinite(targetWorldY)) {
+      throw new BadRequestException('Coordonnées ressource invalides : worldX et worldY doivent être finis.');
     }
-    let wu: ReturnType<typeof isoScreenToWorldWU>;
-    try {
-      wu = isoScreenToWorldWU(rx, ry);
-    } catch {
-      throw new BadRequestException('Conversion WU impossible pour les coordonnées ressource.');
-    }
+    const px = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
+    const py = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
     return this.resourceRepo.save(
-      this.resourceRepo.create({ type, x: rx, y: ry, worldX: wu.worldX, worldY: wu.worldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
+      this.resourceRepo.create({ type, x: px, y: py, worldX: targetWorldX, worldY: targetWorldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
     );
   }
 

@@ -580,32 +580,40 @@ export class AnimalsService implements OnModuleInit {
 
   async createAdminSpawn(
     templateKey: string,
-    x: number,
-    y: number,
+    worldX: number,
+    worldY: number,
   ): Promise<AnimalDto | null> {
     const template = await this.templateRepository.findOne({
       where: { key: templateKey },
     });
     if (!template) return null;
 
+    const targetWorldX = Math.round(worldX);
+    const targetWorldY = Math.round(worldY);
+    const px = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
+    const py = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
+
     const spawnKey = `admin-${templateKey}-${Date.now()}`;
     const spawn = await this.spawnRepository.save(
       this.spawnRepository.create({
         key: spawnKey,
         template,
-        spawnX: Math.round(x),
-        spawnY: Math.round(y),
+        spawnX: px,
+        spawnY: py,
+        worldX: targetWorldX,
+        worldY: targetWorldY,
         respawnDelayMs: 30000,
       }),
     );
 
-    const spawnWU = this.pixelToWUSafe(Math.round(x), Math.round(y));
     const rawAnimal = await this.animalRepository.save(
       this.animalRepository.create({
         spawn,
-        x: Math.round(x),
-        y: Math.round(y),
-        ...(spawnWU ?? {}),
+        x: px,
+        y: py,
+        worldX: targetWorldX,
+        worldY: targetWorldY,
+        mapId: DEFAULT_MAP_ID,
         health: template.baseHealth,
         state: 'alive',
       }),
@@ -658,7 +666,7 @@ export class AnimalsService implements OnModuleInit {
 
   async adminUpdateAnimal(
     id: string,
-    fields: Partial<{ health: number; x: number; y: number; state: string; respawnDelayMs: number | null }>,
+    fields: Partial<{ health: number; worldX: number; worldY: number; state: string; respawnDelayMs: number | null }>,
   ): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(id);
     if (!animal) return null;
@@ -666,8 +674,6 @@ export class AnimalsService implements OnModuleInit {
     if (fields.health !== undefined) {
       animal.health = Math.max(0, Math.min(fields.health, animal.spawn.template.baseHealth));
     }
-    if (fields.x !== undefined) animal.x = Math.round(fields.x);
-    if (fields.y !== undefined) animal.y = Math.round(fields.y);
     if (fields.state !== undefined) {
       animal.state = fields.state as Animal['state'];
       if (fields.state === 'alive') {
@@ -675,10 +681,13 @@ export class AnimalsService implements OnModuleInit {
       }
     }
 
-    if (fields.x !== undefined || fields.y !== undefined) {
+    if (fields.worldX !== undefined || fields.worldY !== undefined) {
       this.patrolStates.delete(id);
-      const updateWU = this.pixelToWUSafe(animal.x, animal.y);
-      if (updateWU) { animal.worldX = updateWU.worldX; animal.worldY = updateWU.worldY; animal.mapId = updateWU.mapId; }
+      if (fields.worldX !== undefined) animal.worldX = Math.round(fields.worldX);
+      if (fields.worldY !== undefined) animal.worldY = Math.round(fields.worldY);
+      animal.mapId = DEFAULT_MAP_ID;
+      animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
+      animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
     }
 
     // 0 → null (hérite du spawn/template)
@@ -693,17 +702,18 @@ export class AnimalsService implements OnModuleInit {
     return dto;
   }
 
-  async moveAnimal(animalId: string, x: number, y: number): Promise<AnimalDto | null> {
+  async moveAnimal(animalId: string, worldX: number, worldY: number): Promise<AnimalDto | null> {
     const animal = this.liveAnimals.get(animalId);
     if (!animal || animal.state === 'dead') return null;
 
-    animal.x = Math.round(x);
-    animal.y = Math.round(y);
+    animal.worldX = Math.round(worldX);
+    animal.worldY = Math.round(worldY);
+    animal.mapId = DEFAULT_MAP_ID;
+    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
+    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
     this.patrolStates.delete(animalId);
-    const moveWU = this.pixelToWUSafe(animal.x, animal.y);
-    if (moveWU) { animal.worldX = moveWU.worldX; animal.worldY = moveWU.worldY; animal.mapId = moveWU.mapId; }
 
-    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y, ...(moveWU ?? {}) });
+    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y, worldX: animal.worldX, worldY: animal.worldY, mapId: animal.mapId });
 
     if (this.server) {
       this.server.emit('animal_update', toDto(animal));

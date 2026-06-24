@@ -32,24 +32,24 @@ function ackPromise(
   });
 }
 
-/** Crée un spawn de créature à la position donnée. */
+/** Crée un spawn de créature à la position donnée (WU). */
 export function spawnCreature(
   templateKey: string,
-  x: number,
-  y: number,
+  worldX: number,
+  worldY: number,
   socket: any,
 ): Promise<ActionResult> {
-  return ackPromise(socket, "admin:spawn", { templateKey, x, y });
+  return ackPromise(socket, "admin:spawn", { templateKey, worldX, worldY });
 }
 
-/** Téléporte un personnage connecté. */
+/** Téléporte un personnage connecté (WU). */
 export function teleportCharacter(
   characterId: string,
-  x: number,
-  y: number,
+  worldX: number,
+  worldY: number,
   socket: any,
 ): Promise<ActionResult> {
-  return ackPromise(socket, "admin:teleport", { characterId, x, y });
+  return ackPromise(socket, "admin:teleport", { characterId, worldX, worldY });
 }
 
 /** Met à jour les stats d'un template via WS (broadcast category:updated). */
@@ -61,9 +61,9 @@ export function updateTemplate(
   return ackPromise(socket, "admin:update_template", { key, fields });
 }
 
-/** Déplace un animal vivant à la position donnée. */
-export function moveAnimal(animalId: string, x: number, y: number, socket: any): Promise<ActionResult> {
-  return ackPromise(socket, 'admin:move_animal', { animalId, x, y });
+/** Déplace un animal vivant à la position donnée (WU). */
+export function moveAnimal(animalId: string, worldX: number, worldY: number, socket: any): Promise<ActionResult> {
+  return ackPromise(socket, 'admin:move_animal', { animalId, worldX, worldY });
 }
 
 /** Force le respawn de tous les animaux d'un template. */

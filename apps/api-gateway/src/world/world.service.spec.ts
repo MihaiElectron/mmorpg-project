@@ -467,13 +467,12 @@ describe('WorldService.teleportCharacter', () => {
   it("émet character_teleport avec worldX/worldY/characterId/chunkX/chunkY", async () => {
     const svc = makeService();
     const socket = makeSocket();
-    // pixel(600, 300) → WU(1600, 8000) selon la projection isométrique
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
     const { server, emitted } = makeServer();
-    // téléportation en pixel(600, 580) → WU(6080, 12480) selon ADR-0001
-    await svc.teleportCharacter('char-1', 600, 580, server);
+    // Téléportation WU(6080, 12480) — P6 : le gateway envoie déjà des WU
+    await svc.teleportCharacter('char-1', 6080, 12480, server);
 
     expect(emitted).toHaveLength(1);
     const payload = emitted[0].payload;
@@ -493,30 +492,44 @@ describe('WorldService.teleportCharacter', () => {
     injectPlayer(svc, socket, player);
 
     const { server } = makeServer();
-    await svc.teleportCharacter('char-1', 600, 580, server);
+    await svc.teleportCharacter('char-1', 6080, 12480, server);
 
     expect(player.worldX).toBe(6080);
     expect(player.worldY).toBe(12480);
   });
 
+  it("teleportCharacter dérive le cache pixel depuis WU", async () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer();
+    injectPlayer(svc, socket, player);
+
+    const { server } = makeServer();
+    // WU(1600, 8000) → screenX=600, screenY=300
+    await svc.teleportCharacter('char-1', 1600, 8000, server);
+
+    expect(player.x).toBe(600);
+    expect(player.y).toBe(300);
+  });
+
   it("retourne null si le personnage n'est pas connecté", async () => {
     const svc = makeService();
     const { server } = makeServer();
-    const result = await svc.teleportCharacter('inexistant', 600, 300, server);
+    const result = await svc.teleportCharacter('inexistant', 1600, 8000, server);
     expect(result).toBeNull();
   });
 
-  it("conserve worldX/Y précédent si la position cible est hors isométrie", async () => {
+  it("retourne null si les coordonnées WU sont NaN", async () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000 });
     injectPlayer(svc, socket, player);
 
     const { server } = makeServer();
-    // Coordonnées pixel impossibles à convertir → fallback sur la valeur précédente
-    await svc.teleportCharacter('char-1', NaN, NaN, server);
+    const result = await svc.teleportCharacter('char-1', NaN, NaN, server);
 
-    // Le player ne bouge pas si rx/ry sont NaN
+    expect(result).toBeNull();
+    // Le player ne bouge pas
     expect(player.worldX).toBe(1600);
     expect(player.worldY).toBe(8000);
   });

@@ -95,7 +95,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     groupSaveEvent: "admin:update_template",
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
     dragEvent: "admin:spawn",
-    getDragPayload: (t, x, y) => ({ templateKey: t.key, x, y }),
+    getDragPayload: (t, worldX, worldY) => ({ templateKey: t.key, worldX, worldY }),
     getInstancesForGroup: (animals, template) =>
       animals.filter((a) => a.templateKey === template.key),
     getInstanceKey:  (a) => a.id,
@@ -105,12 +105,12 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "state",          label: "État",         options: ["alive", "fighting", "escaping", "dead"] },
       { key: "health",         label: "HP",            min: 0 },
       { key: "respawnDelayMs", label: "Respawn (ms)",  min: 0, step: 1000 },
-      { key: "x",              label: "X",             min: 0 },
-      { key: "y",              label: "Y",             min: 0 },
+      { key: "worldX",         label: "WU X",          min: 0 },
+      { key: "worldY",         label: "WU Y",          min: 0 },
     ],
     instanceSaveEvent: "admin:update_animal",
     getInstanceSavePayload: (a, fields) => ({ id: a.id, fields }),
-    getInstanceTpPosition: (a) => ({ x: a.x, y: a.y }),
+    getInstanceTpPosition: (a) => (a.worldX != null && a.worldY != null ? { worldX: a.worldX, worldY: a.worldY } : null),
     instanceDeleteEvent: "admin:delete_animal",
     getInstanceDeletePayload: (a) => ({ id: a.id }),
     getInstanceInfoLine: (a) => {
@@ -143,7 +143,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       return `Loot pool (lecture seule) : ${items.join(", ")}`;
     },
     dragEvent: "admin:spawn_resource",
-    getDragPayload: (t, x, y) => ({ type: t.type, x, y }),
+    getDragPayload: (t, worldX, worldY) => ({ type: t.type, worldX, worldY }),
     getInstancesForGroup: (resources, tpl) =>
       resources.filter((r) => r.type === tpl.type),
     getInstanceKey:  (r) => r.id,
@@ -153,12 +153,12 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "state",          label: "État",         options: ["alive", "dead"] },
       { key: "remainingLoots", label: "Loots",        min: 0 },
       { key: "respawnDelayMs", label: "Respawn (ms)", min: 0, step: 1000 },
-      { key: "x",              label: "X",            min: 0 },
-      { key: "y",              label: "Y",            min: 0 },
+      { key: "worldX",         label: "WU X",         min: 0 },
+      { key: "worldY",         label: "WU Y",         min: 0 },
     ],
     instanceSaveEvent: "admin:update_resource",
     getInstanceSavePayload: (r, fields) => ({ id: r.id, fields }),
-    getInstanceTpPosition: (r) => ({ x: r.x, y: r.y }),
+    getInstanceTpPosition: (r) => (r.worldX != null && r.worldY != null ? { worldX: r.worldX, worldY: r.worldY } : null),
     instanceDeleteEvent: "admin:delete_resource",
     getInstanceDeletePayload: (r) => ({ id: r.id }),
     getInstanceInfoLine: (r) => {
@@ -197,9 +197,9 @@ const SECTION_CONFIGS: SectionConfig[] = [
       { key: "attack",    label: "ATK",    min: 0 },
       { key: "defense",   label: "DEF",    min: 0 },
     ],
-    getTpPosition: (c) => c.positionX != null ? { x: c.positionX, y: c.positionY } : null,
+    getTpPosition: (c) => c.worldX != null && c.worldY != null ? { worldX: c.worldX, worldY: c.worldY } : null,
     dragEvent: "admin:teleport",
-    getDragPayload: (c, x, y) => ({ characterId: c.id, x, y }),
+    getDragPayload: (c, worldX, worldY) => ({ characterId: c.id, worldX, worldY }),
   },
 ];
 
@@ -463,8 +463,7 @@ export default function AdminPanelWOM() {
     const ctx = {
       socket, token,
       getTarget: () => null,
-      getCharacterPos: () => null,
-      getLastClickedPos: () => getDevToolsStore().getState().lastClickedPos,
+      getLastClickedWorldPoint: () => getDevToolsStore().getState().lastClickedWorldPoint,
       getTemplateKeys: () => (groupData["creatures"] ?? []).map((t: any) => t.key),
     };
     const result = await def.handler(parsed.args, parsed.flags, ctx);

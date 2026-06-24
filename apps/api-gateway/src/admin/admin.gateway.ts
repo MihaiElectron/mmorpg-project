@@ -13,11 +13,11 @@ import { AdminService } from './admin.service';
 import { ResourcesService } from '../resources/resources.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 
-type SpawnPayload = { templateKey: string; x: number; y: number };
-type TeleportPayload = { characterId: string; x: number; y: number };
+type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
+type TeleportPayload = { characterId: string; worldX: number; worldY: number };
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
-type MoveAnimalPayload = { animalId: string; x: number; y: number };
+type MoveAnimalPayload = { animalId: string; worldX: number; worldY: number };
 type UpdateEntityPayload = { id: string; fields: Record<string, number> };
 type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
 type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
@@ -45,12 +45,12 @@ export class AdminGateway {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { templateKey, x, y } = payload ?? {};
-    if (!templateKey || typeof x !== 'number' || typeof y !== 'number') {
-      return { success: false, message: 'Payload invalide : templateKey, x, y requis.' };
+    const { templateKey, worldX, worldY } = payload ?? {};
+    if (!templateKey || typeof worldX !== 'number' || typeof worldY !== 'number') {
+      return { success: false, message: 'Payload invalide : templateKey, worldX, worldY requis.' };
     }
 
-    const dto = await this.animalsService.createAdminSpawn(templateKey, x, y);
+    const dto = await this.animalsService.createAdminSpawn(templateKey, worldX, worldY);
     if (!dto) {
       return { success: false, message: `Template "${templateKey}" introuvable.` };
     }
@@ -58,7 +58,7 @@ export class AdminGateway {
     this.server.emit('animal_update', dto);
     return {
       success: true,
-      message: `"${dto.name}" spawné en (${Math.round(x)}, ${Math.round(y)}). ID: ${dto.id}`,
+      message: `"${dto.name}" spawné en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${dto.id}`,
       data: dto,
     };
   }
@@ -72,9 +72,9 @@ export class AdminGateway {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { characterId: rawId, x, y } = payload ?? {};
-    if (!rawId || typeof x !== 'number' || typeof y !== 'number') {
-      return { success: false, message: 'Payload invalide : characterId, x, y requis.' };
+    const { characterId: rawId, worldX, worldY } = payload ?? {};
+    if (!rawId || typeof worldX !== 'number' || typeof worldY !== 'number') {
+      return { success: false, message: 'Payload invalide : characterId, worldX, worldY requis.' };
     }
 
     const resolved = this.worldService.findPlayerByNameOrId(rawId);
@@ -82,14 +82,14 @@ export class AdminGateway {
       return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
     }
 
-    const player = await this.worldService.teleportCharacter(resolved.characterId, x, y, this.server);
+    const player = await this.worldService.teleportCharacter(resolved.characterId, worldX, worldY, this.server);
     if (!player) {
       return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
     }
 
     return {
       success: true,
-      message: `"${player.name}" (${player.characterId}) téléporté en (${Math.round(x)}, ${Math.round(y)}).`,
+      message: `"${player.name}" (${player.characterId}) téléporté en WU (${Math.round(worldX)}, ${Math.round(worldY)}).`,
       data: { characterId: player.characterId, name: player.name },
     };
   }
@@ -165,19 +165,19 @@ export class AdminGateway {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { animalId, x, y } = payload ?? {};
-    if (!animalId || typeof x !== 'number' || typeof y !== 'number') {
-      return { success: false, message: 'Payload invalide : animalId, x, y requis.' };
+    const { animalId, worldX, worldY } = payload ?? {};
+    if (!animalId || typeof worldX !== 'number' || typeof worldY !== 'number') {
+      return { success: false, message: 'Payload invalide : animalId, worldX, worldY requis.' };
     }
 
-    const dto = await this.animalsService.moveAnimal(animalId, x, y);
+    const dto = await this.animalsService.moveAnimal(animalId, worldX, worldY);
     if (!dto) {
       return { success: false, message: `Animal "${animalId}" introuvable ou mort.` };
     }
 
     return {
       success: true,
-      message: `"${dto.name}" (${dto.id}) déplacé en (${Math.round(x)}, ${Math.round(y)}).`,
+      message: `"${dto.name}" (${dto.id}) déplacé en WU (${Math.round(worldX)}, ${Math.round(worldY)}).`,
       data: dto,
     };
   }
@@ -215,7 +215,7 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const numericAllowed = ['health', 'x', 'y', 'respawnDelayMs'];
+    const numericAllowed = ['health', 'worldX', 'worldY', 'respawnDelayMs'];
     const validStates = ['alive', 'fighting', 'escaping', 'dead'];
     const safe: Record<string, number | string | null> = {};
     for (const [k, v] of Object.entries(fields)) {
@@ -229,7 +229,7 @@ export class AdminGateway {
         safe[k] = n === 0 ? null : n;
       } else if (numericAllowed.includes(k)) {
         const n = Number(v);
-        if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+        if (isNaN(n)) return { success: false, message: `Valeur invalide pour "${k}".` };
         safe[k] = n;
       } else {
         return { success: false, message: `Champ "${k}" non modifiable.` };
@@ -297,26 +297,19 @@ export class AdminGateway {
   @SubscribeMessage('admin:spawn_resource')
   async onSpawnResource(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { type: string; x: number; y: number },
+    @MessageBody() payload: { type: string; worldX: number; worldY: number },
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
 
-    const { type, x, y } = payload ?? {};
-    if (!type || typeof x !== 'number' || typeof y !== 'number')
-      return { success: false, message: 'Payload invalide : type, x, y requis.' };
+    const { type, worldX, worldY } = payload ?? {};
+    if (!type || typeof worldX !== 'number' || typeof worldY !== 'number')
+      return { success: false, message: 'Payload invalide : type, worldX, worldY requis.' };
 
-    const resource = await this.adminService.createResource(type, x, y);
-    this.server.emit('resource_update', {
-      id: resource.id,
-      type: resource.type,
-      x: resource.x,
-      y: resource.y,
-      state: resource.state,
-      remainingLoots: resource.remainingLoots,
-    });
+    const resource = await this.adminService.createResource(type, worldX, worldY);
+    this.server.emit('resource_update', this.resourcesService.buildResourceBroadcast(resource));
     return {
       success: true,
-      message: `Ressource "${type}" créée en (${Math.round(x)}, ${Math.round(y)}). ID: ${resource.id}`,
+      message: `Ressource "${type}" créée en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${resource.id}`,
     };
   }
 
@@ -460,7 +453,7 @@ export class AdminGateway {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const numericAllowed = ['x', 'y', 'remainingLoots', 'respawnDelayMs'];
+    const numericAllowed = ['worldX', 'worldY', 'remainingLoots', 'respawnDelayMs'];
     const validResourceStates = ['alive', 'dead'];
     const safe: Record<string, number | string | null> = {};
     for (const [k, v] of Object.entries(fields)) {
@@ -474,7 +467,7 @@ export class AdminGateway {
         safe[k] = n === 0 ? null : n;
       } else if (numericAllowed.includes(k)) {
         const n = Number(v);
-        if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+        if (isNaN(n)) return { success: false, message: `Valeur invalide pour "${k}".` };
         safe[k] = n;
       } else {
         return { success: false, message: `Champ "${k}" non modifiable.` };

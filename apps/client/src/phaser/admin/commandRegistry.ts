@@ -13,8 +13,7 @@ export type CommandContext = {
   socket: any;
   token: string;
   getTarget: () => { id: string; kind: string; type: string } | null;
-  getCharacterPos: () => { x: number; y: number } | null;
-  getLastClickedPos: () => { x: number; y: number } | null;
+  getLastClickedWorldPoint: () => { worldX: number; worldY: number; mapId: number } | null;
   getTemplateKeys: () => string[];
 };
 
@@ -30,18 +29,20 @@ export type CommandDef = {
   ) => Promise<ActionResult>;
 };
 
-/** Résout la position depuis les args ou le contexte admin. */
+/** Résout la position WU depuis les args ou le dernier clic monde. */
 function resolvePos(
   rawX: string | undefined,
   rawY: string | undefined,
   ctx: CommandContext,
-): { x: number; y: number } | null {
+): { worldX: number; worldY: number } | null {
   if (rawX !== undefined && rawY !== undefined) {
-    const x = parseFloat(rawX);
-    const y = parseFloat(rawY);
-    if (!isNaN(x) && !isNaN(y)) return { x, y };
+    const worldX = parseFloat(rawX);
+    const worldY = parseFloat(rawY);
+    if (!isNaN(worldX) && !isNaN(worldY)) return { worldX, worldY };
   }
-  return ctx.getLastClickedPos() ?? ctx.getCharacterPos();
+  const wp = ctx.getLastClickedWorldPoint();
+  if (wp) return { worldX: wp.worldX, worldY: wp.worldY };
+  return null;
 }
 
 export const commandRegistry: Record<string, CommandDef> = {
@@ -65,10 +66,10 @@ export const commandRegistry: Record<string, CommandDef> = {
       if (!pos) {
         return {
           success: false,
-          message: "Erreur : position manquante. Fournissez x y ou cliquez d'abord sur la carte.",
+          message: "Erreur : position manquante. Fournissez worldX worldY (WU) ou cliquez d'abord sur la carte.",
         };
       }
-      return spawnCreature(templateKey, pos.x, pos.y, ctx.socket);
+      return spawnCreature(templateKey, pos.worldX, pos.worldY, ctx.socket);
     },
   },
 
@@ -104,13 +105,13 @@ export const commandRegistry: Record<string, CommandDef> = {
 
       const pos = resolvePos(rawX, rawY, ctx);
       if (!pos) {
-        return { success: false, message: "Erreur : x et y requis. Ex: /tp 300 400" };
+        return { success: false, message: "Erreur : worldX worldY requis (WU). Ex: /tp 6400 8192" };
       }
 
       if (entityKind === "animal") {
-        return moveAnimal(entityId!, pos.x, pos.y, ctx.socket);
+        return moveAnimal(entityId!, pos.worldX, pos.worldY, ctx.socket);
       }
-      return teleportCharacter(entityId!, pos.x, pos.y, ctx.socket);
+      return teleportCharacter(entityId!, pos.worldX, pos.worldY, ctx.socket);
     },
   },
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
+import { screenToWorldWU } from "../../phaser/utils/worldCoordinates";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,9 +28,9 @@ export type SectionConfig = {
   getDisplayKey: (item: any) => string;
   getName: (item: any) => string;
   fields: FieldDef[];
-  getTpPosition?: (item: any) => { x: number; y: number } | null;
+  getTpPosition?: (item: any) => { worldX: number; worldY: number } | null;
   dragEvent?: string;
-  getDragPayload?: (item: any, x: number, y: number) => object;
+  getDragPayload?: (item: any, worldX: number, worldY: number) => object;
 };
 
 export type InstanceAction = {
@@ -50,7 +51,7 @@ export type GroupedSectionConfig = {
   /** Ligne d'info lecture seule sous le nom du groupe (ex: lootPool). */
   getGroupInfoLine?: (g: any) => string | null;
   dragEvent?:           string;
-  getDragPayload?:      (g: any, x: number, y: number) => object;
+  getDragPayload?:      (g: any, worldX: number, worldY: number) => object;
   getInstancesForGroup: (instances: any[], group: any) => any[];
   getInstanceKey:  (i: any) => string;
   getInstanceName: (i: any) => string;
@@ -58,7 +59,7 @@ export type GroupedSectionConfig = {
   instanceFields:  FieldDef[];
   instanceSaveEvent: string;
   getInstanceSavePayload: (i: any, fields: Record<string, number | string>) => object;
-  getInstanceTpPosition?: (i: any) => { x: number; y: number } | null;
+  getInstanceTpPosition?: (i: any) => { worldX: number; worldY: number } | null;
   instanceDeleteEvent?:      string;
   getInstanceDeletePayload?: (i: any) => object;
   /** Ligne d'info lecture seule sous les champs de l'instance (ex: coordonnées WU). */
@@ -122,7 +123,13 @@ export function toWorldPoint(clientX: number, clientY: number): { x: number; y: 
   ) as { x: number; y: number };
 }
 
-export function startDrag(e: React.MouseEvent, label: string, onDrop: (x: number, y: number) => void) {
+function toWorldWU(clientX: number, clientY: number): { worldX: number; worldY: number } | null {
+  const wp = toWorldPoint(clientX, clientY);
+  if (!wp) return null;
+  return screenToWorldWU(wp.x, wp.y);
+}
+
+export function startDrag(e: React.MouseEvent, label: string, onDrop: (worldX: number, worldY: number) => void) {
   e.preventDefault();
   const ghost = document.createElement("div");
   ghost.className = "admin-drag-ghost";
@@ -134,9 +141,9 @@ export function startDrag(e: React.MouseEvent, label: string, onDrop: (x: number
   function onMove(me: MouseEvent) {
     ghost.style.left = `${me.clientX + 14}px`;
     ghost.style.top  = `${me.clientY + 14}px`;
-    const wp = toWorldPoint(me.clientX, me.clientY);
-    ghost.classList.toggle("admin-drag-ghost--valid", wp !== null);
-    ghost.textContent = wp ? `${label}  →  (${Math.round(wp.x)}, ${Math.round(wp.y)})` : label;
+    const wu = toWorldWU(me.clientX, me.clientY);
+    ghost.classList.toggle("admin-drag-ghost--valid", wu !== null);
+    ghost.textContent = wu ? `${label}  →  WU (${Math.round(wu.worldX)}, ${Math.round(wu.worldY)})` : label;
   }
 
   function onUp(me: MouseEvent) {
@@ -145,8 +152,8 @@ export function startDrag(e: React.MouseEvent, label: string, onDrop: (x: number
     ghost.remove();
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
-    const wp = toWorldPoint(me.clientX, me.clientY);
-    if (wp) onDrop(wp.x, wp.y);
+    const wu = toWorldWU(me.clientX, me.clientY);
+    if (wu) onDrop(wu.worldX, wu.worldY);
   }
 
   document.addEventListener("mousemove", onMove);
@@ -308,7 +315,7 @@ export function EntitySection({ config, items, onResult }: EntitySectionProps) {
     if (!pos) return;
     const characterId = getAdminCharacterId();
     if (!characterId) { onResult("Personnage introuvable.", false); return; }
-    const result = await ackPromise(socket, "admin:teleport", { characterId, x: pos.x, y: pos.y });
+    const result = await ackPromise(socket, "admin:teleport", { characterId, worldX: pos.worldX, worldY: pos.worldY });
     onResult(result.message, result.success);
   }
 
@@ -353,17 +360,17 @@ export function EntitySection({ config, items, onResult }: EntitySectionProps) {
                   <div className="admin-panel__item-header">
                     {config.dragEvent && (
                       <span className="admin-panel__drag-handle" title="Glisser sur la map"
-                        onMouseDown={(e) => startDrag(e, config.getName(item), (x, y) => {
+                        onMouseDown={(e) => startDrag(e, config.getName(item), (worldX, worldY) => {
                           const socket = getSocket();
                           if (!socket?.connected || !config.getDragPayload) return;
-                          ackPromise(socket, config.dragEvent!, config.getDragPayload(item, Math.round(x), Math.round(y)))
+                          ackPromise(socket, config.dragEvent!, config.getDragPayload(item, Math.round(worldX), Math.round(worldY)))
                             .then((r) => onResult(r.message, r.success));
                         })}>⠿</span>
                     )}
                     <span className="admin-panel__template-name">{config.getName(item)}</span>
                     {config.getTpPosition?.(item) && (
                       <button className="admin-panel__tp-btn"
-                        title={`Tp (${config.getTpPosition!(item)!.x}, ${config.getTpPosition!(item)!.y})`}
+                        title={`Tp WU (${config.getTpPosition!(item)!.worldX}, ${config.getTpPosition!(item)!.worldY})`}
                         onClick={() => onTp(item)}>↓ Tp</button>
                     )}
                   </div>
@@ -474,10 +481,10 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
     setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   }
 
-  async function onGroupDrop(group: any, x: number, y: number) {
+  async function onGroupDrop(group: any, worldX: number, worldY: number) {
     const socket = getSocket();
     if (!socket?.connected || !config.dragEvent || !config.getDragPayload) return;
-    const result = await ackPromise(socket, config.dragEvent, config.getDragPayload(group, Math.round(x), Math.round(y)));
+    const result = await ackPromise(socket, config.dragEvent, config.getDragPayload(group, Math.round(worldX), Math.round(worldY)));
     onResult(result.message, result.success);
   }
 
@@ -530,7 +537,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
     if (!pos) return;
     const characterId = getAdminCharacterId();
     if (!characterId) { onResult("Personnage introuvable.", false); return; }
-    const result = await ackPromise(socket, "admin:teleport", { characterId, x: pos.x, y: pos.y });
+    const result = await ackPromise(socket, "admin:teleport", { characterId, worldX: pos.worldX, worldY: pos.worldY });
     onResult(result.message, result.success);
   }
 
@@ -622,7 +629,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                               )}
                               {tpPos && (
                                 <button className="admin-panel__tp-btn"
-                                  title={`Tp (${tpPos.x}, ${tpPos.y})`}
+                                  title={`Tp WU (${tpPos.worldX}, ${tpPos.worldY})`}
                                   onClick={() => tpToInstance(inst)}>↓ Tp</button>
                               )}
                               {config.instanceDeleteEvent && (

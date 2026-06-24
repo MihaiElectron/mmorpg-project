@@ -458,50 +458,37 @@ export class WorldService implements OnModuleInit {
 
   async teleportCharacter(
     characterId: string,
-    x: number,
-    y: number,
+    worldX: number,
+    worldY: number,
     server: Server,
   ): Promise<ConnectedPlayer | null> {
-    const rx = Math.round(x);
-    const ry = Math.round(y);
+    if (!Number.isFinite(worldX) || !Number.isFinite(worldY)) return null;
+    const targetWorldX = Math.round(worldX);
+    const targetWorldY = Math.round(worldY);
+    const targetX = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
+    const targetY = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
 
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
-        player.x = rx;
-        player.y = ry;
-        // Mettre à jour la vérité serveur WU depuis la position de téléportation
-        let teleportWorldX = player.worldX;
-        let teleportWorldY = player.worldY;
+        player.worldX = targetWorldX;
+        player.worldY = targetWorldY;
+        player.x = targetX;
+        player.y = targetY;
         const teleportMapId = player.mapId;
-        try {
-          const wu = isoScreenToWorldWU(rx, ry);
-          if (Number.isFinite(wu.worldX) && Number.isFinite(wu.worldY)) {
-            teleportWorldX = wu.worldX;
-            teleportWorldY = wu.worldY;
-          }
-        } catch { /* position hors isométrie : worldX/Y conservent leur valeur précédente */ }
 
-        const positionUpdate: Partial<Character> = { positionX: rx, positionY: ry };
-        if (
-          Number.isFinite(teleportWorldX) &&
-          Number.isFinite(teleportWorldY) &&
-          Number.isFinite(teleportMapId)
-        ) {
-          player.worldX = teleportWorldX;
-          player.worldY = teleportWorldY;
-          player.mapId = teleportMapId;
-          positionUpdate.worldX = teleportWorldX;
-          positionUpdate.worldY = teleportWorldY;
-          positionUpdate.mapId = teleportMapId;
-        }
-
-        await this.characterRepository.update(characterId, positionUpdate);
+        await this.characterRepository.update(characterId, {
+          positionX: targetX,
+          positionY: targetY,
+          worldX: targetWorldX,
+          worldY: targetWorldY,
+          mapId: teleportMapId,
+        });
         server.to(player.socketId).emit('character_teleport', {
           characterId,
-          worldX: teleportWorldX,
-          worldY: teleportWorldY,
-          chunkX: wuToChunkIndex(teleportWorldX),
-          chunkY: wuToChunkIndex(teleportWorldY),
+          worldX: targetWorldX,
+          worldY: targetWorldY,
+          chunkX: wuToChunkIndex(targetWorldX),
+          chunkY: wuToChunkIndex(targetWorldY),
           mapId: teleportMapId,
         });
         server.except(player.socketId).emit('player_moved', player);
