@@ -46,6 +46,7 @@ type Props = {
 const RECIPE_FIELDS: FieldDef[] = [
   { key: "name",                    label: "Nom",                  type: "text" },
   { key: "category",                label: "Catégorie",            type: "text" },
+  { key: "requiredSkillKey",        label: "Skill requis",         options: [] },
   { key: "requiredSkillLevel",      label: "Niv. requis",          min: 1 },
   { key: "baseSuccessRate",         label: "Taux succès base",     min: 0, step: 0.05 },
   { key: "successBonusPerLevel",    label: "Bonus/niv",            min: 0, step: 0.01 },

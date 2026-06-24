@@ -228,6 +228,43 @@ export class SkillsService implements OnModuleInit {
   }
 
   // ---------------------------------------------------------------------------
+  // Lecture — progression joueur
+  // ---------------------------------------------------------------------------
+
+  async getCharacterSkills(characterId: string): Promise<{
+    skillDefinitionId: string;
+    key: string;
+    name: string;
+    category: string;
+    level: number;
+    xp: number;
+    nextLevelXp: number;
+    enabled: boolean;
+  }[]> {
+    const playerSkills = await this.playerSkillRepo.find({
+      where: { characterId },
+      relations: ['skillDefinition'],
+      order: { updatedAt: 'DESC' },
+    });
+
+    return playerSkills
+      .filter((ps) => ps.skillDefinition != null)
+      .map((ps) => {
+        const sd = ps.skillDefinition;
+        return {
+          skillDefinitionId: sd.id,
+          key: sd.key,
+          name: sd.name,
+          category: sd.category,
+          level: ps.level,
+          xp: ps.xp,
+          nextLevelXp: this.getNextLevelXp(sd, ps.level),
+          enabled: sd.enabled,
+        };
+      });
+  }
+
+  // ---------------------------------------------------------------------------
   // Interne
   // ---------------------------------------------------------------------------
 

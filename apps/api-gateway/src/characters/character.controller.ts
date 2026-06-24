@@ -9,6 +9,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { CharacterService } from './character.service';
+import { SkillsService } from '../skills/skills.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
@@ -17,7 +18,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('characters')
 @UseGuards(JwtAuthGuard)
 export class CharacterController {
-  constructor(private readonly characterService: CharacterService) {}
+  constructor(
+    private readonly characterService: CharacterService,
+    private readonly skillsService: SkillsService,
+  ) {}
 
   /**
    * POST /characters
@@ -45,6 +49,16 @@ export class CharacterController {
   @Get('me')
   findMe(@Request() req) {
     return this.characterService.findFirstByUser(req.user.userId);
+  }
+
+  /**
+   * GET /characters/me/skills
+   * Retourne les skills du personnage principal avec niveau, XP et XP prochain niveau.
+   */
+  @Get('me/skills')
+  async findMySkills(@Request() req) {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    return this.skillsService.getCharacterSkills(character.id);
   }
 
   /**

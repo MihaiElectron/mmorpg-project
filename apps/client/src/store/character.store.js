@@ -8,11 +8,12 @@ const storeLogic = (set, get) => ({
   isOpen: false,
   inventory: [],
   equipment: {},
+  skills: [],
 
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),
-  clearCharacter: () => set({ character: null, inventory: [], equipment: {} }),
+  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [] }),
   toggleOpen: () => {
     set((s) => ({ isOpen: !s.isOpen }));
   },
@@ -72,6 +73,21 @@ const storeLogic = (set, get) => ({
     } catch (err) {
       console.error("[CharacterStore] loadCharacter error:", err);
       throw err;
+    }
+  },
+
+  loadSkills: async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/skills`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ skills: data });
+    } catch (err) {
+      console.error("[CharacterStore] loadSkills error:", err);
     }
   },
 

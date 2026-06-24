@@ -9,19 +9,13 @@ import { CharacterController } from './character.controller';
 import { ItemModule } from '../items/item.module';
 import { Item } from '../items/entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
+import { SkillsModule } from '../skills/skills.module';
 
 @Module({
   imports: [
-    // -------------------------------------------------------------------------
-    // Entités utilisées DIRECTEMENT par CharacterService
-    // (obligatoire pour @InjectRepository)
-    // -------------------------------------------------------------------------
     TypeOrmModule.forFeature([Character, CharacterEquipment, Item, Inventory]),
-
-    // -------------------------------------------------------------------------
-    // Module Item conservé (rien supprimé)
-    // -------------------------------------------------------------------------
     ItemModule,
+    SkillsModule,
   ],
   controllers: [CharacterController],
   providers: [CharacterService],

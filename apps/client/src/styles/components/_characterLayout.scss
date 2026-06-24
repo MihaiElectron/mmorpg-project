@@ -53,6 +53,21 @@
     }
   }
 
+  // ── Onglet bientôt ────────────────────────────────────────────────────────
+  &__tab--soon {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &__tab-soon-badge {
+    display: block;
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: vars.$color-text-muted;
+    line-height: 1;
+  }
+
   // ── Contenus ─────────────────────────────────────────────────────────────
   &__content {
     flex: 1;
@@ -64,6 +79,12 @@
     &--admin {
       flex: 2;
       align-items: flex-start;
+    }
+
+    &--full {
+      flex: 1 1 100%;
+      align-items: flex-start;
+      overflow-y: auto;
     }
   }
 
