@@ -208,6 +208,40 @@ describe('AnimalsService', () => {
 
       expect(result[0].type).toBe(result[0].textureKey);
     });
+
+    it('DTO expose worldX/worldY/mapId depuis l\'animal', () => {
+      const animal = makeAnimal({ worldX: 65536, worldY: 32768, mapId: 1 } as any);
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].worldX).toBe(65536);
+      expect(result[0].worldY).toBe(32768);
+      expect(result[0].mapId).toBe(1);
+    });
+
+    it('DTO worldX/worldY/mapId sont null si absents de l\'animal', () => {
+      const animal = makeAnimal();
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].worldX).toBeNull();
+      expect(result[0].worldY).toBeNull();
+      expect(result[0].mapId).toBeNull();
+    });
+
+    it('DTO conserve x/y pixel legacy aux côtés des WU', () => {
+      const animal = makeAnimal({ x: 600, y: 580, worldX: 65536, worldY: 32768, mapId: 1 } as any);
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].x).toBe(600);
+      expect(result[0].y).toBe(580);
+      expect(result[0].worldX).toBe(65536);
+      expect(result[0].worldY).toBe(32768);
+    });
   });
 
   // -------------------------------------------------------------------------
