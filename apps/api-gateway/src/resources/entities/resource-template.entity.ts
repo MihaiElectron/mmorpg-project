@@ -16,4 +16,12 @@ export class ResourceTemplate {
 
   @Column({ type: 'jsonb', nullable: true, name: 'loot_pool', default: null })
   lootPool: any[] | null;
+
+  /** Clé du skill de récolte (ex: 'woodcutting', 'mining'). Null → pas d'XP. */
+  @Column({ type: 'varchar', length: 64, name: 'skill_key', nullable: true, default: null })
+  skillKey: string | null;
+
+  /** XP accordée par tick de récolte réussi. 0 → pas d'XP. */
+  @Column('int', { name: 'gathering_xp_reward', default: 0 })
+  gatheringXpReward: number;
 }

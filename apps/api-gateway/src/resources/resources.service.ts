@@ -6,18 +6,25 @@ import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
-export const RESOURCE_TEMPLATES: Pick<ResourceTemplate, 'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool'>[] = [
+export const RESOURCE_TEMPLATES: Pick<
+  ResourceTemplate,
+  'type' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'lootPool' | 'skillKey' | 'gatheringXpReward'
+>[] = [
   {
     type: 'dead_tree',
     defaultRemainingLoots: 4,
     respawnDelayMs: 60_000,
     lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 1 }],
+    skillKey: 'woodcutting',
+    gatheringXpReward: 5,
   },
   {
     type: 'ore',
     defaultRemainingLoots: 6,
     respawnDelayMs: 120_000,
     lootPool: [{ itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 1 }],
+    skillKey: 'mining',
+    gatheringXpReward: 5,
   },
 ];
 
@@ -58,7 +65,23 @@ export class ResourcesService implements OnModuleInit {
       .values(RESOURCE_TEMPLATES as any[])
       .orIgnore()
       .execute();
+    await this.backfillGatheringFields();
     await this.reloadPendingRespawns();
+  }
+
+  /**
+   * Backfill non-destructif : met à jour skillKey/gatheringXpReward uniquement
+   * sur les templates dont skillKey est encore null (créés avant ces champs).
+   * Préserve les overrides admin éventuels.
+   */
+  private async backfillGatheringFields(): Promise<void> {
+    for (const def of RESOURCE_TEMPLATES) {
+      if (!def.skillKey) continue;
+      await this.templateRepo.update(
+        { type: def.type, skillKey: IsNull() },
+        { skillKey: def.skillKey, gatheringXpReward: def.gatheringXpReward ?? 0 },
+      );
+    }
   }
 
   getTemplate(type: string): Promise<ResourceTemplate | null> {

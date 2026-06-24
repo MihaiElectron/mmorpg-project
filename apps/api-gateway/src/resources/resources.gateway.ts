@@ -34,24 +34,6 @@ const GATHER_INTERVAL_MS = 3000;
 // Tolérance de déplacement (px) avant de considérer que le joueur a bougé.
 const MOVE_TOLERANCE = 4;
 
-// XP accordée par tick de récolte réussi — valeur temporaire Phase 1.
-// Phase 2 : dériver du ResourceTemplate ou d'une FormulaDefinition.
-const GATHER_XP_PER_LOOT = 5;
-
-// Mapping type de ressource → clé de skill de récolte.
-// Phase 2 : à externaliser dans ResourceTemplate (champ skillKey à ajouter).
-const GATHERING_SKILL_MAP: Record<string, string> = {
-  dead_tree: 'woodcutting',
-  ore: 'mining',
-};
-
-/**
- * Résout le skill de récolte pour un type de ressource donné.
- * Retourne null si le type n'est pas mappé (XP ignorée silencieusement).
- */
-export function resolveGatheringSkill(resourceType: string): string | null {
-  return GATHERING_SKILL_MAP[resourceType] ?? null;
-}
 
 type GatherSession = {
   targetId: string;
@@ -258,12 +240,14 @@ export class ResourcesGateway
     // 🔄 Mise à jour visuelle pour tous (payload complet pour le rendu et l'admin panel)
     this.server.emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any));
 
-    // XP de récolte accordée après loot confirmé (item ajouté + charge consommée).
+    // XP de récolte data-driven depuis ResourceTemplate.skillKey / gatheringXpReward.
     // characterId vient du serveur (client.data.player), jamais du client.
-    const skillKey = resolveGatheringSkill(resource.type);
-    if (skillKey) {
+    // template est déjà chargé ci-dessus (ligne generateLoot).
+    const xpSkillKey = template?.skillKey ?? null;
+    const xpReward = template?.gatheringXpReward ?? 0;
+    if (xpSkillKey && xpReward > 0) {
       try {
-        await this.skills.addXp(characterId, skillKey, GATHER_XP_PER_LOOT);
+        await this.skills.addXp(characterId, xpSkillKey, xpReward);
       } catch (err) {
         console.warn(`[ResourcesGateway] XP récolte ignorée pour ${characterId}: ${(err as Error).message}`);
       }

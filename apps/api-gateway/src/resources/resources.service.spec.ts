@@ -41,12 +41,12 @@ function makeMockServer() {
 describe('ResourcesService', () => {
   let service: ResourcesService;
   let resourceRepo: { findOne: jest.Mock; find: jest.Mock; update: jest.Mock };
-  let templateRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
+  let templateRepo: { findOne: jest.Mock; update: jest.Mock; createQueryBuilder: jest.Mock };
 
   beforeEach(async () => {
     resourceRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), update: jest.fn() };
     const qb = { insert: jest.fn().mockReturnThis(), values: jest.fn().mockReturnThis(), orIgnore: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined) };
-    templateRepo = { findOne: jest.fn(), createQueryBuilder: jest.fn().mockReturnValue(qb) };
+    templateRepo = { findOne: jest.fn(), update: jest.fn().mockResolvedValue(undefined), createQueryBuilder: jest.fn().mockReturnValue(qb) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
