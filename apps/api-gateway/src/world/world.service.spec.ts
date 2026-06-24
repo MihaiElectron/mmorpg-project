@@ -1,4 +1,4 @@
-import { ConnectedPlayer, WorldService } from './world.service';
+import { ConnectedPlayer, MAX_REASONABLE_POSITION, WorldService } from './world.service';
 import { WorldSocket } from '../types/world-socket';
 import { wuToChunkIndex } from '../common/world-coordinates';
 
@@ -352,6 +352,155 @@ describe('WorldService.updatePlayer — cohérence WU ↔ pixels', () => {
 
     expect(player.worldX).toBe(1600);
     expect(player.worldY).toBe(8000);
+  });
+});
+
+// ─── updatePlayer — instrumentation passive Movement Authority P1 ─────────────
+
+describe('WorldService.updatePlayer — métriques passives mouvement', () => {
+  let nowSpy: jest.SpyInstance<number, []>;
+
+  beforeEach(() => {
+    nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+  });
+
+  afterEach(() => {
+    nowSpy.mockRestore();
+  });
+
+  function silenceMovementLogs(svc: WorldService) {
+    jest.spyOn((svc as any).logger, 'warn').mockImplementation(() => undefined);
+  }
+
+  it('compte un mouvement normal sans anomalie et sans rejet', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    const result = svc.updatePlayer(socket, {
+      x: 606,
+      y: 306,
+      worldX: 1_700,
+      worldY: 8_100,
+      mapId: 1,
+    });
+
+    expect(result).toBe(player);
+    expect(player.worldX).toBe(1_700);
+    expect(player.worldY).toBe(8_100);
+    expect(svc.getMovementMetrics()).toEqual({
+      totalMoves: 1,
+      suspectTeleports: 0,
+      suspectSpeed: 0,
+      invalidCoordinates: 0,
+      mapMismatch: 0,
+    });
+  });
+
+  it('détecte une vitesse suspecte mais accepte le mouvement', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { x: 1_000, y: 0, worldX: 0, worldY: 0, mapId: 1 });
+    nowSpy.mockReturnValue(1_100);
+    const result = svc.updatePlayer(socket, {
+      x: 1_125,
+      y: 63,
+      worldX: 2_000,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(result).toBe(player);
+    expect(player.worldX).toBe(2_000);
+    expect(svc.getMovementMetrics().suspectSpeed).toBe(1);
+  });
+
+  it('détecte une téléportation suspecte mais accepte le mouvement', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    const result = svc.updatePlayer(socket, {
+      x: 1_625,
+      y: 313,
+      worldX: 10_000,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(result).toBe(player);
+    expect(player.worldX).toBe(10_000);
+    expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
+  });
+
+  it('détecte des coordonnées invalides sans rejeter le fallback existant', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    const result = svc.updatePlayer(socket, {
+      x: 600,
+      y: 300,
+      worldX: NaN,
+      worldY: 12_480,
+      mapId: 1,
+    });
+
+    expect(result).toBe(player);
+    expect(player.worldX).toBe(1_600);
+    expect(player.worldY).toBe(8_000);
+    expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
+  });
+
+  it('détecte une position hors plage raisonnable sans rejet', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    const hugeWorldX = MAX_REASONABLE_POSITION + 1;
+    const result = svc.updatePlayer(socket, {
+      x: 8_389_608,
+      y: 4_194_304,
+      worldX: hugeWorldX,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(result).toBe(player);
+    expect(player.worldX).toBe(hugeWorldX);
+    expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
+  });
+
+  it('détecte un map mismatch mais conserve le comportement actuel', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    const result = svc.updatePlayer(socket, {
+      x: 600,
+      y: 300,
+      worldX: 1_600,
+      worldY: 8_000,
+      mapId: 2,
+    });
+
+    expect(result).toBe(player);
+    expect(player.mapId).toBe(2);
+    expect(svc.getMovementMetrics().mapMismatch).toBe(1);
   });
 });
 

@@ -1,6 +1,6 @@
 // apps/api-gateway/src/world/world.service.ts
 
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { WorldSocket } from '../types/world-socket';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -33,6 +33,39 @@ export type ConnectedPlayer = {
   direction?: string;
 };
 
+export const MAX_REASONABLE_SPEED_WU_PER_SEC = 10_000;
+export const MAX_REASONABLE_MOVE_DISTANCE_WU = 8_192;
+export const MAX_REASONABLE_POSITION = 134_217_728;
+const MOVE_SUSPECT_LOG_THROTTLE_MS = 10_000;
+
+export type MovementSuspectType =
+  | 'TELEPORT_SUSPECT'
+  | 'SPEED_SUSPECT'
+  | 'INVALID_COORDINATE'
+  | 'MAP_MISMATCH';
+
+export type MovementMetrics = {
+  totalMoves: number;
+  suspectTeleports: number;
+  suspectSpeed: number;
+  invalidCoordinates: number;
+  mapMismatch: number;
+};
+
+type MovementMetricSample = {
+  characterId: string;
+  deltaTimeMs: number;
+  deltaWorldX: number;
+  deltaWorldY: number;
+  distanceWU: number;
+  speedWUPerSec: number;
+};
+
+type MovementObservationState = {
+  lastObservedAt: number;
+  lastSuspectLogAt: Partial<Record<MovementSuspectType, number>>;
+};
+
 export type JoinWorldPayload = {
   characterId: string;
   name: string;
@@ -47,7 +80,16 @@ export type JoinedPlayer = {
 
 @Injectable()
 export class WorldService implements OnModuleInit {
+  private readonly logger = new Logger(WorldService.name);
   private connectedPlayers = new Map<string, ConnectedPlayer>();
+  private movementObservation = new Map<string, MovementObservationState>();
+  private movementMetrics: MovementMetrics = {
+    totalMoves: 0,
+    suspectTeleports: 0,
+    suspectSpeed: 0,
+    invalidCoordinates: 0,
+    mapMismatch: 0,
+  };
 
   constructor(
     @InjectRepository(Character)
@@ -192,6 +234,7 @@ export class WorldService implements OnModuleInit {
       }
 
       this.connectedPlayers.delete(previousSocketId);
+      this.movementObservation.delete(previousSocketId);
     }
 
     const character = await this.characterRepository.findOne({
@@ -239,6 +282,10 @@ export class WorldService implements OnModuleInit {
     };
 
     this.connectedPlayers.set(client.id, player);
+    this.movementObservation.set(client.id, {
+      lastObservedAt: Date.now(),
+      lastSuspectLogAt: {},
+    });
     client.data.player = {
       characterId: player.characterId,
       name: player.name,
@@ -260,6 +307,24 @@ export class WorldService implements OnModuleInit {
   ): ConnectedPlayer | null {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
+
+    const now = Date.now();
+    const previousWorldX = player.worldX;
+    const previousWorldY = player.worldY;
+    const previousMapId = player.mapId;
+    const state = this.getMovementObservationState(client.id, now);
+    const deltaTimeMs = Math.max(now - state.lastObservedAt, 0);
+
+    this.movementMetrics.totalMoves++;
+    if (this.hasInvalidMovementCoordinate(payload)) {
+      this.recordMovementSuspect(client.id, player.characterId, 'INVALID_COORDINATE', now, {
+        x: payload.x,
+        y: payload.y,
+        worldX: payload.worldX,
+        worldY: payload.worldY,
+        mapId: payload.mapId,
+      });
+    }
 
     player.direction = payload.direction ?? player.direction;
 
@@ -286,6 +351,15 @@ export class WorldService implements OnModuleInit {
       } catch { /* position hors isométrie : worldX/Y et x/y conservent leur valeur précédente */ }
     }
 
+    this.observeMovementDelta(client.id, player, {
+      previousWorldX,
+      previousWorldY,
+      previousMapId,
+      deltaTimeMs,
+      now,
+      payload,
+    });
+
     client.data.player = {
       characterId: player.characterId,
       name: player.name,
@@ -304,6 +378,7 @@ export class WorldService implements OnModuleInit {
   removePlayer(client: WorldSocket): ConnectedPlayer | undefined {
     const player = this.connectedPlayers.get(client.id);
     this.connectedPlayers.delete(client.id);
+    this.movementObservation.delete(client.id);
     return player;
   }
 
@@ -345,6 +420,10 @@ export class WorldService implements OnModuleInit {
   getConnectedCount(): number {
     const unique = new Set(Array.from(this.connectedPlayers.values()).map((p) => p.characterId));
     return unique.size;
+  }
+
+  getMovementMetrics(): MovementMetrics {
+    return { ...this.movementMetrics };
   }
 
   getPlayersExcept(socketId: string): ConnectedPlayer[] {
@@ -447,5 +526,141 @@ export class WorldService implements OnModuleInit {
     }
 
     return null;
+  }
+
+  private getMovementObservationState(
+    socketId: string,
+    now: number,
+  ): MovementObservationState {
+    let state = this.movementObservation.get(socketId);
+    if (!state) {
+      state = { lastObservedAt: now, lastSuspectLogAt: {} };
+      this.movementObservation.set(socketId, state);
+    }
+    return state;
+  }
+
+  private hasInvalidMovementCoordinate(
+    payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number },
+  ): boolean {
+    const rawValues = [payload.x, payload.y, payload.worldX, payload.worldY, payload.mapId]
+      .filter((value) => value !== undefined);
+    if (rawValues.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+      return true;
+    }
+
+    if (
+      payload.worldX !== undefined &&
+      Math.abs(payload.worldX) > MAX_REASONABLE_POSITION
+    ) {
+      return true;
+    }
+    if (
+      payload.worldY !== undefined &&
+      Math.abs(payload.worldY) > MAX_REASONABLE_POSITION
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private observeMovementDelta(
+    socketId: string,
+    player: ConnectedPlayer,
+    context: {
+      previousWorldX: number;
+      previousWorldY: number;
+      previousMapId: number;
+      deltaTimeMs: number;
+      now: number;
+      payload: { mapId?: number };
+    },
+  ): void {
+    const deltaWorldX = player.worldX - context.previousWorldX;
+    const deltaWorldY = player.worldY - context.previousWorldY;
+    const distanceWU = Math.hypot(deltaWorldX, deltaWorldY);
+    const speedWUPerSec = context.deltaTimeMs > 0
+      ? distanceWU / (context.deltaTimeMs / 1000)
+      : 0;
+
+    const sample: MovementMetricSample = {
+      characterId: player.characterId,
+      deltaTimeMs: context.deltaTimeMs,
+      deltaWorldX,
+      deltaWorldY,
+      distanceWU,
+      speedWUPerSec,
+    };
+
+    if (distanceWU > MAX_REASONABLE_MOVE_DISTANCE_WU) {
+      this.recordMovementSuspect(socketId, player.characterId, 'TELEPORT_SUSPECT', context.now, sample);
+    }
+
+    if (
+      context.deltaTimeMs > 0 &&
+      speedWUPerSec > MAX_REASONABLE_SPEED_WU_PER_SEC
+    ) {
+      this.recordMovementSuspect(socketId, player.characterId, 'SPEED_SUSPECT', context.now, sample);
+    }
+
+    if (
+      Number.isFinite(context.payload.mapId) &&
+      context.payload.mapId !== context.previousMapId
+    ) {
+      this.recordMovementSuspect(socketId, player.characterId, 'MAP_MISMATCH', context.now, {
+        previousMapId: context.previousMapId,
+        receivedMapId: context.payload.mapId,
+      });
+    }
+
+    const state = this.getMovementObservationState(socketId, context.now);
+    state.lastObservedAt = context.now;
+  }
+
+  private recordMovementSuspect(
+    socketId: string,
+    characterId: string,
+    type: MovementSuspectType,
+    now: number,
+    details: Record<string, unknown>,
+  ): void {
+    switch (type) {
+      case 'TELEPORT_SUSPECT':
+        this.movementMetrics.suspectTeleports++;
+        break;
+      case 'SPEED_SUSPECT':
+        this.movementMetrics.suspectSpeed++;
+        break;
+      case 'INVALID_COORDINATE':
+        this.movementMetrics.invalidCoordinates++;
+        break;
+      case 'MAP_MISMATCH':
+        this.movementMetrics.mapMismatch++;
+        break;
+    }
+
+    const state = this.getMovementObservationState(socketId, now);
+    const lastLogAt = state.lastSuspectLogAt[type];
+    if (
+      lastLogAt !== undefined &&
+      now - lastLogAt < MOVE_SUSPECT_LOG_THROTTLE_MS
+    ) return;
+    state.lastSuspectLogAt[type] = now;
+
+    const detailText = Object.entries(details)
+      .map(([key, value]) => `${key}=${this.formatMoveMetricValue(value)}`)
+      .join(' ');
+
+    this.logger.warn(
+      `[MOVE_SUSPECT] type=${type} characterId=${characterId} ${detailText}`,
+    );
+  }
+
+  private formatMoveMetricValue(value: unknown): string {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value.toFixed(2) : String(value);
+    }
+    return String(value);
   }
 }
