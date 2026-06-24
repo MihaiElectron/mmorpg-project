@@ -7,7 +7,7 @@ import {
   worldWUToNavCell,
   NAV_CELL_SIZE_WU,
 } from "../utils/worldCoordinates";
-import { isNavCellInNavGrid } from "../utils/walkabilityGrid";
+import { isNavCellInNavGrid, findNearestWalkableCell } from "../utils/walkabilityGrid";
 import { smoothPath } from "../utils/pathfinding";
 
 export const MOUSE_HOLD_THRESHOLD_MS = 150;
@@ -177,11 +177,45 @@ export default class PlayerController {
       return;
     }
 
+    // Snap vers la cellule walkable la plus proche si la cible est bloquée
+    let finalNavX = endCell.navX;
+    let finalNavY = endCell.navY;
+    let wasSnapped = false;
+
+    if (this.scene.navGrid && this.scene.navGrid[endCell.navY]?.[endCell.navX] === 1) {
+      wasSnapped = true;
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "pathfinding_target_blocked",
+        details: this.getDebugDetails({
+          requestedNavX: endCell.navX,
+          requestedNavY: endCell.navY,
+        }),
+      });
+      const snapped = findNearestWalkableCell(this.scene.navGrid, endCell.navX, endCell.navY);
+      if (snapped) {
+        const dist = Math.hypot(snapped.navX - endCell.navX, snapped.navY - endCell.navY);
+        pushDebugEvent({
+          source: "PlayerController",
+          type: "pathfinding_target_snapped",
+          details: this.getDebugDetails({
+            requestedNavX: endCell.navX,
+            requestedNavY: endCell.navY,
+            snappedNavX: snapped.navX,
+            snappedNavY: snapped.navY,
+            distance: Number(dist.toFixed(2)),
+          }),
+        });
+        finalNavX = snapped.navX;
+        finalNavY = snapped.navY;
+      }
+    }
+
     const newPath = this.scene.pathfinder.findPath(
       startCell.navX,
       startCell.navY,
-      endCell.navX,
-      endCell.navY,
+      finalNavX,
+      finalNavY,
     );
 
     if (newPath && newPath.length > 0) {
@@ -200,7 +234,9 @@ export default class PlayerController {
       });
     } else {
       this.path = null;
-      this.target = { x: targetX, y: targetY };
+      // Si la cible était bloquée (snap tenté), annuler tout mouvement direct.
+      // Si la cible était walkable mais isolée, conserver le fallback direct.
+      this.target = wasSnapped ? null : { x: targetX, y: targetY };
       pushDebugEvent({
         source: "PlayerController",
         type: "pathfinding_no_path",

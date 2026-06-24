@@ -267,6 +267,83 @@ describe("PlayerController — mouse movement", () => {
     expect(controller.path).toBeNull();
   });
 
+  // Player screen (1000,32) → navCell (4,4)
+  // Target screen (1016,44) → worldX=832, worldY=576 → navCell (6,4)
+  it("snap : clic sur cellule bloquée → pathfinding_target_blocked + pathfinding_target_snapped", () => {
+    // navGrid 16×16 : cellule (6,4) bloquée, tout le reste walkable
+    const navGrid = Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => (x === 6 && y === 4 ? 1 : 0)),
+    );
+    // pathfinder : retourne null si la destination est la cellule bloquée (6,4),
+    // sinon retourne un chemin minimal
+    const pathfinder = {
+      findPath: vi.fn((sx, sy, ex, ey) => {
+        if (ex === 6 && ey === 4) return null;
+        return [{ x: sx, y: sy }, { x: ex, y: ey }];
+      }),
+    };
+    const { controller, player } = createController({ pathfinder, navGrid });
+
+    player.x = 1000;
+    player.y = 32;
+
+    // screen (1016,44) → navCell (6,4) bloquée
+    controller.startMouseMove(1016, 44);
+    vi.mocked(pushDebugEvent).mockClear();
+    const now50 = 50;
+    vi.spyOn(performance, "now").mockReturnValue(now50);
+    controller.stopMouseMove();
+
+    // findPath jamais appelé avec la cellule bloquée (6,4)
+    expect(pathfinder.findPath).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), 6, 4,
+    );
+    // Événements de snap émis
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pathfinding_target_blocked" }),
+    );
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pathfinding_target_snapped",
+        details: expect.objectContaining({
+          requestedNavX: 6,
+          requestedNavY: 4,
+        }),
+      }),
+    );
+    // Un chemin a été trouvé (path non null)
+    expect(controller.path).not.toBeNull();
+    expect(controller.path.length).toBeGreaterThan(0);
+  });
+
+  it("snap : clic sur cellule bloquée sans walkable trouvable → pathfinding_no_path, pas de target", () => {
+    // navGrid 3×1 entièrement bloquée sauf (0,0)
+    const navGrid = [[0, 1, 1]];
+    const pathfinder = { findPath: vi.fn(() => null) };
+    const { controller, player } = createController({ pathfinder, navGrid });
+
+    player.x = 1000;
+    player.y = 0;
+
+    // screen (1016,8) → worldX = 8*16 + 16*8 = 256, worldY = -128 + 128 = 0 → navCell (2, 0) bloquée
+    // La seule cellule walkable est (0,0) mais le chemin retourne null (pathfinder mocké)
+    controller.startMouseMove(1016, 8);
+    vi.mocked(pushDebugEvent).mockClear();
+    vi.spyOn(performance, "now").mockReturnValue(50);
+    controller.stopMouseMove();
+
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pathfinding_target_blocked" }),
+    );
+    // pathfinding_no_path doit être émis
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pathfinding_no_path" }),
+    );
+    // Pas de fallback direct vers la cellule bloquée
+    expect(controller.target).toBeNull();
+    expect(controller.path).toBeNull();
+  });
+
   it("pathfinding_fallback si cible hors grille navGrid", () => {
     const pathfinder = { findPath: vi.fn() };
     // navGrid 16×16 (2×2 tiles × 8×8 cells/tile) — navCell(28,4) est hors limites

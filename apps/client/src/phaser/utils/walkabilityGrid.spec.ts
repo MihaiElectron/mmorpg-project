@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createNavGridFromWalkabilityGrid,
   createWalkabilityGridFromMap,
+  findNearestWalkableCell,
   getWalkabilityAtTile,
   getWalkabilityGridSize,
   getWalkabilityGridStats,
@@ -155,5 +156,86 @@ describe("getWalkabilityGridStats", () => {
       ),
     );
     expect(getWalkabilityGridStats(grid)).toEqual({ walkable: 4071, blocked: 25 });
+  });
+});
+
+describe("findNearestWalkableCell", () => {
+  it("retourne null pour une grille null ou vide", () => {
+    expect(findNearestWalkableCell(null, 0, 0)).toBeNull();
+    expect(findNearestWalkableCell([], 0, 0)).toBeNull();
+    expect(findNearestWalkableCell([[]], 0, 0)).toBeNull();
+  });
+
+  it("retourne null si la cible est hors de la grille", () => {
+    const grid: (0 | 1)[][] = [[0, 0], [0, 0]];
+    expect(findNearestWalkableCell(grid, -1, 0)).toBeNull();
+    expect(findNearestWalkableCell(grid, 0, -1)).toBeNull();
+    expect(findNearestWalkableCell(grid, 5, 0)).toBeNull();
+    expect(findNearestWalkableCell(grid, 0, 5)).toBeNull();
+  });
+
+  it("retourne la cellule cible immédiatement si elle est walkable", () => {
+    const grid: (0 | 1)[][] = [[0, 0, 0], [0, 1, 0], [0, 0, 0]];
+    expect(findNearestWalkableCell(grid, 0, 0)).toEqual({ navX: 0, navY: 0 });
+    expect(findNearestWalkableCell(grid, 2, 2)).toEqual({ navX: 2, navY: 2 });
+  });
+
+  it("cellule bloquée entourée de walkables → trouve un voisin immédiat", () => {
+    const grid: (0 | 1)[][] = [
+      [0, 0, 0],
+      [0, 1, 0],
+      [0, 0, 0],
+    ];
+    const result = findNearestWalkableCell(grid, 1, 1);
+    expect(result).not.toBeNull();
+    // La cellule retournée doit être walkable
+    expect(grid[result!.navY][result!.navX]).toBe(0);
+    // Distance Chebyshev de 1
+    expect(Math.max(Math.abs(result!.navX - 1), Math.abs(result!.navY - 1))).toBe(1);
+  });
+
+  it("bloc 5×5 bloqué dans grille 10×10 → trouve la bordure à distance 1", () => {
+    const grid = Array.from({ length: 10 }, (_, y) =>
+      Array.from({ length: 10 }, (_, x): 0 | 1 =>
+        x >= 2 && x <= 6 && y >= 2 && y <= 6 ? 1 : 0,
+      ),
+    );
+    // Cible au centre du bloc 5×5
+    const result = findNearestWalkableCell(grid, 4, 4);
+    expect(result).not.toBeNull();
+    // La cellule retournée doit être walkable
+    expect(grid[result!.navY][result!.navX]).toBe(0);
+    // Distance Chebyshev depuis (4,4) vers le bord du bloc : 4-2+1 = 3 cases → distance = 3
+    const chebDist = Math.max(Math.abs(result!.navX - 4), Math.abs(result!.navY - 4));
+    expect(chebDist).toBe(3);
+  });
+
+  it("retourne null si aucune cellule walkable dans toute la grille", () => {
+    const grid: (0 | 1)[][] = [[1, 1], [1, 1]];
+    expect(findNearestWalkableCell(grid, 0, 0)).toBeNull();
+    expect(findNearestWalkableCell(grid, 1, 1)).toBeNull();
+  });
+
+  it("le résultat est toujours une cellule walkable (valeur 0)", () => {
+    const grid: (0 | 1)[][] = [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 1, 0],
+    ];
+    const result = findNearestWalkableCell(grid, 1, 1);
+    expect(result).not.toBeNull();
+    expect(grid[result!.navY][result!.navX]).toBe(0);
+  });
+
+  it("résultat à distance minimale par rapport à la cible (Chebyshev)", () => {
+    // Cible (2,0) bloquée — seuls (1,0) et (3,0) sont walkables à distance 1
+    const grid: (0 | 1)[][] = [[0, 1, 0, 0, 0]];
+    const result = findNearestWalkableCell(grid, 1, 0);
+    expect(result).not.toBeNull();
+    // Distance Chebyshev minimale = 1 (il existe des voisins directs)
+    const chebDist = Math.max(Math.abs(result!.navX - 1), Math.abs(result!.navY - 0));
+    expect(chebDist).toBe(1);
+    // La cellule retournée est walkable
+    expect(grid[result!.navY][result!.navX]).toBe(0);
   });
 });
