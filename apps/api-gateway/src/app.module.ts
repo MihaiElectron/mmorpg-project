@@ -24,6 +24,7 @@ import { ResourcesModule } from './resources/resources.module';
 import { WorldModule } from './world/world.module';
 import { AnimalsModule } from './animals/animals.module';
 import { AdminModule } from './admin/admin.module';
+import { SkillsModule } from './skills/skills.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { AdminModule } from './admin/admin.module';
     WorldModule,
     AnimalsModule,
     AdminModule,
+    SkillsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
