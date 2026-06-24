@@ -95,10 +95,11 @@ describe('ItemService', () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
-    it('insère uniquement les items manquants (un présent, un absent)', async () => {
+    it('insère uniquement les items manquants (un absent parmi plusieurs présents)', async () => {
       repo.findOne
-        .mockResolvedValueOnce(makeItem()) // wooden_stick material présent
-        .mockResolvedValueOnce(null);      // iron_ore material absent
+        .mockResolvedValueOnce(makeItem()) // wooden_stick présent
+        .mockResolvedValueOnce(null)       // iron_ore absent → insert
+        .mockResolvedValue(makeItem());    // iron_bar, basic_handle, rough_blade, basic_sword présents
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
     });

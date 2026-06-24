@@ -12,16 +12,22 @@ import { PlayerSkill } from './entities/player-skill.entity';
 
 const DEFAULT_SKILLS: Pick<
   SkillDefinition,
-  'key' | 'name' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'
+  'key' | 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'
 >[] = [
-  {
-    key: 'crafting',
-    name: 'Crafting',
-    maxLevel: 100,
-    baseXpPerLevel: 100,
-    xpCurveExponent: 1.5,
-    enabled: true,
-  },
+  // ── Crafting ────────────────────────────────────────────────────────────────
+  { key: 'smithing',     name: 'Smithing',     category: 'crafting',    maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  { key: 'woodworking',  name: 'Woodworking',  category: 'crafting',    maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  // ── Gathering ───────────────────────────────────────────────────────────────
+  { key: 'mining',       name: 'Mining',       category: 'gathering',   maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  { key: 'woodcutting',  name: 'Woodcutting',  category: 'gathering',   maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  // ── Combat ──────────────────────────────────────────────────────────────────
+  { key: 'two_handed',   name: 'Two-Handed',   category: 'combat',      maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  { key: 'bow',          name: 'Bow',          category: 'combat',      maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  { key: 'crossbow',     name: 'Crossbow',     category: 'combat',      maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  // ── Social ──────────────────────────────────────────────────────────────────
+  { key: 'diplomacy',    name: 'Diplomacy',    category: 'social',      maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
+  // ── Leadership ──────────────────────────────────────────────────────────────
+  { key: 'leadership',   name: 'Leadership',   category: 'leadership',  maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true },
 ];
 
 @Injectable()

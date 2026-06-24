@@ -5,10 +5,16 @@ import { Item } from './entities/item.entity';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
-/** Items de loot garantis présents en DB au démarrage. */
+/** Items de loot et de craft garantis présents en DB au démarrage. */
 export const LOOT_ITEM_SEEDS: Pick<Item, 'name' | 'type' | 'category'>[] = [
+  // ── Loot resources ───────────────────────────────────────────────────────
   { name: 'Bâton de bois',  type: 'material', category: 'wooden_stick' },
   { name: 'Minerai de fer', type: 'material', category: 'iron_ore' },
+  // ── Craft outputs (Phase 1) ───────────────────────────────────────────────
+  { name: 'Lingot de fer',  type: 'material', category: 'iron_bar' },
+  { name: 'Manche brut',    type: 'material', category: 'basic_handle' },
+  { name: 'Lame brute',     type: 'material', category: 'rough_blade' },
+  { name: 'Épée basique',   type: 'weapon',   category: 'basic_sword' },
 ];
 
 @Injectable()

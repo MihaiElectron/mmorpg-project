@@ -18,6 +18,10 @@ export class SkillDefinition {
   @Column({ type: 'varchar', length: 256 })
   name: string;
 
+  // Famille de skills : gathering | crafting | combat | social | leadership | general
+  @Column({ type: 'varchar', length: 64, default: 'general' })
+  category: string;
+
   @Column({ type: 'int', default: 100 })
   maxLevel: number;
 

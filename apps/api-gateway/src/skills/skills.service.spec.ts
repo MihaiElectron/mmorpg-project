@@ -12,8 +12,9 @@ function makeSkillDef(
 ): SkillDefinition {
   return {
     id: 'def-1',
-    key: 'crafting',
-    name: 'Crafting',
+    key: 'smithing',
+    name: 'Smithing',
+    category: 'crafting',
     maxLevel: 100,
     baseXpPerLevel: 100,
     xpCurveExponent: 1.5,
@@ -141,24 +142,61 @@ describe('SkillsService', () => {
   // ─── seedDefaultSkills ────────────────────────────────────────────────────
 
   describe('seedDefaultSkills', () => {
-    it('insère le skill "crafting" si absent', async () => {
+    it('insère toutes les DEFAULT_SKILLS absentes', async () => {
       skillDefRepo.findOne.mockResolvedValue(null);
-      skillDefRepo.save.mockResolvedValue({ id: 'def-1', key: 'crafting' });
+      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
 
       await service.seedDefaultSkills();
 
-      expect(skillDefRepo.findOne).toHaveBeenCalledWith({
-        where: { key: 'crafting' },
-      });
-      expect(skillDefRepo.save).toHaveBeenCalledTimes(1);
+      // findOne appelé une fois par skill défini
+      expect(skillDefRepo.findOne).toHaveBeenCalledTimes(9);
+      // save appelé pour chaque skill absent
+      expect(skillDefRepo.save).toHaveBeenCalledTimes(9);
     });
 
-    it('ne modifie pas un skill déjà existant (seed non destructif)', async () => {
+    it('insère "smithing" avec la bonne category', async () => {
+      skillDefRepo.findOne.mockResolvedValue(null);
+      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+
+      await service.seedDefaultSkills();
+
+      expect(skillDefRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'smithing', category: 'crafting' }),
+      );
+    });
+
+    it('insère "mining" avec category gathering', async () => {
+      skillDefRepo.findOne.mockResolvedValue(null);
+      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+
+      await service.seedDefaultSkills();
+
+      expect(skillDefRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'mining', category: 'gathering' }),
+      );
+    });
+
+    it('ne modifie pas les skills déjà existants (seed non destructif)', async () => {
       skillDefRepo.findOne.mockResolvedValue(makeSkillDef());
 
       await service.seedDefaultSkills();
 
       expect(skillDefRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('insère seulement les skills absents (certains présents, certains absents)', async () => {
+      // Les 4 premiers présents, les 5 suivants absents
+      skillDefRepo.findOne
+        .mockResolvedValueOnce(makeSkillDef({ key: 'smithing' }))
+        .mockResolvedValueOnce(makeSkillDef({ key: 'woodworking' }))
+        .mockResolvedValueOnce(makeSkillDef({ key: 'mining' }))
+        .mockResolvedValueOnce(makeSkillDef({ key: 'woodcutting' }))
+        .mockResolvedValue(null); // two_handed, bow, crossbow, diplomacy, leadership
+      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+
+      await service.seedDefaultSkills();
+
+      expect(skillDefRepo.save).toHaveBeenCalledTimes(5);
     });
   });
 
