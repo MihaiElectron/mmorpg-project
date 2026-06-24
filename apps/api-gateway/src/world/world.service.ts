@@ -13,6 +13,7 @@ import {
   wuToIsoScreenY,
   isoScreenToWorldWU,
   chebyshevDistanceWU,
+  wuToChunkIndex,
   DEFAULT_MAP_ID,
 } from '../common/world-coordinates';
 
@@ -159,10 +160,10 @@ export class WorldService implements OnModuleInit {
         player.mapId   = nearestWU.mapId;
         server.to(player.socketId).emit('character_respawn', {
           characterId,
-          x: newX,
-          y: newY,
           worldX: newWX,
           worldY: newWY,
+          chunkX: wuToChunkIndex(newWX),
+          chunkY: wuToChunkIndex(newWY),
           mapId: nearestWU.mapId,
           health: newHealth,
           maxHealth: character.maxHealth,
@@ -417,10 +418,11 @@ export class WorldService implements OnModuleInit {
 
         await this.characterRepository.update(characterId, positionUpdate);
         server.to(player.socketId).emit('character_teleport', {
-          x: rx,
-          y: ry,
+          characterId,
           worldX: teleportWorldX,
           worldY: teleportWorldY,
+          chunkX: wuToChunkIndex(teleportWorldX),
+          chunkY: wuToChunkIndex(teleportWorldY),
           mapId: teleportMapId,
         });
         server.except(player.socketId).emit('player_moved', player);

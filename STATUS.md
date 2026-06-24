@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-23_
-_Session : 2026-06-23 (session 8 — AdminPanelWOM, fixes overlays et respawn)_
+_Dernière mise à jour : 2026-06-24_
+_Session : 2026-06-24 (sessions 9–13 — Skills/Crafting admin, UX panneau, migration WU P4–P5)_
 _Branche : main_
 _État : développement local_
 
@@ -15,38 +15,37 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
-Migration WU Phase 2 terminée. Infrastructure DevTools complète : shell, panel,
-store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
+Migration WU P4–P5 terminée : `character_respawn` et `character_teleport` émettent
+désormais `worldX/worldY/chunkX/chunkY` sans coordonnées pixel legacy. Frontend
+WU-first sur tous les flux joueur critiques. Infrastructure DevTools complète :
+shell, panel, store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
 
-**AdminPanelWOM** opérationnel : interface admin principale basée sur le pipeline
-WOM pour les ressources (instances + templates dérivés) et les animaux (instances).
-Accès côté client avec onglet toggle Legacy/WOM. Cycle respawn resource corrigé :
-`buildResourceBroadcast` assure que le payload contient `type`/`x`/`y` pour la
-réapparition côté client.
+**AdminPanelWOM** opérationnel avec Skills et CraftingRecipes : création/édition
+de `SkillDefinition`, sélects dynamiques pour categories/stations, `requiredSkillKey`
+avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensionnable.
+Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
+Onglets Talents/Succès placeholder actifs.
 
 ---
 
 ## Derniers changements importants
 
-- **AdminPanelWOM** : `AdminPanelWOM.tsx` — panel admin WOM-first complet.
-  `adminPanel.shared.tsx` extrait les composants partagés (GroupedSection,
-  EntitySection, useDraft, usePagination, InstanceAction). `DevToolsPanel.tsx`
-  avec onglet toggle Admin (WOM) / Admin (Legacy).
-- **Overlay Creature Spawns — bug corrigé** : `WorldScene.js` fetch URL corrigée
-  (`VITE_API_URL` + header `Authorization`). `DevToolsOverlayManager.js` fallback
-  `metadata.legacy.spawnX/spawnY` pour les spawns sans WU backfillés.
-- **Resource templates — `respawnDelayMs` éditable** : `admin:update_resource_template`
-  gateway accepte désormais `respawnDelayMs` (validation > 0). `AdminPanelWOM`
-  expose le champ dans `groupFields`. `lootPool` affiché en lecture seule.
-- **Resource instances WOM** : `wosToResourceInstances` expose `worldX/Y/mapId` et
-  `respawnAt`. `getInstanceInfoLine` affiche coordonnées WU + temps restant avant
-  respawn. Bouton "Reset template" via `instanceActions`.
-- **`respawnAt` dans Resource WorldObjects** : `resource-world-object.adapter.ts`
-  expose `metadata.respawnAt`. 2 tests adapter. Type frontend mis à jour.
-- **Cycle respawn resource corrigé** : `armRespawnTimer`, `forceRespawn` et
-  `resetInstanceFromTemplate` utilisent `buildResourceBroadcast` — payload complet
-  avec `type`, `x`, `y`, `worldX`, `worldY`, `mapId`. Sans ces champs, `upsertResource`
-  côté client refusait de recréer le sprite (garde `x !== undefined`).
+- **Migration WU P4–P5** : `character_respawn` et `character_teleport` transportent
+  désormais `worldX/worldY/chunkX/chunkY + characterId`. Champs `x/y` pixels legacy
+  supprimés des deux payloads. `WorldScene.js` utilisait déjà `resolveScreen()` WU-first.
+  7 nouveaux tests `world.service.spec.ts` (suites `teleportCharacter` + `respawnCharacter`).
+- **CraftingRecipe administrable (WOM)** : adapter WOM, `AdminService` CRUD + ingrédients/
+  résultats + validation, 7 événements `AdminGateway`, 4 endpoints REST. `RecipesSection.tsx`
+  avec sélects dynamiques (category, stationType, requiredSkillKey avec labels). 65 tests
+  `admin.service.spec.ts`, 14 tests adapter.
+- **SkillDefinition admin amélioré** : labels lisibles dans le form création, hint sous
+  le champ Key, sélects catégorie. `optionLabels` ajouté à `FieldDef` + `StatField`.
+- **Onglet Skills joueur** : `GET /characters/me/skills` (level, xp, nextLevelXp),
+  `loadSkills()` dans `character.store`, `SkillsTab.tsx` (groupé par catégorie, barre XP,
+  niveau max). Onglets Talents/Succès placeholders cliquables dans le panneau personnage.
+- **DevTools UX** : panneau redimensionnable (`resize: both`, min/max), `template-stats`
+  responsive (`flex: 1 + min-width: 72px`), header recette à deux lignes, sélects
+  category/station, classes SCSS manquantes (`__recipe-subtext`, `__instance-row`, etc.).
 
 ---
 
@@ -71,8 +70,10 @@ réapparition côté client.
 | Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 383 tests backend (15 suites) + 147 tests frontend — 1 suite pré-existante en échec (`auth.controller.spec.ts`, dépendance manquante non liée aux changements récents) |
-| Migration WU | Backend : `world.service.ts` + `animals.service.ts` entièrement migrés. Frontend : `resolveScreen()` WU-first pour joueurs, animaux et ressources. Protocole `player_move` additif. |
+| Tests | 562 tests backend (22 suites, 1 échec pré-existant `auth.controller.spec.ts`) + 147 tests frontend |
+| Migration WU | **P4–P5 soldés.** `character_respawn` + `character_teleport` en WU pur (`worldX/worldY/chunkX/chunkY`), pixels legacy supprimés. `resolveScreen()` WU-first pour tous les flux joueur. Reste : P5 `player_move` fallback, P6 `admin:teleport` pixels, P7 drop colonnes legacy DB. |
+| Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
+| Crafting admin | `CraftingRecipe` entièrement administrable via WOM/Admin (WOM adapter, CRUD, ingrédients, résultats, validation). |
 
 ---
 
@@ -136,8 +137,8 @@ réapparition côté client.
 - **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
 - **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
-- **[IMPORTANT] `player_move` — x/y fallback à supprimer** : protocole additif (P1). Suppression définitive des champs `x/y` dans le payload possible une fois le frontend entièrement migré (P2 fait, reste character_respawn / character_teleport côté frontend).
-- **[IMPORTANT] `character_respawn` et `character_teleport`** : payloads encore en pixels côté client (`WorldScene.js:player.setPosition(data.x, data.y)`). Backend émet `x/y` pixels — migration prévue en P3-suites / P4 de l'étude WebSocket.
+- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P5 : WU + chunkX/Y, x/y supprimés).
+- **[IMPORTANT] `player_move` — x/y fallback à supprimer** : protocole additif (P1). Frontend envoie déjà `worldX/worldY/mapId`. Suppression définitive des champs `x/y` dans le payload client et fallback serveur `updatePlayer` prévue en migration P5 (plan WebSocket).
 - **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
   `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
   `devtools.store` fichier par fichier.
@@ -188,8 +189,9 @@ réapparition côté client.
 - [x] P1 — `player_move` additif : backend WU-first, fallback x/y conservé
 - [x] P2 — Frontend joueurs : `resolveScreen()` WU-first
 - [x] P3 — Frontend animaux + ressources : `resolveScreen()` WU-first
-- [ ] P4 — `character_respawn` et `character_teleport` : ajouter `worldX/Y` dans payload, frontend lit WU
-- [ ] P5 — `player_move` : supprimer fallback `x/y` (après stabilisation P1)
+- [x] P4 — `character_respawn` et `character_teleport` : `worldX/worldY/chunkX/chunkY/characterId`, frontend WU-first via `resolveScreen()`
+- [x] P4.5 — supprimer `x/y` legacy de `character_respawn` et `character_teleport`
+- [ ] P5 — `player_move` : supprimer fallback `x/y` dans payload client + `updatePlayer` serveur
 - [ ] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_animal` en WU
 - [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `animal.x/y` en cache pur)
 
@@ -230,6 +232,29 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-24 (sessions 9–13 — Skills, Crafting, UX DevTools, migration WU P4–P5)
+
+- **SkillDefinition admin** : `SkillDefinition` entité, endpoints REST, gateway events,
+  `AdminPanelWOM` section Skills avec formulaire création (labels, hint snake_case, sélect catégorie).
+  `FieldDef.optionLabels?: string[]` ajouté pour sélects avec labels lisibles (`StatField`).
+- **CraftingRecipe admin** : `CraftingRecipe` entité (ingrédients JSON, résultats JSON,
+  requiredSkillKey, category, stationType). `craft-recipe-world-object.adapter.ts` (14 tests).
+  `AdminService` : `CraftingRecipeRepository` injecté, 7 méthodes CRUD. 65 tests
+  `admin.service.spec.ts`. 7 events `AdminGateway`. 4 endpoints REST `AdminController`.
+- **RecipesSection.tsx** : `skillDefinitions` prop → sélects dynamiques `requiredSkillKey`
+  avec labels. Constantes `RECIPE_CATEGORIES`, `STATION_TYPES`. Header recette deux lignes
+  (nom+badge / key·category·skill). Sélects create form.
+- **SkillsTab joueur** : `GET /characters/me/skills` (level, xp, nextLevelXp).
+  `character.store.loadSkills()`. `SkillsTab.tsx` (groupé par catégorie, barre XP,
+  niveau max). Onglets Talents/Succès placeholders cliquables.
+- **DevTools UX** : panneau `resize: both` (min 280 px), `overflow: auto`, `__body: flex: 1`.
+  `template-stat` responsive (`flex: 1 + min-width: 72px + width: 100%`), SCSS sélects.
+  Classes `.admin-panel__recipe-*` et `__field-hint` ajoutées.
+- **Migration WU P4** : `character_respawn` et `character_teleport` — ajout `chunkX/chunkY`
+  + `characterId` (téléport). 7 nouveaux tests `world.service.spec.ts` (31 total).
+- **Migration WU P5** : `x/y` legacy supprimés des deux payloads. `resolveScreen()` WU-first
+  dans `WorldScene.js` déjà en place — aucun consommateur ne dépendait des champs supprimés.
 
 ### 2026-06-23 (session 8 — AdminPanelWOM, fixes overlays et respawn)
 

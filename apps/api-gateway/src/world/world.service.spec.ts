@@ -1,5 +1,6 @@
 import { ConnectedPlayer, WorldService } from './world.service';
 import { WorldSocket } from '../types/world-socket';
+import { wuToChunkIndex } from '../common/world-coordinates';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -351,5 +352,159 @@ describe('WorldService.updatePlayer — cohérence WU ↔ pixels', () => {
 
     expect(player.worldX).toBe(1600);
     expect(player.worldY).toBe(8000);
+  });
+});
+
+// ─── teleportCharacter ────────────────────────────────────────────────────────
+
+describe('WorldService.teleportCharacter', () => {
+  function makeServer() {
+    const emitted: { event: string; payload: any }[] = [];
+    const socketEmit = jest.fn((event: string, payload: any) => { emitted.push({ event, payload }); });
+    const server = {
+      to: jest.fn().mockReturnValue({ emit: socketEmit }),
+      except: jest.fn().mockReturnValue({ emit: jest.fn() }),
+    } as unknown as any;
+    return { server, emitted, socketEmit };
+  }
+
+  it("émet character_teleport avec worldX/worldY/characterId/chunkX/chunkY", async () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    // pixel(600, 300) → WU(1600, 8000) selon la projection isométrique
+    const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    const { server, emitted } = makeServer();
+    // téléportation en pixel(600, 580) → WU(6080, 12480) selon ADR-0001
+    await svc.teleportCharacter('char-1', 600, 580, server);
+
+    expect(emitted).toHaveLength(1);
+    const payload = emitted[0].payload;
+    expect(emitted[0].event).toBe('character_teleport');
+    expect(payload.characterId).toBe('char-1');
+    expect(payload.worldX).toBe(6080);
+    expect(payload.worldY).toBe(12480);
+    expect(payload.chunkX).toBe(0);  // 6080 >> 16 = 0
+    expect(payload.chunkY).toBe(0);  // 12480 >> 16 = 0
+    expect(payload.mapId).toBeDefined();
+  });
+
+  it("met à jour le player.worldX/worldY en mémoire après téléportation", async () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer();
+    injectPlayer(svc, socket, player);
+
+    const { server } = makeServer();
+    await svc.teleportCharacter('char-1', 600, 580, server);
+
+    expect(player.worldX).toBe(6080);
+    expect(player.worldY).toBe(12480);
+  });
+
+  it("retourne null si le personnage n'est pas connecté", async () => {
+    const svc = makeService();
+    const { server } = makeServer();
+    const result = await svc.teleportCharacter('inexistant', 600, 300, server);
+    expect(result).toBeNull();
+  });
+
+  it("conserve worldX/Y précédent si la position cible est hors isométrie", async () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000 });
+    injectPlayer(svc, socket, player);
+
+    const { server } = makeServer();
+    // Coordonnées pixel impossibles à convertir → fallback sur la valeur précédente
+    await svc.teleportCharacter('char-1', NaN, NaN, server);
+
+    // Le player ne bouge pas si rx/ry sont NaN
+    expect(player.worldX).toBe(1600);
+    expect(player.worldY).toBe(8000);
+  });
+});
+
+// ─── respawnCharacter ─────────────────────────────────────────────────────────
+
+describe('WorldService.respawnCharacter', () => {
+  function makeRespawnServer() {
+    const emitted: { event: string; payload: any }[] = [];
+    const socketEmit = jest.fn((event: string, payload: any) => { emitted.push({ event, payload }); });
+    const server = {
+      to: jest.fn().mockReturnValue({ emit: socketEmit }),
+      except: jest.fn().mockReturnValue({ emit: jest.fn() }),
+    } as unknown as any;
+    return { server, emitted };
+  }
+
+  function makeRespawnService(
+    character: Partial<{ id: string; health: number; maxHealth: number; worldX: number; worldY: number; mapId: number; positionX: number; positionY: number }>,
+    respawnPoint: Partial<{ worldX: number; worldY: number; mapId: number; x: number; y: number; radius: number }>,
+  ) {
+    const charRepo = {
+      find: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({ id: 'char-1', health: 0, maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 1, positionX: 600, positionY: 300, ...character }),
+      update: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn().mockResolvedValue(1),
+      save: jest.fn(),
+      create: jest.fn(),
+    };
+    const respawnRepo = {
+      find: jest.fn().mockResolvedValue([{ worldX: 0, worldY: 0, mapId: 1, x: 0, y: 0, radius: 0, ...respawnPoint }]),
+      count: jest.fn().mockResolvedValue(1),
+      save: jest.fn(),
+      create: jest.fn(),
+    };
+    return new WorldService(charRepo as any, respawnRepo as any);
+  }
+
+  it("émet character_respawn avec worldX/worldY/characterId/chunkX/chunkY", async () => {
+    // pixel(600, 300) → WU(1600, 8000) ; point de respawn à worldX=0, worldY=0, map=1
+    const svc = makeRespawnService(
+      { id: 'char-1', maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 1, positionX: 600, positionY: 300 },
+      { worldX: 0, worldY: 0, mapId: 1, radius: 0 },
+    );
+
+    // Connecter un joueur pour que l'emit soit possible
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    const { server, emitted } = makeRespawnServer();
+    await svc.respawnCharacter('char-1', server);
+
+    expect(emitted).toHaveLength(1);
+    const payload = emitted[0].payload;
+    expect(emitted[0].event).toBe('character_respawn');
+    expect(payload.characterId).toBe('char-1');
+    expect(typeof payload.worldX).toBe('number');
+    expect(typeof payload.worldY).toBe('number');
+    expect(payload.chunkX).toBe(wuToChunkIndex(payload.worldX));
+    expect(payload.chunkY).toBe(wuToChunkIndex(payload.worldY));
+    expect(payload.health).toBe(100);
+  });
+
+  it("ne fait rien si le personnage est introuvable", async () => {
+    const charRepo = {
+      find: jest.fn(), findOne: jest.fn().mockResolvedValue(null),
+      update: jest.fn(), count: jest.fn().mockResolvedValue(0), save: jest.fn(), create: jest.fn(),
+    };
+    const respawnRepo = {
+      find: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), save: jest.fn(), create: jest.fn(),
+    };
+    const svc = new WorldService(charRepo as any, respawnRepo as any);
+    const { server, emitted } = makeRespawnServer();
+    await svc.respawnCharacter('inexistant', server);
+    expect(emitted).toHaveLength(0);
+  });
+
+  it("ne fait rien si aucun respawn point disponible", async () => {
+    const svc = makeRespawnService({ id: 'char-1' }, {});
+    (svc as any).respawnPointRepository = { find: jest.fn().mockResolvedValue([]) };
+    const { server, emitted } = makeRespawnServer();
+    await svc.respawnCharacter('char-1', server);
+    expect(emitted).toHaveLength(0);
   });
 });
