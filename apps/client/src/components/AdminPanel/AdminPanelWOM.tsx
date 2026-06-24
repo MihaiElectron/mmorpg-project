@@ -16,6 +16,7 @@ import {
   EntitySection,
 } from "./adminPanel.shared";
 import RecipesSection from "./RecipesSection";
+import { studioAppearanceRegistry } from "../../studio/sdk/appearanceLibrary";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -50,11 +51,6 @@ type MovementMetrics = {
   mapMismatch: number;
 };
 
-// ── Constantes assets ─────────────────────────────────────────────────────────
-
-const CREATURE_TEXTURES = ["turkey"];
-const RESOURCE_TEXTURES = ["dead_tree", "fire_camp"];
-
 // ── Constantes skills ─────────────────────────────────────────────────────────
 
 const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
@@ -84,6 +80,8 @@ const SKILLS_SECTION_CONFIG: SectionConfig = {
 
 function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[] {
   const skillKeyOptions = ["", ...skillKeys];
+  const creatureTextureOptions = studioAppearanceRegistry.getAppearancesByCategory('creature').map((a) => a.textureKey);
+  const resourceTextureOptions = studioAppearanceRegistry.getAppearancesByCategory('resource').map((a) => a.textureKey);
   return [
   {
     id: "creatures",
@@ -92,7 +90,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupName: (t) => t.name,
     groupFields: [
       { key: "name",             label: "Nom",          type: "text" as const },
-      { key: "textureKey",       label: "Texture",      options: CREATURE_TEXTURES },
+      { key: "textureKey",       label: "Texture",      options: creatureTextureOptions },
       { key: "baseHealth",       label: "PV",           min: 1 },
       { key: "baseAttack",       label: "ATK",          min: 0 },
       { key: "baseArmor",        label: "ARM",          min: 0 },
@@ -138,7 +136,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
-      { key: "textureKey",            label: "Texture",       options: RESOURCE_TEXTURES },
+      { key: "textureKey",            label: "Texture",       options: resourceTextureOptions },
       { key: "defaultRemainingLoots", label: "Loots défaut",  min: 1 },
       { key: "respawnDelayMs",        label: "Respawn (ms)",  min: 1, step: 1000 },
       { key: "gatheringXpReward",     label: "XP récolte",    min: 0 },
@@ -752,8 +750,17 @@ export default function AdminPanelWOM() {
                     value={newCreature.textureKey}
                     onChange={(e) => setNewCreature((prev) => ({ ...prev, textureKey: e.target.value }))}
                     {...kbHandlers}>
-                    {CREATURE_TEXTURES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {studioAppearanceRegistry.getAppearancesByCategory('creature').map((a) => (
+                      <option key={a.key} value={a.textureKey}>{a.name} ({a.textureKey})</option>
+                    ))}
                   </select>
+                  {studioAppearanceRegistry.getPreviewSrc(newCreature.textureKey) && (
+                    <img
+                      className="admin-panel__texture-preview"
+                      src={studioAppearanceRegistry.getPreviewSrc(newCreature.textureKey)!}
+                      alt={newCreature.textureKey}
+                    />
+                  )}
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">PV</span>
@@ -844,8 +851,17 @@ export default function AdminPanelWOM() {
                     value={newResourceTemplate.textureKey}
                     onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, textureKey: e.target.value }))}
                     {...kbHandlers}>
-                    {RESOURCE_TEXTURES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {studioAppearanceRegistry.getAppearancesByCategory('resource').map((a) => (
+                      <option key={a.key} value={a.textureKey}>{a.name} ({a.textureKey})</option>
+                    ))}
                   </select>
+                  {studioAppearanceRegistry.getPreviewSrc(newResourceTemplate.textureKey) && (
+                    <img
+                      className="admin-panel__texture-preview"
+                      src={studioAppearanceRegistry.getPreviewSrc(newResourceTemplate.textureKey)!}
+                      alt={newResourceTemplate.textureKey}
+                    />
+                  )}
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Loots défaut</span>
