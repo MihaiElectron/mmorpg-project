@@ -101,16 +101,18 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Position du joueur local, diffusée aux autres clients.
+   * Payload WU-only depuis P5 : { worldX, worldY, mapId, direction? }.
    */
   @SubscribeMessage('player_move')
   handlePlayerMove(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number; direction?: string },
+    @MessageBody() payload: { worldX: number; worldY: number; mapId: number; direction?: string },
   ) {
     if (
       !payload ||
-      typeof payload.x !== 'number' ||
-      typeof payload.y !== 'number'
+      !Number.isFinite(payload.worldX) ||
+      !Number.isFinite(payload.worldY) ||
+      !Number.isFinite(payload.mapId)
     ) {
       return;
     }

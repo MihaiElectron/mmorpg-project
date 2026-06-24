@@ -303,7 +303,7 @@ export class WorldService implements OnModuleInit {
 
   updatePlayer(
     client: WorldSocket,
-    payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number; direction?: string },
+    payload: { worldX: number; worldY: number; mapId: number; direction?: string },
   ): ConnectedPlayer | null {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
@@ -318,8 +318,6 @@ export class WorldService implements OnModuleInit {
     this.movementMetrics.totalMoves++;
     if (this.hasInvalidMovementCoordinate(payload)) {
       this.recordMovementSuspect(client.id, player.characterId, 'INVALID_COORDINATE', now, {
-        x: payload.x,
-        y: payload.y,
         worldX: payload.worldX,
         worldY: payload.worldY,
         mapId: payload.mapId,
@@ -333,22 +331,13 @@ export class WorldService implements OnModuleInit {
       Number.isFinite(payload.worldY) &&
       Number.isFinite(payload.mapId)
     ) {
-      // Chemin WU direct — client transmet des coordonnées WU validées
-      player.worldX = payload.worldX!;
-      player.worldY = payload.worldY!;
-      player.mapId  = payload.mapId!;
-      player.x = Math.round(wuToIsoScreenX(payload.worldX!, payload.worldY!));
-      player.y = Math.round(wuToIsoScreenY(payload.worldX!, payload.worldY!));
-    } else if (Number.isFinite(payload.x) && Number.isFinite(payload.y)) {
-      // Fallback legacy — conversion pixel → WU (client sans support WU)
-      try {
-        const wu = isoScreenToWorldWU(payload.x, payload.y);
-        player.worldX = wu.worldX;
-        player.worldY = wu.worldY;
-        // mapId reste inchangé dans ce chemin : le client ne le transmet pas
-        player.x = payload.x;
-        player.y = payload.y;
-      } catch { /* position hors isométrie : worldX/Y et x/y conservent leur valeur précédente */ }
+      // Chemin WU direct — seule source de vérité depuis P5
+      player.worldX = payload.worldX;
+      player.worldY = payload.worldY;
+      player.mapId  = payload.mapId;
+      // Cache pixel dérivé des WU, utilisé par persistPlayerPosition et le broadcast
+      player.x = Math.round(wuToIsoScreenX(payload.worldX, payload.worldY));
+      player.y = Math.round(wuToIsoScreenY(payload.worldX, payload.worldY));
     }
 
     this.observeMovementDelta(client.id, player, {
@@ -552,27 +541,13 @@ export class WorldService implements OnModuleInit {
   }
 
   private hasInvalidMovementCoordinate(
-    payload: { x: number; y: number; worldX?: number; worldY?: number; mapId?: number },
+    payload: { worldX: number; worldY: number; mapId: number },
   ): boolean {
-    const rawValues = [payload.x, payload.y, payload.worldX, payload.worldY, payload.mapId]
-      .filter((value) => value !== undefined);
-    if (rawValues.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+    if (!Number.isFinite(payload.worldX) || !Number.isFinite(payload.worldY) || !Number.isFinite(payload.mapId)) {
       return true;
     }
-
-    if (
-      payload.worldX !== undefined &&
-      Math.abs(payload.worldX) > MAX_REASONABLE_POSITION
-    ) {
-      return true;
-    }
-    if (
-      payload.worldY !== undefined &&
-      Math.abs(payload.worldY) > MAX_REASONABLE_POSITION
-    ) {
-      return true;
-    }
-
+    if (Math.abs(payload.worldX) > MAX_REASONABLE_POSITION) return true;
+    if (Math.abs(payload.worldY) > MAX_REASONABLE_POSITION) return true;
     return false;
   }
 

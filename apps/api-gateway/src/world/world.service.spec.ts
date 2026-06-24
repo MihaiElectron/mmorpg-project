@@ -41,18 +41,29 @@ function injectPlayer(svc: WorldService, socket: WorldSocket, player: ConnectedP
 
 // ─── updatePlayer — cas normaux ───────────────────────────────────────────────
 
-describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
-  it('met à jour worldX/worldY avant x/y', () => {
+describe('WorldService.updatePlayer — payload WU-only (P5)', () => {
+  it('met à jour worldX/worldY/mapId depuis un payload WU', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
+
+    expect(player.worldX).toBe(1600);
+    expect(player.worldY).toBe(8000);
+    expect(player.mapId).toBe(1);
+  });
+
+  it('dérive le cache pixel x/y depuis worldX/worldY (P5 : seul chemin)', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, x: 400, y: 300 });
     injectPlayer(svc, socket, player);
 
-    // pixel(600, 300) → WU(1600, 8000)
-    svc.updatePlayer(socket, { x: 600, y: 300 });
+    // WU(1600, 8000) → pixel(600, 300) selon ADR-0001
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
 
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
     expect(player.x).toBe(600);
     expect(player.y).toBe(300);
   });
@@ -63,7 +74,7 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300, direction: 'down' });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: 300, direction: 'up' });
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1, direction: 'up' });
 
     expect(player.direction).toBe('up');
     expect(player.worldX).toBe(1600);
@@ -76,55 +87,45 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
     const player = makePlayer({ direction: 'left' });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: 300 });
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
 
     expect(player.direction).toBe('left');
   });
 
-  it('mapId inchangé après updatePlayer', () => {
+  it('met à jour mapId depuis le payload WU', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: 300 });
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 2 });
 
-    expect(player.mapId).toBe(1);
+    expect(player.mapId).toBe(2);
   });
 
-  it('client.data.player reçoit x/y mis à jour', () => {
+  it('client.data.player reçoit x/y (cache pixel) et worldX/worldY/mapId mis à jour', () => {
     const svc = makeService();
     const socket = makeSocket();
-    const player = makePlayer({ x: 400, y: 300 });
+    const player = makePlayer({ worldX: 0, worldY: 0, x: 400, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 700, y: 400 });
+    // WU(4000, 8800) → pixel(700, 400) selon ADR-0001
+    svc.updatePlayer(socket, { worldX: 4000, worldY: 8800, mapId: 1 });
 
+    expect(socket.data.player.worldX).toBe(4000);
+    expect(socket.data.player.worldY).toBe(8800);
+    expect(socket.data.player.mapId).toBe(1);
     expect(socket.data.player.x).toBe(700);
     expect(socket.data.player.y).toBe(400);
   });
 
-  it('client.data.player reçoit worldX/worldY/mapId après updatePlayer', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    // pixel(600, 300) → WU(1600, 8000)
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { x: 600, y: 300 });
-
-    expect(socket.data.player.worldX).toBe(1600);
-    expect(socket.data.player.worldY).toBe(8000);
-    expect(socket.data.player.mapId).toBe(1);
-  });
-
-  it('client.data.player garde worldX/worldY si payload invalide', () => {
+  it('client.data.player garde worldX/worldY si payload invalide (worldX NaN)', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: NaN, y: NaN });
+    svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1 });
 
     expect(socket.data.player.worldX).toBe(1600);
     expect(socket.data.player.worldY).toBe(8000);
@@ -137,7 +138,7 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
     const player = makePlayer();
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, { x: 600, y: 300 });
+    const result = svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
 
     expect(result).toBe(player);
   });
@@ -146,7 +147,7 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
     const svc = makeService();
     const socket = makeSocket();
 
-    const result = svc.updatePlayer(socket, { x: 600, y: 300 });
+    const result = svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
 
     expect(result).toBeNull();
   });
@@ -155,13 +156,13 @@ describe('WorldService.updatePlayer — vérité WU prioritaire', () => {
 // ─── updatePlayer — garde-fous NaN / Infinity ─────────────────────────────────
 
 describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () => {
-  it('NaN dans x : worldX/Y et x/y conservent leur valeur précédente', () => {
+  it('NaN dans worldX : worldX/Y et cache pixel conservent leur valeur précédente', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: NaN, y: 300 });
+    svc.updatePlayer(socket, { worldX: NaN, worldY: 8000, mapId: 1 });
 
     expect(player.worldX).toBe(1600);
     expect(player.worldY).toBe(8000);
@@ -169,13 +170,13 @@ describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () =
     expect(player.y).toBe(300);
   });
 
-  it('NaN dans y : worldX/Y et x/y conservent leur valeur précédente', () => {
+  it('NaN dans worldY : position conservée', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: NaN });
+    svc.updatePlayer(socket, { worldX: 1600, worldY: NaN, mapId: 1 });
 
     expect(player.worldX).toBe(1600);
     expect(player.worldY).toBe(8000);
@@ -183,25 +184,25 @@ describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () =
     expect(player.y).toBe(300);
   });
 
-  it('Infinity dans x : position conservée', () => {
+  it('Infinity dans worldX : position conservée', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: Infinity, y: 300 });
+    svc.updatePlayer(socket, { worldX: Infinity, worldY: 8000, mapId: 1 });
 
     expect(player.worldX).toBe(1600);
     expect(player.x).toBe(600);
   });
 
-  it('-Infinity dans y : position conservée', () => {
+  it('-Infinity dans worldY : position conservée', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: -Infinity });
+    svc.updatePlayer(socket, { worldX: 1600, worldY: -Infinity, mapId: 1 });
 
     expect(player.worldY).toBe(8000);
     expect(player.y).toBe(300);
@@ -210,11 +211,13 @@ describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () =
   it('payload invalide : client.data.player garde les coordonnées précédentes', () => {
     const svc = makeService();
     const socket = makeSocket();
-    const player = makePlayer({ x: 600, y: 300 });
+    const player = makePlayer({ worldX: 1600, worldY: 8000, x: 600, y: 300 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: NaN, y: NaN });
+    svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1 });
 
+    expect(socket.data.player.worldX).toBe(1600);
+    expect(socket.data.player.worldY).toBe(8000);
     expect(socket.data.player.x).toBe(600);
     expect(socket.data.player.y).toBe(300);
   });
@@ -225,24 +228,24 @@ describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () =
     const player = makePlayer({ direction: 'down' });
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, { x: NaN, y: NaN, direction: 'right' });
+    const result = svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1, direction: 'right' });
 
     expect(result).toBe(player);
     expect(player.direction).toBe('right');
   });
 });
 
-// ─── updatePlayer — chemin WU direct ─────────────────────────────────────────
+// ─── updatePlayer — chemin WU (seul chemin depuis P5) ────────────────────────
 
-describe('WorldService.updatePlayer — chemin WU direct', () => {
-  it('utilise worldX/worldY/mapId directement si présents et valides', () => {
+describe('WorldService.updatePlayer — chemin WU', () => {
+  it('met à jour worldX/worldY/mapId et dérive le cache pixel', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
     injectPlayer(svc, socket, player);
 
-    // worldX=6080, worldY=12480 → pixel(600, 580)
-    svc.updatePlayer(socket, { x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+    // WU(6080, 12480) → pixel(600, 580) selon ADR-0001
+    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: 1 });
 
     expect(player.worldX).toBe(6080);
     expect(player.worldY).toBe(12480);
@@ -251,107 +254,63 @@ describe('WorldService.updatePlayer — chemin WU direct', () => {
     expect(player.y).toBe(580);
   });
 
-  it('dérive le cache pixel depuis worldX/Y (chemin WU — ne lit pas payload.x/y)', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, x: 400, y: 300 });
-    injectPlayer(svc, socket, player);
-
-    // On passe des pixels incohérents avec worldX/Y — le chemin WU doit les ignorer
-    svc.updatePlayer(socket, { x: 999, y: 999, worldX: 6080, worldY: 12480, mapId: 1 });
-
-    expect(player.x).toBe(600);  // dérivé de worldX/Y, pas de payload.x
-    expect(player.y).toBe(580);
-  });
-
-  it('met à jour mapId via le chemin WU', () => {
+  it('met à jour mapId', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 2 });
+    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: 2 });
 
     expect(player.mapId).toBe(2);
   });
 
-  it('tombe en fallback pixel si worldX manquant', () => {
+  it('position inchangée si worldX est NaN (payload invalide ignoré)', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
     injectPlayer(svc, socket, player);
 
-    // worldY et mapId présents mais worldX absent → fallback pixel
-    svc.updatePlayer(socket, { x: 600, y: 300, worldY: 12480, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);  // converti depuis pixel(600, 300)
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('tombe en fallback pixel si mapId manquant', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
-    injectPlayer(svc, socket, player);
-
-    // worldX et worldY présents mais mapId absent → fallback pixel
-    svc.updatePlayer(socket, { x: 600, y: 300, worldX: 6080, worldY: 12480 });
-
-    expect(player.worldX).toBe(1600);  // converti depuis pixel(600, 300)
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('tombe en fallback pixel si worldX est NaN', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { x: 600, y: 300, worldX: NaN, worldY: 12480, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);  // fallback pixel
-  });
-});
-
-// ─── updatePlayer — worldX/Y cohérence avec la projection isométrique ─────────
-
-describe('WorldService.updatePlayer — cohérence WU ↔ pixels', () => {
-  // pixel(400, 300) → WU(0, 9600) selon la projection isométrique du projet
-  it('pixel(400, 300) → worldX=0 worldY=9600', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer();
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { x: 400, y: 300 });
+    svc.updatePlayer(socket, { worldX: NaN, worldY: 12480, mapId: 1 });
 
     expect(player.worldX).toBe(0);
-    expect(player.worldY).toBe(9600);
+    expect(player.worldY).toBe(0);
   });
 
-  // pixel(600, 580) → WU(6080, 12480)
-  it('pixel(600, 580) → worldX=6080 worldY=12480', () => {
+  it('position inchangée si mapId est NaN (payload invalide ignoré)', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: NaN });
+
+    expect(player.worldX).toBe(0);
+    expect(player.worldY).toBe(0);
+  });
+
+  it('WU(1600, 8000) → cache pixel(600, 300)', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, x: 400, y: 300 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
+
+    expect(player.x).toBe(600);
+    expect(player.y).toBe(300);
+  });
+
+  it('WU(6080, 12480) → cache pixel(600, 580)', () => {
     const svc = makeService();
     const socket = makeSocket();
     const player = makePlayer();
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 600, y: 580 });
+    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: 1 });
 
-    expect(player.worldX).toBe(6080);
-    expect(player.worldY).toBe(12480);
-  });
-
-  it('pixel(600, 300) → worldX=1600 worldY=8000', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer();
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { x: 600, y: 300 });
-
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
+    expect(player.x).toBe(600);
+    expect(player.y).toBe(580);
   });
 });
 
@@ -379,13 +338,7 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, {
-      x: 606,
-      y: 306,
-      worldX: 1_700,
-      worldY: 8_100,
-      mapId: 1,
-    });
+    const result = svc.updatePlayer(socket, { worldX: 1_700, worldY: 8_100, mapId: 1 });
 
     expect(result).toBe(player);
     expect(player.worldX).toBe(1_700);
@@ -406,15 +359,9 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, { x: 1_000, y: 0, worldX: 0, worldY: 0, mapId: 1 });
+    svc.updatePlayer(socket, { worldX: 0, worldY: 0, mapId: 1 });
     nowSpy.mockReturnValue(1_100);
-    const result = svc.updatePlayer(socket, {
-      x: 1_125,
-      y: 63,
-      worldX: 2_000,
-      worldY: 0,
-      mapId: 1,
-    });
+    const result = svc.updatePlayer(socket, { worldX: 2_000, worldY: 0, mapId: 1 });
 
     expect(result).toBe(player);
     expect(player.worldX).toBe(2_000);
@@ -428,37 +375,25 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, {
-      x: 1_625,
-      y: 313,
-      worldX: 10_000,
-      worldY: 0,
-      mapId: 1,
-    });
+    const result = svc.updatePlayer(socket, { worldX: 10_000, worldY: 0, mapId: 1 });
 
     expect(result).toBe(player);
     expect(player.worldX).toBe(10_000);
     expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
   });
 
-  it('détecte des coordonnées invalides sans rejeter le fallback existant', () => {
+  it('détecte des coordonnées invalides (worldX NaN) et ne met pas à jour la position', () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1, x: 400, y: 300 });
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, {
-      x: 600,
-      y: 300,
-      worldX: NaN,
-      worldY: 12_480,
-      mapId: 1,
-    });
+    const result = svc.updatePlayer(socket, { worldX: NaN, worldY: 12_480, mapId: 1 });
 
     expect(result).toBe(player);
-    expect(player.worldX).toBe(1_600);
-    expect(player.worldY).toBe(8_000);
+    expect(player.worldX).toBe(0);   // inchangé
+    expect(player.worldY).toBe(0);
     expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
   });
 
@@ -470,13 +405,7 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     injectPlayer(svc, socket, player);
 
     const hugeWorldX = MAX_REASONABLE_POSITION + 1;
-    const result = svc.updatePlayer(socket, {
-      x: 8_389_608,
-      y: 4_194_304,
-      worldX: hugeWorldX,
-      worldY: 0,
-      mapId: 1,
-    });
+    const result = svc.updatePlayer(socket, { worldX: hugeWorldX, worldY: 0, mapId: 1 });
 
     expect(result).toBe(player);
     expect(player.worldX).toBe(hugeWorldX);
@@ -490,13 +419,7 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    const result = svc.updatePlayer(socket, {
-      x: 600,
-      y: 300,
-      worldX: 1_600,
-      worldY: 8_000,
-      mapId: 2,
-    });
+    const result = svc.updatePlayer(socket, { worldX: 1_600, worldY: 8_000, mapId: 2 });
 
     expect(result).toBe(player);
     expect(player.mapId).toBe(2);
@@ -510,13 +433,7 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
 
-    svc.updatePlayer(socket, {
-      x: 1_625,
-      y: 313,
-      worldX: 10_000,
-      worldY: 0,
-      mapId: 1,
-    });
+    svc.updatePlayer(socket, { worldX: 10_000, worldY: 0, mapId: 1 });
 
     expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
 

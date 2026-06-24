@@ -832,10 +832,10 @@ export default class WorldScene extends Phaser.Scene {
 
     const px = Math.round(this.player.x);
     const py = Math.round(this.player.y);
+    const wu = screenToWorldWU(px, py);
     const position = {
-      x: px,
-      y: py,
-      ...screenToWorldWU(px, py),
+      worldX: wu.worldX,
+      worldY: wu.worldY,
       mapId: 1,
       direction: this.player.direction,
     };
@@ -843,8 +843,8 @@ export default class WorldScene extends Phaser.Scene {
     const previous = this.lastSyncedPosition;
     const hasMoved =
       !previous ||
-      Math.abs(previous.x - position.x) > 1 ||
-      Math.abs(previous.y - position.y) > 1 ||
+      previous.worldX !== position.worldX ||
+      previous.worldY !== position.worldY ||
       previous.direction !== position.direction;
 
     if (!hasMoved) return;
@@ -855,8 +855,6 @@ export default class WorldScene extends Phaser.Scene {
       source: "WorldScene",
       type: "socket_player_move_emit",
       details: {
-        x: position.x,
-        y: position.y,
         worldX: position.worldX,
         worldY: position.worldY,
         mapId: position.mapId,
