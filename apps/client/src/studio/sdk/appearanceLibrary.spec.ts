@@ -3,6 +3,7 @@ import {
   StudioAppearanceRegistry,
   studioAppearanceRegistry,
   APPEARANCE_DEFINITIONS,
+  resolveAppearanceTexture,
   type AppearanceCategory,
 } from './appearanceLibrary';
 
@@ -119,6 +120,93 @@ describe('StudioAppearanceRegistry — instance isolée', () => {
     expect(reg.getAppearancesByCategory('creature').length).toBe(1);
     expect(reg.getAppearancesByCategory('resource').length).toBe(1);
     expect(reg.getAppearancesByCategory('station').length).toBe(0);
+  });
+});
+
+describe('resolveAppearanceTexture', () => {
+  it('retourne la textureKey du registry si appearanceKey connu — creature', () => {
+    expect(resolveAppearanceTexture({ appearanceKey: 'turkey', fallbackTextureKey: 'dead_tree' })).toBe('turkey');
+  });
+
+  it('retourne la textureKey du registry si appearanceKey connu — resource', () => {
+    expect(resolveAppearanceTexture({ appearanceKey: 'dead_tree', fallbackTextureKey: 'turkey' })).toBe('dead_tree');
+    expect(resolveAppearanceTexture({ appearanceKey: 'fire_camp', fallbackTextureKey: 'dead_tree' })).toBe('fire_camp');
+  });
+
+  it('le registry a priorité sur textureKey directe', () => {
+    const result = resolveAppearanceTexture({
+      appearanceKey: 'turkey',
+      textureKey: 'other_texture',
+      fallbackTextureKey: 'dead_tree',
+      isLoaded: () => true,
+    });
+    expect(result).toBe('turkey');
+  });
+
+  it('utilise textureKey directe si appearanceKey inconnu et isLoaded vrai', () => {
+    const result = resolveAppearanceTexture({
+      appearanceKey: 'unknown_ore',
+      textureKey: 'custom_sprite',
+      fallbackTextureKey: 'dead_tree',
+      isLoaded: () => true,
+    });
+    expect(result).toBe('custom_sprite');
+  });
+
+  it('utilise textureKey directe sans isLoaded (acceptée sans vérification)', () => {
+    const result = resolveAppearanceTexture({
+      textureKey: 'custom_sprite',
+      fallbackTextureKey: 'dead_tree',
+    });
+    expect(result).toBe('custom_sprite');
+  });
+
+  it('retourne fallback si textureKey non chargée selon isLoaded', () => {
+    const result = resolveAppearanceTexture({
+      appearanceKey: 'unknown_ore',
+      textureKey: 'not_loaded',
+      fallbackTextureKey: 'dead_tree',
+      isLoaded: () => false,
+    });
+    expect(result).toBe('dead_tree');
+  });
+
+  it('retourne fallback si appearanceKey inconnu et pas de textureKey', () => {
+    const result = resolveAppearanceTexture({
+      appearanceKey: 'unknown_ore',
+      fallbackTextureKey: 'dead_tree',
+      isLoaded: () => false,
+    });
+    expect(result).toBe('dead_tree');
+  });
+
+  it('retourne fallback si tout est absent', () => {
+    expect(resolveAppearanceTexture({ fallbackTextureKey: 'turkey' })).toBe('turkey');
+  });
+
+  it('category est accepté sans changer le résultat en Phase 1', () => {
+    const result = resolveAppearanceTexture({
+      appearanceKey: 'turkey',
+      category: 'creature',
+      fallbackTextureKey: 'dead_tree',
+    });
+    expect(result).toBe('turkey');
+  });
+
+  it('isLoaded reçoit bien la textureKey directe en argument', () => {
+    const captured: string[] = [];
+    resolveAppearanceTexture({
+      appearanceKey: 'unknown_type',
+      textureKey: 'my_sprite',
+      fallbackTextureKey: 'dead_tree',
+      isLoaded: (k) => { captured.push(k); return true; },
+    });
+    expect(captured).toContain('my_sprite');
+  });
+
+  it('ne crashe pas si appearanceKey est une chaîne vide', () => {
+    expect(() => resolveAppearanceTexture({ appearanceKey: '', fallbackTextureKey: 'dead_tree' })).not.toThrow();
+    expect(resolveAppearanceTexture({ appearanceKey: '', fallbackTextureKey: 'dead_tree' })).toBe('dead_tree');
   });
 });
 

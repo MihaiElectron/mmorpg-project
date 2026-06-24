@@ -31,6 +31,7 @@ import {
   createWalkabilityOverlayTiles,
   getTileDiamondPoints,
 } from "../utils/walkabilityOverlay";
+import { resolveAppearanceTexture } from "../../studio/sdk/appearanceLibrary";
 
 const MOVEMENT_KEYS = new Set([
   "ArrowLeft",
@@ -1142,9 +1143,12 @@ export default class WorldScene extends Phaser.Scene {
       .filter((resource) => resource.state === "alive")
       .forEach((resource) => {
         const { x, y } = resolveScreen(resource);
-        const textureKey = this.textures.exists(resource.type)
-          ? resource.type
-          : "dead_tree";
+        const textureKey = resolveAppearanceTexture({
+          appearanceKey: resource.type,
+          textureKey: resource.textureKey,
+          fallbackTextureKey: "dead_tree",
+          isLoaded: (key) => this.textures.exists(key),
+        });
 
         const sprite = this.add.image(x, y, textureKey);
         sprite.setDepth(10);
@@ -1174,7 +1178,12 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const textureKey = this.textures.exists(resource.type) ? resource.type : "dead_tree";
+    const textureKey = resolveAppearanceTexture({
+      appearanceKey: resource.type,
+      textureKey: resource.textureKey,
+      fallbackTextureKey: "dead_tree",
+      isLoaded: (key) => this.textures.exists(key),
+    });
     const sprite = this.add.image(x, y, textureKey);
     sprite.setDepth(10);
     sprite.setInteractive(
@@ -1351,7 +1360,12 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const textureKey = this.textures.exists(animal.type) ? animal.type : "turkey";
+    const textureKey = resolveAppearanceTexture({
+      appearanceKey: animal.type,
+      textureKey: animal.textureKey,
+      fallbackTextureKey: "turkey",
+      isLoaded: (key) => this.textures.exists(key),
+    });
     const sprite = this.add.image(x, y, textureKey);
     sprite.setDepth(10);
     sprite.setInteractive(

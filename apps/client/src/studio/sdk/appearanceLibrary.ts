@@ -120,3 +120,42 @@ export class StudioAppearanceRegistry {
 export const studioAppearanceRegistry = new StudioAppearanceRegistry(APPEARANCE_DEFINITIONS);
 
 export { APPEARANCE_DEFINITIONS };
+
+// ── Helper de résolution Phaser ────────────────────────────────────────────────
+
+/**
+ * Résout la clé de texture Phaser à partir d'une apparence ou d'une clé directe.
+ *
+ * Ordre de priorité :
+ *   1. Registry : getTextureKey(appearanceKey) si la key est connue dans l'Appearance Library
+ *   2. textureKey directe si fournie et "chargée" (selon isLoaded)
+ *   3. fallbackTextureKey
+ *
+ * Ne crashe jamais — retourne toujours une string.
+ *
+ * @param isLoaded - callback Phaser : `(key) => scene.textures.exists(key)`.
+ *                   Si absent, textureKey est acceptée sans vérification de chargement.
+ */
+export function resolveAppearanceTexture({
+  appearanceKey,
+  textureKey,
+  category: _category,
+  fallbackTextureKey,
+  isLoaded,
+}: {
+  appearanceKey?: string;
+  textureKey?: string;
+  /** Réservé pour filtrage futur — non utilisé en Phase 1. */
+  category?: AppearanceCategory;
+  fallbackTextureKey: string;
+  isLoaded?: (key: string) => boolean;
+}): string {
+  if (appearanceKey) {
+    const fromRegistry = studioAppearanceRegistry.getTextureKey(appearanceKey);
+    if (fromRegistry !== undefined) return fromRegistry;
+  }
+  if (textureKey) {
+    if (!isLoaded || isLoaded(textureKey)) return textureKey;
+  }
+  return fallbackTextureKey;
+}
