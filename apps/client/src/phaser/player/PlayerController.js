@@ -13,6 +13,9 @@ export default class PlayerController {
     // Souris
     this.mouseActive = false;
     this.isDragging = false;
+    this.isPointerHeld = false;
+    this.isMouseHoldMovement = false;
+    this.lastMouseDirection = null;
     this.clickStartTime = 0;
 
     // Pathfinding
@@ -30,6 +33,9 @@ export default class PlayerController {
   startMouseMove(x, y) {
     this.mouseActive = true;
     this.isDragging = false;
+    this.isPointerHeld = true;
+    this.isMouseHoldMovement = false;
+    this.lastMouseDirection = null;
     this.clickStartTime = performance.now();
 
     this.target = { x, y };
@@ -65,6 +71,7 @@ export default class PlayerController {
     if (!this.mouseActive) return;
 
     const clickDuration = performance.now() - this.clickStartTime;
+    this.isPointerHeld = false;
 
     if (clickDuration < MOUSE_HOLD_THRESHOLD_MS && !this.isDragging) {
       pushDebugEvent({
@@ -90,6 +97,8 @@ export default class PlayerController {
 
     this.mouseActive = false;
     this.isDragging = false;
+    this.isMouseHoldMovement = false;
+    this.lastMouseDirection = null;
     this.target = null;
     this.path = null;
     this.currentPathIndex = 0;
@@ -101,6 +110,9 @@ export default class PlayerController {
   moveTo(x, y) {
     this.mouseActive = true;
     this.isDragging = true;
+    this.isPointerHeld = false;
+    this.isMouseHoldMovement = false;
+    this.lastMouseDirection = null;
     this.path = null;
     this.currentPathIndex = 0;
     this.target = { x, y };
@@ -190,6 +202,9 @@ export default class PlayerController {
       }
       this.mouseActive = false;
       this.isDragging = false;
+      this.isPointerHeld = false;
+      this.isMouseHoldMovement = false;
+      this.lastMouseDirection = null;
       this.path = null;
       this.target = null;
       this.player.setVelocity(vx, vy);
@@ -199,30 +214,38 @@ export default class PlayerController {
     this.activateMouseDragIfHeld();
 
     // 2. MAINTIEN → steering direct
-    if (this.mouseActive && this.isDragging && this.target) {
+    if (this.mouseActive && this.isMouseHoldMovement && this.target) {
+      this.moveInMouseHoldDirection(speed);
+      return;
+    }
+
+    // 3. Déplacement direct vers cible (clic simple fallback / poursuite)
+    if (this.mouseActive && this.target) {
       this.directMoveToTarget(speed);
       return;
     }
 
-    // 3. CLIC SIMPLE → pathfinding
+    // 4. CLIC SIMPLE → pathfinding
     if (this.mouseActive && this.path && this.path.length > 0) {
       this.followPath(speed);
       return;
     }
 
-    // 4. AUCUN INPUT
+    // 5. AUCUN INPUT
     this.player.setVelocity(0);
   }
 
   activateMouseDragIfHeld() {
-    if (!this.mouseActive || this.isDragging || !this.target) return;
+    if (!this.mouseActive || !this.isPointerHeld || this.isDragging || !this.target) return;
 
     const heldTime = performance.now() - this.clickStartTime;
     if (heldTime <= MOUSE_HOLD_THRESHOLD_MS) return;
 
     this.isDragging = true;
+    this.isMouseHoldMovement = true;
     this.path = null;
     this.currentPathIndex = 0;
+    this.updateLastMouseDirection();
 
     pushDebugEvent({
       source: "PlayerController",
@@ -244,11 +267,15 @@ export default class PlayerController {
     return {
       mouseActive: this.mouseActive,
       isDragging: this.isDragging,
+      isPointerHeld: this.isPointerHeld,
+      isMouseHoldMovement: this.isMouseHoldMovement,
       keyboardActive: this.isKeyboardActive(),
       hasTarget: Boolean(this.target),
       targetX: this.target ? Math.round(this.target.x) : null,
       targetY: this.target ? Math.round(this.target.y) : null,
       hasPath: Boolean(this.path?.length),
+      lastDirX: this.lastMouseDirection ? Number(this.lastMouseDirection.x.toFixed(3)) : null,
+      lastDirY: this.lastMouseDirection ? Number(this.lastMouseDirection.y.toFixed(3)) : null,
       ...extra,
     };
   }
@@ -301,5 +328,73 @@ export default class PlayerController {
     const ny = dy / dist;
 
     this.player.setVelocity(nx * speed, ny * speed);
+  }
+
+  // -------------------------------------------------------
+  // HOLD MOVE (clic maintenu)
+  // -------------------------------------------------------
+  moveInMouseHoldDirection(speed) {
+    this.refreshMouseHoldTargetFromPointer();
+    const direction = this.updateLastMouseDirection();
+
+    if (!direction) {
+      this.player.setVelocity(0);
+      return;
+    }
+
+    const dx = this.target.x - this.player.x;
+    const dy = this.target.y - this.player.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist <= this.arrivalThreshold) {
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "target_reached_ignored_because_dragging",
+        details: this.getDebugDetails({ distance: Number(dist.toFixed(2)) }),
+      });
+    }
+
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "mouse_hold_direction_move",
+      details: this.getDebugDetails({
+        dirX: Number(direction.x.toFixed(3)),
+        dirY: Number(direction.y.toFixed(3)),
+      }),
+    });
+
+    this.player.setVelocity(direction.x * speed, direction.y * speed);
+  }
+
+  refreshMouseHoldTargetFromPointer() {
+    const pointer = this.scene.input?.activePointer;
+    const camera = this.scene.cameras?.main;
+
+    if (!pointer || !camera?.getWorldPoint) return;
+
+    const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
+    if (!Number.isFinite(worldPoint?.x) || !Number.isFinite(worldPoint?.y)) return;
+
+    this.target = {
+      x: worldPoint.x,
+      y: worldPoint.y,
+    };
+  }
+
+  updateLastMouseDirection() {
+    if (!this.target) return this.lastMouseDirection;
+
+    const dx = this.target.x - this.player.x;
+    const dy = this.target.y - this.player.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > this.arrivalThreshold) {
+      this.lastMouseDirection = {
+        x: dx / dist,
+        y: dy / dist,
+      };
+    }
+
+    return this.lastMouseDirection;
   }
 }

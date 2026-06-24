@@ -520,6 +520,8 @@ export default class WorldScene extends Phaser.Scene {
     return {
       mouseActive: this.controller?.mouseActive ?? false,
       isDragging: this.controller?.isDragging ?? false,
+      isPointerHeld: this.controller?.isPointerHeld ?? false,
+      isMouseHoldMovement: this.controller?.isMouseHoldMovement ?? false,
       keyboardActive: this.controller?.isKeyboardActive?.() ?? false,
       targetX: this.controller?.target ? Math.round(this.controller.target.x) : null,
       targetY: this.controller?.target ? Math.round(this.controller.target.y) : null,
