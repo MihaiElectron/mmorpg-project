@@ -50,6 +50,31 @@
     color: vars.$color-text-primary;
   }
 
+  &__overlay-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    padding: 5px 8px;
+  }
+
+  &__overlay-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+
+  &__overlay-checkbox {
+    width: 12px;
+    height: 12px;
+    accent-color: vars.$color-magic-amber;
+  }
+
   &__event-log {
     @include m.panel-section;
     display: flex;

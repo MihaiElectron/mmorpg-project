@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createWalkabilityGridFromMap,
+  getWalkabilityAtTile,
   getWalkabilityGridSize,
+  isTileInWalkabilityGrid,
 } from "./walkabilityGrid";
 
 describe("walkabilityGrid", () => {
@@ -40,5 +42,18 @@ describe("walkabilityGrid", () => {
     expect(createWalkabilityGridFromMap({ width: 4, height: 1 }, layer)).toStrictEqual([
       [1, 1, 1, 0],
     ]);
+  });
+
+  it("lit la walkability d'une tile sans erreur hors limites", () => {
+    const grid = [
+      [0, 1],
+      [0, 0],
+    ];
+
+    expect(isTileInWalkabilityGrid(grid, 1, 0)).toBe(true);
+    expect(isTileInWalkabilityGrid(grid, 2, 0)).toBe(false);
+    expect(getWalkabilityAtTile(grid, 0, 0)).toBe(true);
+    expect(getWalkabilityAtTile(grid, 1, 0)).toBe(false);
+    expect(getWalkabilityAtTile(grid, -1, 0)).toBe(null);
   });
 });

@@ -32,7 +32,13 @@ export default function CoordinateInspector() {
   const cursorScreenPoint = useDevToolsStore((s) => s.currentCursorScreenPoint);
   const cursorWorldPoint = useDevToolsStore((s) => s.currentCursorWorldPoint);
   const cursorTilePoint = useDevToolsStore((s) => s.currentCursorTilePoint);
+  const cursorChunkPoint = useDevToolsStore((s) => s.currentCursorChunkPoint);
+  const cursorWalkable = useDevToolsStore((s) => s.currentCursorWalkable);
   const terrainMapInfo = useDevToolsStore((s) => s.terrainMapInfo);
+  const walkabilityOverlayEnabled = useDevToolsStore((s) => s.walkabilityOverlayEnabled);
+  const tileCoordinatesOverlayEnabled = useDevToolsStore((s) => s.tileCoordinatesOverlayEnabled);
+  const toggleWalkabilityOverlayEnabled = useDevToolsStore((s) => s.toggleWalkabilityOverlayEnabled);
+  const toggleTileCoordinatesOverlayEnabled = useDevToolsStore((s) => s.toggleTileCoordinatesOverlayEnabled);
 
   return (
     <section className="devtools-world__inspector" aria-label="Coordinate inspector">
@@ -63,9 +69,29 @@ export default function CoordinateInspector() {
             ["h", terrainMapInfo.walkabilityGridHeight],
           ]}
         />
-        <CoordinateRow label="Cursor (px)" values={[["x", cursorScreenPoint?.x], ["y", cursorScreenPoint?.y]]} />
+        <div className="devtools-world__overlay-toggles">
+          <label className="devtools-world__overlay-toggle">
+            <input
+              className="devtools-world__overlay-checkbox"
+              type="checkbox"
+              checked={walkabilityOverlayEnabled}
+              onChange={toggleWalkabilityOverlayEnabled}
+            />
+            <span>Walkability Overlay</span>
+          </label>
+          <label className="devtools-world__overlay-toggle">
+            <input
+              className="devtools-world__overlay-checkbox"
+              type="checkbox"
+              checked={tileCoordinatesOverlayEnabled}
+              onChange={toggleTileCoordinatesOverlayEnabled}
+            />
+            <span>Tile Coordinates</span>
+          </label>
+        </div>
+        <CoordinateRow label="Screen" values={[["x", cursorScreenPoint?.x], ["y", cursorScreenPoint?.y]]} />
         <CoordinateRow
-          label="Cursor WU"
+          label="World"
           values={[
             ["map", cursorWorldPoint?.mapId],
             ["x", cursorWorldPoint?.worldX],
@@ -73,16 +99,28 @@ export default function CoordinateInspector() {
           ]}
         />
         <CoordinateRow
-          label="Cursor Tile"
+          label="Tile"
           values={[
             ["map", cursorTilePoint?.mapId],
             ["x", cursorTilePoint?.tileX],
             ["y", cursorTilePoint?.tileY],
           ]}
         />
-        <CoordinateRow label="World Click (px)" values={[["x", screenPoint?.x], ["y", screenPoint?.y]]} />
         <CoordinateRow
-          label="WU"
+          label="Chunk"
+          values={[
+            ["map", cursorChunkPoint?.mapId],
+            ["x", cursorChunkPoint?.chunkX],
+            ["y", cursorChunkPoint?.chunkY],
+          ]}
+        />
+        <CoordinateRow
+          label="Walkable"
+          values={[["value", cursorWalkable === null ? "-" : cursorWalkable ? "true" : "false"]]}
+        />
+        <CoordinateRow label="Click Screen" values={[["x", screenPoint?.x], ["y", screenPoint?.y]]} />
+        <CoordinateRow
+          label="Click WU"
           values={[
             ["map", worldPoint?.mapId],
             ["x", worldPoint?.worldX],
@@ -90,7 +128,7 @@ export default function CoordinateInspector() {
           ]}
         />
         <CoordinateRow
-          label="Tile"
+          label="Click Tile"
           values={[
             ["map", tilePoint?.mapId],
             ["x", tilePoint?.tileX],
@@ -98,7 +136,7 @@ export default function CoordinateInspector() {
           ]}
         />
         <CoordinateRow
-          label="Chunk"
+          label="Click Chunk"
           values={[
             ["map", chunkPoint?.mapId],
             ["x", chunkPoint?.chunkX],

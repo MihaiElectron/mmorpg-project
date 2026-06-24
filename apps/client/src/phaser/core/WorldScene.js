@@ -12,14 +12,20 @@ import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
 import {
   screenToWorldWU,
+  TILE_SIZE_WU,
   worldWUToChunk,
   worldWUToScreen,
   worldWUToTile,
 } from "../utils/worldCoordinates";
 import {
   createWalkabilityGridFromMap,
+  getWalkabilityAtTile,
   getWalkabilityGridSize,
 } from "../utils/walkabilityGrid";
+import {
+  createWalkabilityOverlayTiles,
+  getTileDiamondPoints,
+} from "../utils/walkabilityOverlay";
 
 const MOVEMENT_KEYS = new Set([
   "ArrowLeft",
@@ -159,6 +165,10 @@ export default class WorldScene extends Phaser.Scene {
     this.terrainMap = null;
     this.terrainLayer = null;
     this.walkabilityGrid = null;
+    this.walkabilityOverlayGraphics = null;
+    this.walkabilityHoverGraphics = null;
+    this.walkabilityHoverLabel = null;
+    this.lastWalkabilityHoverTileKey = null;
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
     this.lastSyncedPosition = null;
@@ -411,6 +421,11 @@ export default class WorldScene extends Phaser.Scene {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
       const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
       const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
+      const walkabilityOverlayChanged   = state.walkabilityOverlayEnabled   !== prev.walkabilityOverlayEnabled;
+      const tileCoordinatesChanged      = state.tileCoordinatesOverlayEnabled !== prev.tileCoordinatesOverlayEnabled;
+      const cursorTileChanged =
+        state.currentCursorTilePoint?.tileX !== prev.currentCursorTilePoint?.tileX ||
+        state.currentCursorTilePoint?.tileY !== prev.currentCursorTilePoint?.tileY;
       const selectionChanged = state.selectedWorldObject?.id !== prev.selectedWorldObject?.id;
       if (resourceOverlayChanged || selectionChanged) {
         this.redrawResourceOverlay();
@@ -420,6 +435,12 @@ export default class WorldScene extends Phaser.Scene {
       }
       if (creatureSpawnOverlayChanged || selectionChanged) {
         this.redrawCreatureSpawnOverlay();
+      }
+      if (walkabilityOverlayChanged) {
+        this.redrawWalkabilityOverlay();
+      }
+      if (walkabilityOverlayChanged || tileCoordinatesChanged || cursorTileChanged) {
+        this.redrawWalkabilityHover();
       }
     });
 
@@ -555,6 +576,7 @@ export default class WorldScene extends Phaser.Scene {
       worldPoint: { mapId: 1, ...world },
       tilePoint: { mapId: 1, ...tile },
       chunkPoint: { mapId: 1, ...chunk },
+      walkable: getWalkabilityAtTile(this.walkabilityGrid, tile.tileX, tile.tileY),
     };
   }
 
@@ -1149,6 +1171,116 @@ export default class WorldScene extends Phaser.Scene {
       });
   }
 
+  // ── Studio SDK — Walkability Overlay ───────────────────────────────────────
+
+  ensureWalkabilityOverlayGraphics() {
+    if (!this.walkabilityOverlayGraphics) {
+      this.walkabilityOverlayGraphics = this.add.graphics();
+      this.walkabilityOverlayGraphics.setDepth(45);
+    }
+    if (!this.walkabilityHoverGraphics) {
+      this.walkabilityHoverGraphics = this.add.graphics();
+      this.walkabilityHoverGraphics.setDepth(46);
+    }
+  }
+
+  clearWalkabilityOverlay() {
+    if (this.walkabilityOverlayGraphics) {
+      this.walkabilityOverlayGraphics.clear();
+    }
+    this.clearWalkabilityHover();
+  }
+
+  clearWalkabilityHover() {
+    if (this.walkabilityHoverGraphics) {
+      this.walkabilityHoverGraphics.clear();
+    }
+    if (this.walkabilityHoverLabel) {
+      this.walkabilityHoverLabel.destroy();
+      this.walkabilityHoverLabel = null;
+    }
+    this.lastWalkabilityHoverTileKey = null;
+  }
+
+  destroyWalkabilityOverlay() {
+    this.clearWalkabilityHover();
+    if (this.walkabilityHoverGraphics) {
+      this.walkabilityHoverGraphics.destroy();
+      this.walkabilityHoverGraphics = null;
+    }
+    if (this.walkabilityOverlayGraphics) {
+      this.walkabilityOverlayGraphics.destroy();
+      this.walkabilityOverlayGraphics = null;
+    }
+  }
+
+  redrawWalkabilityOverlay() {
+    const state = getDevToolsStore().getState();
+    this.ensureWalkabilityOverlayGraphics();
+    this.walkabilityOverlayGraphics.clear();
+
+    if (!state.walkabilityOverlayEnabled || !this.walkabilityGrid) {
+      this.clearWalkabilityHover();
+      return;
+    }
+
+    for (const tile of createWalkabilityOverlayTiles(this.walkabilityGrid)) {
+      const color = tile.walkable ? 0x66ff99 : 0xff4d4d;
+      const alpha = tile.walkable ? 0.18 : 0.55;
+      this.walkabilityOverlayGraphics.lineStyle(1, color, alpha);
+      this.walkabilityOverlayGraphics.strokePoints(tile.points, true);
+    }
+  }
+
+  redrawWalkabilityHover() {
+    const state = getDevToolsStore().getState();
+    const tile = state.currentCursorTilePoint;
+    const enabled = state.walkabilityOverlayEnabled;
+    const tileKey = tile ? `${tile.tileX},${tile.tileY}` : null;
+
+    if (!enabled || !tile) {
+      this.clearWalkabilityHover();
+      return;
+    }
+
+    this.ensureWalkabilityOverlayGraphics();
+    this.walkabilityHoverGraphics.clear();
+    if (this.walkabilityHoverLabel) {
+      this.walkabilityHoverLabel.destroy();
+      this.walkabilityHoverLabel = null;
+    }
+
+    const walkable = getWalkabilityAtTile(this.walkabilityGrid, tile.tileX, tile.tileY);
+    if (walkable === null) {
+      this.lastWalkabilityHoverTileKey = tileKey;
+      return;
+    }
+
+    const points = getTileDiamondPoints(tile.tileX, tile.tileY);
+    this.walkabilityHoverGraphics.lineStyle(3, 0xf1c40f, 0.95);
+    this.walkabilityHoverGraphics.strokePoints(points, true);
+    this.walkabilityHoverGraphics.fillStyle(walkable ? 0x66ff99 : 0xff4d4d, 0.12);
+    this.walkabilityHoverGraphics.fillPoints(points, true);
+
+    if (state.tileCoordinatesOverlayEnabled) {
+      const center = worldWUToScreen(
+        (tile.tileX + 0.5) * TILE_SIZE_WU,
+        (tile.tileY + 0.5) * TILE_SIZE_WU,
+      );
+      this.walkabilityHoverLabel = this.add
+        .text(center.x, center.y, `${tile.tileX},${tile.tileY}`, {
+          fontSize: "10px",
+          color: "#f1c40f",
+          stroke: "#000000",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5);
+      this.walkabilityHoverLabel.setDepth(47);
+    }
+
+    this.lastWalkabilityHoverTileKey = tileKey;
+  }
+
   clearResources() {
     for (const sprite of this.resourceSprites.values()) {
       sprite.destroy();
@@ -1238,6 +1370,7 @@ export default class WorldScene extends Phaser.Scene {
       this.overlayManager.destroy();
       this.overlayManager = null;
     }
+    this.destroyWalkabilityOverlay();
     this.creatureSpawnData.clear();
 
     this.clearResources();

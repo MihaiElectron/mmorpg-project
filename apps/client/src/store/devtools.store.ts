@@ -147,12 +147,20 @@ const storeLogic = (set, get) => ({
   currentCursorScreenPoint: null as DevToolsScreenPoint | null,
   currentCursorWorldPoint: null as DevToolsWorldPoint | null,
   currentCursorTilePoint: null as DevToolsTilePoint | null,
+  currentCursorChunkPoint: null as DevToolsChunkPoint | null,
+  currentCursorWalkable: null as boolean | null,
 
-  setCurrentCursorContext: (ctx: Pick<DevToolsClickContext, "screenPoint" | "worldPoint" | "tilePoint">) =>
+  setCurrentCursorContext: (
+    ctx: Pick<DevToolsClickContext, "screenPoint" | "worldPoint" | "tilePoint" | "chunkPoint"> & {
+      walkable?: boolean | null;
+    },
+  ) =>
     set({
       currentCursorScreenPoint: ctx.screenPoint,
       currentCursorWorldPoint: ctx.worldPoint,
       currentCursorTilePoint: ctx.tilePoint,
+      currentCursorChunkPoint: ctx.chunkPoint,
+      currentCursorWalkable: ctx.walkable ?? null,
     }),
 
   // ── Métadonnées map runtime ───────────────────────────────────────────────
@@ -169,6 +177,21 @@ const storeLogic = (set, get) => ({
   } as DevToolsMapInfo,
 
   setTerrainMapInfo: (info: DevToolsMapInfo) => set({ terrainMapInfo: info }),
+
+  walkabilityOverlayEnabled: false,
+  tileCoordinatesOverlayEnabled: false,
+
+  setWalkabilityOverlayEnabled: (enabled: boolean) =>
+    set({ walkabilityOverlayEnabled: enabled }),
+
+  toggleWalkabilityOverlayEnabled: () =>
+    set({ walkabilityOverlayEnabled: !get().walkabilityOverlayEnabled }),
+
+  setTileCoordinatesOverlayEnabled: (enabled: boolean) =>
+    set({ tileCoordinatesOverlayEnabled: enabled }),
+
+  toggleTileCoordinatesOverlayEnabled: () =>
+    set({ tileCoordinatesOverlayEnabled: !get().tileCoordinatesOverlayEnabled }),
 
   // ── Sélection WorldObject (Studio SDK) ──────────────────────────────────────
   selectedWorldObject: null as WorldObject | null,

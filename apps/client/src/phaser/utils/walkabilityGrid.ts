@@ -56,3 +56,21 @@ export function getWalkabilityGridSize(grid: WalkabilityGrid | null | undefined)
     height: grid?.length ?? 0,
   };
 }
+
+export function isTileInWalkabilityGrid(
+  grid: WalkabilityGrid | null | undefined,
+  tileX: number,
+  tileY: number,
+): boolean {
+  const { width, height } = getWalkabilityGridSize(grid);
+  return tileX >= 0 && tileY >= 0 && tileX < width && tileY < height;
+}
+
+export function getWalkabilityAtTile(
+  grid: WalkabilityGrid | null | undefined,
+  tileX: number,
+  tileY: number,
+): boolean | null {
+  if (!isTileInWalkabilityGrid(grid, tileX, tileY)) return null;
+  return grid[tileY][tileX] === 0;
+}
