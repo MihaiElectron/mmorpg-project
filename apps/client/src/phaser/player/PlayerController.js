@@ -1,5 +1,13 @@
 import { getDevToolsStore } from "../../store/devtools.store";
 import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
+import {
+  screenToWorldWU,
+  tileToWorldWU,
+  worldWUToScreen,
+  worldWUToTile,
+  TILE_SIZE_WU,
+} from "../utils/worldCoordinates";
+import { isTileInWalkabilityGrid } from "../utils/walkabilityGrid";
 
 export const MOUSE_HOLD_THRESHOLD_MS = 150;
 
@@ -143,15 +151,37 @@ export default class PlayerController {
       return;
     }
 
-    // Legacy pathfinding grid: not wired in Walkability P1.
-    // The active Tiled map uses ADR WU conversions and 128x64 visual tiles.
-    const tileSize = 32;
-    const startX = Math.floor(this.player.x / tileSize);
-    const startY = Math.floor(this.player.y / tileSize);
-    const endX = Math.floor(targetX / tileSize);
-    const endY = Math.floor(targetY / tileSize);
+    const startWU = screenToWorldWU(this.player.x, this.player.y);
+    const startTile = worldWUToTile(startWU.worldX, startWU.worldY);
+    const endWU = screenToWorldWU(targetX, targetY);
+    const endTile = worldWUToTile(endWU.worldX, endWU.worldY);
 
-    const newPath = this.scene.pathfinder.findPath(startX, startY, endX, endY);
+    // Fallback si la cible est hors des limites de la grille
+    if (
+      this.scene.walkabilityGrid &&
+      !isTileInWalkabilityGrid(this.scene.walkabilityGrid, endTile.tileX, endTile.tileY)
+    ) {
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "pathfinding_fallback",
+        details: this.getDebugDetails({
+          reason: "out_of_bounds",
+          targetX: Math.round(targetX),
+          targetY: Math.round(targetY),
+        }),
+      });
+      this.path = null;
+      this.target = { x: targetX, y: targetY };
+      this.scene.redrawPathOverlay?.(null);
+      return;
+    }
+
+    const newPath = this.scene.pathfinder.findPath(
+      startTile.tileX,
+      startTile.tileY,
+      endTile.tileX,
+      endTile.tileY,
+    );
 
     if (newPath && newPath.length > 0) {
       this.path = newPath;
@@ -167,14 +197,14 @@ export default class PlayerController {
       this.target = { x: targetX, y: targetY };
       pushDebugEvent({
         source: "PlayerController",
-        type: "pathfinding_fallback",
+        type: "pathfinding_no_path",
         details: this.getDebugDetails({
-          reason: "no_path",
           targetX: Math.round(targetX),
           targetY: Math.round(targetY),
         }),
       });
     }
+    this.scene.redrawPathOverlay?.(this.path);
   }
 
   // -------------------------------------------------------
@@ -292,14 +322,13 @@ export default class PlayerController {
       return;
     }
 
-    const tileSize = 32;
     const waypoint = this.path[this.currentPathIndex];
+    // Centre de la tuile en WU puis projection écran (ADR-0001)
+    const wu = tileToWorldWU(waypoint.x, waypoint.y);
+    const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
 
-    const targetX = waypoint.x * tileSize + tileSize / 2;
-    const targetY = waypoint.y * tileSize + tileSize / 2;
-
-    const dx = targetX - this.player.x;
-    const dy = targetY - this.player.y;
+    const dx = center.x - this.player.x;
+    const dy = center.y - this.player.y;
     const dist = Math.hypot(dx, dy);
 
     if (dist <= this.arrivalThreshold) {

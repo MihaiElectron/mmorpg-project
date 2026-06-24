@@ -12,11 +12,13 @@ import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
 import {
   screenToWorldWU,
+  tileToWorldWU,
   TILE_SIZE_WU,
   worldWUToChunk,
   worldWUToScreen,
   worldWUToTile,
 } from "../utils/worldCoordinates";
+import Pathfinder from "../utils/pathfinding";
 import {
   createWalkabilityGridFromMap,
   getWalkabilityAtTile,
@@ -168,6 +170,7 @@ export default class WorldScene extends Phaser.Scene {
     this.walkabilityOverlayGraphics = null;
     this.walkabilityHoverGraphics = null;
     this.walkabilityHoverLabel = null;
+    this.pathOverlayGraphics = null;
     this.lastWalkabilityHoverTileKey = null;
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
@@ -262,6 +265,7 @@ export default class WorldScene extends Phaser.Scene {
             this.terrainMap = map;
             this.terrainLayer = layer;
             this.walkabilityGrid = createWalkabilityGridFromMap(map, layer);
+            this.pathfinder = new Pathfinder(this.walkabilityGrid);
           }
         }
       } catch (e) {
@@ -438,6 +442,7 @@ export default class WorldScene extends Phaser.Scene {
       }
       if (walkabilityOverlayChanged) {
         this.redrawWalkabilityOverlay();
+        this.redrawPathOverlay(this.controller?.path ?? null);
       }
       if (walkabilityOverlayChanged || tileCoordinatesChanged || cursorTileChanged) {
         this.redrawWalkabilityHover();
@@ -1211,6 +1216,39 @@ export default class WorldScene extends Phaser.Scene {
     if (this.walkabilityOverlayGraphics) {
       this.walkabilityOverlayGraphics.destroy();
       this.walkabilityOverlayGraphics = null;
+    }
+    if (this.pathOverlayGraphics) {
+      this.pathOverlayGraphics.destroy();
+      this.pathOverlayGraphics = null;
+    }
+  }
+
+  redrawPathOverlay(path) {
+    if (!this.pathOverlayGraphics) {
+      this.pathOverlayGraphics = this.add.graphics();
+      this.pathOverlayGraphics.setDepth(48);
+    }
+    this.pathOverlayGraphics.clear();
+
+    const enabled = getDevToolsStore().getState().walkabilityOverlayEnabled;
+    if (!enabled || !path || path.length === 0) return;
+
+    // Ligne reliant les centres de tuiles
+    this.pathOverlayGraphics.lineStyle(2, 0xf1c40f, 0.85);
+    for (let i = 0; i < path.length; i++) {
+      const wu = tileToWorldWU(path[i].x, path[i].y);
+      const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
+      if (i === 0) this.pathOverlayGraphics.moveTo(center.x, center.y);
+      else this.pathOverlayGraphics.lineTo(center.x, center.y);
+    }
+    this.pathOverlayGraphics.strokePath();
+
+    // Points aux sommets du chemin
+    this.pathOverlayGraphics.fillStyle(0xf1c40f, 0.9);
+    for (const wp of path) {
+      const wu = tileToWorldWU(wp.x, wp.y);
+      const center = worldWUToScreen(wu.worldX + TILE_SIZE_WU / 2, wu.worldY + TILE_SIZE_WU / 2);
+      this.pathOverlayGraphics.fillCircle(center.x, center.y, 3);
     }
   }
 

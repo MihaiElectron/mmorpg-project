@@ -13,7 +13,7 @@ vi.mock("../../components/DevTools/debugEventLog", () => ({
   pushDebugEvent: vi.fn(),
 }));
 
-function createController({ pathfinder } = {}) {
+function createController({ pathfinder, walkabilityGrid } = {}) {
   const cursors = {
     left: { isDown: false },
     right: { isDown: false },
@@ -36,6 +36,8 @@ function createController({ pathfinder } = {}) {
   const getWorldPoint = vi.fn((x, y) => ({ x, y }));
   const scene = {
     pathfinder,
+    walkabilityGrid: walkabilityGrid ?? null,
+    redrawPathOverlay: vi.fn(),
     input: {
       activePointer,
       keyboard: {
@@ -202,6 +204,9 @@ describe("PlayerController — mouse movement", () => {
     );
   });
 
+  // Coordonnées WU (ADR-0001) :
+  // Player à screen (1000, 32) → WU (512, 512) → tile (0, 0)
+  // Target à screen (1192, 128) → WU (3584, 512) → tile (3, 0)
   it("conserve le cheminement par clic simple sans rejeter le mouvement", () => {
     const pathfinder = {
       findPath: vi.fn(() => [
@@ -209,9 +214,12 @@ describe("PlayerController — mouse movement", () => {
         { x: 3, y: 0 },
       ]),
     };
-    const { controller } = createController({ pathfinder });
+    const { controller, player } = createController({ pathfinder });
 
-    controller.startMouseMove(96, 0);
+    player.x = 1000;
+    player.y = 32;
+
+    controller.startMouseMove(1192, 128);
     now = 50;
     controller.stopMouseMove();
 
@@ -221,5 +229,89 @@ describe("PlayerController — mouse movement", () => {
       { x: 0, y: 0 },
       { x: 3, y: 0 },
     ]);
+  });
+
+  it("pathfinding_fallback si pathfinder absent", () => {
+    const { controller } = createController();
+
+    controller.startMouseMove(1192, 128);
+    now = 50;
+    controller.stopMouseMove();
+
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pathfinding_fallback",
+        details: expect.objectContaining({ reason: "missing_pathfinder" }),
+      }),
+    );
+    expect(controller.target).toEqual({ x: 1192, y: 128 });
+    expect(controller.path).toBeNull();
+  });
+
+  it("pathfinding_no_path si findPath retourne null (aucun chemin possible)", () => {
+    const pathfinder = { findPath: vi.fn(() => null) };
+    const { controller, player } = createController({ pathfinder });
+
+    player.x = 1000;
+    player.y = 32;
+
+    controller.startMouseMove(1192, 128);
+    now = 50;
+    controller.stopMouseMove();
+
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pathfinding_no_path" }),
+    );
+    expect(controller.target).toEqual({ x: 1192, y: 128 });
+    expect(controller.path).toBeNull();
+  });
+
+  it("pathfinding_fallback si cible hors grille walkabilityGrid", () => {
+    const pathfinder = { findPath: vi.fn() };
+    // Grille 2×2 : tiles (0,0) à (1,1) uniquement
+    const walkabilityGrid = [[0, 0], [0, 0]];
+    const { controller, player } = createController({ pathfinder, walkabilityGrid });
+
+    player.x = 1000;
+    player.y = 32;
+
+    // target → tile (3,0) hors de la grille 2×2
+    controller.startMouseMove(1192, 128);
+    now = 50;
+    controller.stopMouseMove();
+
+    expect(pathfinder.findPath).not.toHaveBeenCalled();
+    expect(pushDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pathfinding_fallback",
+        details: expect.objectContaining({ reason: "out_of_bounds" }),
+      }),
+    );
+    expect(controller.target).toEqual({ x: 1192, y: 128 });
+  });
+
+  it("followPath — avance vers le centre WU de la tuile suivante", () => {
+    // tile (3,0) center en WU : worldX = 3584, worldY = 512
+    // screen : x = 1000+(3584-512)/16 = 1192, y = (3584+512)/32 = 128
+    const path = [{ x: 0, y: 0 }, { x: 3, y: 0 }];
+    const pathfinder = { findPath: vi.fn(() => path) };
+    const { controller, player } = createController({ pathfinder });
+
+    player.x = 1000;
+    player.y = 32;
+
+    controller.startMouseMove(1192, 128);
+    now = 50;
+    controller.stopMouseMove();
+
+    // tile(0,0) center → screen (1000, 32) = position joueur → arrivée immédiate
+    controller.update(); // currentPathIndex passe à 1
+    expect(controller.currentPathIndex).toBe(1);
+
+    // tile(3,0) center → screen (1192, 128) : dx=192, dy=96
+    controller.update();
+    const ratio = player.velocity.y / player.velocity.x;
+    expect(ratio).toBeCloseTo(0.5, 1); // dy/dx = 96/192
+    expect(player.velocity.x).toBeGreaterThan(0);
   });
 });
