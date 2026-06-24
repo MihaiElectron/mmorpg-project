@@ -502,12 +502,12 @@ Resource dans le monde
      Loot produit
   (items, matières premières)
         │
-        │ ← [futur] crafting / traitement
+        │ ← crafting runtime / traitement
         ▼
    Item transformé
   (planche, barre, fiole…)
         │
-        │ ← [futur] crafting avancé
+        │ ← transformation avancée future
         ▼
    Objet fini
   (arme, armure, consommable…)
@@ -526,7 +526,7 @@ et ajouté à son inventaire. Un item n'a plus de position dans le monde.
 **Matière première** — sous-catégorie d'item : produit brut obtenu directement d'une
 Resource, non transformé. Distinction conceptuelle importante pour l'économie future.
 
-**Composant de crafting** — sous-catégorie d'item futur : produit intermédiaire issu
+**Composant de crafting** — sous-catégorie d'item : produit intermédiaire issu
 d'une transformation de matière première.
 
 ### Exemples de chaînes
@@ -921,11 +921,15 @@ l'état du monde.
 
 ---
 
-## 13. Crafting futur
+## 13. Lien Resource → Crafting
 
-Ce document prépare le lien conceptuel vers le crafting sans le définir.
+Ce document décrit le lien conceptuel entre Resources et crafting. Le runtime
+craft joueur via stations est désormais documenté dans
+`docs/08_Gameplay/crafting-runtime.md`. Les transformations avancées de
+Resources, la traçabilité économique complète et les installations de traitement
+spécialisées restent des extensions futures.
 
-### Principes à respecter lors de l'implémentation du crafting
+### Principes à respecter pour le crafting
 
 **Une Resource produit des inputs, pas le crafting lui-même.**
 Le crafting consomme des items produits par les Resources. La chaîne est :

@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-22
+- Last updated: 2026-06-24
 - Depends on: docs/README.md, docs/ROADMAP.md, docs/10_AI/project-philosophy.md, docs/00_Project/glossary.md
 - Used by: Project owner, developers, Claude Code, Claude, ChatGPT, Codex, tout agent IA travaillant sur ce projet
 
@@ -185,6 +185,9 @@ dans le monde.
 - Respawn : joueur (point le plus proche), animal (spawn d'origine).
 - Loot : génération de récompenses selon le type d'entité.
 - Progression : expérience, niveaux, statistiques.
+- Skills métiers : définitions de skills, XP et niveaux joueur.
+- Crafting : recettes, stations de craft, validation serveur, consommation et
+  production d'items.
 - Inventaire : stockage, équipement, limites, transferts.
 - Comportements IA : patrouille, aggro, fuite, leash.
 
@@ -207,6 +210,7 @@ dans le monde.
 
 - `docs/08_Gameplay/movement-model.md`
 - `docs/08_Gameplay/movement-authority-audit.md`
+- `docs/08_Gameplay/crafting-runtime.md`
 - `docs/01_Architecture/client-server-boundaries.md`
 - `docs/02_Security/client-server-trust.md`
 
@@ -224,11 +228,12 @@ dans le monde.
 | Respawn animal | **Implémenté** |
 | Loot ressource | **Implémenté** (partiel — table hardcodée) |
 | Loot animal | **Futur** |
-| Progression (exp, niveaux) | **Futur** |
+| Progression (exp, niveaux) | **Implémenté** pour skills de craft |
+| Métiers / skills | **Implémenté** pour SkillDefinition + PlayerSkill XP/niveaux |
+| Crafting | **Implémenté** pour recettes, stations, ActionPanel runtime et validation serveur WU |
+| Stations de craft | **Implémenté** — templates, instances WU, AdminPanel/WOM, rendu debug |
 | Calcul de stats d'équipement | **Futur** (stub existant) |
 | Quêtes | **Futur** |
-| Métiers / skills | **Futur** |
-| Crafting | **Futur** |
 
 ---
 

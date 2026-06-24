@@ -4,8 +4,8 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
-- Depends on: docs/README.md, docs/01_Architecture/overview.md, docs/02_Security/client-server-trust.md
+- Last updated: 2026-06-24
+- Depends on: docs/README.md, docs/01_Architecture/overview.md, docs/02_Security/client-server-trust.md, docs/08_Gameplay/crafting-runtime.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
 ## Scope
@@ -67,6 +67,7 @@ accepted as real game state.
 | Gameplay collisions | No collision authority. | May use local collision or pathfinding helpers. | No collision authority. | Server-side gameplay collision validation was not verified. | No authoritative collision persistence was verified. | Not verified |
 | Client prediction | No direct prediction authority. | Moves the local player before server acceptance is fully verified. | May display predicted or locally updated state. | Can broadcast accepted movement, but correction/refusal behavior was not verified. | No direct prediction state. | Implemented / Not verified |
 | Resources | Displays interaction UI and inventory updates. | Renders resource targets and emits resource interaction events. | Stores displayed inventory updates. | Resource gateway validates joined player, target, range, movement tolerance, and resource state before loot. | Stores resources, items, and inventory updates. | Implemented |
+| Crafting | Displays station ActionPanel, compatible recipes, estimated reach, result, and server errors. | Renders debug crafting stations and station radius overlay from WU data. | Stores local character position for display and refreshes inventory/skills after craft. | Craft controller resolves character from auth; CraftingService validates recipe, stationType, nearest compatible station, WU distance, inventory, skill, success roll, and XP. | Stores recipes, station templates, station instances, inventory, and player skill data. | Implemented |
 | Loot | Displays loot and inventory changes. | Receives resource loot events and visual updates. | Updates local inventory display. | Server services generate and apply loot through inventory/resource logic. | Stores inventory and item data. | Implemented |
 | Inventory | Renders inventory and equipment UI. | Receives inventory-related events for world feedback. | Stores displayed inventory and equipment. | Character and inventory-related endpoints and services update server state. | Stores inventory, equipment, and item rows. | Implemented |
 | Animals | Displays action panel and health-related UI. | Renders animals, emits attacks, and displays animal updates. | Stores local action and character display state. | Animal gateway and service validate target, range, cooldown, combat, respawn, and updates. | Stores animals, templates, spawns, and character health. | Implemented |
@@ -166,6 +167,9 @@ Implemented examples:
 - `interact_resource` validates joined player state, target existence, range,
   movement during gathering, and resource availability.
 - `attack_animal` routes combat through server-side animal service logic.
+- `POST /crafting/craft` resolves the character server-side, never accepts a
+  client `stationId`, and validates station proximity in WU before inventory or
+  skill effects.
 - Observed admin gateway commands check `client.data.role === 'admin'`.
 
 Not verified:

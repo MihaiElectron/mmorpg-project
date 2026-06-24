@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-22
+- Last updated: 2026-06-24
 - Depends on: docs/08_Gameplay/world-model.md, docs/08_Gameplay/entity-model.md, docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md, docs/07_Admin/mmorpg-studio.md
 - Used by: Project owner, developers, Claude Code, Claude, tout agent IA travaillant sur ce projet
 
@@ -173,18 +173,45 @@ D'autres catégories pourront être introduites sans modifier le WOM :
 | Timeline | Séquence d'événements mondiaux planifiés |
 | Decoration | Objet visuel non interactif posé dans la scène |
 
-### Note d'implémentation — Crafting Stations Phase 1
+### Note d'implémentation — Crafting Stations
 
 Les `CraftingStationTemplate` et `CraftingStation` sont des World Objects
-persistés et administrables via WOM/AdminPanel. En Phase 1, leur rôle runtime
-est la validation serveur des recettes de craft qui déclarent un
-`stationType != "none"` : le serveur choisit une station compatible proche du
-joueur en coordonnées WU.
+persistés et administrables via WOM/AdminPanel.
 
-Le rendu sprite direct dans `WorldScene` n'est pas requis pour cette phase.
-L'affichage in-world dédié des stations est prévu pour une Phase 2, afin de
-choisir des assets et interactions visuelles cohérents sans déplacer la logique
-métier côté client.
+`CraftingStationTemplate` est un World Object de définition :
+
+- `kind: "definition"` ;
+- `category: "crafting_station_template"` ;
+- `position: null` ;
+- `metadata.key`, `metadata.name`, `metadata.stationType`,
+  `metadata.category`, `metadata.requiredSkillKey`,
+  `metadata.interactionRadiusWU`, `metadata.enabled`.
+
+`CraftingStation` est un World Object d'entité placée :
+
+- `kind: "entity"` ;
+- `category: "crafting_station"` ;
+- `mapId` et `position.worldX/worldY` en WU ;
+- `metadata.templateId`, `metadata.templateKey`, `metadata.name`,
+  `metadata.stationType`, `metadata.interactionRadiusWU`,
+  `metadata.templateEnabled`, `metadata.enabled`.
+
+Les capabilities exposées sont :
+
+- `crafting_station` ;
+- `placement` ;
+- `validation`.
+
+Leur rôle runtime est la validation serveur des recettes de craft qui déclarent
+un `stationType != "none"` : le serveur choisit une station compatible proche
+du joueur en coordonnées WU, avec distance euclidienne WU et rayon
+`interactionRadiusWU`.
+
+Le rendu actuel dans `WorldScene` est un rendu debug simple avec label court et
+couleur par `stationType`. Le toggle DevTools `Station Radius` affiche le rayon
+d'interaction. Ces éléments sont visuels uniquement : ils ne sont ni des
+collisions, ni des validations gameplay. Le runtime craft joueur est documenté
+dans `docs/08_Gameplay/crafting-runtime.md`.
 
 ---
 
@@ -320,6 +347,8 @@ plusieurs. Ajouter un nouveau type d'objet = définir ses capacités.
 | `validation` | Expose des règles de validation vérifiables par le Studio | Tout World Object |
 | `entities` | Contient ou référence d'autres World Objects | Chunk, Area |
 | `environment` | Porte des effets environnementaux (météo) | Weather Zone |
+| `crafting_station` | Station de craft utilisable par les recettes qui exigent un `stationType` | CraftingStationTemplate, CraftingStation |
+| `placement` | Peut être placé ou déplacé dans une Map en coordonnées WU | CraftingStation, Resource, Spawn Point |
 
 ### Propriétés d'une capacité
 
@@ -405,6 +434,20 @@ Un point de spawn d'animaux.
 | `spawn` | Template : Loup, max actifs : 3, cooldown : 60 s |
 | `persistence` | Persisté en DB |
 | `validation` | Règle : position dans Map valide, template existant |
+
+### CraftingStation : Forge
+
+Une forge placée dans le monde et utilisable par les recettes `stationType:
+"forge"`.
+
+| Capacité | Contenu |
+|---|---|
+| `crafting_station` | stationType : `forge`, rayon : `interactionRadiusWU` |
+| `placement` | `mapId`, `worldX`, `worldY` en WU |
+| `validation` | Règle : template enabled, instance enabled, stationType compatible, distance serveur en WU |
+
+Le Studio inspecte cet objet sans décider du résultat d'un craft. Le Runtime
+reste responsable de la validation de proximité et du résultat de craft.
 
 ---
 
@@ -567,6 +610,8 @@ décide de corriger.
 | Chunk (concept) | **Implémenté** — pas d'objet inspectable isolément |
 | Spawn Point (CreatureSpawn) | **Implémenté** — pas de capacités exposées |
 | Respawn Point | **Implémenté** — pas de capacités exposées |
+| CraftingStationTemplate | **Implémenté** — WOM/AdminPanel, capabilities `crafting_station`, `placement`, `validation` |
+| CraftingStation | **Implémenté** — instance WU placée, rendu debug, ActionPanel runtime |
 | Area | **Futur** |
 | Trigger | **Futur** |
 | Portal | **Futur** |

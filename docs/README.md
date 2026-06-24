@@ -127,8 +127,9 @@ If a contradiction is found:
 
 - [Gameplay README](08_Gameplay/README.md) - Status: Draft - Role of the gameplay documentation domain.
 - [World Object Model](08_Gameplay/world-object-model.md) - Status: Draft - Modèle conceptuel racine du monde : World Object, catégories, capacités, relation Runtime/Studio, Inspector universel, validation.
+- [Crafting Runtime](08_Gameplay/crafting-runtime.md) - Status: Draft - Cycle runtime joueur du craft via stations placées, validation serveur WU, erreurs structurées et overlays debug.
 - [Entity Architecture](08_Gameplay/entity-architecture.md) - Status: Draft - Architecture conceptuelle des Entities : cycle de vie, identité, localisation, état, capacités, comportements, événements, autorité, visibilité Studio.
-- [Resource Architecture](08_Gameplay/resource-architecture.md) - Status: Draft - Architecture conceptuelle des Resources : cycle de vie, loot, transformation, respawn, intégration Studio, crafting futur.
+- [Resource Architecture](08_Gameplay/resource-architecture.md) - Status: Draft - Architecture conceptuelle des Resources : cycle de vie, loot, transformation, respawn, intégration Studio, lien Resource → Crafting.
 - [Resource Runtime Gap Analysis](08_Gameplay/resource-runtime-gap-analysis.md) - Status: Draft - Audit de conformité Resources : écarts entre l'implémentation actuelle et l'architecture conceptuelle, plan de migration incrémental.
 - [World Model](08_Gameplay/world-model.md) - Status: Draft - World, Map, Chunk, and Tile concepts — technology-independent.
 - [Entity Model](08_Gameplay/entity-model.md) - Status: Draft - Entity concept and specialized entity types.

@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-24_
-_Session : 2026-06-24 (sessions 14–15 — migration WU P5, P6 — protocole admin WU pur)_
+_Session : 2026-06-24 (sessions 14–18 — Crafting Stations, runtime craft joueur, overlays debug)_
 _Branche : main_
 _État : développement local_
 
@@ -29,10 +29,42 @@ avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensio
 Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
 Onglets Talents/Succès placeholder actifs.
 
+**Crafting Stations runtime** opérationnel : `CraftingStationTemplate` et
+`CraftingStation` sont persistés, administrables via WOM/AdminPanel, rendus en
+debug dans `WorldScene` et utilisables par le joueur depuis l'ActionPanel. Les
+recettes avec `stationType != "none"` sont validées côté serveur par distance
+euclidienne WU à une station compatible proche. Le client affiche un indicateur
+estimatif de portée et les erreurs structurées serveur, sans jamais devenir
+autoritaire.
+
 ---
 
 ## Derniers changements importants
 
+- **Crafting Stations + runtime craft joueur** : ajout de `CraftingStationTemplate`
+  et `CraftingStation` (templates + instances WU), seeds non destructifs
+  (`forge`, `workbench`, `sawmill`, `alchemy_table`, `cooking_station`),
+  adapter WOM avec capabilities `crafting_station`, `placement`, `validation`,
+  AdminPanel/WOM pour templates et instances, drag-to-map et bouton TP station.
+  `CraftingService.craft()` valide les recettes `stationType != "none"` par
+  station enabled/template enabled, même `mapId`, `stationType` compatible et
+  distance euclidienne WU <= `interactionRadiusWU`.
+- **Rendu debug stations et Station Radius Overlay** : `WorldScene` affiche les
+  stations enabled en carrés debug (`forge` orange, `workbench` bleu, `sawmill`
+  vert, `alchemy_table` violet, `cooking_station` rouge, fallback gris). Le
+  toggle DevTools `Station Radius` affiche le rayon issu de
+  `interactionRadiusWU`. Ces rendus sont visuels uniquement : pas de collision,
+  pas de validation gameplay.
+- **Runtime Crafting UI** : clic station → `ActionPanel` → ouverture du panneau
+  craft runtime, chargement des recettes compatibles via `stationType`, puis
+  `POST /crafting/craft { recipeId, quantity }`. Le client n'envoie ni
+  `characterId`, ni `stationId`; le serveur résout le personnage et choisit la
+  station valide. Après succès, inventaire et skills sont rafraîchis.
+- **UX portée estimée et erreurs station structurées** : le client affiche
+  `Station à portée` ou `Hors de portée estimée` à partir des coordonnées WU
+  locales, sans bloquer le craft. Les refus serveur station renvoient
+  `CRAFTING_STATION_REQUIRED` ou `CRAFTING_STATION_OUT_OF_RANGE` avec
+  `stationType`, et si calculable `nearestDistanceWU` + `requiredRadiusWU`.
 - **Migration WU P5 — `player_move` WU-only** : `x/y` pixels supprimés du payload
   `player_move` (client → serveur). `WorldScene.syncLocalPlayer` envoie désormais
   `{ worldX, worldY, mapId, direction }`. `updatePlayer` accepte uniquement WU,
@@ -79,18 +111,18 @@ Onglets Talents/Succès placeholder actifs.
 | DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, ouverture HUD, mode edit, position panneau, lastClickedPos, contexte coordonnées (world click px/WU/tile/chunk) |
 | DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
 | DevTools — World | `CoordinateInspector` lecture seule : activeTool, dernier clic monde Phaser en pixels, WU, tile, chunk |
-| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic |
+| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic, Station Radius Overlay pour les stations de craft |
 | DevTools — Command Palette | Input filtré par label/id, Enter = première action, liste cliquable, pending state |
-| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Animals (instances WOM, templates REST). Players/Overview REST. Console identique legacy. |
+| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Animals (instances WOM, templates REST). CraftingRecipes et CraftingStations (templates + instances WU, drag-to-map, TP). Players/Overview REST. Console identique legacy. |
 | Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn + Reset Template) |
 | Studio SDK — projection | `wuToScreen()` centralisée dans `phaser/utils/wuProjection.ts` |
 | Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 572 tests backend (23 suites, 1 échec pré-existant `auth.controller.spec.ts`) + 209 tests frontend |
+| Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé craft : `npm --workspace api-gateway run test -- crafting`, client complet : `npm --workspace client run test` |
 | Migration WU | **P0–P6 soldés.** Protocole WebSocket entièrement WU. `player_move` WU-only, tous les événements admin en `worldX/worldY`. `resolveScreen()` WU-first côté client. Reste : P7 drop colonnes legacy DB (`positionX/Y`, `animal.x/y`). |
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
-| Crafting admin | `CraftingRecipe` entièrement administrable via WOM/Admin (WOM adapter, CRUD, ingrédients, résultats, validation). |
+| Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
 
 ---
 
@@ -258,6 +290,27 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-24 (sessions 16–18 — Crafting Stations et runtime craft joueur)
+
+- **Crafting Stations Phase 1** : `CraftingStationTemplate` et `CraftingStation`
+  ajoutés comme World Objects persistés, administrables via WOM/AdminPanel. Seeds
+  non destructifs minimum : `forge`, `workbench`, `sawmill`, `alchemy_table`,
+  `cooking_station`. Validation serveur dans `CraftingService.craft()` pour
+  `stationType != "none"` : station compatible enabled, template enabled, même
+  `mapId`, distance euclidienne WU <= `interactionRadiusWU`.
+- **Crafting Stations Phase 2 + 2.5** : rendu debug in-world des stations enabled
+  dans `WorldScene`, bouton TP station dans AdminPanel, live refresh via
+  `crafting_station_update`, toggle DevTools `Station Radius` basé sur
+  `interactionRadiusWU`.
+- **Runtime Crafting UI joueur** : clic station → `ActionPanel` → panneau craft,
+  liste recettes compatibles, `POST /crafting/craft { recipeId, quantity }`,
+  refresh inventaire/skills. Le client n'envoie jamais `characterId` ni
+  `stationId`.
+- **UX portée et erreurs structurées** : indicateur purement informatif de portée
+  estimée côté client. Erreurs serveur station enrichies :
+  `CRAFTING_STATION_REQUIRED` et `CRAFTING_STATION_OUT_OF_RANGE` avec distance/rayon
+  si calculables.
 
 ### 2026-06-24 (sessions 14–15 — migration WU P5 + P6)
 

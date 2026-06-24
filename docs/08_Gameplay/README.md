@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-24
 - Depends on: docs/README.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -14,7 +14,11 @@ This folder is the business reference of the MMORPG.
 
 It describes the concepts of the game, the relationships between those concepts, and the rules that govern them.
 
-It is intentionally independent of any technology. It does not mention TypeORM, PostgreSQL, NestJS, Phaser, React, Socket.IO, or any other implementation detail. These belong to other documentation domains.
+It is intentionally independent of any technology by default. Documents whose
+scope is the current runtime state may cite route names, UI entry points, or
+server/client boundaries when that is required to prevent ambiguity. Detailed
+implementation mechanics still belong to the architecture, client, server, or
+admin documentation domains.
 
 When a concept is described here, it is described as a game designer would describe it — not as a developer implementing it.
 
@@ -28,7 +32,8 @@ When a concept is described here, it is described as a game designer would descr
 ## What does not belong here
 
 - Database schema or column types.
-- API routes or socket events.
+- API routes or socket events, except when a current-state runtime document
+  needs to name the actual boundary used by gameplay.
 - Client rendering or Phaser scene logic.
 - Server validation code or service methods.
 - Any implementation detail.
@@ -42,6 +47,8 @@ world-model.md   ← the structure of the game world
 ↓
 entity-model.md  ← the concept of a game entity
 ↓
+crafting-runtime.md ← runtime crafting through placed stations
+↓
 (future documents, one per domain when development begins)
 ```
 
@@ -50,5 +57,6 @@ entity-model.md  ← the concept of a game entity
 - [Documentation Index](../README.md)
 - [World Model](world-model.md)
 - [Entity Model](entity-model.md)
+- [Crafting Runtime](crafting-runtime.md)
 - [Architecture Overview](../01_Architecture/overview.md)
 - [ROADMAP](../ROADMAP.md)
