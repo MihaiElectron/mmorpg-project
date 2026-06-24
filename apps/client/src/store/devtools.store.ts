@@ -24,6 +24,18 @@ export type DevToolsClickContext = {
   chunkPoint: DevToolsChunkPoint;
 };
 
+export type DevToolsMapInfo = {
+  loaded: boolean;
+  key: string | null;
+  layerName: string | null;
+  width: number | null;
+  height: number | null;
+  tileWidth: number | null;
+  tileHeight: number | null;
+  walkabilityGridWidth: number;
+  walkabilityGridHeight: number;
+};
+
 export type DevToolsPanelPosition = { x: number; y: number };
 
 const DEFAULT_PANEL_POSITION: DevToolsPanelPosition = { x: 0, y: 0 };
@@ -130,6 +142,33 @@ const storeLogic = (set, get) => ({
       lastClickedTilePoint:    null,
       lastClickedChunkPoint:   null,
     }),
+
+  // ── Curseur monde courant ─────────────────────────────────────────────────
+  currentCursorScreenPoint: null as DevToolsScreenPoint | null,
+  currentCursorWorldPoint: null as DevToolsWorldPoint | null,
+  currentCursorTilePoint: null as DevToolsTilePoint | null,
+
+  setCurrentCursorContext: (ctx: Pick<DevToolsClickContext, "screenPoint" | "worldPoint" | "tilePoint">) =>
+    set({
+      currentCursorScreenPoint: ctx.screenPoint,
+      currentCursorWorldPoint: ctx.worldPoint,
+      currentCursorTilePoint: ctx.tilePoint,
+    }),
+
+  // ── Métadonnées map runtime ───────────────────────────────────────────────
+  terrainMapInfo: {
+    loaded: false,
+    key: null,
+    layerName: null,
+    width: null,
+    height: null,
+    tileWidth: null,
+    tileHeight: null,
+    walkabilityGridWidth: 0,
+    walkabilityGridHeight: 0,
+  } as DevToolsMapInfo,
+
+  setTerrainMapInfo: (info: DevToolsMapInfo) => set({ terrainMapInfo: info }),
 
   // ── Sélection WorldObject (Studio SDK) ──────────────────────────────────────
   selectedWorldObject: null as WorldObject | null,

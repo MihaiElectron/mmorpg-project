@@ -10,6 +10,16 @@ import { getCharacterStore } from "../../store/character.store";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
+import {
+  screenToWorldWU,
+  worldWUToChunk,
+  worldWUToScreen,
+  worldWUToTile,
+} from "../utils/worldCoordinates";
+import {
+  createWalkabilityGridFromMap,
+  getWalkabilityGridSize,
+} from "../utils/walkabilityGrid";
 
 const MOVEMENT_KEYS = new Set([
   "ArrowLeft",
@@ -120,10 +130,7 @@ function destroyHpBar(hpBar) {
 // Fallback sur les champs x/y legacy si worldX/worldY absents ou invalides.
 function resolveScreen(entity) {
   if (Number.isFinite(entity.worldX) && Number.isFinite(entity.worldY)) {
-    return {
-      x: Math.round(1000 + (entity.worldX - entity.worldY) / 16),
-      y: Math.round((entity.worldX + entity.worldY) / 32),
-    };
+    return worldWUToScreen(entity.worldX, entity.worldY);
   }
   return { x: Math.round(entity.x), y: Math.round(entity.y) };
 }
@@ -149,6 +156,9 @@ export default class WorldScene extends Phaser.Scene {
     this.overlayStoreUnsub = null;
     this.animalSprites = new Map();
     this.remotePlayers = new Map();
+    this.terrainMap = null;
+    this.terrainLayer = null;
+    this.walkabilityGrid = null;
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
     this.lastSyncedPosition = null;
@@ -237,12 +247,18 @@ export default class WorldScene extends Phaser.Scene {
         const tileset = map.addTilesetImage("grass", "tileset_grass");
         if (tileset && map.layers.length > 0) {
           const layer = map.createLayer(map.layers[0].name, tileset, TILEMAP_TEST_OFFSET_X, TILEMAP_TEST_OFFSET_Y);
-          if (layer) layer.setDepth(0);
+          if (layer) {
+            layer.setDepth(0);
+            this.terrainMap = map;
+            this.terrainLayer = layer;
+            this.walkabilityGrid = createWalkabilityGridFromMap(map, layer);
+          }
         }
       } catch (e) {
         console.warn("[WorldScene] tilemap load failed:", e.message);
       }
     }
+    this.updateTerrainMapInfo();
 
     this.socket = this.game.socket;
 
@@ -342,16 +358,10 @@ export default class WorldScene extends Phaser.Scene {
 
       const sx = Math.round(worldX);
       const sy = Math.round(worldY);
-      // Inverse de la projection isométrique ADR-0001 (mapId hardcodé = 1, carte unique)
-      const wuX = Math.round(8 * (worldX - 1000) + 16 * worldY);
-      const wuY = Math.round(-8 * (worldX - 1000) + 16 * worldY);
+      const cursorContext = this.createCoordinateContext(worldX, worldY);
       getDevToolsStore().getState().setLastClickedPos({ x: sx, y: sy });
-      getDevToolsStore().getState().setLastClickedContext({
-        screenPoint: { x: sx, y: sy },
-        worldPoint:  { mapId: 1, worldX: wuX, worldY: wuY },
-        tilePoint:   { mapId: 1, tileX: wuX >> 10, tileY: wuY >> 10 },
-        chunkPoint:  { mapId: 1, chunkX: wuX >> 16, chunkY: wuY >> 16 },
-      });
+      getDevToolsStore().getState().setLastClickedContext(cursorContext);
+      getDevToolsStore().getState().setCurrentCursorContext(cursorContext);
       getActionPanelStore().getState().closePanel();
       getDevToolsStore().getState().clearSelectedWorldObject();
       this.stopAutoAttack();
@@ -359,8 +369,11 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.input.on("pointermove", (pointer) => {
+      const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      getDevToolsStore().getState().setCurrentCursorContext(
+        this.createCoordinateContext(worldPoint.x, worldPoint.y),
+      );
       if (pointer.isDown) {
-        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         pushDebugEvent({
           source: "WorldScene",
           type: "pointermove",
@@ -526,6 +539,38 @@ export default class WorldScene extends Phaser.Scene {
       targetX: this.controller?.target ? Math.round(this.controller.target.x) : null,
       targetY: this.controller?.target ? Math.round(this.controller.target.y) : null,
     };
+  }
+
+  createCoordinateContext(screenX, screenY) {
+    const roundedScreen = {
+      x: Math.round(screenX),
+      y: Math.round(screenY),
+    };
+    const world = screenToWorldWU(screenX, screenY);
+    const tile = worldWUToTile(world.worldX, world.worldY);
+    const chunk = worldWUToChunk(world.worldX, world.worldY);
+
+    return {
+      screenPoint: roundedScreen,
+      worldPoint: { mapId: 1, ...world },
+      tilePoint: { mapId: 1, ...tile },
+      chunkPoint: { mapId: 1, ...chunk },
+    };
+  }
+
+  updateTerrainMapInfo() {
+    const gridSize = getWalkabilityGridSize(this.walkabilityGrid);
+    getDevToolsStore().getState().setTerrainMapInfo({
+      loaded: Boolean(this.terrainMap && this.terrainLayer),
+      key: this.terrainMap ? "terrain_pipeline_test" : null,
+      layerName: this.terrainLayer?.layer?.name ?? this.terrainLayer?.name ?? null,
+      width: this.terrainMap?.width ?? null,
+      height: this.terrainMap?.height ?? null,
+      tileWidth: this.terrainMap?.tileWidth ?? null,
+      tileHeight: this.terrainMap?.tileHeight ?? null,
+      walkabilityGridWidth: gridSize.width,
+      walkabilityGridHeight: gridSize.height,
+    });
   }
 
   update(time) {
@@ -746,8 +791,7 @@ export default class WorldScene extends Phaser.Scene {
     const position = {
       x: px,
       y: py,
-      worldX: 8 * (px - 1000) + 16 * py,
-      worldY: -8 * (px - 1000) + 16 * py,
+      ...screenToWorldWU(px, py),
       mapId: 1,
       direction: this.player.direction,
     };

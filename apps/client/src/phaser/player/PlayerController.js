@@ -143,6 +143,8 @@ export default class PlayerController {
       return;
     }
 
+    // Legacy pathfinding grid: not wired in Walkability P1.
+    // The active Tiled map uses ADR WU conversions and 128x64 visual tiles.
     const tileSize = 32;
     const startX = Math.floor(this.player.x / tileSize);
     const startY = Math.floor(this.player.y / tileSize);
