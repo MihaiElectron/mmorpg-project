@@ -8,6 +8,7 @@ import {
   NAV_CELL_SIZE_WU,
 } from "../utils/worldCoordinates";
 import { isNavCellInNavGrid } from "../utils/walkabilityGrid";
+import { smoothPath } from "../utils/pathfinding";
 
 export const MOUSE_HOLD_THRESHOLD_MS = 150;
 
@@ -184,13 +185,18 @@ export default class PlayerController {
     );
 
     if (newPath && newPath.length > 0) {
-      this.path = newPath;
+      const smoothed = smoothPath(newPath, this.scene.navGrid);
+      this.path = smoothed;
       this.currentPathIndex = 0;
       this.target = null;
       pushDebugEvent({
         source: "PlayerController",
-        type: "pathfinding_path_found",
-        details: this.getDebugDetails({ pathLength: newPath.length }),
+        type: "pathfinding_path_smoothed",
+        details: this.getDebugDetails({
+          rawLength: newPath.length,
+          smoothedLength: smoothed.length,
+          reduction: newPath.length - smoothed.length,
+        }),
       });
     } else {
       this.path = null;
