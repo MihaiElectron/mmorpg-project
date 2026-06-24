@@ -49,4 +49,95 @@
   &__coordinate-value {
     color: vars.$color-text-primary;
   }
+
+  &__event-log {
+    @include m.panel-section;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  &__event-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__event-log-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  &__event-log-button {
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-inner-bg;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+    font-size: 0.7rem;
+    line-height: 1;
+    padding: 4px 7px;
+  }
+
+  &__event-log-button:hover {
+    border-color: vars.$panel-border;
+    color: vars.$color-text-gold;
+  }
+
+  &__event-log-filter {
+    width: 100%;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-primary;
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 5px 7px;
+  }
+
+  &__event-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  &__event-log-row {
+    display: grid;
+    grid-template-columns: 52px 76px 96px minmax(0, 1fr);
+    gap: 5px;
+    align-items: start;
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    padding: 4px 6px;
+  }
+
+  &__event-log-time,
+  &__event-log-source,
+  &__event-log-type {
+    color: vars.$color-text-gold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__event-log-details {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__event-log-empty {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+  }
 }

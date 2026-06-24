@@ -8,7 +8,23 @@ import { setSpriteDepth } from "../utils/depth";
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { getCharacterStore } from "../../store/character.store";
 import { getDevToolsStore } from "../../store/devtools.store";
+import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 import { DevToolsOverlayManager } from "../devtools/DevToolsOverlayManager";
+
+const MOVEMENT_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "a",
+  "d",
+  "s",
+  "w",
+  "A",
+  "D",
+  "S",
+  "W",
+]);
 
 // ── Studio SDK — WorldObject adapters (client-side mirror des backend adapters) ──
 const RESOURCE_WO_CAPABILITIES = Object.freeze([
@@ -138,6 +154,9 @@ export default class WorldScene extends Phaser.Scene {
     this.lastSyncedPosition = null;
     this.windowMouseUpHandler = null;
     this.windowBlurHandler = null;
+    this.windowFocusHandler = null;
+    this.windowKeyDownHandler = null;
+    this.windowKeyUpHandler = null;
     this.canvasMouseLeaveHandler = null;
 
     // Indicateur visuel de récolte (local, visible uniquement par ce client).
@@ -271,6 +290,12 @@ export default class WorldScene extends Phaser.Scene {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
 
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "pointerdown",
+        details: this.getPointerDebugDetails(pointer),
+      });
+
       getCharacterStore().getState().closePanel?.();
 
       const targets = this.getGatheringTargetsAt(worldX, worldY);
@@ -336,12 +361,25 @@ export default class WorldScene extends Phaser.Scene {
     this.input.on("pointermove", (pointer) => {
       if (pointer.isDown) {
         const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        pushDebugEvent({
+          source: "WorldScene",
+          type: "pointermove",
+          details: this.getPointerDebugDetails(pointer, {
+            worldX: Math.round(worldPoint.x),
+            worldY: Math.round(worldPoint.y),
+          }),
+        });
         this.controller.updateMouseTarget(worldPoint.x, worldPoint.y);
       }
     });
 
-    this.input.on("pointerup", () => {
-      this.controller.stopMouseMove();
+    this.input.on("pointerup", (pointer) => {
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "pointerup",
+        details: this.getPointerDebugDetails(pointer),
+      });
+      this.controller.stopMouseMove("pointerup");
     });
 
     this.registerPointerGuards();
@@ -378,33 +416,114 @@ export default class WorldScene extends Phaser.Scene {
   registerPointerGuards() {
     if (typeof window === "undefined" || !this.game?.canvas) return;
 
-    this.windowMouseUpHandler = () => {
+    this.windowMouseUpHandler = (event) => {
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "window_mouseup",
+        details: this.getWindowDebugDetails({ button: event.button, buttons: event.buttons }),
+      });
       if (this.controller?.mouseActive && this.controller.isDragging) {
-        this.controller.stopMouseMove();
+        this.controller.stopMouseMove("window_mouseup");
       }
     };
 
     this.windowBlurHandler = () => {
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "window_blur",
+        details: this.getWindowDebugDetails(),
+      });
       if (this.controller?.mouseActive) {
-        this.controller.stopMouseMove();
+        this.controller.stopMouseMove("window_blur");
       }
     };
 
+    this.windowFocusHandler = () => {
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "window_focus",
+        details: this.getWindowDebugDetails(),
+      });
+    };
+
+    this.windowKeyDownHandler = (event) => {
+      if (!MOVEMENT_KEYS.has(event.key)) return;
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "keydown",
+        details: this.getWindowDebugDetails({ key: event.key, repeat: event.repeat }),
+      });
+    };
+
+    this.windowKeyUpHandler = (event) => {
+      if (!MOVEMENT_KEYS.has(event.key)) return;
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "keyup",
+        details: this.getWindowDebugDetails({ key: event.key }),
+      });
+    };
+
     this.canvasMouseLeaveHandler = (event) => {
+      pushDebugEvent({
+        source: "WorldScene",
+        type: "canvas_mouseleave",
+        details: this.getWindowDebugDetails({
+          button: event.button,
+          buttons: event.buttons,
+        }),
+      });
       if (event.buttons === 0 && this.controller?.mouseActive && this.controller.isDragging) {
-        this.controller.stopMouseMove();
+        this.controller.stopMouseMove("canvas_mouseleave_no_buttons");
       }
     };
 
     window.addEventListener("mouseup", this.windowMouseUpHandler);
     window.addEventListener("blur", this.windowBlurHandler);
+    window.addEventListener("focus", this.windowFocusHandler);
+    window.addEventListener("keydown", this.windowKeyDownHandler);
+    window.addEventListener("keyup", this.windowKeyUpHandler);
     this.game.canvas.addEventListener("mouseleave", this.canvasMouseLeaveHandler);
 
     this.events.once("shutdown", () => {
       window.removeEventListener("mouseup", this.windowMouseUpHandler);
       window.removeEventListener("blur", this.windowBlurHandler);
+      window.removeEventListener("focus", this.windowFocusHandler);
+      window.removeEventListener("keydown", this.windowKeyDownHandler);
+      window.removeEventListener("keyup", this.windowKeyUpHandler);
       this.game.canvas.removeEventListener("mouseleave", this.canvasMouseLeaveHandler);
     });
+  }
+
+  getPointerDebugDetails(pointer, extra = {}) {
+    return {
+      button: pointer.button ?? null,
+      buttons: pointer.buttons ?? null,
+      pointerDown: Boolean(pointer.isDown),
+      pointerX: Math.round(pointer.x ?? 0),
+      pointerY: Math.round(pointer.y ?? 0),
+      worldX: Math.round(pointer.worldX ?? 0),
+      worldY: Math.round(pointer.worldY ?? 0),
+      ...this.getControllerDebugDetails(),
+      ...extra,
+    };
+  }
+
+  getWindowDebugDetails(extra = {}) {
+    return {
+      ...this.getControllerDebugDetails(),
+      ...extra,
+    };
+  }
+
+  getControllerDebugDetails() {
+    return {
+      mouseActive: this.controller?.mouseActive ?? false,
+      isDragging: this.controller?.isDragging ?? false,
+      keyboardActive: this.controller?.isKeyboardActive?.() ?? false,
+      targetX: this.controller?.target ? Math.round(this.controller.target.x) : null,
+      targetY: this.controller?.target ? Math.round(this.controller.target.y) : null,
+    };
   }
 
   update(time) {
@@ -642,6 +761,18 @@ export default class WorldScene extends Phaser.Scene {
 
     this.lastPlayerSyncAt = time;
     this.lastSyncedPosition = position;
+    pushDebugEvent({
+      source: "WorldScene",
+      type: "socket_player_move_emit",
+      details: {
+        x: position.x,
+        y: position.y,
+        worldX: position.worldX,
+        worldY: position.worldY,
+        mapId: position.mapId,
+        direction: position.direction,
+      },
+    });
     this.socket.emit("player_move", position);
   }
 

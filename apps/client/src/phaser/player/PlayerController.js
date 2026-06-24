@@ -1,4 +1,5 @@
 import { getDevToolsStore } from "../../store/devtools.store";
+import { pushDebugEvent } from "../../components/DevTools/debugEventLog";
 
 export const MOUSE_HOLD_THRESHOLD_MS = 150;
 
@@ -32,6 +33,12 @@ export default class PlayerController {
     this.clickStartTime = performance.now();
 
     this.target = { x, y };
+
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "mouse_movement_start",
+      details: this.getDebugDetails({ targetX: Math.round(x), targetY: Math.round(y) }),
+    });
   }
 
   // -------------------------------------------------------
@@ -43,22 +50,46 @@ export default class PlayerController {
     this.target = { x, y };
 
     this.activateMouseDragIfHeld();
+
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "mouse_target_update",
+      details: this.getDebugDetails({ targetX: Math.round(x), targetY: Math.round(y) }),
+    });
   }
 
   // -------------------------------------------------------
   // POINTER UP
   // -------------------------------------------------------
-  stopMouseMove() {
+  stopMouseMove(reason = "pointerup") {
     if (!this.mouseActive) return;
 
     const clickDuration = performance.now() - this.clickStartTime;
 
     if (clickDuration < MOUSE_HOLD_THRESHOLD_MS && !this.isDragging) {
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "mouse_click_path_request",
+        details: this.getDebugDetails({
+          reason,
+          clickDurationMs: Math.round(clickDuration),
+        }),
+      });
       if (this.target) this.calculatePath(this.target.x, this.target.y);
       return;
     }
 
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "mouse_movement_stop",
+      details: this.getDebugDetails({
+        reason,
+        clickDurationMs: Math.round(clickDuration),
+      }),
+    });
+
     this.mouseActive = false;
+    this.isDragging = false;
     this.target = null;
     this.path = null;
     this.currentPathIndex = 0;
@@ -73,6 +104,12 @@ export default class PlayerController {
     this.path = null;
     this.currentPathIndex = 0;
     this.target = { x, y };
+
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "programmatic_move_start",
+      details: this.getDebugDetails({ targetX: Math.round(x), targetY: Math.round(y) }),
+    });
   }
 
   // -------------------------------------------------------
@@ -81,6 +118,15 @@ export default class PlayerController {
   calculatePath(targetX, targetY) {
     if (!this.scene.pathfinder) {
       console.warn("Pathfinder missing, fallback to direct movement");
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "pathfinding_fallback",
+        details: this.getDebugDetails({
+          reason: "missing_pathfinder",
+          targetX: Math.round(targetX),
+          targetY: Math.round(targetY),
+        }),
+      });
       this.target = { x: targetX, y: targetY };
       return;
     }
@@ -97,9 +143,23 @@ export default class PlayerController {
       this.path = newPath;
       this.currentPathIndex = 0;
       this.target = null;
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "pathfinding_path_found",
+        details: this.getDebugDetails({ pathLength: newPath.length }),
+      });
     } else {
       this.path = null;
       this.target = { x: targetX, y: targetY };
+      pushDebugEvent({
+        source: "PlayerController",
+        type: "pathfinding_fallback",
+        details: this.getDebugDetails({
+          reason: "no_path",
+          targetX: Math.round(targetX),
+          targetY: Math.round(targetY),
+        }),
+      });
     }
   }
 
@@ -121,6 +181,13 @@ export default class PlayerController {
     }
 
     if (vx !== 0 || vy !== 0) {
+      if (this.mouseActive) {
+        pushDebugEvent({
+          source: "PlayerController",
+          type: "mouse_movement_stop",
+          details: this.getDebugDetails({ reason: "keyboard_input" }),
+        });
+      }
       this.mouseActive = false;
       this.isDragging = false;
       this.path = null;
@@ -156,6 +223,34 @@ export default class PlayerController {
     this.isDragging = true;
     this.path = null;
     this.currentPathIndex = 0;
+
+    pushDebugEvent({
+      source: "PlayerController",
+      type: "mouse_drag_activated",
+      details: this.getDebugDetails({ heldTimeMs: Math.round(heldTime) }),
+    });
+  }
+
+  isKeyboardActive() {
+    return Boolean(
+      this.cursors.left.isDown ||
+      this.cursors.right.isDown ||
+      this.cursors.up.isDown ||
+      this.cursors.down.isDown,
+    );
+  }
+
+  getDebugDetails(extra = {}) {
+    return {
+      mouseActive: this.mouseActive,
+      isDragging: this.isDragging,
+      keyboardActive: this.isKeyboardActive(),
+      hasTarget: Boolean(this.target),
+      targetX: this.target ? Math.round(this.target.x) : null,
+      targetY: this.target ? Math.round(this.target.y) : null,
+      hasPath: Boolean(this.path?.length),
+      ...extra,
+    };
   }
 
   // -------------------------------------------------------
