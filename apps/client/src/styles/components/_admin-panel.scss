@@ -174,6 +174,43 @@
     gap: 8px;
   }
 
+  &__metric-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+  }
+
+  &__metric {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    padding: 7px 8px;
+    min-width: 0;
+  }
+
+  &__metric-value {
+    display: block;
+    color: vars.$color-magic-amber;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1rem;
+    font-weight: bold;
+    line-height: 1.2;
+  }
+
+  &__metric-label {
+    display: block;
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    margin-top: 2px;
+    text-transform: uppercase;
+  }
+
   &__stat {
     flex: 1;
     background: vars.$panel-header-bg;

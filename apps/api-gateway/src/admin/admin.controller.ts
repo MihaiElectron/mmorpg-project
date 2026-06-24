@@ -20,6 +20,17 @@ export class AdminController {
   @Get('overview')
   getOverview() { return this.adminService.getOverview(); }
 
+  @Get('movement-metrics')
+  getMovementMetrics() { return this.adminService.getMovementMetrics(); }
+
+  @Post('movement-metrics/reset')
+  resetMovementMetrics() {
+    return {
+      message: 'Movement metrics reset.',
+      metrics: this.adminService.resetMovementMetrics(),
+    };
+  }
+
   // ── Animaux (instances vivantes) ─────────────────────────────────────────
 
   @Get('animals')

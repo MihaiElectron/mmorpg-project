@@ -1,4 +1,12 @@
-import { spawnCreature, teleportCharacter, updateTemplate, respawnAll, moveAnimal } from "./admin.actions";
+import {
+  spawnCreature,
+  teleportCharacter,
+  updateTemplate,
+  respawnAll,
+  moveAnimal,
+  getMovementMetrics,
+  resetMovementMetrics,
+} from "./admin.actions";
 import type { ActionResult } from "./admin.actions";
 
 export type CommandContext = {
@@ -153,6 +161,18 @@ export const commandRegistry: Record<string, CommandDef> = {
         return { success: false, message: "Template requis. Ex: /respawn all turkey" };
       }
       return respawnAll(templateKey, ctx.socket);
+    },
+  },
+
+  "movement-metrics": {
+    description: "Affiche ou réinitialise les métriques passives de déplacement.",
+    usage: "/movement-metrics [reset]",
+    argNames: ["reset?"],
+    handler: async (args, _flags, ctx) => {
+      if (args[0] === "reset") {
+        return resetMovementMetrics(ctx.token);
+      }
+      return getMovementMetrics(ctx.token);
     },
   },
 

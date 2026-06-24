@@ -42,6 +42,14 @@ type Overview = {
   registeredCharacters: number;
 };
 
+type MovementMetrics = {
+  totalMoves: number;
+  suspectTeleports: number;
+  suspectSpeed: number;
+  invalidCoordinates: number;
+  mapMismatch: number;
+};
+
 // ── Constantes skills ─────────────────────────────────────────────────────────
 
 const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
@@ -263,6 +271,14 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
 
+const EMPTY_MOVEMENT_METRICS: MovementMetrics = {
+  totalMoves: 0,
+  suspectTeleports: 0,
+  suspectSpeed: 0,
+  invalidCoordinates: 0,
+  mapMismatch: 0,
+};
+
 export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
@@ -283,6 +299,8 @@ export default function AdminPanelWOM() {
   const [creating, setCreating] = useState(false);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [movementMetrics, setMovementMetrics] = useState<MovementMetrics | null>(null);
+  const [movementMetricsLoading, setMovementMetricsLoading] = useState(false);
 
   const groupedConfigs = useMemo(
     () => buildGroupedSectionConfigs((sectionData["skills"] ?? []).map((sd: any) => sd.key)),
@@ -317,6 +335,7 @@ export default function AdminPanelWOM() {
       fetchAdmin<any[]>("/admin/items", token).then(setItems),
       // Recettes crafting
       fetchAdmin<any[]>("/admin/crafting-recipes", token).then(setRecipes),
+      fetchAdmin<MovementMetrics>("/admin/movement-metrics", token).then(setMovementMetrics),
     ];
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
@@ -390,6 +409,40 @@ export default function AdminPanelWOM() {
 
   function pushResult(text: string, ok: boolean) {
     setResults((prev) => [{ text, ok }, ...prev].slice(0, 5));
+  }
+
+  async function refreshMovementMetrics() {
+    setMovementMetricsLoading(true);
+    try {
+      const metrics = await fetchAdmin<MovementMetrics>("/admin/movement-metrics", token);
+      setMovementMetrics(metrics);
+      pushResult("Movement metrics rafraîchies.", true);
+    } catch {
+      pushResult("Impossible de charger les movement metrics.", false);
+    } finally {
+      setMovementMetricsLoading(false);
+    }
+  }
+
+  async function resetMovementMetrics() {
+    setMovementMetricsLoading(true);
+    try {
+      const res = await fetch(`${API}/admin/movement-metrics/reset`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pushResult((body as any).message ?? `Erreur ${res.status}`, false);
+        return;
+      }
+      setMovementMetrics(((body as any).metrics ?? EMPTY_MOVEMENT_METRICS) as MovementMetrics);
+      pushResult("Movement metrics remises à zéro.", true);
+    } catch {
+      pushResult("Impossible de reset les movement metrics.", false);
+    } finally {
+      setMovementMetricsLoading(false);
+    }
   }
 
   async function runCommand(raw: string) {
@@ -481,6 +534,44 @@ export default function AdminPanelWOM() {
           </div>
         </section>
       )}
+
+      <section className="admin-panel__section">
+        <div className="admin-panel__section-header">
+          <span className="admin-panel__section-toggle">Movement Metrics</span>
+          <div className="admin-panel__metric-actions">
+            <button
+              className="admin-panel__tp-btn"
+              disabled={movementMetricsLoading}
+              onClick={refreshMovementMetrics}
+            >
+              Refresh
+            </button>
+            <button
+              className="admin-panel__tp-btn"
+              disabled={movementMetricsLoading}
+              onClick={resetMovementMetrics}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+        <div className="admin-panel__metric-grid">
+          {[
+            ["Total moves", movementMetrics?.totalMoves],
+            ["Suspect teleports", movementMetrics?.suspectTeleports],
+            ["Suspect speed", movementMetrics?.suspectSpeed],
+            ["Invalid coordinates", movementMetrics?.invalidCoordinates],
+            ["Map mismatch", movementMetrics?.mapMismatch],
+          ].map(([label, value]) => (
+            <div key={label} className="admin-panel__metric">
+              <span className="admin-panel__metric-value">
+                {value ?? "–"}
+              </span>
+              <span className="admin-panel__metric-label">{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {groupedConfigs.map((cfg) => (
         <GroupedSection

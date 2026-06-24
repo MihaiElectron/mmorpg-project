@@ -24,6 +24,7 @@ describe('AdminService resources', () => {
   let resourceTemplateRepo: Record<string, jest.Mock>;
   let skillDefinitionRepo: Record<string, jest.Mock>;
   let playerSkillRepo: Record<string, jest.Mock>;
+  let worldService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     resourceRepo = {
@@ -48,6 +49,23 @@ describe('AdminService resources', () => {
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn(),
     };
+    worldService = {
+      getConnectedCount: jest.fn().mockReturnValue(0),
+      getMovementMetrics: jest.fn().mockReturnValue({
+        totalMoves: 12,
+        suspectTeleports: 1,
+        suspectSpeed: 2,
+        invalidCoordinates: 3,
+        mapMismatch: 4,
+      }),
+      resetMovementMetrics: jest.fn().mockReturnValue({
+        totalMoves: 0,
+        suspectTeleports: 0,
+        suspectSpeed: 0,
+        invalidCoordinates: 0,
+        mapMismatch: 0,
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -64,11 +82,39 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
-        { provide: WorldService, useValue: { getConnectedCount: jest.fn() } },
+        { provide: WorldService, useValue: worldService },
       ],
     }).compile();
 
     service = module.get<AdminService>(AdminService);
+  });
+
+  // ── Movement metrics ─────────────────────────────────────────────────────────
+
+  it('getMovementMetrics retourne les compteurs du WorldService', () => {
+    const result = service.getMovementMetrics();
+
+    expect(worldService.getMovementMetrics).toHaveBeenCalled();
+    expect(result).toEqual({
+      totalMoves: 12,
+      suspectTeleports: 1,
+      suspectSpeed: 2,
+      invalidCoordinates: 3,
+      mapMismatch: 4,
+    });
+  });
+
+  it('resetMovementMetrics remet les compteurs via WorldService', () => {
+    const result = service.resetMovementMetrics();
+
+    expect(worldService.resetMovementMetrics).toHaveBeenCalled();
+    expect(result).toEqual({
+      totalMoves: 0,
+      suspectTeleports: 0,
+      suspectSpeed: 0,
+      invalidCoordinates: 0,
+      mapMismatch: 0,
+    });
   });
 
   // ── updateResourceTemplate ───────────────────────────────────────────────────

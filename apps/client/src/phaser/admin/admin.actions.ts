@@ -7,6 +7,14 @@ export type ActionResult = {
   data?: unknown;
 };
 
+export type MovementMetrics = {
+  totalMoves: number;
+  suspectTeleports: number;
+  suspectSpeed: number;
+  invalidCoordinates: number;
+  mapMismatch: number;
+};
+
 function ackPromise(
   socket: any,
   event: string,
@@ -61,6 +69,61 @@ export function moveAnimal(animalId: string, x: number, y: number, socket: any):
 /** Force le respawn de tous les animaux d'un template. */
 export function respawnAll(templateKey: string, socket: any): Promise<ActionResult> {
   return ackPromise(socket, 'admin:respawn_all', { templateKey });
+}
+
+function formatMovementMetrics(metrics: MovementMetrics): string {
+  return [
+    `total=${metrics.totalMoves}`,
+    `teleports=${metrics.suspectTeleports}`,
+    `speed=${metrics.suspectSpeed}`,
+    `invalid=${metrics.invalidCoordinates}`,
+    `map=${metrics.mapMismatch}`,
+  ].join("  ");
+}
+
+export async function getMovementMetrics(token: string): Promise<ActionResult> {
+  try {
+    const res = await fetch(`${API}/admin/movement-metrics`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      return { success: false, message: `Erreur ${res.status}.` };
+    }
+    const metrics = await res.json() as MovementMetrics;
+    return {
+      success: true,
+      message: `Movement metrics — ${formatMovementMetrics(metrics)}`,
+      data: metrics,
+    };
+  } catch (e) {
+    return { success: false, message: `Erreur réseau : ${String(e)}` };
+  }
+}
+
+export async function resetMovementMetrics(token: string): Promise<ActionResult> {
+  try {
+    const res = await fetch(`${API}/admin/movement-metrics/reset`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      return { success: false, message: `Erreur ${res.status}.` };
+    }
+    const body = await res.json() as { metrics?: MovementMetrics };
+    return {
+      success: true,
+      message: `Movement metrics reset — ${formatMovementMetrics(body.metrics ?? {
+        totalMoves: 0,
+        suspectTeleports: 0,
+        suspectSpeed: 0,
+        invalidCoordinates: 0,
+        mapMismatch: 0,
+      })}`,
+      data: body.metrics,
+    };
+  } catch (e) {
+    return { success: false, message: `Erreur réseau : ${String(e)}` };
+  }
 }
 
 /** Met à jour un template via HTTP PATCH (alternatif REST). */

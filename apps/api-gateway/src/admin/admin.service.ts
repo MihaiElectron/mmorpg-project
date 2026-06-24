@@ -15,7 +15,7 @@ import { ResourceTemplate } from '../resources/entities/resource-template.entity
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../skills/adapters/skill-definition-world-object.adapter';
-import { WorldService } from '../world/world.service';
+import { type MovementMetrics, WorldService } from '../world/world.service';
 import { DEFAULT_MAP_ID, isoScreenToWorldWU } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toAnimalWorldObject, AnimalWorldObject } from '../animals/adapters/animal-world-object.adapter';
@@ -50,6 +50,16 @@ export class AdminService {
     private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
   ) {}
+
+  // ── Debug movement authority ────────────────────────────────────────────────
+
+  getMovementMetrics(): MovementMetrics {
+    return this.worldService.getMovementMetrics();
+  }
+
+  resetMovementMetrics(): MovementMetrics {
+    return this.worldService.resetMovementMetrics();
+  }
 
   // ── Créatures ─────────────────────────────────────────────────────────────
 

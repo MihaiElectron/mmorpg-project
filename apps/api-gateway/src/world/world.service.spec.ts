@@ -502,6 +502,36 @@ describe('WorldService.updatePlayer — métriques passives mouvement', () => {
     expect(player.mapId).toBe(2);
     expect(svc.getMovementMetrics().mapMismatch).toBe(1);
   });
+
+  it('resetMovementMetrics remet les compteurs à zéro sans toucher les joueurs connectés', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
+    injectPlayer(svc, socket, player);
+
+    svc.updatePlayer(socket, {
+      x: 1_625,
+      y: 313,
+      worldX: 10_000,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
+
+    const reset = svc.resetMovementMetrics();
+
+    expect(reset).toEqual({
+      totalMoves: 0,
+      suspectTeleports: 0,
+      suspectSpeed: 0,
+      invalidCoordinates: 0,
+      mapMismatch: 0,
+    });
+    expect(svc.getAllConnectedPlayers()).toHaveLength(1);
+    expect(player.worldX).toBe(10_000);
+  });
 });
 
 // ─── teleportCharacter ────────────────────────────────────────────────────────

@@ -426,6 +426,17 @@ export class WorldService implements OnModuleInit {
     return { ...this.movementMetrics };
   }
 
+  resetMovementMetrics(): MovementMetrics {
+    this.movementMetrics = {
+      totalMoves: 0,
+      suspectTeleports: 0,
+      suspectSpeed: 0,
+      invalidCoordinates: 0,
+      mapMismatch: 0,
+    };
+    return this.getMovementMetrics();
+  }
+
   getPlayersExcept(socketId: string): ConnectedPlayer[] {
     const playersByCharacter = new Map<string, ConnectedPlayer>();
 
