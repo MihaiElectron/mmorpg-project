@@ -230,9 +230,15 @@ export default class WorldScene extends Phaser.Scene {
       this.registerGatheringEvents();
     }
 
-    // WORLD BOUNDS
-    this.physics.world.setBounds(0, 0, 2000, 2000);
-    this.cameras.main.setBounds(0, 0, 2000, 2000);
+    // WORLD BOUNDS — dérivés de la projection WU (ADR-0001) : screenX = 1000 + (wx−wy)/16, screenY = (wx+wy)/32
+    // Carte 64×64 tuiles × 1024 WU/tuile → coins : nord(1000,0) est(5096,2048) ouest(−3096,2048) sud(1000,4096)
+    const _MAP_WU = 64 * 1024; // 65536 — à mettre à jour si la taille de carte change
+    const _BOUNDS_X = Math.round(1000 - _MAP_WU / 16); // -3096
+    const _BOUNDS_Y = 0;
+    const _BOUNDS_W = Math.round(_MAP_WU / 8);          // 8192
+    const _BOUNDS_H = Math.round(_MAP_WU / 16);         // 4096
+    this.physics.world.setBounds(_BOUNDS_X, _BOUNDS_Y, _BOUNDS_W, _BOUNDS_H);
+    this.cameras.main.setBounds(_BOUNDS_X, _BOUNDS_Y, _BOUNDS_W, _BOUNDS_H);
 
     // PLAYER
     const character = getCharacterStore().getState().character;
