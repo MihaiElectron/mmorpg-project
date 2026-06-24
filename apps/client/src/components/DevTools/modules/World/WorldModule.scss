@@ -97,6 +97,29 @@
     padding: 5px 7px;
   }
 
+  &__event-log-quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__event-log-filter-button {
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.68rem;
+    line-height: 1;
+    padding: 4px 6px;
+  }
+
+  &__event-log-filter-button:hover,
+  &__event-log-filter-button.is-active {
+    border-color: vars.$color-magic-amber;
+    color: vars.$color-text-gold;
+  }
+
   &__event-log-list {
     display: flex;
     flex-direction: column;
@@ -119,6 +142,11 @@
     padding: 4px 6px;
   }
 
+  &__event-log-row.is-stop {
+    border: 1px solid vars.$color-magic-amber;
+    background: vars.$panel-inner-bg;
+  }
+
   &__event-log-time,
   &__event-log-source,
   &__event-log-type {
@@ -129,6 +157,22 @@
   }
 
   &__event-log-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__event-log-reason {
+    border: 1px solid vars.$color-magic-amber;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-gold;
+    font-weight: bold;
+    padding: 0 4px;
+  }
+
+  &__event-log-detail-text {
     min-width: 0;
     overflow-wrap: anywhere;
   }
