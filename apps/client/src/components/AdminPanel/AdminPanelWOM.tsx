@@ -379,7 +379,10 @@ export default function AdminPanelWOM() {
   const [command, setCommand] = useState("");
   const [results, setResults] = useState<ConsoleLine[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [newSkillOpen, setNewSkillOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [createSkillOpen, setCreateSkillOpen] = useState(false);
   const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
   const [newStationTemplateOpen, setNewStationTemplateOpen] = useState(false);
   const [newStationTemplate, setNewStationTemplate] = useState({ ...NEW_STATION_TEMPLATE_DEFAULT });
@@ -632,56 +635,70 @@ export default function AdminPanelWOM() {
 
       {overview && (
         <section className="admin-panel__section">
-          <h3 className="admin-panel__section-title">Vue d&apos;ensemble</h3>
-          <div className="admin-panel__overview">
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.connectedPlayers}</span><span className="admin-panel__stat-label">Connectés</span></div>
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.registeredCharacters}</span><span className="admin-panel__stat-label">Personnages</span></div>
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeAnimals}</span><span className="admin-panel__stat-label">Animaux</span></div>
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.templates}</span><span className="admin-panel__stat-label">Templates</span></div>
-            <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.spawns}</span><span className="admin-panel__stat-label">Spawns</span></div>
+          <div className="admin-panel__section-header" onClick={() => setOverviewOpen((o) => !o)}>
+            <span className="admin-panel__section-toggle">
+              <span className="admin-panel__section-chevron">{overviewOpen ? "▼" : "▶"}</span>
+              Vue d&apos;ensemble
+            </span>
           </div>
+          {overviewOpen && (
+            <div className="admin-panel__overview">
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.connectedPlayers}</span><span className="admin-panel__stat-label">Connectés</span></div>
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.registeredCharacters}</span><span className="admin-panel__stat-label">Personnages</span></div>
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeAnimals}</span><span className="admin-panel__stat-label">Animaux</span></div>
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.templates}</span><span className="admin-panel__stat-label">Templates</span></div>
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.spawns}</span><span className="admin-panel__stat-label">Spawns</span></div>
+            </div>
+          )}
         </section>
       )}
 
       <section className="admin-panel__section">
-        <div className="admin-panel__section-header">
-          <span className="admin-panel__section-toggle">Movement Metrics</span>
-          <div className="admin-panel__metric-actions">
-            <button
-              className="admin-panel__tp-btn"
-              disabled={movementMetricsLoading}
-              onClick={refreshMovementMetrics}
-            >
-              Refresh
-            </button>
-            <button
-              className="admin-panel__tp-btn"
-              disabled={movementMetricsLoading}
-              onClick={resetMovementMetrics}
-            >
-              Reset
-            </button>
-          </div>
+        <div className="admin-panel__section-header" onClick={() => setMetricsOpen((o) => !o)}>
+          <span className="admin-panel__section-toggle">
+            <span className="admin-panel__section-chevron">{metricsOpen ? "▼" : "▶"}</span>
+            Movement Metrics
+          </span>
         </div>
-        <div className="admin-panel__metric-grid">
-          {[
-            ["Total moves", movementMetrics?.totalMoves],
-            ["Suspect teleports", movementMetrics?.suspectTeleports],
-            ["Suspect speed", movementMetrics?.suspectSpeed],
-            ["Invalid coordinates", movementMetrics?.invalidCoordinates],
-            ["Map mismatch", movementMetrics?.mapMismatch],
-          ].map(([label, value]) => (
-            <div key={label} className="admin-panel__metric">
-              <span className="admin-panel__metric-value">
-                {value ?? "–"}
-              </span>
-              <span className="admin-panel__metric-label">{label}</span>
+        {metricsOpen && (
+          <>
+            <div className="admin-panel__metric-actions">
+              <button
+                className="admin-panel__tp-btn"
+                disabled={movementMetricsLoading}
+                onClick={refreshMovementMetrics}
+              >
+                Refresh
+              </button>
+              <button
+                className="admin-panel__tp-btn"
+                disabled={movementMetricsLoading}
+                onClick={resetMovementMetrics}
+              >
+                Reset
+              </button>
             </div>
-          ))}
-        </div>
+            <div className="admin-panel__metric-grid">
+              {[
+                ["Total moves", movementMetrics?.totalMoves],
+                ["Suspect teleports", movementMetrics?.suspectTeleports],
+                ["Suspect speed", movementMetrics?.suspectSpeed],
+                ["Invalid coordinates", movementMetrics?.invalidCoordinates],
+                ["Map mismatch", movementMetrics?.mapMismatch],
+              ].map(([label, value]) => (
+                <div key={label} className="admin-panel__metric">
+                  <span className="admin-panel__metric-value">
+                    {value ?? "–"}
+                  </span>
+                  <span className="admin-panel__metric-label">{label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
-      {groupedConfigs.map((cfg) => (
+      {groupedConfigs.filter((cfg) => cfg.id !== "craftingStations").map((cfg) => (
         <GroupedSection
           key={cfg.id}
           config={cfg}
@@ -693,78 +710,87 @@ export default function AdminPanelWOM() {
         />
       ))}
 
-      <section className="admin-panel__section">
-        <div className="admin-panel__section-header" onClick={() => setNewStationTemplateOpen((o) => !o)}>
-          <span className="admin-panel__section-toggle">
-            <span className="admin-panel__section-chevron">{newStationTemplateOpen ? "▼" : "▶"}</span>
-            Créer une station
-          </span>
-        </div>
-        {newStationTemplateOpen && (
-          <div className="admin-panel__template-item">
-            <div className="admin-panel__template-stats">
-              {(["key", "name"] as const).map((f) => (
-                <label key={f} className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
+      {groupedConfigs.filter((cfg) => cfg.id === "craftingStations").map((cfg) => (
+        <GroupedSection
+          key={cfg.id}
+          config={cfg}
+          groups={groupData[cfg.id] ?? []}
+          instances={instanceData[cfg.id] ?? []}
+          onResult={pushResult}
+          onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
+          highlightId={highlightIds[cfg.id] ?? null}
+          rightHeader={
+            <div className="admin-panel__section-toggle" onClick={() => setNewStationTemplateOpen((o) => !o)}>
+              Créer une station
+              <span className="admin-panel__section-chevron">{newStationTemplateOpen ? "▼" : "▶"}</span>
+            </div>
+          }
+          rightContent={newStationTemplateOpen ? (
+            <div className="admin-panel__template-item">
+              <div className="admin-panel__template-stats">
+                {(["key", "name"] as const).map((f) => (
+                  <label key={f} className="admin-panel__template-stat">
+                    <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
+                    <input className="admin-panel__template-stat-input" type="text"
+                      value={newStationTemplate[f]}
+                      onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, [f]: e.target.value }))}
+                      {...kbHandlers} />
+                  </label>
+                ))}
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Station</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newStationTemplate.stationType}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, stationType: e.target.value }))}
+                    {...kbHandlers}>
+                    {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Catégorie</span>
                   <input className="admin-panel__template-stat-input" type="text"
-                    value={newStationTemplate[f]}
-                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, [f]: e.target.value }))}
+                    value={newStationTemplate.category}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, category: e.target.value }))}
                     {...kbHandlers} />
                 </label>
-              ))}
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Station</span>
-                <select className="admin-panel__template-stat-input"
-                  value={newStationTemplate.stationType}
-                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, stationType: e.target.value }))}
-                  {...kbHandlers}>
-                  {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Catégorie</span>
-                <input className="admin-panel__template-stat-input" type="text"
-                  value={newStationTemplate.category}
-                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, category: e.target.value }))}
-                  {...kbHandlers} />
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Skill requis</span>
-                <select className="admin-panel__template-stat-input"
-                  value={newStationTemplate.requiredSkillKey}
-                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
-                  {...kbHandlers}>
-                  <option value="">—</option>
-                  {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
-                </select>
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Rayon WU</span>
-                <input className="admin-panel__template-stat-input" type="number" min={1}
-                  value={newStationTemplate.interactionRadiusWU}
-                  onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, interactionRadiusWU: Number(e.target.value) }))}
-                  {...kbHandlers} />
-              </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Skill requis</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newStationTemplate.requiredSkillKey}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
+                    {...kbHandlers}>
+                    <option value="">—</option>
+                    {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
+                  </select>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Rayon WU</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1}
+                    value={newStationTemplate.interactionRadiusWU}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, interactionRadiusWU: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+              </div>
+              <button className="admin-panel__apply-btn" disabled={creating}
+                onClick={async () => {
+                  const socket = getSocket();
+                  if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                  setCreating(true);
+                  const result = await ackPromise(socket, "admin:create_crafting_station_template", { fields: newStationTemplate });
+                  setCreating(false);
+                  pushResult(result.message, result.success);
+                  if (result.success && result.data) {
+                    setGroupData((prev) => ({ ...prev, craftingStations: [...(prev.craftingStations ?? []), result.data as any] }));
+                    setNewStationTemplate({ ...NEW_STATION_TEMPLATE_DEFAULT });
+                    setNewStationTemplateOpen(false);
+                  }
+                }}>
+                {creating ? "…" : "Créer"}
+              </button>
             </div>
-            <button className="admin-panel__apply-btn" disabled={creating}
-              onClick={async () => {
-                const socket = getSocket();
-                if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
-                setCreating(true);
-                const result = await ackPromise(socket, "admin:create_crafting_station_template", { fields: newStationTemplate });
-                setCreating(false);
-                pushResult(result.message, result.success);
-                if (result.success && result.data) {
-                  setGroupData((prev) => ({ ...prev, craftingStations: [...(prev.craftingStations ?? []), result.data as any] }));
-                  setNewStationTemplate({ ...NEW_STATION_TEMPLATE_DEFAULT });
-                  setNewStationTemplateOpen(false);
-                }
-              }}>
-              {creating ? "…" : "Créer"}
-            </button>
-          </div>
-        )}
-      </section>
+          ) : null}
+        />
+      ))}
 
       {SECTION_CONFIGS.map((cfg) => (
         <EntitySection
@@ -776,13 +802,25 @@ export default function AdminPanelWOM() {
       ))}
 
       <section className="admin-panel__section">
-        <div className="admin-panel__section-header" onClick={() => setNewSkillOpen((o) => !o)}>
-          <span className="admin-panel__section-toggle">
-            <span className="admin-panel__section-chevron">{newSkillOpen ? "▼" : "▶"}</span>
-            Créer un skill
-          </span>
+        <div className="admin-panel__dual-header">
+          <div className="admin-panel__section-toggle" onClick={() => setSkillsOpen((o) => !o)}>
+            <span className="admin-panel__section-chevron">{skillsOpen ? "▼" : "▶"}</span>
+            Skills
+          </div>
+          <div className="admin-panel__section-toggle" onClick={() => setCreateSkillOpen((o) => !o)}>
+            Créer Skill
+            <span className="admin-panel__section-chevron">{createSkillOpen ? "▼" : "▶"}</span>
+          </div>
         </div>
-        {newSkillOpen && (
+        {skillsOpen && (
+          <EntitySection
+            config={SKILLS_SECTION_CONFIG}
+            items={sectionData["skills"] ?? []}
+            onResult={pushResult}
+            embedded
+          />
+        )}
+        {createSkillOpen && (
           <div className="admin-panel__template-item">
             <div className="admin-panel__template-stats">
               <label className="admin-panel__template-stat">
@@ -842,7 +880,6 @@ export default function AdminPanelWOM() {
                 if (result.success && result.data) {
                   setSectionData((prev) => ({ ...prev, skills: [...(prev["skills"] ?? []), result.data as any] }));
                   setNewSkill({ ...NEW_SKILL_DEFAULT });
-                  setNewSkillOpen(false);
                 }
               }}>
               {creating ? "…" : "Créer"}
@@ -850,12 +887,6 @@ export default function AdminPanelWOM() {
           </div>
         )}
       </section>
-
-      <EntitySection
-        config={SKILLS_SECTION_CONFIG}
-        items={sectionData["skills"] ?? []}
-        onResult={pushResult}
-      />
 
       <RecipesSection
         recipes={recipes}

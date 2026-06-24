@@ -92,6 +92,7 @@ function matchesTextFilter(event: DebugEvent, query: string): boolean {
 }
 
 export default function EventLogPanel() {
+  const [isOpen, setIsOpen] = useState(false);
   const [events, setEvents] = useState<DebugEvent[]>(() => getDebugEvents());
   const [isPaused, setPaused] = useState(false);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("All");
@@ -118,8 +119,11 @@ export default function EventLogPanel() {
   return (
     <section className="devtools-world__event-log" aria-label="Movement event log">
       <div className="devtools-world__event-log-header">
-        <h3 className="devtools-world__title">Event Log</h3>
-        <div className="devtools-world__event-log-actions">
+        <h3 className="devtools-world__title devtools-world__title--clickable" onClick={() => setIsOpen((o) => !o)}>
+          <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
+          Event Log
+        </h3>
+        {isOpen && <div className="devtools-world__event-log-actions">
           <button
             className="devtools-world__event-log-button"
             type="button"
@@ -137,9 +141,10 @@ export default function EventLogPanel() {
           >
             Clear
           </button>
-        </div>
+        </div>}
       </div>
 
+      {isOpen && <>
       <input
         className="devtools-world__event-log-filter"
         type="search"
@@ -209,6 +214,7 @@ export default function EventLogPanel() {
           })
         )}
       </div>
+      </>}
     </section>
   );
 }

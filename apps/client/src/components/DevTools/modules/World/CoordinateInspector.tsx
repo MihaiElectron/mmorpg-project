@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useDevToolsStore } from "../../../../store/devtools.store";
 
 function formatValue(value: number | string | null | undefined): string {
@@ -22,6 +23,7 @@ function CoordinateRow({
 }
 
 export default function CoordinateInspector() {
+  const [isOpen, setIsOpen] = useState(false);
   const activeTool = useDevToolsStore((s) => s.activeTool);
   // Pixels du dernier clic dans le monde Phaser, pas coordonnées écran/caméra.
   // TODO: ajouter une section Camera quand le contexte caméra sera exposé.
@@ -38,8 +40,11 @@ export default function CoordinateInspector() {
 
   return (
     <section className="devtools-world__inspector" aria-label="Coordinate inspector">
-      <h3 className="devtools-world__title">Coordinates</h3>
-      <div className="devtools-world__coordinate-list">
+      <h3 className="devtools-world__title devtools-world__title--clickable" onClick={() => setIsOpen((o) => !o)}>
+        <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
+        Coordinates
+      </h3>
+      {isOpen && <div className="devtools-world__coordinate-list">
         <CoordinateRow label="Tool" values={[["active", activeTool]]} />
         <CoordinateRow
           label="Map"
@@ -140,7 +145,7 @@ export default function CoordinateInspector() {
             ["y", chunkPoint?.chunkY],
           ]}
         />
-      </div>
+      </div>}
     </section>
   );
 }

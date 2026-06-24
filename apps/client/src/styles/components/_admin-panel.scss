@@ -107,6 +107,79 @@
     color: vars.$color-text-muted;
   }
 
+  // ── En-tête double (ex. Skills / Créer Skill) ─────────────────────────────
+  &__dual-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+    user-select: none;
+
+    > .admin-panel__section-toggle {
+      cursor: pointer;
+
+      &:hover { color: vars.$color-metal-silver; }
+      &:hover .admin-panel__section-chevron { color: vars.$color-metal-silver; }
+    }
+  }
+
+  // ── Onglets compacts ─────────────────────────────────────────────────────
+  &__tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__tab-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid vars.$panel-border;
+    padding-bottom: 6px;
+  }
+
+  &__tab {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: bold;
+    line-height: 1.2;
+    padding: 5px 9px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+
+    &:hover {
+      border-color: vars.$color-metal-silver;
+      color: vars.$color-text-primary;
+    }
+
+    &.is-active {
+      background: rgba(245, 197, 66, 0.1);
+      border-color: vars.$color-text-gold;
+      color: vars.$color-text-gold;
+    }
+  }
+
+  &__tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__embedded-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-height: 24px;
+  }
+
   // ── Pagination ────────────────────────────────────────────────────────────
   &__pagination {
     display: flex;

@@ -8,6 +8,9 @@
   gap: 6px;
 
   &__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: vars.$color-text-gold;
     font-size: 0.85rem;
     font-weight: bold;
@@ -15,6 +18,15 @@
     letter-spacing: 1px;
     border-bottom: 1px solid vars.$panel-border;
     padding-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover { color: vars.$color-metal-silver; }
+  }
+
+  &__chevron {
+    font-size: 0.65rem;
+    color: vars.$color-text-muted;
   }
 
   &__list {

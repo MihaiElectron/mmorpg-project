@@ -80,9 +80,10 @@ function fieldValue(recipe: Recipe, key: string): string {
 // ── RecipesSection ────────────────────────────────────────────────────────────
 
 export default function RecipesSection({ recipes, skillDefinitions, items, onResult, onRecipeCreated, onRecipeUpdated, onIngredientAdded, onIngredientRemoved, onResultAdded, onResultRemoved }: Props) {
+  const [recipesOpen, setRecipesOpen] = useState(false);
+  const [createRecipeOpen, setCreateRecipeOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
-  const [createOpen, setCreateOpen] = useState(false);
   const [newRecipe, setNewRecipe] = useState({ ...NEW_RECIPE_DEFAULT });
   const [creating, setCreating] = useState(false);
   const [newIng, setNewIng] = useState<Record<string, typeof NEW_ING_DEFAULT>>({});
@@ -196,230 +197,235 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
     if (r.success && r.data) {
       onRecipeCreated({ ...(r.data as Recipe), ingredients: [], results: [] });
       setNewRecipe({ ...NEW_RECIPE_DEFAULT });
-      setCreateOpen(false);
     }
   }
 
-  return (
-    <section className="admin-panel__section">
-      <div className="admin-panel__section-header">
-        <span className="admin-panel__section-title">Recettes de crafting</span>
+  const recipeList = (
+    <>
+      <div className="admin-panel__embedded-toolbar">
         <span className="admin-panel__count-badge">{recipes.length}</span>
       </div>
+      <div className="admin-panel__template-list">
+        {recipes.map((recipe) => {
+          const expanded = expandedId === recipe.id;
+          const ingNew = newIng[recipe.id] ?? NEW_ING_DEFAULT;
+          const resNew = newRes[recipe.id] ?? NEW_RES_DEFAULT;
 
-      {/* ── Formulaire de création ── */}
-      <div className="admin-panel__section-header" onClick={() => setCreateOpen((o) => !o)}>
-        <span className="admin-panel__section-toggle">
-          <span className="admin-panel__section-chevron">{createOpen ? "▼" : "▶"}</span>
-          Créer une recette
-        </span>
-      </div>
-      {createOpen && (
-        <div className="admin-panel__template-item">
-          <div className="admin-panel__template-stats">
-            {(["key", "name"] as const).map((f) => (
-              <label key={f} className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
-                <input className="admin-panel__template-stat-input" type="text"
-                  value={(newRecipe as any)[f]}
-                  onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: e.target.value }))}
-                  {...kbHandlers} />
-              </label>
-            ))}
-            <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">Catégorie</span>
-              <select className="admin-panel__template-stat-input"
-                value={newRecipe.category}
-                onChange={(e) => setNewRecipe((prev) => ({ ...prev, category: e.target.value }))}
-                {...kbHandlers}>
-                {RECIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
-            <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">Station</span>
-              <select className="admin-panel__template-stat-input"
-                value={newRecipe.stationType}
-                onChange={(e) => setNewRecipe((prev) => ({ ...prev, stationType: e.target.value }))}
-                {...kbHandlers}>
-                {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </label>
-            <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">Skill requis</span>
-              <select className="admin-panel__template-stat-input"
-                value={newRecipe.requiredSkillKey}
-                onChange={(e) => setNewRecipe((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
-                {...kbHandlers}>
-                {skillKeyOptions.map((k, i) => (
-                  <option key={k} value={k}>{skillKeyLabels[i]}</option>
-                ))}
-              </select>
-            </label>
-            {([
-              { f: "requiredSkillLevel",   label: "Niv. requis",  step: 1 },
-              { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
-              { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
-              { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
-              { f: "xpReward",             label: "XP",           step: 1 },
-              { f: "craftTimeMs",          label: "Durée (ms)",   step: 100 },
-            ] as const).map(({ f, label, step }) => (
-              <label key={f} className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">{label}</span>
-                <input className="admin-panel__template-stat-input" type="number" min={0} step={step}
-                  value={(newRecipe as any)[f]}
-                  onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: Number(e.target.value) }))}
-                  {...kbHandlers} />
-              </label>
-            ))}
-          </div>
-          <button className="admin-panel__apply-btn" disabled={creating} onClick={createRecipe}>
-            {creating ? "…" : "Créer"}
-          </button>
-        </div>
-      )}
-
-      {/* ── Liste des recettes ── */}
-      {recipes.map((recipe) => {
-        const expanded = expandedId === recipe.id;
-        const ingNew = newIng[recipe.id] ?? NEW_ING_DEFAULT;
-        const resNew = newRes[recipe.id] ?? NEW_RES_DEFAULT;
-
-        return (
-          <div key={recipe.id} className="admin-panel__template-group">
-            <div className="admin-panel__template-header" onClick={() => setExpandedId(expanded ? null : recipe.id)}>
-              <div className="admin-panel__recipe-header-main">
-                <span className="admin-panel__section-chevron">{expanded ? "▼" : "▶"}</span>
-                <span className="admin-panel__template-name">{recipe.name}</span>
-                <span className={`admin-panel__badge admin-panel__badge--${recipe.enabled ? "alive" : "dead"}`}>
-                  {recipe.enabled ? "actif" : "désactivé"}
-                </span>
+          return (
+            <div key={recipe.id} className="admin-panel__template-group">
+              <div className="admin-panel__template-header" onClick={() => setExpandedId(expanded ? null : recipe.id)}>
+                <div className="admin-panel__recipe-header-main">
+                  <span className="admin-panel__section-chevron">{expanded ? "▼" : "▶"}</span>
+                  <span className="admin-panel__template-name">{recipe.name}</span>
+                  <span className={`admin-panel__badge admin-panel__badge--${recipe.enabled ? "alive" : "dead"}`}>
+                    {recipe.enabled ? "actif" : "désactivé"}
+                  </span>
+                </div>
+                <div className="admin-panel__recipe-subtext">
+                  <span className="admin-panel__recipe-key">{recipe.key}</span>
+                  {recipe.category && (
+                    <><span className="admin-panel__recipe-sep"> · </span>
+                    <span className="admin-panel__recipe-cat">{recipe.category}</span></>
+                  )}
+                  {recipe.requiredSkillKey && (
+                    <><span className="admin-panel__recipe-sep"> · </span>
+                    <span className="admin-panel__recipe-skill">
+                      skill: {skillNameByKey[recipe.requiredSkillKey] ?? recipe.requiredSkillKey}
+                    </span></>
+                  )}
+                </div>
               </div>
-              <div className="admin-panel__recipe-subtext">
-                <span className="admin-panel__recipe-key">{recipe.key}</span>
-                {recipe.category && (
-                  <><span className="admin-panel__recipe-sep"> · </span>
-                  <span className="admin-panel__recipe-cat">{recipe.category}</span></>
-                )}
-                {recipe.requiredSkillKey && (
-                  <><span className="admin-panel__recipe-sep"> · </span>
-                  <span className="admin-panel__recipe-skill">
-                    skill: {skillNameByKey[recipe.requiredSkillKey] ?? recipe.requiredSkillKey}
-                  </span></>
-                )}
-              </div>
-            </div>
 
-            {expanded && (
-              <div className="admin-panel__template-item">
-                {/* Champs éditables recette */}
-                <div className="admin-panel__template-stats">
-                  {RECIPE_FIELDS.map((def) => {
-                    const fieldDef: FieldDef = def.key === "requiredSkillKey"
-                      ? { ...def, options: skillKeyOptions, optionLabels: skillKeyLabels }
-                      : def;
+              {expanded && (
+                <div className="admin-panel__template-item">
+                  <div className="admin-panel__template-stats">
+                    {RECIPE_FIELDS.map((def) => {
+                      const fieldDef: FieldDef = def.key === "requiredSkillKey"
+                        ? { ...def, options: skillKeyOptions, optionLabels: skillKeyLabels }
+                        : def;
+                      return (
+                        <label key={def.key} className="admin-panel__template-stat">
+                          <span className="admin-panel__template-stat-label">{def.label}</span>
+                          <StatField
+                            def={fieldDef}
+                            dirty={isDirty(recipe.id, def.key, recipe)}
+                            value={drafts[recipe.id]?.[def.key] ?? fieldValue(recipe, def.key)}
+                            onChange={(v) => setDraftField(recipe.id, def.key, v)}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="admin-panel__template-actions">
+                    <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Sauvegarder</button>
+                    <button className="admin-panel__apply-btn" onClick={() => validateRecipe(recipe.id)}>Valider</button>
+                  </div>
+
+                  <div className="admin-panel__info-line">
+                    <strong>Ingrédients ({recipe.ingredients.length})</strong>
+                  </div>
+                  {recipe.ingredients.map((ing) => {
+                    const item = items.find((i) => i.id === ing.itemId);
                     return (
-                      <label key={def.key} className="admin-panel__template-stat">
-                        <span className="admin-panel__template-stat-label">{def.label}</span>
-                        <StatField
-                          def={fieldDef}
-                          dirty={isDirty(recipe.id, def.key, recipe)}
-                          value={drafts[recipe.id]?.[def.key] ?? fieldValue(recipe, def.key)}
-                          onChange={(v) => setDraftField(recipe.id, def.key, v)}
-                        />
-                      </label>
+                      <div key={ing.id} className="admin-panel__instance-row">
+                        <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : ing.itemId}</span>
+                        <span className="admin-panel__instance-badge">×{ing.requiredQuantity}</span>
+                        <button className="admin-panel__delete-btn" onClick={() => removeIngredient(recipe.id, ing.id)}>✕</button>
+                      </div>
                     );
                   })}
-                </div>
-                <div className="admin-panel__template-actions">
-                  <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Sauvegarder</button>
-                  <button className="admin-panel__apply-btn" onClick={() => validateRecipe(recipe.id)}>Valider</button>
-                </div>
+                  <div className="admin-panel__template-stats">
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Item</span>
+                      <select className="admin-panel__template-stat-input"
+                        value={ingNew.itemId}
+                        onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), itemId: e.target.value } }))}
+                        {...kbHandlers}>
+                        <option value="">—</option>
+                        {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
+                      </select>
+                    </label>
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Qté</span>
+                      <input className="admin-panel__template-stat-input" type="number" min={1}
+                        value={ingNew.requiredQuantity}
+                        onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), requiredQuantity: Number(e.target.value) } }))}
+                        {...kbHandlers} />
+                    </label>
+                    <button className="admin-panel__apply-btn" disabled={pending[`ing-${recipe.id}`]} onClick={() => addIngredient(recipe.id)}>
+                      {pending[`ing-${recipe.id}`] ? "…" : "+ Ingrédient"}
+                    </button>
+                  </div>
 
-                {/* Ingrédients */}
-                <div className="admin-panel__info-line">
-                  <strong>Ingrédients ({recipe.ingredients.length})</strong>
+                  <div className="admin-panel__info-line">
+                    <strong>Résultats ({recipe.results.length})</strong>
+                  </div>
+                  {recipe.results.map((res) => {
+                    const item = items.find((i) => i.id === res.itemId);
+                    return (
+                      <div key={res.id} className="admin-panel__instance-row">
+                        <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : res.itemId}</span>
+                        <span className="admin-panel__instance-badge">×{res.producedQuantity} @ {Math.round(res.chance * 100)}%</span>
+                        <button className="admin-panel__delete-btn" onClick={() => removeResult(recipe.id, res.id)}>✕</button>
+                      </div>
+                    );
+                  })}
+                  <div className="admin-panel__template-stats">
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Item</span>
+                      <select className="admin-panel__template-stat-input"
+                        value={resNew.itemId}
+                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), itemId: e.target.value } }))}
+                        {...kbHandlers}>
+                        <option value="">—</option>
+                        {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
+                      </select>
+                    </label>
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Qté</span>
+                      <input className="admin-panel__template-stat-input" type="number" min={1}
+                        value={resNew.producedQuantity}
+                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), producedQuantity: Number(e.target.value) } }))}
+                        {...kbHandlers} />
+                    </label>
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Chance</span>
+                      <input className="admin-panel__template-stat-input" type="number" min={0} max={1} step={0.05}
+                        value={resNew.chance}
+                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), chance: Number(e.target.value) } }))}
+                        {...kbHandlers} />
+                    </label>
+                    <button className="admin-panel__apply-btn" disabled={pending[`res-${recipe.id}`]} onClick={() => addResult(recipe.id)}>
+                      {pending[`res-${recipe.id}`] ? "…" : "+ Résultat"}
+                    </button>
+                  </div>
                 </div>
-                {recipe.ingredients.map((ing) => {
-                  const item = items.find((i) => i.id === ing.itemId);
-                  return (
-                    <div key={ing.id} className="admin-panel__instance-row">
-                      <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : ing.itemId}</span>
-                      <span className="admin-panel__instance-badge">×{ing.requiredQuantity}</span>
-                      <button className="admin-panel__delete-btn" onClick={() => removeIngredient(recipe.id, ing.id)}>✕</button>
-                    </div>
-                  );
-                })}
-                <div className="admin-panel__template-stats">
-                  <label className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">Item</span>
-                    <select className="admin-panel__template-stat-input"
-                      value={ingNew.itemId}
-                      onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), itemId: e.target.value } }))}
-                      {...kbHandlers}>
-                      <option value="">—</option>
-                      {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
-                    </select>
-                  </label>
-                  <label className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">Qté</span>
-                    <input className="admin-panel__template-stat-input" type="number" min={1}
-                      value={ingNew.requiredQuantity}
-                      onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), requiredQuantity: Number(e.target.value) } }))}
-                      {...kbHandlers} />
-                  </label>
-                  <button className="admin-panel__apply-btn" disabled={pending[`ing-${recipe.id}`]} onClick={() => addIngredient(recipe.id)}>
-                    {pending[`ing-${recipe.id}`] ? "…" : "+ Ingrédient"}
-                  </button>
-                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
 
-                {/* Résultats */}
-                <div className="admin-panel__info-line">
-                  <strong>Résultats ({recipe.results.length})</strong>
-                </div>
-                {recipe.results.map((res) => {
-                  const item = items.find((i) => i.id === res.itemId);
-                  return (
-                    <div key={res.id} className="admin-panel__instance-row">
-                      <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : res.itemId}</span>
-                      <span className="admin-panel__instance-badge">×{res.producedQuantity} @ {Math.round(res.chance * 100)}%</span>
-                      <button className="admin-panel__delete-btn" onClick={() => removeResult(recipe.id, res.id)}>✕</button>
-                    </div>
-                  );
-                })}
-                <div className="admin-panel__template-stats">
-                  <label className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">Item</span>
-                    <select className="admin-panel__template-stat-input"
-                      value={resNew.itemId}
-                      onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), itemId: e.target.value } }))}
-                      {...kbHandlers}>
-                      <option value="">—</option>
-                      {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
-                    </select>
-                  </label>
-                  <label className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">Qté</span>
-                    <input className="admin-panel__template-stat-input" type="number" min={1}
-                      value={resNew.producedQuantity}
-                      onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), producedQuantity: Number(e.target.value) } }))}
-                      {...kbHandlers} />
-                  </label>
-                  <label className="admin-panel__template-stat">
-                    <span className="admin-panel__template-stat-label">Chance</span>
-                    <input className="admin-panel__template-stat-input" type="number" min={0} max={1} step={0.05}
-                      value={resNew.chance}
-                      onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), chance: Number(e.target.value) } }))}
-                      {...kbHandlers} />
-                  </label>
-                  <button className="admin-panel__apply-btn" disabled={pending[`res-${recipe.id}`]} onClick={() => addResult(recipe.id)}>
-                    {pending[`res-${recipe.id}`] ? "…" : "+ Résultat"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+  const createRecipeForm = (
+    <div className="admin-panel__template-item">
+      <div className="admin-panel__template-stats">
+        {(["key", "name"] as const).map((f) => (
+          <label key={f} className="admin-panel__template-stat">
+            <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
+            <input className="admin-panel__template-stat-input" type="text"
+              value={(newRecipe as any)[f]}
+              onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: e.target.value }))}
+              {...kbHandlers} />
+          </label>
+        ))}
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Catégorie</span>
+          <select className="admin-panel__template-stat-input"
+            value={newRecipe.category}
+            onChange={(e) => setNewRecipe((prev) => ({ ...prev, category: e.target.value }))}
+            {...kbHandlers}>
+            {RECIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Station</span>
+          <select className="admin-panel__template-stat-input"
+            value={newRecipe.stationType}
+            onChange={(e) => setNewRecipe((prev) => ({ ...prev, stationType: e.target.value }))}
+            {...kbHandlers}>
+            {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Skill requis</span>
+          <select className="admin-panel__template-stat-input"
+            value={newRecipe.requiredSkillKey}
+            onChange={(e) => setNewRecipe((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
+            {...kbHandlers}>
+            {skillKeyOptions.map((k, i) => (
+              <option key={k} value={k}>{skillKeyLabels[i]}</option>
+            ))}
+          </select>
+        </label>
+        {([
+          { f: "requiredSkillLevel",   label: "Niv. requis",  step: 1 },
+          { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
+          { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
+          { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
+          { f: "xpReward",             label: "XP",           step: 1 },
+          { f: "craftTimeMs",          label: "Durée (ms)",   step: 100 },
+        ] as const).map(({ f, label, step }) => (
+          <label key={f} className="admin-panel__template-stat">
+            <span className="admin-panel__template-stat-label">{label}</span>
+            <input className="admin-panel__template-stat-input" type="number" min={0} step={step}
+              value={(newRecipe as any)[f]}
+              onChange={(e) => setNewRecipe((prev) => ({ ...prev, [f]: Number(e.target.value) }))}
+              {...kbHandlers} />
+          </label>
+        ))}
+      </div>
+      <button className="admin-panel__apply-btn" disabled={creating} onClick={createRecipe}>
+        {creating ? "…" : "Créer"}
+      </button>
+    </div>
+  );
+
+  return (
+    <section className="admin-panel__section">
+      <div className="admin-panel__dual-header">
+        <div className="admin-panel__section-toggle" onClick={() => setRecipesOpen((o) => !o)}>
+          <span className="admin-panel__section-chevron">{recipesOpen ? "▼" : "▶"}</span>
+          Recettes
+        </div>
+        <div className="admin-panel__section-toggle" onClick={() => setCreateRecipeOpen((o) => !o)}>
+          Créer Recette
+          <span className="admin-panel__section-chevron">{createRecipeOpen ? "▼" : "▶"}</span>
+        </div>
+      </div>
+      {recipesOpen && recipeList}
+      {createRecipeOpen && createRecipeForm}
     </section>
   );
 }

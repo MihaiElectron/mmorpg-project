@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
 import { screenToWorldWU } from "../../phaser/utils/worldCoordinates";
@@ -292,9 +292,10 @@ type EntitySectionProps = {
   config: SectionConfig;
   items: any[];
   onResult: (text: string, ok: boolean) => void;
+  embedded?: boolean;
 };
 
-export function EntitySection({ config, items, onResult }: EntitySectionProps) {
+export function EntitySection({ config, items, onResult, embedded = false }: EntitySectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -332,6 +333,70 @@ export function EntitySection({ config, items, onResult }: EntitySectionProps) {
     if (result.success) { Object.assign(item, dirtyFields); draft.clearDraft(dk); }
   }
 
+  const content = (
+    <>
+      {embedded && (
+        <div className="admin-panel__embedded-toolbar">
+          <span className="admin-panel__count-badge">{filtered.length}</span>
+          <PaginationControls {...pag} />
+        </div>
+      )}
+
+      <input className="admin-panel__search" type="text"
+        placeholder={`Filtrer ${config.title.toLowerCase()}…`}
+        value={search} onChange={(e) => setSearch(e.target.value)}
+        onClick={(e) => e.stopPropagation()} {...kbHandlers} spellCheck={false} />
+
+      {items.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
+      {items.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
+
+      <div className="admin-panel__template-list">
+        {paginated.map((item) => {
+          const dk = config.getDisplayKey(item);
+          return (
+            <div key={dk} className="admin-panel__template-item">
+              <div className="admin-panel__item-header">
+                {config.dragEvent && (
+                  <span className="admin-panel__drag-handle" title="Glisser sur la map"
+                    onMouseDown={(e) => startDrag(e, config.getName(item), (worldX, worldY) => {
+                      const socket = getSocket();
+                      if (!socket?.connected || !config.getDragPayload) return;
+                      ackPromise(socket, config.dragEvent!, config.getDragPayload(item, Math.round(worldX), Math.round(worldY)))
+                        .then((r) => onResult(r.message, r.success));
+                    })}>⠿</span>
+                )}
+                <span className="admin-panel__template-name">{config.getName(item)}</span>
+                {config.getTpPosition?.(item) && (
+                  <button className="admin-panel__tp-btn"
+                    title={`Tp WU (${config.getTpPosition!(item)!.worldX}, ${config.getTpPosition!(item)!.worldY})`}
+                    onClick={() => onTp(item)}>↓ Tp</button>
+                )}
+              </div>
+              <div className="admin-panel__template-stats">
+                {config.fields.map((f) => (
+                  <label key={f.key} className="admin-panel__template-stat">
+                    <span className="admin-panel__template-stat-label">{f.label}</span>
+                    <StatField def={f} dirty={draft.isDirty(dk, f.key, item)}
+                      value={draft.getDisplayField(dk, f.key, item)}
+                      onChange={(v) => draft.onChange(dk, f.key, v)} />
+                  </label>
+                ))}
+              </div>
+              {draft.hasAnyDirty(dk, item) && (
+                <button className="admin-panel__apply-btn"
+                  disabled={!!draft.saving[dk]} onClick={() => onApply(item)}>
+                  {draft.saving[dk] ? "…" : "Appliquer"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  if (embedded) return content;
+
   return (
     <section className="admin-panel__section">
       <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
@@ -342,60 +407,7 @@ export function EntitySection({ config, items, onResult }: EntitySectionProps) {
         {isOpen && <PaginationControls {...pag} />}
       </div>
 
-      {isOpen && (
-        <>
-          <input className="admin-panel__search" type="text"
-            placeholder={`Filtrer ${config.title.toLowerCase()}…`}
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            onClick={(e) => e.stopPropagation()} {...kbHandlers} spellCheck={false} />
-
-          {items.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
-          {items.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
-
-          <div className="admin-panel__template-list">
-            {paginated.map((item) => {
-              const dk = config.getDisplayKey(item);
-              return (
-                <div key={dk} className="admin-panel__template-item">
-                  <div className="admin-panel__item-header">
-                    {config.dragEvent && (
-                      <span className="admin-panel__drag-handle" title="Glisser sur la map"
-                        onMouseDown={(e) => startDrag(e, config.getName(item), (worldX, worldY) => {
-                          const socket = getSocket();
-                          if (!socket?.connected || !config.getDragPayload) return;
-                          ackPromise(socket, config.dragEvent!, config.getDragPayload(item, Math.round(worldX), Math.round(worldY)))
-                            .then((r) => onResult(r.message, r.success));
-                        })}>⠿</span>
-                    )}
-                    <span className="admin-panel__template-name">{config.getName(item)}</span>
-                    {config.getTpPosition?.(item) && (
-                      <button className="admin-panel__tp-btn"
-                        title={`Tp WU (${config.getTpPosition!(item)!.worldX}, ${config.getTpPosition!(item)!.worldY})`}
-                        onClick={() => onTp(item)}>↓ Tp</button>
-                    )}
-                  </div>
-                  <div className="admin-panel__template-stats">
-                    {config.fields.map((f) => (
-                      <label key={f.key} className="admin-panel__template-stat">
-                        <span className="admin-panel__template-stat-label">{f.label}</span>
-                        <StatField def={f} dirty={draft.isDirty(dk, f.key, item)}
-                          value={draft.getDisplayField(dk, f.key, item)}
-                          onChange={(v) => draft.onChange(dk, f.key, v)} />
-                      </label>
-                    ))}
-                  </div>
-                  {draft.hasAnyDirty(dk, item) && (
-                    <button className="admin-panel__apply-btn"
-                      disabled={!!draft.saving[dk]} onClick={() => onApply(item)}>
-                      {draft.saving[dk] ? "…" : "Appliquer"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
+      {isOpen && content}
     </section>
   );
 }
@@ -409,6 +421,8 @@ type GroupedSectionProps = {
   onResult: (text: string, ok: boolean) => void;
   onInstanceDeleted: (instanceKey: string) => void;
   highlightId?: string | null;
+  rightHeader?: React.ReactNode;
+  rightContent?: React.ReactNode;
 };
 
 function InstanceActionButton({ action, inst, onResult }: { action: InstanceAction; inst: any; onResult: (text: string, ok: boolean) => void }) {
@@ -434,7 +448,7 @@ function InstanceActionButton({ action, inst, onResult }: { action: InstanceActi
   );
 }
 
-export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId }: GroupedSectionProps) {
+export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId, rightHeader, rightContent }: GroupedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -543,13 +557,23 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
 
   return (
     <section className="admin-panel__section">
-      <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
-        <span className="admin-panel__section-toggle">
-          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-          {config.title}
-        </span>
-        {isOpen && <PaginationControls {...pag} />}
-      </div>
+      {rightHeader ? (
+        <div className="admin-panel__dual-header">
+          <div className="admin-panel__section-toggle" onClick={() => setIsOpen((o) => !o)}>
+            <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+            {config.title}
+          </div>
+          {rightHeader}
+        </div>
+      ) : (
+        <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
+          <span className="admin-panel__section-toggle">
+            <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+            {config.title}
+          </span>
+          {isOpen && <PaginationControls {...pag} />}
+        </div>
+      )}
 
       {isOpen && (
         <>
@@ -680,6 +704,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
           </div>
         </>
       )}
+      {rightContent}
     </section>
   );
 }
