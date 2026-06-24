@@ -56,6 +56,7 @@ function toDto(animal: Animal): AnimalDto {
     id: animal.id,
     templateKey: t.key,
     type: t.textureKey,
+    textureKey: t.textureKey,
     name: t.name,
     x: animal.x,
     y: animal.y,

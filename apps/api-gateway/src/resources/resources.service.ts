@@ -1,7 +1,7 @@
 // apps/api-gateway/src/resources/resources.service.ts
 import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, IsNull, Repository } from 'typeorm';
+import { In, Not, IsNull, Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
@@ -153,10 +153,11 @@ export class ResourcesService implements OnModuleInit {
     const remainingLoots = await this.getDefaultRemainingLoots(resource.type);
     await this.repo.update(id, { state: 'alive', remainingLoots, respawnAt: null });
 
+    const template = await this.getTemplate(resource.type);
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', this.buildResourceBroadcast(updated));
+      this.server.emit('resource_update', this.buildResourceBroadcast(updated, template?.textureKey));
     }
 
     return updated;
@@ -186,7 +187,7 @@ export class ResourcesService implements OnModuleInit {
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', this.buildResourceBroadcast(updated));
+      this.server.emit('resource_update', this.buildResourceBroadcast(updated, template.textureKey));
     }
 
     return updated;
@@ -220,7 +221,8 @@ export class ResourcesService implements OnModuleInit {
     // Broadcast avec respawnAt pour que le panneau admin affiche le timer
     const resource = await this.findOne(id);
     if (resource && this.server) {
-      this.server.emit('resource_update', this.buildResourceBroadcast({ ...resource, respawnAt }));
+      const template = await this.getTemplate(resource.type);
+      this.server.emit('resource_update', this.buildResourceBroadcast({ ...resource, respawnAt }, template?.textureKey));
     }
 
     this.armRespawnTimer(id, resolvedDelay, token);
@@ -284,10 +286,11 @@ export class ResourcesService implements OnModuleInit {
    * Inclut type et coordonnées (legacy + WU) nécessaires au rendu Phaser.
    * Sans type/position, upsertResource ne peut pas recréer le sprite après un dead.
    */
-  buildResourceBroadcast(resource: Resource): Record<string, unknown> {
+  buildResourceBroadcast(resource: Resource, textureKey?: string | null): Record<string, unknown> {
     return {
       id:             resource.id,
       type:           resource.type,
+      textureKey:     textureKey ?? null,
       state:          resource.state,
       remainingLoots: resource.remainingLoots,
       respawnAt:      resource.respawnAt      ?? null,
@@ -301,6 +304,24 @@ export class ResourcesService implements OnModuleInit {
   }
 
   /**
+   * Enrichit une liste de Resource avec textureKey depuis leurs templates.
+   * Effectue un seul SELECT de templates groupés par type distinct.
+   */
+  async findAllWithTextureKey(): Promise<Array<Resource & { textureKey: string | null }>> {
+    const resources = await this.repo.find();
+    if (resources.length === 0) return [];
+
+    const types = [...new Set(resources.map((r) => r.type))];
+    const templates = await this.templateRepo.find({
+      where: { type: In(types) },
+      select: ['type', 'textureKey'],
+    });
+
+    const textureByType = new Map(templates.map((t) => [t.type, t.textureKey]));
+    return resources.map((r) => ({ ...r, textureKey: textureByType.get(r.type) ?? null }));
+  }
+
+  /**
    * Arme le setTimeout qui déclenche doRespawn et broadcast resource_update.
    * Le token capturé est passé à doRespawn : si le token a été invalidé entre-temps
    * (forceRespawn ou double schedule), doRespawn retourne null sans toucher la DB.
@@ -309,7 +330,8 @@ export class ResourcesService implements OnModuleInit {
     setTimeout(async () => {
       const respawned = await this.doRespawn(id, token);
       if (respawned && this.server) {
-        this.server.emit('resource_update', this.buildResourceBroadcast(respawned));
+        const template = await this.getTemplate(respawned.type);
+        this.server.emit('resource_update', this.buildResourceBroadcast(respawned, template?.textureKey));
       }
     }, delayMs);
   }

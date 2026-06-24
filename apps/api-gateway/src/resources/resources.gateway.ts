@@ -238,7 +238,7 @@ export class ResourcesGateway
     });
 
     // 🔄 Mise à jour visuelle pour tous (payload complet pour le rendu et l'admin panel)
-    this.server.emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any));
+    this.server.emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any, template?.textureKey));
 
     // XP de récolte data-driven depuis ResourceTemplate.skillKey / gatheringXpReward.
     // characterId vient du serveur (client.data.player), jamais du client.
@@ -293,7 +293,7 @@ export class ResourcesGateway
   }
 
   private async sendResources(client: WorldSocket) {
-    const objects = await this.resources.findAll();
+    const objects = await this.resources.findAllWithTextureKey();
     client.emit('resources', objects);
   }
 }

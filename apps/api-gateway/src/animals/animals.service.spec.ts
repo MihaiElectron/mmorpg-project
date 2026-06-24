@@ -180,6 +180,34 @@ describe('AnimalsService', () => {
     it('retourne un tableau vide si aucun animal en mémoire', () => {
       expect(service.findAll()).toEqual([]);
     });
+
+    it('DTO expose textureKey depuis le template', () => {
+      const animal = makeAnimal();
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].textureKey).toBe('turkey');
+    });
+
+    it('DTO textureKey correspond à template.textureKey', () => {
+      const template = makeTemplate({ textureKey: 'custom_sprite' });
+      const animal = makeAnimal({ spawn: makeSpawn(template) as any });
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].textureKey).toBe('custom_sprite');
+    });
+
+    it('DTO type et textureKey sont identiques en Phase 1', () => {
+      const animal = makeAnimal();
+      (service as any).liveAnimals.set(animal.id, animal);
+
+      const result = service.findAll();
+
+      expect(result[0].type).toBe(result[0].textureKey);
+    });
   });
 
   // -------------------------------------------------------------------------

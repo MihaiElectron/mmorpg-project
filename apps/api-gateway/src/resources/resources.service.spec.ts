@@ -706,6 +706,177 @@ describe('ResourcesService', () => {
   });
 });
 
+// ── buildResourceBroadcast — textureKey ──────────────────────────────────────
+
+describe('buildResourceBroadcast — textureKey', () => {
+  let service: ResourcesService;
+  let resourceRepo: { findOne: jest.Mock; find: jest.Mock; update: jest.Mock };
+  let templateRepo: { findOne: jest.Mock; update: jest.Mock; find: jest.Mock; createQueryBuilder: jest.Mock };
+
+  beforeEach(async () => {
+    resourceRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), update: jest.fn() };
+    const qb = { insert: jest.fn().mockReturnThis(), values: jest.fn().mockReturnThis(), orIgnore: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined) };
+    templateRepo = { findOne: jest.fn(), update: jest.fn().mockResolvedValue(undefined), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        ResourcesService,
+        { provide: getRepositoryToken(Resource),         useValue: resourceRepo },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: templateRepo },
+      ],
+    }).compile();
+
+    service = module.get(ResourcesService);
+    await service.onModuleInit();
+  });
+
+  it('buildResourceBroadcast inclut textureKey quand fourni', () => {
+    const resource = makeResource();
+    const result = service.buildResourceBroadcast(resource, 'fire_camp');
+    expect(result.textureKey).toBe('fire_camp');
+  });
+
+  it('buildResourceBroadcast inclut textureKey null quand absent', () => {
+    const resource = makeResource();
+    const result = service.buildResourceBroadcast(resource);
+    expect(result.textureKey).toBeNull();
+  });
+
+  it('buildResourceBroadcast inclut textureKey null quand explicitement null', () => {
+    const resource = makeResource();
+    const result = service.buildResourceBroadcast(resource, null);
+    expect(result.textureKey).toBeNull();
+  });
+
+  it('forceRespawn envoie textureKey depuis le template', async () => {
+    resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+    templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4, textureKey: 'fire_camp' } as any));
+    resourceRepo.update.mockResolvedValue(undefined);
+
+    const mockServer = { emit: jest.fn() };
+    service.setServer(mockServer as any);
+
+    await service.forceRespawn('res-1');
+
+    const [, payload] = mockServer.emit.mock.calls[0];
+    expect(payload.textureKey).toBe('fire_camp');
+  });
+
+  it('forceRespawn envoie textureKey null si template absent', async () => {
+    resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+    templateRepo.findOne.mockResolvedValue(null);
+    resourceRepo.update.mockResolvedValue(undefined);
+
+    const mockServer = { emit: jest.fn() };
+    service.setServer(mockServer as any);
+
+    await service.forceRespawn('res-1');
+
+    const [, payload] = mockServer.emit.mock.calls[0];
+    expect(payload.textureKey).toBeNull();
+  });
+
+  it('resetInstanceFromTemplate envoie textureKey depuis le template', async () => {
+    resourceRepo.findOne.mockResolvedValue(makeResource({ state: 'dead', remainingLoots: 0 }));
+    templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4, textureKey: 'dead_tree' } as any));
+    resourceRepo.update.mockResolvedValue(undefined);
+
+    const mockServer = { emit: jest.fn() };
+    service.setServer(mockServer as any);
+
+    await service.resetInstanceFromTemplate('res-1');
+
+    const [, payload] = mockServer.emit.mock.calls[0];
+    expect(payload.textureKey).toBe('dead_tree');
+  });
+});
+
+// ── findAllWithTextureKey ─────────────────────────────────────────────────────
+
+describe('findAllWithTextureKey', () => {
+  let service: ResourcesService;
+  let resourceRepo: { findOne: jest.Mock; find: jest.Mock; update: jest.Mock };
+  let templateRepo: { findOne: jest.Mock; update: jest.Mock; find: jest.Mock; createQueryBuilder: jest.Mock };
+
+  beforeEach(async () => {
+    resourceRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), update: jest.fn() };
+    const qb = { insert: jest.fn().mockReturnThis(), values: jest.fn().mockReturnThis(), orIgnore: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined) };
+    templateRepo = { findOne: jest.fn(), update: jest.fn().mockResolvedValue(undefined), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        ResourcesService,
+        { provide: getRepositoryToken(Resource),         useValue: resourceRepo },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: templateRepo },
+      ],
+    }).compile();
+
+    service = module.get(ResourcesService);
+    await service.onModuleInit();
+  });
+
+  it('retourne [] si aucune resource en base', async () => {
+    resourceRepo.find.mockResolvedValue([]);
+    const result = await service.findAllWithTextureKey();
+    expect(result).toEqual([]);
+  });
+
+  it('enrichit chaque resource avec textureKey depuis le template', async () => {
+    resourceRepo.find.mockResolvedValue([
+      makeResource({ id: 'r1', type: 'dead_tree' }),
+      makeResource({ id: 'r2', type: 'fire_camp' }),
+    ]);
+    templateRepo.find.mockResolvedValue([
+      makeTemplate({ type: 'dead_tree', textureKey: 'dead_tree' } as any),
+      makeTemplate({ type: 'fire_camp', textureKey: 'fire_camp' } as any),
+    ]);
+
+    const result = await service.findAllWithTextureKey();
+
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.id === 'r1')?.textureKey).toBe('dead_tree');
+    expect(result.find((r) => r.id === 'r2')?.textureKey).toBe('fire_camp');
+  });
+
+  it('textureKey null si le template est absent pour un type', async () => {
+    resourceRepo.find.mockResolvedValue([makeResource({ id: 'r1', type: 'unknown_ore' })]);
+    templateRepo.find.mockResolvedValue([]);
+
+    const result = await service.findAllWithTextureKey();
+
+    expect(result[0].textureKey).toBeNull();
+  });
+
+  it('conserve toutes les propriétés d\'origine de la resource', async () => {
+    const resource = makeResource({ id: 'r1', type: 'dead_tree', worldX: 1024, worldY: 2048, mapId: 1 });
+    resourceRepo.find.mockResolvedValue([resource]);
+    templateRepo.find.mockResolvedValue([makeTemplate({ type: 'dead_tree', textureKey: 'dead_tree' } as any)]);
+
+    const result = await service.findAllWithTextureKey();
+
+    expect(result[0]).toMatchObject({
+      id: 'r1',
+      type: 'dead_tree',
+      worldX: 1024,
+      worldY: 2048,
+      mapId: 1,
+      textureKey: 'dead_tree',
+    });
+  });
+
+  it('ne fait qu\'un seul fetch de templates pour plusieurs resources du même type', async () => {
+    resourceRepo.find.mockResolvedValue([
+      makeResource({ id: 'r1', type: 'dead_tree' }),
+      makeResource({ id: 'r2', type: 'dead_tree' }),
+    ]);
+    templateRepo.find.mockResolvedValue([makeTemplate({ type: 'dead_tree', textureKey: 'dead_tree' } as any)]);
+
+    await service.findAllWithTextureKey();
+
+    expect(templateRepo.find).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── RESOURCE_TEMPLATES — équilibrage ──────────────────────────────────────────
 
 describe('RESOURCE_TEMPLATES', () => {
