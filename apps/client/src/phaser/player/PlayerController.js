@@ -1,5 +1,7 @@
 import { getDevToolsStore } from "../../store/devtools.store";
 
+export const MOUSE_HOLD_THRESHOLD_MS = 150;
+
 export default class PlayerController {
   constructor(scene, player) {
     this.scene = scene;
@@ -38,24 +40,20 @@ export default class PlayerController {
   updateMouseTarget(x, y) {
     if (!this.mouseActive) return;
 
-    const heldTime = performance.now() - this.clickStartTime;
+    this.target = { x, y };
 
-    if (heldTime > 150) {
-      this.isDragging = true;
-      this.path = null;
-      this.currentPathIndex = 0;
-
-      this.target = { x, y };
-    }
+    this.activateMouseDragIfHeld();
   }
 
   // -------------------------------------------------------
   // POINTER UP
   // -------------------------------------------------------
   stopMouseMove() {
+    if (!this.mouseActive) return;
+
     const clickDuration = performance.now() - this.clickStartTime;
 
-    if (clickDuration < 150 && !this.isDragging) {
+    if (clickDuration < MOUSE_HOLD_THRESHOLD_MS && !this.isDragging) {
       if (this.target) this.calculatePath(this.target.x, this.target.y);
       return;
     }
@@ -124,11 +122,14 @@ export default class PlayerController {
 
     if (vx !== 0 || vy !== 0) {
       this.mouseActive = false;
+      this.isDragging = false;
       this.path = null;
       this.target = null;
       this.player.setVelocity(vx, vy);
       return;
     }
+
+    this.activateMouseDragIfHeld();
 
     // 2. MAINTIEN → steering direct
     if (this.mouseActive && this.isDragging && this.target) {
@@ -144,6 +145,17 @@ export default class PlayerController {
 
     // 4. AUCUN INPUT
     this.player.setVelocity(0);
+  }
+
+  activateMouseDragIfHeld() {
+    if (!this.mouseActive || this.isDragging || !this.target) return;
+
+    const heldTime = performance.now() - this.clickStartTime;
+    if (heldTime <= MOUSE_HOLD_THRESHOLD_MS) return;
+
+    this.isDragging = true;
+    this.path = null;
+    this.currentPathIndex = 0;
   }
 
   // -------------------------------------------------------

@@ -136,6 +136,9 @@ export default class WorldScene extends Phaser.Scene {
     this.gatheringEventsRegistered = false;
     this.lastPlayerSyncAt = 0;
     this.lastSyncedPosition = null;
+    this.windowMouseUpHandler = null;
+    this.windowBlurHandler = null;
+    this.canvasMouseLeaveHandler = null;
 
     // Indicateur visuel de récolte (local, visible uniquement par ce client).
     this.gatherIndicator = null;
@@ -341,6 +344,8 @@ export default class WorldScene extends Phaser.Scene {
       this.controller.stopMouseMove();
     });
 
+    this.registerPointerGuards();
+
     // CAMERA
     this.cameras.main.setZoom(1);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -368,6 +373,38 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.joinWorld();
+  }
+
+  registerPointerGuards() {
+    if (typeof window === "undefined" || !this.game?.canvas) return;
+
+    this.windowMouseUpHandler = () => {
+      if (this.controller?.mouseActive && this.controller.isDragging) {
+        this.controller.stopMouseMove();
+      }
+    };
+
+    this.windowBlurHandler = () => {
+      if (this.controller?.mouseActive) {
+        this.controller.stopMouseMove();
+      }
+    };
+
+    this.canvasMouseLeaveHandler = (event) => {
+      if (event.buttons === 0 && this.controller?.mouseActive && this.controller.isDragging) {
+        this.controller.stopMouseMove();
+      }
+    };
+
+    window.addEventListener("mouseup", this.windowMouseUpHandler);
+    window.addEventListener("blur", this.windowBlurHandler);
+    this.game.canvas.addEventListener("mouseleave", this.canvasMouseLeaveHandler);
+
+    this.events.once("shutdown", () => {
+      window.removeEventListener("mouseup", this.windowMouseUpHandler);
+      window.removeEventListener("blur", this.windowBlurHandler);
+      this.game.canvas.removeEventListener("mouseleave", this.canvasMouseLeaveHandler);
+    });
   }
 
   update(time) {
