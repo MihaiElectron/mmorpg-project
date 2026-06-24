@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-24_
-_Session : 2026-06-24 (sessions 9–13 — Skills/Crafting admin, UX panneau, migration WU P4–P5)_
+_Session : 2026-06-24 (sessions 14–15 — migration WU P5, P6 — protocole admin WU pur)_
 _Branche : main_
 _État : développement local_
 
@@ -15,10 +15,13 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
-Migration WU P4–P5 terminée : `character_respawn` et `character_teleport` émettent
-désormais `worldX/worldY/chunkX/chunkY` sans coordonnées pixel legacy. Frontend
-WU-first sur tous les flux joueur critiques. Infrastructure DevTools complète :
-shell, panel, store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
+Migration WU P0–P6 terminée : protocole WebSocket entièrement WU. `player_move`
+WU-only (plus de `x/y` dans le payload). Tous les événements admin (`admin:spawn`,
+`admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`,
+`admin:update_resource`) acceptent `worldX/worldY` exclusivement. Pixel cache dérivé
+côté serveur via `wuToIsoScreenX/Y`. Drag-to-map et boutons Tp du panneau admin
+passent en WU via `screenToWorldWU`. Infrastructure DevTools complète : shell, panel,
+store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
 
 **AdminPanelWOM** opérationnel avec Skills et CraftingRecipes : création/édition
 de `SkillDefinition`, sélects dynamiques pour categories/stations, `requiredSkillKey`
@@ -30,7 +33,21 @@ Onglets Talents/Succès placeholder actifs.
 
 ## Derniers changements importants
 
-- **Migration WU P4–P5** : `character_respawn` et `character_teleport` transportent
+- **Migration WU P5 — `player_move` WU-only** : `x/y` pixels supprimés du payload
+  `player_move` (client → serveur). `WorldScene.syncLocalPlayer` envoie désormais
+  `{ worldX, worldY, mapId, direction }`. `updatePlayer` accepte uniquement WU,
+  dérive le pixel cache via `wuToIsoScreenX/Y`. Fallback `isoScreenToWorldWU` supprimé.
+  Suite "métriques passives mouvement" de `world.service.spec.ts` mise à jour.
+- **Migration WU P6 — Protocole admin WU pur** : `admin:spawn`, `admin:teleport`,
+  `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`,
+  `admin:update_resource` — tous les payloads de coordonnées en `worldX/worldY`.
+  `AnimalsService.createAdminSpawn/moveAnimal/adminUpdateAnimal`,
+  `AdminService.createResource/updateResource` dérivent le pixel cache côté serveur.
+  `commandRegistry.ts` utilise `lastClickedWorldPoint` (WU). `adminPanel.shared.tsx`
+  : `toWorldWU()` via `screenToWorldWU`, drag-to-map et boutons Tp passent en WU.
+  `admin.actions.ts` : signatures WU. Tests : `admin.service.spec.ts` + tests
+  `teleportCharacter` WU mis à jour.
+- **Migration WU P4–P4.5** : `character_respawn` et `character_teleport` transportent
   désormais `worldX/worldY/chunkX/chunkY + characterId`. Champs `x/y` pixels legacy
   supprimés des deux payloads. `WorldScene.js` utilisait déjà `resolveScreen()` WU-first.
   7 nouveaux tests `world.service.spec.ts` (suites `teleportCharacter` + `respawnCharacter`).
@@ -70,8 +87,8 @@ Onglets Talents/Succès placeholder actifs.
 | Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | 562 tests backend (22 suites, 1 échec pré-existant `auth.controller.spec.ts`) + 147 tests frontend |
-| Migration WU | **P4–P5 soldés.** `character_respawn` + `character_teleport` en WU pur (`worldX/worldY/chunkX/chunkY`), pixels legacy supprimés. `resolveScreen()` WU-first pour tous les flux joueur. Reste : P5 `player_move` fallback, P6 `admin:teleport` pixels, P7 drop colonnes legacy DB. |
+| Tests | 572 tests backend (23 suites, 1 échec pré-existant `auth.controller.spec.ts`) + 209 tests frontend |
+| Migration WU | **P0–P6 soldés.** Protocole WebSocket entièrement WU. `player_move` WU-only, tous les événements admin en `worldX/worldY`. `resolveScreen()` WU-first côté client. Reste : P7 drop colonnes legacy DB (`positionX/Y`, `animal.x/y`). |
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
 | Crafting admin | `CraftingRecipe` entièrement administrable via WOM/Admin (WOM adapter, CRUD, ingrédients, résultats, validation). |
 
@@ -84,9 +101,16 @@ Onglets Talents/Succès placeholder actifs.
   `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`.
   Inverse : `worldX = 8*(sx−1000) + 16*sy`, `worldY = −8*(sx−1000) + 16*sy`.
   Helper TS partagé : `src/phaser/utils/wuProjection.ts` (`wuToScreen`).
-  Phase 1 clôturée : backfill OK, `world.service.ts` entièrement migré.
+  P0–P6 soldés : protocole WebSocket WU pur, pixel cache dérivé côté serveur.
   Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
   `docs/01_Architecture/wu-migration-audit.md`.
+- **Navigation client — NavGrid / Pathfinder** : `NAV_CELL_SIZE_WU = 128` (8×8 nav
+  cells par tile, `NAV_CELLS_PER_TILE = 8`). `WalkabilityGrid` (résolution tile) →
+  `createNavGridFromWalkabilityGrid(wg, 8)` → `NavGrid` (512×512 pour une map 64×64 tiles).
+  Format : `grid[y][x]`, `0` = walkable, `1` = bloqué. A\* 8 directions, coût `hypot`,
+  résultat `{x: navX, y: navY}[]`. `smoothPath` (string-pulling greedy Bresenham LOS).
+  `findNearestWalkableCell` (Chebyshev rings) : si la cible est bloquée, `wasSnapped=true`
+  supprime le fallback mouvement direct. Modules : `walkabilityGrid.ts`, `pathfinding.js`.
 - Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
   ownership — voir `docs/02_Security/client-server-trust.md`.
 - Les actions admin doivent être autorisées côté serveur. Les événements admin observés
@@ -137,8 +161,9 @@ Onglets Talents/Succès placeholder actifs.
 - **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
 - **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
-- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P5 : WU + chunkX/Y, x/y supprimés).
-- **[IMPORTANT] `player_move` — x/y fallback à supprimer** : protocole additif (P1). Frontend envoie déjà `worldX/worldY/mapId`. Suppression définitive des champs `x/y` dans le payload client et fallback serveur `updatePlayer` prévue en migration P5 (plan WebSocket).
+- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P4.5 : WU + chunkX/Y, x/y supprimés).
+- ~~**[IMPORTANT] `player_move` — x/y fallback à supprimer**~~ — **SOLDÉ** (P5 : payload WU-only, fallback pixel supprimé, pixel cache dérivé côté serveur).
+- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6 : `admin:spawn`, `admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal/resource` en `worldX/worldY`).
 - **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
   `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
   `devtools.store` fichier par fichier.
@@ -191,8 +216,8 @@ Onglets Talents/Succès placeholder actifs.
 - [x] P3 — Frontend animaux + ressources : `resolveScreen()` WU-first
 - [x] P4 — `character_respawn` et `character_teleport` : `worldX/worldY/chunkX/chunkY/characterId`, frontend WU-first via `resolveScreen()`
 - [x] P4.5 — supprimer `x/y` legacy de `character_respawn` et `character_teleport`
-- [ ] P5 — `player_move` : supprimer fallback `x/y` dans payload client + `updatePlayer` serveur
-- [ ] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_animal` en WU
+- [x] P5 — `player_move` : supprimer fallback `x/y` dans payload client + `updatePlayer` serveur
+- [x] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`, `admin:update_resource` en WU
 - [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `animal.x/y` en cache pur)
 
 ### Gameplay / contenu
@@ -208,11 +233,12 @@ Onglets Talents/Succès placeholder actifs.
 
 ## Documents potentiellement impactés
 
-- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection, AdminPanelWOM
-- [ ] `docs/04_Server/websockets.md` — `player_move` payload additif (worldX/worldY/mapId) + P0 join_world ; `buildResourceBroadcast` pour resource_update
-- [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, toggle Legacy/WOM, InstanceAction, adminPanel.shared
+- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection, AdminPanelWOM, NavGrid/Pathfinder
+- [ ] `docs/04_Server/websockets.md` — `player_move` WU-only (P5), protocole admin WU (P6), `buildResourceBroadcast`
+- [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, admin protocol WU, drag-to-map WU, Tp WU
 - [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
-- [ ] `docs/05_World/chunks.md` — après validation ADR-0001 (déjà fait, vérifier)
+- [ ] `docs/05_World/maps-and-collisions.md` — NavGrid 8×8, `NAV_CELL_SIZE_WU=128`, pathfinding WU
+- [ ] `docs/01_Architecture/websocket-wu-migration-study.md` — marquer P0–P6 soldés (fait dans cette session)
 
 ---
 
@@ -232,6 +258,27 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-24 (sessions 14–15 — migration WU P5 + P6)
+
+- **Migration WU P5 — `player_move` WU-only** : `x/y` supprimés du payload
+  `player_move`. `WorldScene.syncLocalPlayer` envoie `{ worldX, worldY, mapId,
+  direction }`. `world.gateway.ts` : validation WU uniquement. `world.service.ts`
+  `updatePlayer` : accepte uniquement `worldX/worldY/mapId`, dérive pixel cache via
+  `wuToIsoScreenX/Y`, supprime appel `isoScreenToWorldWU`. Suite "métriques passives
+  mouvement" mise à jour (retrait `x/y` des payloads de test). 572 tests backend.
+- **Migration WU P6 — Protocole admin WU pur** :
+  - Backend : `AnimalsService.createAdminSpawn`, `moveAnimal`, `adminUpdateAnimal` —
+    signatures `(worldX, worldY)`, pixel cache dérivé. `AdminService.createResource`,
+    `updateResource` — idem, guard `isFinite`. `admin.gateway.ts` : types payload
+    `worldX/worldY` pour les 6 événements admin de coordonnées.
+  - Frontend `admin.actions.ts` : `spawnCreature/teleportCharacter/moveAnimal` en WU.
+    `commandRegistry.ts` : `getLastClickedWorldPoint()`, `resolvePos` utilise WU.
+    `/spawn` et `/tp` passent `worldX/worldY`. `adminPanel.shared.tsx` : `toWorldWU()`
+    via `screenToWorldWU`, drag-to-map et boutons Tp en WU. `AdminPanelWOM.tsx` :
+    `getDragPayload` et `getTpPosition/getInstanceTpPosition` en `worldX/worldY`.
+  - Tests : `teleportCharacter` mis à jour (WU input, guard NaN, pixel cache), nouveaux
+    tests `admin.service.spec.ts` (`createResource WU`, `updateResource WU`, guard Infinity).
 
 ### 2026-06-24 (sessions 9–13 — Skills, Crafting, UX DevTools, migration WU P4–P5)
 

@@ -1,8 +1,27 @@
 # Étude — Migration WebSocket vers WU
 
 _Date : 2026-06-22_
+_Mise à jour : 2026-06-24 — P0–P6 soldés_
 _Branche : main_
-_Portée : protocole WebSocket uniquement — aucun code modifié_
+_Portée : protocole WebSocket_
+
+---
+
+## État de la migration (2026-06-24)
+
+| Phase | Description | État |
+|---|---|---|
+| P0 | `join_world` — supprimer fallback `payload.x/y` | **SOLDÉ** |
+| P1 | `player_move` additif — backend WU-first, fallback x/y conservé | **SOLDÉ** |
+| P2 | Frontend joueurs — `resolveScreen()` WU-first | **SOLDÉ** |
+| P3 | Frontend animaux + ressources — `resolveScreen()` WU-first | **SOLDÉ** |
+| P4 | `character_respawn` + `character_teleport` — WU + chunkX/Y | **SOLDÉ** |
+| P4.5 | Supprimer `x/y` legacy de `character_respawn` + `character_teleport` | **SOLDÉ** |
+| P5 | `player_move` WU-only — supprimer fallback `x/y` | **SOLDÉ** |
+| P6 | Protocole admin WU — 6 événements admin en `worldX/worldY` | **SOLDÉ** |
+| P7 | Drop colonnes legacy DB (`positionX/Y`, `animal.x/y`) | À faire |
+
+---
 
 ---
 
@@ -121,55 +140,50 @@ export type ConnectedPlayer = {
 
 ### Écriture de `x/y` côté serveur
 
-| Fonction | Écrit `x/y` depuis | Peut être supprimé quand |
+| Fonction | Écrit `x/y` depuis | État |
 |---|---|---|
-| `joinPlayer` | `wuToIsoScreenX/Y(worldX, worldY)` ou fallback DB | Frontend lit `worldX/Y` |
-| `updatePlayer` | `payload.x/y` du client | Frontend envoie WU dans `player_move` |
-| `respawnCharacter` | `wuToIsoScreenX/Y(newWX, newWY)` | Frontend lit `worldX/Y` dans `character_respawn` |
-| `teleportCharacter` | `rx, ry` pixels de la commande admin | Frontend lit `worldX/Y` dans `character_teleport` |
+| `joinPlayer` | `wuToIsoScreenX/Y(worldX, worldY)` ou fallback DB | Actif (cache pour frontend) |
+| `updatePlayer` | `wuToIsoScreenX/Y(payload.worldX, payload.worldY)` | **P5 SOLDÉ** — plus de pixels du client |
+| `respawnCharacter` | `wuToIsoScreenX/Y(newWX, newWY)` | Actif (cache pour frontend) |
+| `teleportCharacter` | `wuToIsoScreenX/Y(worldX, worldY)` | **P6 SOLDÉ** — plus de pixels admin |
 
 ---
 
-## 4. `player_move` — description précise
+## 4. `player_move` — état P5 (WU-only, **SOLDÉ**)
 
-### Payload actuel (client → serveur)
+### Payload (client → serveur)
 
 ```typescript
-// WorldScene.js:463
+// WorldScene.js — après P5
 const position = {
-  x: Math.round(this.player.x),     // pixels Phaser — coordonnées isométriques du sprite
-  y: Math.round(this.player.y),
+  worldX: Math.round(worldXY.worldX),
+  worldY: Math.round(worldXY.worldY),
+  mapId: DEFAULT_MAP_ID,
   direction: this.player.direction,
 };
 this.socket.emit("player_move", position);
 ```
 
-Émis : au maximum toutes les 80 ms, uniquement si x, y ou direction ont changé de plus de 1 px.
+Émis : au maximum toutes les 80 ms, uniquement si worldX, worldY ou direction ont changé.
 
-### Validation actuelle (world.gateway.ts:112)
-
-```typescript
-if (!payload || typeof payload.x !== 'number' || typeof payload.y !== 'number') return;
-```
-
-Valide uniquement que x/y sont des nombres. Aucune vérification de plage, aucune sanitisation WU.
-
-### Conversion actuelle (world.service.ts:265)
+### Validation (world.gateway.ts) — après P5
 
 ```typescript
-if (Number.isFinite(payload.x) && Number.isFinite(payload.y)) {
-  try {
-    const wu = isoScreenToWorldWU(payload.x, payload.y);
-    player.worldX = wu.worldX;
-    player.worldY = wu.worldY;
-    // mapId non mis à jour (le client ne transmet pas de mapId)
-    player.x = payload.x;
-    player.y = payload.y;
-  } catch { /* position hors isométrie : worldX/Y et x/y conservent leur valeur précédente */ }
-}
+if (!payload || typeof payload.worldX !== 'number' || typeof payload.worldY !== 'number') return;
 ```
 
-`isoScreenToWorldWU` est appelé à chaque mouvement (~12 fois/s par joueur actif).
+### Traitement (world.service.ts `updatePlayer`) — après P5
+
+```typescript
+player.worldX = payload.worldX;
+player.worldY = payload.worldY;
+if (Number.isFinite(payload.mapId)) player.mapId = payload.mapId;
+player.x = Math.round(wuToIsoScreenX(player.worldX, player.worldY));
+player.y = Math.round(wuToIsoScreenY(player.worldX, player.worldY));
+player.direction = payload.direction ?? player.direction;
+```
+
+`isoScreenToWorldWU` supprimé de `updatePlayer`. Le pixel cache est désormais dérivé côté serveur.
 
 ### Persistance
 
@@ -206,13 +220,7 @@ player.y = Math.round(wuToIsoScreenY(payload.worldX, payload.worldY));
 player.direction = payload.direction ?? player.direction;
 ```
 
-**Gains :**
-- Supprime `isoScreenToWorldWU` de `updatePlayer`
-- Le client envoie ce qu'il calcule naturellement (coordonnées monde)
-- Le serveur ne fait plus confiance aux pixels envoyés par le client
-- `mapId` enfin transmis → permet la validation de map côté serveur
-
-**Risque principal :** le client doit calculer `worldX/Y` depuis sa position Phaser avant d'envoyer. Cela déplace la conversion `isoScreenToWorldWU` vers le frontend (`WorldScene.syncLocalPlayer`).
+**Soldé P5 :** gains effectifs — `isoScreenToWorldWU` supprimé de `updatePlayer`, mapId transmis, pixel cache dérivé côté serveur.
 
 ---
 
@@ -251,11 +259,11 @@ player.direction = payload.direction ?? player.direction;
 
 ---
 
-## 6. Plan de migration
+## 6. Plan de migration — ✅ P0–P6 soldés
 
-Objectif final : le backend ne reçoit plus jamais de coordonnées pixels. Les pixels ne sont produits que pour le frontend tant qu'il n'est pas migré.
+~~Objectif final~~ **Atteint** : le backend ne reçoit plus de coordonnées pixels dans les payloads WebSocket clients. Les pixels ne sont produits côté serveur que comme cache pour le frontend (`ConnectedPlayer.x/y`).
 
-### P0 — Nettoyage `join_world` (serveur uniquement, maintenant possible)
+### ~~P0~~ — Nettoyage `join_world` — **SOLDÉ**
 
 **Contexte** : la Phase 1 est terminée — tous les `character` en DB ont `worldX/Y/mapId`. Le fallback sur `payload.x/y` dans `joinPlayer` n'est plus jamais atteint en pratique.
 

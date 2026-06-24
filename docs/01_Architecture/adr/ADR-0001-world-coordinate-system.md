@@ -95,12 +95,16 @@ World
 ### Constants
 
 ```
-CHUNK_SIZE    = 64       // tiles per side per chunk — invariant of the project
-TILE_SIZE_WU  = 1024     // World Units per tile (2^10) — invariant of the project
-CHUNK_SIZE_WU = 65 536   // World Units per chunk side (CHUNK_SIZE × TILE_SIZE_WU)
+CHUNK_SIZE      = 64       // tiles per side per chunk — invariant of the project
+TILE_SIZE_WU    = 1024     // World Units per tile (2^10) — invariant of the project
+CHUNK_SIZE_WU   = 65 536   // World Units per chunk side (CHUNK_SIZE × TILE_SIZE_WU)
+NAV_CELLS_PER_TILE = 8    // navigation grid subdivisions per tile (client only)
+NAV_CELL_SIZE_WU   = 128  // WU per nav cell (TILE_SIZE_WU / NAV_CELLS_PER_TILE = 2^7)
 ```
 
 These constants never change without a new ADR superseding this one. `TILE_SIZE_WU` is a power of 2 (2^10), which enables efficient extraction of tile and chunk indices from a coordinate integer via bit operations.
+
+`NAV_CELL_SIZE_WU` and `NAV_CELLS_PER_TILE` are client-only constants used by the pathfinding system. They subdivide each logical tile into an 8×8 navigation grid for sub-tile collision resolution. They are not used by the server.
 
 ### Official coordinates
 
@@ -206,8 +210,10 @@ There is no global origin constant in the engine. Each map defines its own origi
 - Receives `mapId`, `worldX`, `worldY` from the server.
 - Applies the isometric projection formula to compute `screenX`, `screenY` for each entity.
 - Positions sprites and tiles at the computed screen positions using the map origin.
-- Converts pointer input from Phaser world coordinates back to `worldX`, `worldY` before sending to the server.
+- Converts pointer input from Phaser world coordinates back to `worldX`, `worldY` before sending to the server (`screenToWorldWU` in `worldCoordinates.ts`).
+- Sends `{ worldX, worldY, mapId, direction }` in `player_move` — the server derives the pixel cache.
 - Manages the camera independently from gameplay coordinates.
+- Maintains a `NavGrid` (8×8 nav cells per tile, `NAV_CELL_SIZE_WU = 128 WU`) derived from the collision tile layer for A\* pathfinding. The NavGrid is client-only and never sent to the server.
 
 **Tiled (map editor)**
 
@@ -371,7 +377,7 @@ Chunk-scoped Socket.IO rooms are a future consequence of this system. Their desi
 - [ ] Update `docs/05_World/chunks.md` to reflect the official CHUNK_SIZE and derived coordinate definitions. *(deferred until ADR-0003 accepted)*
 - [ ] Update `docs/05_World/maps-and-collisions.md` to reference this ADR for coordinate authority.
 - [ ] Update `docs/03_Client/phaser-world.md` to document the projection formula as the official conversion.
-- [ ] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`. *(deferred until WebSocket payload migration — Phase 2)*
+- [x] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`. *(P0–P6 soldés — protocole WebSocket entièrement WU)*
 - [ ] Update `docs/06_Database/schema.md` — column type `INTEGER` confirmed; update after legacy columns are removed.
 - [ ] Calibrate speed and range constants in WU/s (Phase 2 prerequisite for ADR-0003 distance gate).
 - [ ] Finalize gameplay distance metric for combat and gathering (Chebyshev vs Euclidean WU).
