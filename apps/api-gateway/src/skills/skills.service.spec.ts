@@ -317,4 +317,97 @@ describe('SkillsService', () => {
       expect(playerSkillRepo.save).not.toHaveBeenCalled();
     });
   });
+
+  // ─── getOrCreatePlayerSkillInTx ──────────────────────────────────────────
+
+  describe('getOrCreatePlayerSkillInTx', () => {
+    let mgr: Record<string, jest.Mock>;
+
+    beforeEach(() => {
+      mgr = {
+        findOne: jest.fn(),
+        save: jest.fn(),
+        create: jest.fn((_entity, data) => ({ ...data })),
+      };
+    });
+
+    it('retourne le PlayerSkill existant sans créer', async () => {
+      const def = makeSkillDef();
+      const existing = makePlayerSkill();
+      mgr.findOne.mockResolvedValue(existing);
+
+      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+
+      expect(result).toBe(existing);
+      expect(mgr.save).not.toHaveBeenCalled();
+    });
+
+    it('crée un PlayerSkill level=1 xp=0 si absent et attache la def', async () => {
+      const def = makeSkillDef();
+      const saved = makePlayerSkill({ level: 1, xp: 0 });
+      mgr.findOne.mockResolvedValue(null);
+      mgr.save.mockResolvedValue(saved);
+
+      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+
+      expect(mgr.save).toHaveBeenCalledTimes(1);
+      expect(result.skillDefinition).toBe(def);
+    });
+  });
+
+  // ─── applyXpInTx ─────────────────────────────────────────────────────────
+
+  describe('applyXpInTx', () => {
+    let mgr: Record<string, jest.Mock>;
+
+    beforeEach(() => {
+      mgr = {
+        save: jest.fn().mockImplementation((_entity, data) => Promise.resolve(data)),
+      };
+    });
+
+    it('retourne inchangé si xpAmount === 0 sans écriture', async () => {
+      const def = makeSkillDef();
+      const ps = makePlayerSkill({ level: 1, xp: 50 });
+
+      const result = await service.applyXpInTx(ps, 0, def, mgr as any);
+
+      expect(result.level).toBe(1);
+      expect(result.xp).toBe(50);
+      expect(mgr.save).not.toHaveBeenCalled();
+    });
+
+    it('ajoute XP sans level up', async () => {
+      const def = makeSkillDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerSkill({ level: 1, xp: 0 });
+
+      const result = await service.applyXpInTx(ps, 50, def, mgr as any);
+
+      expect(result.level).toBe(1);
+      expect(result.xp).toBe(50);
+      expect(mgr.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('level up quand le seuil est dépassé', async () => {
+      // seuil level 1→2 : 100 × 1^1.5 = 100
+      const def = makeSkillDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerSkill({ level: 1, xp: 80 });
+
+      // 80 + 50 = 130 ≥ 100 → level 2, xp 30
+      const result = await service.applyXpInTx(ps, 50, def, mgr as any);
+
+      expect(result.level).toBe(2);
+      expect(result.xp).toBe(30);
+    });
+
+    it('plafonne au maxLevel', async () => {
+      const def = makeSkillDef({ maxLevel: 2, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerSkill({ level: 2, xp: 0 });
+
+      const result = await service.applyXpInTx(ps, 9999, def, mgr as any);
+
+      expect(result.level).toBe(2);
+      expect(result.xp).toBe(9999);
+    });
+  });
 });

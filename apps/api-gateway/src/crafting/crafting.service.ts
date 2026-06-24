@@ -1,7 +1,18 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Item } from '../items/entities/item.entity';
+import { Character } from '../characters/entities/character.entity';
+import { Inventory } from '../inventory/entities/inventory.entity';
+import { SkillDefinition } from '../skills/entities/skill-definition.entity';
+import { PlayerSkill } from '../skills/entities/player-skill.entity';
+import { SkillsService } from '../skills/skills.service';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
@@ -128,11 +139,39 @@ export const DEFAULT_RECIPES: RecipeDef[] = [
   },
 ];
 
+// ─── CraftResult ──────────────────────────────────────────────────────────────
+
+export interface CraftResult {
+  recipeId: string;
+  recipeKey: string;
+  requestedQuantity: number;
+  attempts: number;
+  successes: number;
+  failures: number;
+  consumed: { itemId: string; quantity: number }[];
+  produced: { itemId: string; quantity: number }[];
+  skill: {
+    key: string;
+    previousLevel: number;
+    newLevel: number;
+    previousXp: number;
+    newXp: number;
+    xpGained: number;
+    nextLevelXp: number;
+  };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
 export class CraftingService implements OnModuleInit {
   private readonly logger = new Logger(CraftingService.name);
+
+  /**
+   * Overridable pour les tests — ne jamais laisser le client influencer ce tirage.
+   * Retourne un float dans [0, 1[.
+   */
+  protected _randomFn = (): number => Math.random();
 
   constructor(
     @InjectRepository(Item)
@@ -143,11 +182,17 @@ export class CraftingService implements OnModuleInit {
     private readonly ingredientRepo: Repository<CraftingIngredient>,
     @InjectRepository(CraftingResult)
     private readonly resultRepo: Repository<CraftingResult>,
+    private readonly dataSource: DataSource,
+    private readonly skillsService: SkillsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.seedDefaultRecipes();
   }
+
+  // ---------------------------------------------------------------------------
+  // Seed
+  // ---------------------------------------------------------------------------
 
   /**
    * Seed non destructif — insère uniquement les recettes absentes.
@@ -224,6 +269,227 @@ export class CraftingService implements OnModuleInit {
       this.logger.log(`[seed] Recette seedée : ${def.key}`);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Runtime craft — transactionnel
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Exécute `quantity` tentatives de craft pour `characterId` sur `recipeId`.
+   *
+   * Tout le flow s'exécute dans une transaction TypeORM :
+   * - vérification recipe/skill/level
+   * - lock pessimiste des lignes Inventory concernées
+   * - tirage côté serveur uniquement
+   * - consommation/production agrégées
+   * - XP accordée pour chaque tentative (succès ou échec)
+   *
+   * Rollback automatique si une exception est levée à n'importe quelle étape.
+   */
+  async craft(
+    characterId: string,
+    recipeId: string,
+    quantity: number,
+  ): Promise<CraftResult> {
+    if (quantity < 1) throw new BadRequestException('quantity doit être >= 1');
+
+    return this.dataSource.transaction(async (manager) => {
+      // ── 1. Character ─────────────────────────────────────────────────────
+      const character = await manager.findOne(Character, {
+        where: { id: characterId },
+      });
+      if (!character) {
+        throw new NotFoundException(`Personnage ${characterId} introuvable`);
+      }
+
+      // ── 2. Recipe ─────────────────────────────────────────────────────────
+      const recipe = await manager.findOne(CraftingRecipe, {
+        where: { id: recipeId },
+        relations: ['ingredients', 'results'],
+      });
+      if (!recipe) throw new NotFoundException(`Recette ${recipeId} introuvable`);
+      if (!recipe.enabled) {
+        throw new BadRequestException(`Recette "${recipe.key}" désactivée`);
+      }
+
+      // ── 3. SkillDefinition ────────────────────────────────────────────────
+      const skillDef = await manager.findOne(SkillDefinition, {
+        where: { key: recipe.requiredSkillKey },
+      });
+      if (!skillDef) {
+        throw new NotFoundException(`Skill "${recipe.requiredSkillKey}" introuvable`);
+      }
+      if (!skillDef.enabled) {
+        throw new BadRequestException(`Skill "${skillDef.key}" désactivé`);
+      }
+
+      // ── 4. PlayerSkill ────────────────────────────────────────────────────
+      const playerSkill = await this.skillsService.getOrCreatePlayerSkillInTx(
+        characterId,
+        skillDef,
+        manager,
+      );
+      if (playerSkill.level < recipe.requiredSkillLevel) {
+        throw new BadRequestException(
+          `Niveau ${recipe.requiredSkillLevel} requis en ${skillDef.key}, niveau actuel : ${playerSkill.level}`,
+        );
+      }
+
+      // ── 5. Taux de succès ─────────────────────────────────────────────────
+      // clamp(base + (playerLevel - required) × bonus, min, max)
+      const successRate = Math.min(
+        recipe.maxSuccessRate,
+        Math.max(
+          recipe.minSuccessRate,
+          recipe.baseSuccessRate +
+            (playerSkill.level - recipe.requiredSkillLevel) *
+              recipe.successBonusPerLevel,
+        ),
+      );
+
+      // ── 6. Lock inventaire + validation quantités ─────────────────────────
+      const ingredientItemIds = recipe.ingredients.map((i) => i.itemId);
+      const inventoryRows =
+        ingredientItemIds.length > 0
+          ? await manager.find(Inventory, {
+              where: {
+                character: { id: characterId },
+                item: { id: In(ingredientItemIds) },
+              },
+              relations: ['item'],
+              lock: { mode: 'pessimistic_write' },
+            })
+          : [];
+
+      const invMap = new Map<string, Inventory>();
+      for (const row of inventoryRows) {
+        invMap.set(row.item.id, row);
+      }
+
+      for (const ing of recipe.ingredients) {
+        const needed = ing.requiredQuantity * quantity;
+        const available = invMap.get(ing.itemId)?.quantity ?? 0;
+        if (available < needed) {
+          throw new BadRequestException(
+            `Inventaire insuffisant : ${available} disponibles, ${needed} requis`,
+          );
+        }
+      }
+
+      // ── 7. Tentatives ─────────────────────────────────────────────────────
+      const consumedMap = new Map<string, number>();
+      const producedMap = new Map<string, number>();
+      let successes = 0;
+      let failures = 0;
+
+      for (let i = 0; i < quantity; i++) {
+        const isSuccess = this._randomFn() < successRate;
+        const shouldConsume = isSuccess || recipe.consumeIngredientsOnFailure;
+
+        if (shouldConsume) {
+          for (const ing of recipe.ingredients) {
+            consumedMap.set(
+              ing.itemId,
+              (consumedMap.get(ing.itemId) ?? 0) + ing.requiredQuantity,
+            );
+          }
+        }
+
+        if (isSuccess) {
+          successes++;
+          for (const res of recipe.results) {
+            if (this._randomFn() < res.chance) {
+              producedMap.set(
+                res.itemId,
+                (producedMap.get(res.itemId) ?? 0) + res.producedQuantity,
+              );
+            }
+          }
+        } else {
+          failures++;
+        }
+      }
+
+      // ── 8. Persister les consommations ────────────────────────────────────
+      for (const [itemId, consumed] of consumedMap) {
+        const inv = invMap.get(itemId)!;
+        inv.quantity -= consumed;
+        if (inv.quantity <= 0) {
+          await manager.remove(Inventory, inv);
+        } else {
+          await manager.save(Inventory, inv);
+        }
+      }
+
+      // ── 9. Persister les productions ──────────────────────────────────────
+      for (const [itemId, produced] of producedMap) {
+        if (produced <= 0) continue;
+        const existing = await manager.findOne(Inventory, {
+          where: { character: { id: characterId }, item: { id: itemId } },
+        });
+        if (existing) {
+          existing.quantity += produced;
+          await manager.save(Inventory, existing);
+        } else {
+          const newInv = manager.create(Inventory, {
+            character,
+            item: { id: itemId } as Item,
+            quantity: produced,
+            equipped: false,
+          });
+          await manager.save(Inventory, newInv);
+        }
+      }
+
+      // ── 10. XP ───────────────────────────────────────────────────────────
+      const previousLevel = playerSkill.level;
+      const previousXp = playerSkill.xp;
+      const totalXp = recipe.xpReward * quantity;
+
+      const updatedSkill = await this.skillsService.applyXpInTx(
+        playerSkill,
+        totalXp,
+        skillDef,
+        manager,
+      );
+
+      const nextLevelXp = this.skillsService.getNextLevelXp(
+        skillDef,
+        updatedSkill.level,
+      );
+
+      // ── 11. Résultat ──────────────────────────────────────────────────────
+      return {
+        recipeId: recipe.id,
+        recipeKey: recipe.key,
+        requestedQuantity: quantity,
+        attempts: quantity,
+        successes,
+        failures,
+        consumed: [...consumedMap.entries()].map(([itemId, qty]) => ({
+          itemId,
+          quantity: qty,
+        })),
+        produced: [...producedMap.entries()].map(([itemId, qty]) => ({
+          itemId,
+          quantity: qty,
+        })),
+        skill: {
+          key: skillDef.key,
+          previousLevel,
+          newLevel: updatedSkill.level,
+          previousXp,
+          newXp: updatedSkill.xp,
+          xpGained: totalXp,
+          nextLevelXp,
+        },
+      };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Interne
+  // ---------------------------------------------------------------------------
 
   /**
    * Résout une liste de définitions item → items DB.

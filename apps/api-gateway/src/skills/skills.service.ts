@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
 import { PlayerSkill } from './entities/player-skill.entity';
 
@@ -160,6 +160,57 @@ export class SkillsService implements OnModuleInit {
     playerSkill.xp = xp;
 
     return this.playerSkillRepo.save(playerSkill);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers transactionnels — à utiliser dans un dataSource.transaction()
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get ou crée un PlayerSkill dans une transaction TypeORM existante.
+   * Utilise l'EntityManager fourni pour rester dans la même transaction.
+   */
+  async getOrCreatePlayerSkillInTx(
+    characterId: string,
+    skillDef: SkillDefinition,
+    manager: EntityManager,
+  ): Promise<PlayerSkill> {
+    const existing = await manager.findOne(PlayerSkill, {
+      where: { characterId, skillDefinitionId: skillDef.id },
+      relations: ['skillDefinition'],
+    });
+    if (existing) return existing;
+
+    const created = manager.create(PlayerSkill, {
+      characterId,
+      skillDefinitionId: skillDef.id,
+      level: 1,
+      xp: 0,
+    });
+    const saved = await manager.save(PlayerSkill, created);
+    saved.skillDefinition = skillDef;
+    return saved;
+  }
+
+  /**
+   * Ajoute de l'XP et recalcule le level dans une transaction TypeORM.
+   * Retourne le PlayerSkill inchangé si xpAmount === 0 (sans écriture).
+   */
+  async applyXpInTx(
+    playerSkill: PlayerSkill,
+    xpAmount: number,
+    skillDef: SkillDefinition,
+    manager: EntityManager,
+  ): Promise<PlayerSkill> {
+    if (xpAmount === 0) return playerSkill;
+    const { level, xp } = this.recomputeLevel(
+      skillDef,
+      playerSkill.level,
+      playerSkill.xp + xpAmount,
+    );
+    playerSkill.level = level;
+    playerSkill.xp = xp;
+    return manager.save(PlayerSkill, playerSkill);
   }
 
   // ---------------------------------------------------------------------------
