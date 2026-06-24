@@ -65,6 +65,13 @@ export default function CoordinateInspector() {
             ["h", terrainMapInfo.walkabilityGridHeight],
           ]}
         />
+        <CoordinateRow
+          label="Tiles"
+          values={[
+            ["walk", terrainMapInfo.walkableCount],
+            ["blocked", terrainMapInfo.blockedCount],
+          ]}
+        />
         <CoordinateRow label="Screen" values={[["x", cursorScreenPoint?.x], ["y", cursorScreenPoint?.y]]} />
         <CoordinateRow
           label="World"

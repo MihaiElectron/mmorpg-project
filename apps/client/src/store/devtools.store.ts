@@ -34,6 +34,8 @@ export type DevToolsMapInfo = {
   tileHeight: number | null;
   walkabilityGridWidth: number;
   walkabilityGridHeight: number;
+  walkableCount: number;
+  blockedCount: number;
 };
 
 export type DevToolsPanelPosition = { x: number; y: number };
@@ -174,6 +176,8 @@ const storeLogic = (set, get) => ({
     tileHeight: null,
     walkabilityGridWidth: 0,
     walkabilityGridHeight: 0,
+    walkableCount: 0,
+    blockedCount: 0,
   } as DevToolsMapInfo,
 
   setTerrainMapInfo: (info: DevToolsMapInfo) => set({ terrainMapInfo: info }),

@@ -23,6 +23,7 @@ import {
   createWalkabilityGridFromMap,
   getWalkabilityAtTile,
   getWalkabilityGridSize,
+  getWalkabilityGridStats,
 } from "../utils/walkabilityGrid";
 import {
   createWalkabilityOverlayTiles,
@@ -258,8 +259,11 @@ export default class WorldScene extends Phaser.Scene {
 
         const map = this.make.tilemap({ key: "terrain_pipeline_test" });
         const tileset = map.addTilesetImage("grass", "tileset_grass");
-        if (tileset && map.layers.length > 0) {
-          const layer = map.createLayer(map.layers[0].name, tileset, TILEMAP_TEST_OFFSET_X, TILEMAP_TEST_OFFSET_Y);
+        // grass_blocked réutilise la même texture ; tiles avec gid=2 ont collision:true dans le TMJ
+        const tilesetBlocked = map.addTilesetImage("grass_blocked", "tileset_grass");
+        const tilesets = [tileset, tilesetBlocked].filter(Boolean);
+        if (tilesets.length > 0 && map.layers.length > 0) {
+          const layer = map.createLayer(map.layers[0].name, tilesets, TILEMAP_TEST_OFFSET_X, TILEMAP_TEST_OFFSET_Y);
           if (layer) {
             layer.setDepth(0);
             this.terrainMap = map;
@@ -587,6 +591,7 @@ export default class WorldScene extends Phaser.Scene {
 
   updateTerrainMapInfo() {
     const gridSize = getWalkabilityGridSize(this.walkabilityGrid);
+    const gridStats = getWalkabilityGridStats(this.walkabilityGrid);
     getDevToolsStore().getState().setTerrainMapInfo({
       loaded: Boolean(this.terrainMap && this.terrainLayer),
       key: this.terrainMap ? "terrain_pipeline_test" : null,
@@ -597,6 +602,8 @@ export default class WorldScene extends Phaser.Scene {
       tileHeight: this.terrainMap?.tileHeight ?? null,
       walkabilityGridWidth: gridSize.width,
       walkabilityGridHeight: gridSize.height,
+      walkableCount: gridStats.walkable,
+      blockedCount: gridStats.blocked,
     });
   }
 

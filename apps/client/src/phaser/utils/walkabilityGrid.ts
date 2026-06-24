@@ -66,6 +66,21 @@ export function isTileInWalkabilityGrid(
   return tileX >= 0 && tileY >= 0 && tileX < width && tileY < height;
 }
 
+export function getWalkabilityGridStats(grid: WalkabilityGrid | null | undefined): {
+  walkable: number;
+  blocked: number;
+} {
+  if (!grid || grid.length === 0) return { walkable: 0, blocked: 0 };
+  let blocked = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell === 1) blocked++;
+    }
+  }
+  const total = grid.length * (grid[0]?.length ?? 0);
+  return { walkable: total - blocked, blocked };
+}
+
 export function getWalkabilityAtTile(
   grid: WalkabilityGrid | null | undefined,
   tileX: number,
