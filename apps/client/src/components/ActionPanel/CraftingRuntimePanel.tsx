@@ -4,7 +4,10 @@ import {
   buildCraftRequestPayload,
   estimateStationReach,
   filterRecipesForStation,
+  formatCraftingServerErrorDetail,
+  parseCraftingServerError,
   type AvailableCraftingRecipe,
+  type CraftingServerError,
   type CraftingStationTarget,
   type CraftResultSnapshot,
 } from "./craftingRuntime";
@@ -37,7 +40,7 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [recipes, setRecipes] = useState<AvailableCraftingRecipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [craftingRecipeId, setCraftingRecipeId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CraftingServerError | null>(null);
   const [result, setResult] = useState<CraftResultSnapshot | null>(null);
 
   const stationType = station.stationType ?? station.type;
@@ -49,6 +52,7 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     () => filterRecipesForStation(recipes, stationType),
     [recipes, stationType],
   );
+  const errorDetail = error ? formatCraftingServerErrorDetail(error) : null;
 
   useEffect(() => {
     const token = localStorage.getItem("token") ?? "";
@@ -60,11 +64,11 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message ?? `Erreur ${res.status}`);
+        if (!res.ok) throw parseCraftingServerError(await res.json().catch(() => ({})), `Erreur ${res.status}`);
         return res.json() as Promise<AvailableCraftingRecipe[]>;
       })
       .then(setRecipes)
-      .catch((err) => setError(err instanceof Error ? err.message : "Impossible de charger les recettes."))
+      .catch((err) => setError(isCraftingServerError(err) ? err : { message: "Impossible de charger les recettes." }))
       .finally(() => setLoading(false));
   }, [stationType]);
 
@@ -88,11 +92,11 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
         body: JSON.stringify(buildCraftRequestPayload(recipe.id)),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.message ?? `Erreur ${res.status}`);
+      if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
       setResult(body as CraftResultSnapshot);
       await Promise.all([loadCharacter(), loadSkills()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Craft impossible.");
+      setError(isCraftingServerError(err) ? err : { message: "Craft impossible." });
     } finally {
       setCraftingRecipeId(null);
     }
@@ -119,7 +123,12 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       </div>
 
       {loading && <p className="action-panel__crafting-muted">Chargement des recettes…</p>}
-      {error && <p className="action-panel__crafting-error">{error}</p>}
+      {error && (
+        <div className="action-panel__crafting-error">
+          <span>{error.message}</span>
+          {errorDetail && <span className="action-panel__crafting-error-detail">{errorDetail}</span>}
+        </div>
+      )}
 
       {!loading && compatibleRecipes.length === 0 && (
         <p className="action-panel__crafting-muted">Aucune recette compatible.</p>
@@ -179,4 +188,8 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       )}
     </div>
   );
+}
+
+function isCraftingServerError(value: unknown): value is CraftingServerError {
+  return Boolean(value && typeof value === "object" && typeof (value as CraftingServerError).message === "string");
 }

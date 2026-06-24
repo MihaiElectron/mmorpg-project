@@ -4,6 +4,8 @@ import {
   distanceWU,
   estimateStationReach,
   filterRecipesForStation,
+  formatCraftingServerErrorDetail,
+  parseCraftingServerError,
   stationActionLabel,
   type AvailableCraftingRecipe,
   type CraftingStationTarget,
@@ -89,5 +91,35 @@ describe("crafting runtime helpers", () => {
   it("retourne unknown si les coordonnées ou le rayon manquent", () => {
     expect(estimateStationReach({ worldX: 0, worldY: 0 }, station({ interactionRadiusWU: undefined })))
       .toEqual({ status: "unknown", distanceWU: null, radiusWU: null, inRange: null });
+  });
+
+  it("extrait une erreur serveur craft structurée", () => {
+    expect(parseCraftingServerError({
+      code: "CRAFTING_STATION_OUT_OF_RANGE",
+      message: "Forge trop éloignée.",
+      stationType: "forge",
+      nearestDistanceWU: 2048,
+      requiredRadiusWU: 1536,
+    }, "Erreur 400")).toEqual({
+      code: "CRAFTING_STATION_OUT_OF_RANGE",
+      message: "Forge trop éloignée.",
+      stationType: "forge",
+      nearestDistanceWU: 2048,
+      requiredRadiusWU: 1536,
+    });
+  });
+
+  it("formate le détail distance/rayon si présent", () => {
+    expect(formatCraftingServerErrorDetail({
+      message: "Forge trop éloignée.",
+      nearestDistanceWU: 2048.4,
+      requiredRadiusWU: 1536,
+    })).toBe("Distance : 2048 WU / portée : 1536 WU");
+  });
+
+  it("conserve un fallback pour les erreurs non structurées", () => {
+    expect(parseCraftingServerError({ message: ["recipeId must be a UUID"] }, "Erreur 400"))
+      .toEqual({ message: "recipeId must be a UUID" });
+    expect(formatCraftingServerErrorDetail({ message: "Inventaire insuffisant" })).toBeNull();
   });
 });

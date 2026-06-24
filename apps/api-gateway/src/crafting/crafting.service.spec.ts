@@ -433,6 +433,19 @@ describe('CraftingService — craft()', () => {
     return { character, recipe, skillDef, playerSkill, inventoryRow };
   }
 
+  async function expectStationError(
+    expected: Record<string, unknown>,
+  ): Promise<BadRequestException> {
+    try {
+      await service.craft('char-1', 'recipe-1', 1);
+    } catch (err) {
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect((err as BadRequestException).getResponse()).toEqual(expect.objectContaining(expected));
+      return err as BadRequestException;
+    }
+    throw new Error('Expected station BadRequestException');
+  }
+
   // ── Tests ──────────────────────────────────────────────────────────────────
 
   it('craft succès 100% : consomme ingrédients, ajoute résultat, ajoute XP', async () => {
@@ -473,7 +486,11 @@ describe('CraftingService — craft()', () => {
     });
     mockManager.find.mockResolvedValue([]);
 
-    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    await expectStationError({
+      code: 'CRAFTING_STATION_REQUIRED',
+      stationType: 'forge',
+      message: 'Forge requise : aucune station compatible active à portée.',
+    });
     expect(mockSkillsService.getOrCreatePlayerSkillInTx).not.toHaveBeenCalled();
   });
 
@@ -522,7 +539,10 @@ describe('CraftingService — craft()', () => {
       } as CraftingStation,
     ]);
 
-    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    await expectStationError({
+      code: 'CRAFTING_STATION_REQUIRED',
+      stationType: 'forge',
+    });
   });
 
   it('template disabled ignoré', async () => {
@@ -542,7 +562,10 @@ describe('CraftingService — craft()', () => {
       } as CraftingStation,
     ]);
 
-    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    await expectStationError({
+      code: 'CRAFTING_STATION_REQUIRED',
+      stationType: 'forge',
+    });
   });
 
   it('mauvaise map ignorée', async () => {
@@ -562,10 +585,13 @@ describe('CraftingService — craft()', () => {
       } as CraftingStation,
     ]);
 
-    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    await expectStationError({
+      code: 'CRAFTING_STATION_REQUIRED',
+      stationType: 'forge',
+    });
   });
 
-  it('station trop loin ignorée', async () => {
+  it('station trop loin ignorée et retourne distance + radius', async () => {
     setupHappyPath(1);
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve(makeCharacter());
@@ -582,7 +608,13 @@ describe('CraftingService — craft()', () => {
       } as CraftingStation,
     ]);
 
-    await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow(/Station "forge" requise/);
+    await expectStationError({
+      code: 'CRAFTING_STATION_OUT_OF_RANGE',
+      stationType: 'forge',
+      nearestDistanceWU: 4000,
+      requiredRadiusWU: 1536,
+      message: 'Forge trop éloignée.',
+    });
   });
 
   it('inventaire insuffisant : throw BadRequestException sans aucun changement', async () => {

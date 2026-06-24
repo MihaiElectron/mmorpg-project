@@ -194,6 +194,15 @@
 
   &__crafting-error {
     color: #ff9f9f;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__crafting-error-detail {
+    color: vars.$color-text-muted;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.76rem;
   }
 
   &__station-range {

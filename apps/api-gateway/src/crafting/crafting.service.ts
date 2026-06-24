@@ -66,6 +66,18 @@ interface StationTemplateDef {
   interactionRadiusWU?: number;
 }
 
+type CraftingStationErrorCode =
+  | 'CRAFTING_STATION_REQUIRED'
+  | 'CRAFTING_STATION_OUT_OF_RANGE';
+
+type CraftingStationErrorBody = {
+  code: CraftingStationErrorCode;
+  message: string;
+  stationType: string;
+  nearestDistanceWU?: number;
+  requiredRadiusWU?: number;
+};
+
 export const DEFAULT_CRAFTING_STATION_TEMPLATES: StationTemplateDef[] = [
   { key: 'forge', name: 'Forge', stationType: 'forge', category: 'smithing', requiredSkillKey: 'smithing' },
   { key: 'workbench', name: 'Workbench', stationType: 'workbench', category: 'woodworking', requiredSkillKey: 'woodworking' },
@@ -573,9 +585,11 @@ export class CraftingService implements OnModuleInit {
   ): Promise<CraftingStation> {
     const player = this.worldService.getConnectedPlayerByCharacterId(characterId);
     if (!player) {
-      throw new BadRequestException(
-        `La recette "${recipe.key}" nécessite une station "${recipe.stationType}" proche, mais le personnage n'est pas connecté au monde.`,
-      );
+      throw this.craftingStationException({
+        code: 'CRAFTING_STATION_REQUIRED',
+        message: `${this.stationTypeLabel(recipe.stationType)} requise : personnage non connecté au monde.`,
+        stationType: recipe.stationType,
+      });
     }
 
     const stations = await manager.find(CraftingStation, {
@@ -584,6 +598,7 @@ export class CraftingService implements OnModuleInit {
     });
 
     let nearest: { station: CraftingStation; distance: number } | null = null;
+    let nearestCompatible: { station: CraftingStation; distance: number; radius: number } | null = null;
     for (const station of stations) {
       if (!station.enabled) continue;
       if (station.mapId !== player.mapId) continue;
@@ -593,17 +608,45 @@ export class CraftingService implements OnModuleInit {
       if (template.interactionRadiusWU <= 0) continue;
 
       const distance = euclideanDistanceWU(player, station);
+      if (!nearestCompatible || distance < nearestCompatible.distance) {
+        nearestCompatible = {
+          station,
+          distance,
+          radius: template.interactionRadiusWU,
+        };
+      }
       if (distance <= template.interactionRadiusWU) {
         if (!nearest || distance < nearest.distance) nearest = { station, distance };
       }
     }
 
     if (!nearest) {
-      throw new BadRequestException(
-        `Station "${recipe.stationType}" requise : aucune station compatible active à portée.`,
-      );
+      if (nearestCompatible) {
+        throw this.craftingStationException({
+          code: 'CRAFTING_STATION_OUT_OF_RANGE',
+          message: `${this.stationTypeLabel(recipe.stationType)} trop éloignée.`,
+          stationType: recipe.stationType,
+          nearestDistanceWU: Math.round(nearestCompatible.distance),
+          requiredRadiusWU: Math.round(nearestCompatible.radius),
+        });
+      }
+
+      throw this.craftingStationException({
+        code: 'CRAFTING_STATION_REQUIRED',
+        message: `${this.stationTypeLabel(recipe.stationType)} requise : aucune station compatible active à portée.`,
+        stationType: recipe.stationType,
+      });
     }
 
     return nearest.station;
+  }
+
+  private craftingStationException(body: CraftingStationErrorBody): BadRequestException {
+    return new BadRequestException(body);
+  }
+
+  private stationTypeLabel(stationType: string): string {
+    const label = stationType.replace(/_/g, ' ');
+    return label.charAt(0).toUpperCase() + label.slice(1);
   }
 }

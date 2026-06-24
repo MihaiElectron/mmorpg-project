@@ -85,6 +85,14 @@ export type StationReachEstimate =
       inRange: boolean;
     };
 
+export type CraftingServerError = {
+  code?: string;
+  message: string;
+  stationType?: string;
+  nearestDistanceWU?: number;
+  requiredRadiusWU?: number;
+};
+
 export function buildCraftRequestPayload(recipeId: string): { recipeId: string; quantity: 1 } {
   return { recipeId, quantity: 1 };
 }
@@ -131,4 +139,34 @@ export function estimateStationReach(
     radiusWU,
     inRange,
   };
+}
+
+export function parseCraftingServerError(body: unknown, fallbackMessage: string): CraftingServerError {
+  if (!body || typeof body !== "object") return { message: fallbackMessage };
+
+  const data = body as Record<string, unknown>;
+  const message =
+    typeof data.message === "string"
+      ? data.message
+      : Array.isArray(data.message)
+        ? data.message.join(", ")
+        : fallbackMessage;
+
+  return {
+    message,
+    code: typeof data.code === "string" ? data.code : undefined,
+    stationType: typeof data.stationType === "string" ? data.stationType : undefined,
+    nearestDistanceWU: numberOrUndefined(data.nearestDistanceWU),
+    requiredRadiusWU: numberOrUndefined(data.requiredRadiusWU),
+  };
+}
+
+export function formatCraftingServerErrorDetail(error: CraftingServerError): string | null {
+  if (error.nearestDistanceWU == null || error.requiredRadiusWU == null) return null;
+  return `Distance : ${Math.round(error.nearestDistanceWU)} WU / portée : ${Math.round(error.requiredRadiusWU)} WU`;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
