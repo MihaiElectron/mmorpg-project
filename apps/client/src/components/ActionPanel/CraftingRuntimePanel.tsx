@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCharacterStore } from "../../store/character.store";
 import {
   buildCraftRequestPayload,
+  estimateStationReach,
   filterRecipesForStation,
   type AvailableCraftingRecipe,
   type CraftingStationTarget,
@@ -32,6 +33,7 @@ type Props = {
 export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const loadCharacter = useCharacterStore((s) => s.loadCharacter);
   const loadSkills = useCharacterStore((s) => s.loadSkills);
+  const character = useCharacterStore((s) => s.character);
   const [recipes, setRecipes] = useState<AvailableCraftingRecipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [craftingRecipeId, setCraftingRecipeId] = useState<string | null>(null);
@@ -39,6 +41,10 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [result, setResult] = useState<CraftResultSnapshot | null>(null);
 
   const stationType = station.stationType ?? station.type;
+  const reachEstimate = estimateStationReach(
+    character ? { worldX: character.positionX, worldY: character.positionY } : null,
+    station,
+  );
   const compatibleRecipes = useMemo(
     () => filterRecipesForStation(recipes, stationType),
     [recipes, stationType],
@@ -99,6 +105,17 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
         <button className="action-panel__crafting-close" onClick={onClose} aria-label="Fermer le craft">
           ×
         </button>
+      </div>
+
+      <div className={`action-panel__station-range action-panel__station-range--${reachEstimate.status}`}>
+        {reachEstimate.status === "unknown" && "Portée estimée indisponible"}
+        {reachEstimate.status === "in_range" && "✓ Station à portée"}
+        {reachEstimate.status === "out_of_range" && "⚠ Hors de portée estimée"}
+        {reachEstimate.distanceWU != null && reachEstimate.radiusWU != null && (
+          <span>
+            {Math.round(reachEstimate.distanceWU)} / {Math.round(reachEstimate.radiusWU)} WU
+          </span>
+        )}
       </div>
 
       {loading && <p className="action-panel__crafting-muted">Chargement des recettes…</p>}

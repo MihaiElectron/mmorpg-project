@@ -196,6 +196,38 @@
     color: #ff9f9f;
   }
 
+  &__station-range {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: vars.$color-text-muted;
+    background: rgba(0, 0, 0, 0.16);
+
+    span {
+      flex-shrink: 0;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.74rem;
+    }
+
+    &--in_range {
+      color: #7ecf7e;
+      border-color: rgba(126, 207, 126, 0.35);
+      background: rgba(126, 207, 126, 0.08);
+    }
+
+    &--out_of_range {
+      color: #ffd37e;
+      border-color: rgba(255, 211, 126, 0.35);
+      background: rgba(255, 211, 126, 0.08);
+    }
+  }
+
   &__recipe-list {
     display: flex;
     flex-direction: column;

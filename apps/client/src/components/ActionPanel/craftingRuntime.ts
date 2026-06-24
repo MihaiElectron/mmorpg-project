@@ -66,6 +66,25 @@ export type CraftResultSnapshot = {
   };
 };
 
+export type WorldPositionWU = {
+  worldX?: number | null;
+  worldY?: number | null;
+};
+
+export type StationReachEstimate =
+  | {
+      status: "unknown";
+      distanceWU: null;
+      radiusWU: null;
+      inRange: null;
+    }
+  | {
+      status: "in_range" | "out_of_range";
+      distanceWU: number;
+      radiusWU: number;
+      inRange: boolean;
+    };
+
 export function buildCraftRequestPayload(recipeId: string): { recipeId: string; quantity: 1 } {
   return { recipeId, quantity: 1 };
 }
@@ -82,4 +101,34 @@ export function stationActionLabel(station: Pick<CraftingStationTarget, "name" |
   const raw = station.name || station.stationType || station.type || "station";
   const label = raw.replace(/_/g, " ");
   return `Ouvrir ${label}`;
+}
+
+export function distanceWU(a: WorldPositionWU, b: WorldPositionWU): number | null {
+  const ax = Number(a.worldX);
+  const ay = Number(a.worldY);
+  const bx = Number(b.worldX);
+  const by = Number(b.worldY);
+  if (![ax, ay, bx, by].every(Number.isFinite)) return null;
+  return Math.hypot(ax - bx, ay - by);
+}
+
+export function estimateStationReach(
+  player: WorldPositionWU | null | undefined,
+  station: CraftingStationTarget,
+): StationReachEstimate {
+  if (!player) return { status: "unknown", distanceWU: null, radiusWU: null, inRange: null };
+
+  const radiusWU = Number(station.interactionRadiusWU);
+  const computedDistance = distanceWU(player, station);
+  if (!Number.isFinite(radiusWU) || radiusWU <= 0 || computedDistance == null) {
+    return { status: "unknown", distanceWU: null, radiusWU: null, inRange: null };
+  }
+
+  const inRange = computedDistance <= radiusWU;
+  return {
+    status: inRange ? "in_range" : "out_of_range",
+    distanceWU: computedDistance,
+    radiusWU,
+    inRange,
+  };
 }

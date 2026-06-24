@@ -177,6 +177,22 @@ function craftingStationActionLabel(station) {
   return `Ouvrir ${raw.replace(/_/g, " ")}`;
 }
 
+function updateLocalCharacterPosition(position) {
+  const worldX = Number(position?.worldX);
+  const worldY = Number(position?.worldY);
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldY)) return;
+
+  const store = getCharacterStore().getState();
+  const character = store.character;
+  if (!character) return;
+  store.setCharacter({
+    ...character,
+    positionX: worldX,
+    positionY: worldY,
+    mapId: position.mapId ?? character.mapId,
+  });
+}
+
 // ── HP bar constants (mirrors SCSS variables) ──────────────────────────────
 const HP_BAR_WIDTH = 40;
 const HP_BAR_HEIGHT = 6;
@@ -852,6 +868,7 @@ export default class WorldScene extends Phaser.Scene {
       const { x, y } = resolveScreen(player);
       this.player.setPosition(x, y);
       this.lastSyncedPosition = { x, y, direction: player.direction };
+      updateLocalCharacterPosition(player);
     });
 
     this.socket.on("player_joined", (player) => {
@@ -879,6 +896,7 @@ export default class WorldScene extends Phaser.Scene {
         this.player.setPosition(x, y);
         this.cameras.main.centerOn(x, y);
         this.lastSyncedPosition = { x, y, direction: this.player.direction };
+        updateLocalCharacterPosition(data);
       }
     });
 
@@ -891,6 +909,7 @@ export default class WorldScene extends Phaser.Scene {
         this.player.setPosition(x, y);
         this.cameras.main.centerOn(x, y);
         this.lastSyncedPosition = { x, y, direction: "down" };
+        updateLocalCharacterPosition(data);
       }
     });
 
@@ -954,6 +973,7 @@ export default class WorldScene extends Phaser.Scene {
       },
     });
     this.socket.emit("player_move", position);
+    updateLocalCharacterPosition(position);
   }
 
   upsertRemotePlayer(player) {
