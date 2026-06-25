@@ -83,6 +83,10 @@ If a contradiction is found:
 - [Realtime Socket.IO](01_Architecture/realtime-socketio.md) - Status: Draft - Documentation planned for real-time Socket.IO architecture.
 - [Architecture Decisions](01_Architecture/decisions.md) - Status: Draft - Documentation planned for architecture decision tracking.
 - [Architecture Decision Records](01_Architecture/adr/README.md) - Status: Draft - Documentation planned for the ADR process and templates.
+- [ADR-0001 — World coordinate system](01_Architecture/adr/ADR-0001-world-coordinate-system.md) - Decision status: Accepted - Système de coordonnées WU, projection isométrique, CHUNK_SIZE.
+- [ADR-0002 — Entity positioning](01_Architecture/adr/ADR-0002-entity-positioning.md) - Decision status: Proposed - Stockage et transmission des positions d'entités.
+- [ADR-0003 — Movement authority](01_Architecture/adr/ADR-0003-movement-authority.md) - Decision status: Proposed - Autorité de mouvement client/serveur.
+- [ADR-0004 — Runtime-Driven Architecture](01_Architecture/adr/ADR-0004-runtime-driven-architecture.md) - Decision status: Proposed - Pipeline RuntimeSource→Modifier→DerivedStats+Trace comme patron obligatoire pour toute nouvelle mécanique.
 
 ### 02_Security
 
