@@ -161,3 +161,48 @@ export interface RuntimeStatsResult {
   base: BaseStats;
   derived: DerivedStats;
 }
+
+/**
+ * Définition d'un modifier à l'intérieur d'un PlayerRuntimeEffect.
+ *
+ * Forme intentionnellement plus légère que RuntimeModifier :
+ * id, sourceType et sourceLabel sont portés par l'effet parent —
+ * effectToModifiers() les propage à chaque RuntimeModifier produit.
+ */
+export interface EffectModifierDef {
+  targetStat: StatKey;
+  operation: ModifierOperation;
+  value: number;
+  priority?: number;
+}
+
+/**
+ * Effet runtime d'un personnage : buff, debuff, consommable, aura ou événement.
+ *
+ * Règles :
+ * - Ne jamais persister cette structure en DB — elle est construite en mémoire
+ *   à partir des sources existantes (futur : buffs actifs, consommables, auras…).
+ * - enabled = false : ignoré silencieusement par effectToModifiers().
+ * - expiresAt passé : ignoré silencieusement (vérifié à l'appel, pas en timer).
+ * - startsAt : documenté pour le futur. Non appliqué en Phase 4 — un effet
+ *   non encore démarré reste de toute façon absent de resolveEffects().
+ * - reason : texte libre, propagé à chaque RuntimeModifier produit.
+ *
+ * Contrat Studio SDK :
+ *   Le Studio peut afficher pour chaque effet :
+ *     - son origine (sourceType, sourceLabel)
+ *     - sa durée (startsAt, expiresAt)
+ *     - son état (enabled)
+ *     - ses modifiers détaillés dans la RuntimeTrace
+ */
+export interface PlayerRuntimeEffect {
+  id: string;
+  sourceType: Extract<ModifierSourceType, 'buff' | 'debuff' | 'consumable' | 'aura' | 'event'>;
+  sourceId: string;
+  sourceLabel: string;
+  modifiers: EffectModifierDef[];
+  enabled: boolean;
+  startsAt?: Date;
+  expiresAt?: Date;
+  reason?: string;
+}

@@ -8,8 +8,10 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { WorldService } from '../world/world.service';
 import { PlayerRuntimeCalculator } from './player-runtime.calculator';
 import { equipmentToModifiers } from './equipment-modifier.mapper';
+import { effectToModifiers } from './effect-modifier.mapper';
 import {
   PlayerRuntime,
+  PlayerRuntimeEffect,
   RuntimeModifier,
   RuntimeStatsResult,
   RuntimeTrace,
@@ -29,7 +31,7 @@ export class PlayerRuntimeService {
   /**
    * Construit le PlayerRuntime complet pour un characterId.
    * - Position : depuis ConnectedPlayer (live) ou dernière valeur DB.
-   * - Stats : Character + équipement actif via RuntimeModifier[].
+   * - Stats : Character + équipement actif + effets actifs via RuntimeModifier[].
    * Retourne null si le personnage est introuvable.
    */
   async getPlayerRuntime(characterId: string): Promise<PlayerRuntime | null> {
@@ -38,7 +40,8 @@ export class PlayerRuntimeService {
 
     const connected = this.worldService.getConnectedPlayerByCharacterId(characterId);
     const base = PlayerRuntimeCalculator.calculateBaseStats(character);
-    const modifiers = this.resolveModifiers(character.equipment ?? []);
+    const effects = this.resolveEffects(characterId);
+    const modifiers = this.resolveModifiers(character.equipment ?? [], effects);
     const derived = PlayerRuntimeCalculator.calculateDerivedStats(base, modifiers);
 
     return {
@@ -62,14 +65,15 @@ export class PlayerRuntimeService {
     if (!character) return null;
 
     const base = PlayerRuntimeCalculator.calculateBaseStats(character);
-    const modifiers = this.resolveModifiers(character.equipment ?? []);
+    const effects = this.resolveEffects(characterId);
+    const modifiers = this.resolveModifiers(character.equipment ?? [], effects);
     const derived = PlayerRuntimeCalculator.calculateDerivedStats(base, modifiers);
     return { base, derived };
   }
 
   /**
    * Retourne la trace complète du calcul DerivedStats.
-   * Chaque bonus d'équipement y est identifié par sourceLabel et contribution.
+   * Chaque bonus (équipement et effets) est identifié par sourceLabel et contribution.
    * Utilisé par le Studio SDK pour l'affichage de l'origine des stats.
    */
   async getRuntimeTrace(characterId: string): Promise<RuntimeTrace | null> {
@@ -77,7 +81,8 @@ export class PlayerRuntimeService {
     if (!character) return null;
 
     const base = PlayerRuntimeCalculator.calculateBaseStats(character);
-    const modifiers = this.resolveModifiers(character.equipment ?? []);
+    const effects = this.resolveEffects(characterId);
+    const modifiers = this.resolveModifiers(character.equipment ?? [], effects);
     const { trace } = PlayerRuntimeCalculator.calculateWithTrace(base, modifiers);
     return trace;
   }
@@ -99,13 +104,32 @@ export class PlayerRuntimeService {
   }
 
   /**
+   * Point d'injection pour les effets runtime actifs du personnage.
+   *
+   * Phase 4 : retourne [] — fondation uniquement, aucun système de buff actif.
+   * Phase suivante : charger buffs actifs, consommables utilisés, auras de zone,
+   * événements de map, etc. Aucune persistance ici — les effets sont construits
+   * en mémoire à partir des sources existantes.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private resolveEffects(_characterId: string): PlayerRuntimeEffect[] {
+    return [];
+  }
+
+  /**
    * Point d'injection unique pour tous les systèmes de modification de stats.
    *
-   * Phase 3 : équipement actif converti en RuntimeModifier[] via equipmentToModifiers.
-   * Phase suivante : ajouter buffs, talents passifs, auras, etc. en concaténant
-   * leurs modifiers à la liste retournée.
+   * Phase 4 : équipement + effets runtime — les deux convertis en RuntimeModifier[].
+   * Phase suivante : ajouter talents passifs, auras permanentes, etc. en étendant
+   * resolveEffects() — resolveModifiers() n'a pas à changer.
    */
-  private resolveModifiers(equipment: CharacterEquipment[]): RuntimeModifier[] {
-    return equipmentToModifiers(equipment);
+  private resolveModifiers(
+    equipment: CharacterEquipment[],
+    effects: PlayerRuntimeEffect[],
+  ): RuntimeModifier[] {
+    return [
+      ...equipmentToModifiers(equipment),
+      ...effectToModifiers(effects),
+    ];
   }
 }

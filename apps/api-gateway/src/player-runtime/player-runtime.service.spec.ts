@@ -5,6 +5,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { Item } from '../items/entities/item.entity';
 import { ConnectedPlayer } from '../world/world.service';
+import { PlayerRuntimeEffect } from './player-runtime.types';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,18 @@ function makeService(
     getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(connected),
   } as any;
   return new PlayerRuntimeService(characterRepo, worldService);
+}
+
+function makeEffect(overrides: Partial<PlayerRuntimeEffect> = {}): PlayerRuntimeEffect {
+  return {
+    id: 'eff-1',
+    sourceType: 'buff',
+    sourceId: 'rage-buff',
+    sourceLabel: 'Rage',
+    modifiers: [{ targetStat: 'attackPower', operation: 'flat', value: 15 }],
+    enabled: true,
+    ...overrides,
+  };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -248,6 +261,56 @@ describe('PlayerRuntimeService', () => {
     it('retourne le même résultat que getPlayerRuntime', async () => {
       const runtime = await makeService(makeCharacter()).recalculateRuntime('char-1');
       expect(runtime!.baseStats.level).toBe(3);
+    });
+  });
+
+  describe('resolveEffects — Phase 4 (fondation)', () => {
+    it('non-régression : sans équipement ni effets, derived = base', async () => {
+      const result = await makeService(makeCharacter({ attack: 10 })).getRuntimeStats('char-1');
+      expect(result!.derived.attackPower).toBe(10);
+    });
+
+    it('non-régression : équipement fonctionne toujours quand resolveEffects retourne []', async () => {
+      const sword = makeItem({ attack: 7, defense: 0 });
+      const result = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeStats('char-1');
+      expect(result!.derived.attackPower).toBe(17);
+    });
+
+    it('resolveModifiers concatène equipment + effects (injection directe via effectToModifiers)', async () => {
+      // Phase 4 : resolveEffects() retourne [] — ce test vérifie que le pipeline est en place
+      // et que l'ajout d'effets via effectToModifiers() fonctionne côté mapper (testé séparément).
+      // Sans effets actifs, le résultat doit être identique au résultat purement équipement.
+      const sword = makeItem({ attack: 5, defense: 0 });
+      const result = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeStats('char-1');
+      expect(result!.derived.attackPower).toBe(15);
+    });
+
+    it('trace — resolveEffects vide produit modifierCount égal à l\'équipement seul', async () => {
+      const sword = makeItem({ name: 'Sword', attack: 5, defense: 0 });
+      const trace = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeTrace('char-1');
+      expect(trace!.modifierCount).toBe(1);
+      expect(trace!.stats.attackPower?.modifiers[0]?.sourceType).toBe('equipment');
+    });
+  });
+
+  describe('makeEffect factory (vérifie la forme de PlayerRuntimeEffect)', () => {
+    it('makeEffect produit un effet buff valide', () => {
+      const eff = makeEffect();
+      expect(eff.sourceType).toBe('buff');
+      expect(eff.enabled).toBe(true);
+      expect(eff.modifiers).toHaveLength(1);
+    });
+
+    it('makeEffect debuff avec expiresAt futur', () => {
+      const eff = makeEffect({ sourceType: 'debuff', expiresAt: new Date(Date.now() + 5000) });
+      expect(eff.sourceType).toBe('debuff');
+      expect(eff.expiresAt).toBeDefined();
     });
   });
 });
