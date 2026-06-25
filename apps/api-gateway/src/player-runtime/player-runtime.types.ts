@@ -81,12 +81,12 @@ export interface RuntimeModifier {
 /**
  * Stats calculées depuis BaseStats + RuntimeModifier[].
  *
- * Phase actuelle (Phase 2) :
- *   - Les modifiers sont toujours vides — le calcul produit les mêmes résultats qu'en Phase 1.
- *   - speed / gatheringRange / attackRange documentés, pas encore de valeur dans Character.
+ * Phase actuelle (Phase 3) :
+ *   - maxHp / attackPower / defenseTotal / attackRange incluent les bonus d'équipement.
+ *   - speed / gatheringRange : documentés, pas encore de valeur dans Character.
  *
- * Prochaine étape : les futurs systèmes (Equipment, Buffs, Talents…)
- * passent leur liste de RuntimeModifier à PlayerRuntimeCalculator.calculateDerivedStats().
+ * Prochaine étape : Buffs, Talents, Auras — concaténer leurs RuntimeModifier[]
+ * dans PlayerRuntimeService.resolveModifiers().
  */
 export interface DerivedStats {
   maxHp: number;

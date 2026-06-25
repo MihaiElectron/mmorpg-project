@@ -2,9 +2,40 @@
 
 import { PlayerRuntimeService } from './player-runtime.service';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
+import { Item } from '../items/entities/item.entity';
 import { ConnectedPlayer } from '../world/world.service';
 
-function makeCharacter(overrides: Partial<Character> = {}): Character {
+// ─── Factories ────────────────────────────────────────────────────────────────
+
+function makeItem(overrides: Partial<Item> = {}): Item {
+  return Object.assign(new Item(), {
+    id: 'item-1',
+    name: 'Iron Sword',
+    type: 'weapon',
+    category: 'sword',
+    attack: 5,
+    defense: 0,
+    range: null,
+    ...overrides,
+  } as Item);
+}
+
+function makeEquip(item: Item, overrides: Partial<CharacterEquipment> = {}): CharacterEquipment {
+  return Object.assign(new CharacterEquipment(), {
+    id: 'equip-1',
+    characterId: 'char-1',
+    itemId: item.id,
+    item,
+    slot: 'right-hand',
+    ...overrides,
+  } as CharacterEquipment);
+}
+
+function makeCharacter(
+  overrides: Partial<Character> = {},
+  equipment: CharacterEquipment[] = [],
+): Character {
   return Object.assign(new Character(), {
     id: 'char-1',
     name: 'Hero',
@@ -21,6 +52,7 @@ function makeCharacter(overrides: Partial<Character> = {}): Character {
     positionY: 300,
     sex: 'male',
     userId: 'user-1',
+    equipment,
     ...overrides,
   } as Character);
 }
@@ -52,13 +84,15 @@ function makeService(
   return new PlayerRuntimeService(characterRepo, worldService);
 }
 
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
 describe('PlayerRuntimeService', () => {
   describe('getPlayerRuntime', () => {
     it('retourne null si le personnage est introuvable', async () => {
       expect(await makeService(null).getPlayerRuntime('unknown')).toBeNull();
     });
 
-    it('retourne un PlayerRuntime complet', async () => {
+    it('retourne un PlayerRuntime complet sans équipement', async () => {
       const runtime = await makeService(makeCharacter()).getPlayerRuntime('char-1');
 
       expect(runtime).not.toBeNull();
@@ -76,7 +110,10 @@ describe('PlayerRuntimeService', () => {
 
     it('utilise la position live ConnectedPlayer si connecté', async () => {
       const connected = makeConnectedPlayer({ worldX: 5000, worldY: 6000 });
-      const runtime = await makeService(makeCharacter({ worldX: 1024, worldY: 2048 }), connected).getPlayerRuntime('char-1');
+      const runtime = await makeService(
+        makeCharacter({ worldX: 1024, worldY: 2048 }),
+        connected,
+      ).getPlayerRuntime('char-1');
 
       expect(runtime!.worldX).toBe(5000);
       expect(runtime!.worldY).toBe(6000);
@@ -85,10 +122,11 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('fallback sur position DB si ConnectedPlayer absent', async () => {
-      const runtime = await makeService(makeCharacter({ worldX: 1024, worldY: 2048 })).getPlayerRuntime('char-1');
+      const runtime = await makeService(
+        makeCharacter({ worldX: 1024, worldY: 2048 }),
+      ).getPlayerRuntime('char-1');
 
       expect(runtime!.worldX).toBe(1024);
-      expect(runtime!.worldY).toBe(2048);
     });
 
     it('position 0/0 si worldX/Y DB sont null et joueur non connecté', async () => {
@@ -99,6 +137,14 @@ describe('PlayerRuntimeService', () => {
       expect(runtime!.worldX).toBe(0);
       expect(runtime!.worldY).toBe(0);
     });
+
+    it('intègre le bonus d\'attaque de l\'équipement dans derivedStats', async () => {
+      const sword = makeItem({ attack: 7, defense: 0 });
+      const character = makeCharacter({ attack: 10 }, [makeEquip(sword)]);
+      const runtime = await makeService(character).getPlayerRuntime('char-1');
+
+      expect(runtime!.derivedStats.attackPower).toBe(17);
+    });
   });
 
   describe('getRuntimeStats', () => {
@@ -106,12 +152,51 @@ describe('PlayerRuntimeService', () => {
       expect(await makeService(null).getRuntimeStats('unknown')).toBeNull();
     });
 
-    it('retourne base et derived stats', async () => {
+    it('retourne base et derived stats sans équipement', async () => {
       const result = await makeService(makeCharacter()).getRuntimeStats('char-1');
 
       expect(result!.base.level).toBe(3);
       expect(result!.derived.maxHp).toBe(100);
       expect(result!.derived.attackPower).toBe(10);
+    });
+
+    it('derived attackPower inclut le bonus d\'équipement', async () => {
+      const sword = makeItem({ attack: 5, defense: 0 });
+      const result = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeStats('char-1');
+
+      expect(result!.derived.attackPower).toBe(15);
+      expect(result!.base.attack).toBe(10);
+    });
+
+    it('derived defenseTotal inclut le bonus de défense de l\'équipement', async () => {
+      const shield = makeItem({ name: 'Shield', attack: 0, defense: 8 });
+      const result = await makeService(
+        makeCharacter({ defense: 5 }, [makeEquip(shield)]),
+      ).getRuntimeStats('char-1');
+
+      expect(result!.derived.defenseTotal).toBe(13);
+    });
+
+    it('plusieurs pièces d\'équipement s\'accumulent', async () => {
+      const sword = makeItem({ id: 'i1', name: 'Sword', attack: 5, defense: 0 });
+      const gloves = makeItem({ id: 'i2', name: 'Gloves', attack: 3, defense: 0 });
+      const result = await makeService(
+        makeCharacter({ attack: 10 }, [
+          makeEquip(sword, { id: 'e1', slot: 'right-hand', itemId: sword.id }),
+          makeEquip(gloves, { id: 'e2', slot: 'gloves', itemId: gloves.id }),
+        ]),
+      ).getRuntimeStats('char-1');
+
+      expect(result!.derived.attackPower).toBe(18);
+    });
+
+    it('non-régression : sans équipement, derived = base (comme phase 1 et 2)', async () => {
+      const result = await makeService(makeCharacter({ attack: 10, defense: 5 })).getRuntimeStats('char-1');
+
+      expect(result!.derived.attackPower).toBe(10);
+      expect(result!.derived.defenseTotal).toBe(5);
     });
   });
 
@@ -120,15 +205,26 @@ describe('PlayerRuntimeService', () => {
       expect(await makeService(null).getRuntimeTrace('unknown')).toBeNull();
     });
 
-    it('retourne une trace avec modifierCount 0 en phase 2', async () => {
+    it('trace vide sans équipement', async () => {
       const trace = await makeService(makeCharacter()).getRuntimeTrace('char-1');
 
-      expect(trace).not.toBeNull();
       expect(trace!.modifierCount).toBe(0);
-      expect(trace!.stats.maxHp?.baseValue).toBe(100);
-      expect(trace!.stats.maxHp?.finalValue).toBe(100);
-      expect(trace!.stats.maxHp?.modifiers).toHaveLength(0);
-      expect(trace!.computedAt).toBeInstanceOf(Date);
+      expect(trace!.stats.attackPower?.modifiers).toHaveLength(0);
+    });
+
+    it('trace identifie le bonus d\'équipement', async () => {
+      const sword = makeItem({ name: 'Iron Sword', attack: 5, defense: 0 });
+      const trace = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeTrace('char-1');
+
+      expect(trace!.modifierCount).toBe(1);
+      const appMod = trace!.stats.attackPower?.modifiers[0];
+      expect(appMod?.sourceLabel).toBe('Iron Sword');
+      expect(appMod?.sourceType).toBe('equipment');
+      expect(appMod?.contribution).toBe(5);
+      expect(trace!.stats.attackPower?.baseValue).toBe(10);
+      expect(trace!.stats.attackPower?.finalValue).toBe(15);
     });
 
     it('trace couvre toutes les StatKey', async () => {
@@ -141,12 +237,16 @@ describe('PlayerRuntimeService', () => {
       expect(trace!.stats.gatheringRange).toBeDefined();
       expect(trace!.stats.attackRange).toBeDefined();
     });
+
+    it('computedAt est une Date', async () => {
+      const trace = await makeService(makeCharacter()).getRuntimeTrace('char-1');
+      expect(trace!.computedAt).toBeInstanceOf(Date);
+    });
   });
 
   describe('recalculateRuntime', () => {
     it('retourne le même résultat que getPlayerRuntime', async () => {
       const runtime = await makeService(makeCharacter()).recalculateRuntime('char-1');
-
       expect(runtime!.baseStats.level).toBe(3);
     });
   });
