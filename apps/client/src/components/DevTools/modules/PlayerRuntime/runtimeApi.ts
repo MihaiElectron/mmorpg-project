@@ -18,29 +18,31 @@ export async function fetchSnapshot(): Promise<PlayerRuntimeSnapshot> {
 }
 
 export async function addDebugModifier(
-  characterId: string,
+  entityId: string,
   input: ModifierFormInput,
 ): Promise<RuntimeModifier> {
   const res = await fetch(`${API}/player-runtime/debug/modifiers`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ characterId, ...input }),
+    // L'endpoint debug est player-specific : le body attend "characterId".
+    // On passe entityId comme valeur — pour un joueur, entityId === characterId.
+    body: JSON.stringify({ characterId: entityId, ...input }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { added: RuntimeModifier };
   return data.added;
 }
 
-export async function clearDebugModifiers(characterId: string): Promise<void> {
-  const res = await fetch(`${API}/player-runtime/debug/modifiers/${characterId}`, {
+export async function clearDebugModifiers(entityId: string): Promise<void> {
+  const res = await fetch(`${API}/player-runtime/debug/modifiers/${entityId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
-export async function listDebugModifiers(characterId: string): Promise<RuntimeModifier[]> {
-  const res = await fetch(`${API}/player-runtime/debug/modifiers/${characterId}`, {
+export async function listDebugModifiers(entityId: string): Promise<RuntimeModifier[]> {
+  const res = await fetch(`${API}/player-runtime/debug/modifiers/${entityId}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

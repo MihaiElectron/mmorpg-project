@@ -7,16 +7,22 @@ import {
   RuntimeTrace,
 } from './player-runtime.types';
 import { RuntimeSourceSnapshot } from './runtime-source';
+import type { EntityRuntimeEventBase } from './entity-runtime.types';
 
 /**
- * Champs communs à tous les événements Runtime.
+ * Base des événements Runtime Player.
+ *
+ * Étend EntityRuntimeEventBase (générique) avec entityKind='player'
+ * et conserve characterId pour compatibilité avec les APIs player-specific.
  *
  * Règles Studio SDK :
  * - Aucun listener, aucun bus. Ces types décrivent des faits observables.
  * - Le Studio lit les événements sans les émettre ni les modifier.
  * - computedAt permet de corréler un événement à la trace qui l'accompagne.
  */
-interface RuntimeEventBase {
+interface RuntimeEventBase extends EntityRuntimeEventBase {
+  readonly entityKind: 'player';
+  /** Alias pour entityId — conservé pour les APIs player-specific. */
   readonly characterId: string;
   readonly computedAt: Date;
 }

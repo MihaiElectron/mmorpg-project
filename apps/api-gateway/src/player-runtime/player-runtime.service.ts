@@ -114,6 +114,8 @@ export class PlayerRuntimeService {
     const { derived, trace } = PlayerRuntimeCalculator.calculateWithTrace(base, modifiers);
 
     return {
+      entityId: character.id,
+      entityKind: 'player',
       characterId: character.id,
       name: character.name,
       baseStats: base,

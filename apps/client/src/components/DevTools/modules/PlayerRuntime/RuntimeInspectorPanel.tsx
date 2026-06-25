@@ -279,7 +279,7 @@ export default function RuntimeInspectorPanel() {
       setSubmitting(true);
       setFormError(null);
       try {
-        await addDebugModifier(snapshot.characterId, input);
+        await addDebugModifier(snapshot.entityId, input);
         await load();
       } catch (e: unknown) {
         setFormError(e instanceof Error ? e.message : "Erreur");
@@ -294,7 +294,7 @@ export default function RuntimeInspectorPanel() {
     if (!snapshot) return;
     setError(null);
     try {
-      await clearDebugModifiers(snapshot.characterId);
+      await clearDebugModifiers(snapshot.entityId);
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur");

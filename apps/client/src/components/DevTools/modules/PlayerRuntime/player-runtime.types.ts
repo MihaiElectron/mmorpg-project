@@ -82,6 +82,10 @@ export interface RuntimeTrace {
 }
 
 export interface PlayerRuntimeSnapshot {
+  /** Identifiant générique — entityId === characterId pour les joueurs. */
+  entityId: string;
+  entityKind: "player";
+  /** Conservé pour les APIs player-specific (debug endpoints, etc.). */
   characterId: string;
   name: string;
   baseStats: BaseStats;

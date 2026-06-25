@@ -10,6 +10,7 @@ import {
   RuntimeModifier,
   RuntimeTrace,
 } from './player-runtime.types';
+import type { EntityRuntimeSnapshot } from './entity-runtime.types';
 
 /**
  * Catégorie de pipeline Runtime.
@@ -117,10 +118,10 @@ export interface RuntimeSourceSnapshot {
 }
 
 /**
- * Snapshot complet du Player Runtime — surface principale du Studio SDK.
+ * Snapshot complet du Player Runtime — implémentation de EntityRuntimeSnapshot.
  *
  * Contient en un seul objet :
- *   - identité du personnage (characterId, name)
+ *   - identité (entityId, entityKind='player', characterId alias, name)
  *   - baseStats  : stats brutes issues de la DB
  *   - derivedStats : stats calculées après application de tous les modifiers
  *   - sources    : par pipeline (EquipmentSource, EffectSource…) avec ses modifiers
@@ -132,17 +133,15 @@ export interface RuntimeSourceSnapshot {
  *   - Lecture seule — le Studio observe, ne recalcule jamais.
  *   - `modifiers` et `sources[].modifiers` sont cohérents (même données, vues différentes).
  *   - La trace suffit pour afficher l'impact de chaque modifier sur chaque stat.
+ *   - entityId === characterId — les deux sont exposés pour compatibilité
+ *     avec EntityRuntimeSnapshot (entityId) et les APIs player-specific (characterId).
  */
-export interface PlayerRuntimeSnapshot {
-  characterId: string;
-  name: string;
-  baseStats: BaseStats;
-  derivedStats: DerivedStats;
-  sources: ReadonlyArray<{
+export interface PlayerRuntimeSnapshot extends EntityRuntimeSnapshot<BaseStats, DerivedStats> {
+  readonly entityKind: 'player';
+  /** Alias pour entityId — conservé pour les APIs player-specific (debug endpoints…). */
+  readonly characterId: string;
+  readonly sources: ReadonlyArray<{
     kind: RuntimeSourceKind;
     modifiers: ReadonlyArray<RuntimeModifier>;
   }>;
-  modifiers: ReadonlyArray<RuntimeModifier>;
-  trace: RuntimeTrace;
-  computedAt: Date;
 }

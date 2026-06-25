@@ -327,6 +327,13 @@ describe('PlayerRuntimeService', () => {
       expect(snap!.name).toBe('Hero');
     });
 
+    it("contient entityId === characterId et entityKind === 'player'", async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.entityId).toBe('char-1');
+      expect(snap!.entityId).toBe(snap!.characterId);
+      expect(snap!.entityKind).toBe('player');
+    });
+
     it('contient baseStats cohérentes avec Character', async () => {
       const snap = await makeService(makeCharacter({ attack: 12, defense: 4 })).getRuntimeSnapshot('char-1');
       expect(snap!.baseStats.attack).toBe(12);
