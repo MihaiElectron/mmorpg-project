@@ -224,4 +224,110 @@
     font-size: 0.75rem;
     padding: 6px 8px;
   }
+
+  &__section-header {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+    font-weight: bold;
+    letter-spacing: 0.8px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+  }
+
+  &__section-header--spaced {
+    margin-top: 4px;
+  }
+
+  &__refresh-btn {
+    background: none;
+    border: none;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.7rem;
+    line-height: 1;
+    margin-left: auto;
+    padding: 1px 5px;
+
+    &:hover { color: vars.$color-text-gold; }
+  }
+
+  &__error {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: #f66;
+    font-family: vars.$coords-font-family;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+  }
+
+  &__trace-empty {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+
+  &__trace-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__trace-stat-header {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    display: flex;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+    justify-content: space-between;
+    padding: 3px 8px;
+  }
+
+  &__trace-stat-name {
+    color: vars.$color-text-gold;
+    font-weight: bold;
+  }
+
+  &__trace-stat-values {
+    color: vars.$color-text-muted;
+  }
+
+  &__trace-modifier {
+    background: vars.$panel-header-bg;
+    border-left: 2px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    display: flex;
+    font-family: vars.$coords-font-family;
+    font-size: 0.7rem;
+    gap: 6px;
+    margin-left: 8px;
+    padding: 2px 8px;
+  }
+
+  &__trace-modifier-source {
+    color: vars.$color-metal-silver;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__trace-modifier-op {
+    color: vars.$color-text-muted;
+    flex-shrink: 0;
+  }
+
+  &__trace-modifier-contribution {
+    color: vars.$color-magic-amber;
+    flex-shrink: 0;
+    font-weight: bold;
+  }
 }

@@ -4,6 +4,19 @@ import { useState, useCallback } from "react";
 
 const API = import.meta.env.VITE_API_URL as string;
 
+// ─── Types (miroir du backend, sans dépendance) ────────────────────────────
+
+type StatKey =
+  | "maxHp"
+  | "attackPower"
+  | "defenseTotal"
+  | "speed"
+  | "gatheringRange"
+  | "attackRange";
+
+type ModifierOperation = "flat" | "percent_add" | "percent_multiply";
+type ModifierSourceType = string;
+
 interface BaseStats {
   level: number;
   health: number;
@@ -27,7 +40,55 @@ interface RuntimeStats {
   derived: DerivedStats;
 }
 
-function StatRow({ label, value }: { label: string; value: number | string }) {
+interface ModifierApplication {
+  modifierId: string;
+  sourceType: ModifierSourceType;
+  sourceId: string;
+  sourceLabel: string;
+  operation: ModifierOperation;
+  value: number;
+  contribution: number;
+}
+
+interface StatTrace {
+  stat: StatKey;
+  baseValue: number;
+  modifiers: ModifierApplication[];
+  finalValue: number;
+}
+
+interface RuntimeTrace {
+  stats: Partial<Record<StatKey, StatTrace>>;
+  modifierCount: number;
+  computedAt: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+const STAT_LABELS: Record<StatKey, string> = {
+  maxHp: "Max HP",
+  attackPower: "Attack Power",
+  defenseTotal: "Defense Total",
+  speed: "Speed",
+  gatheringRange: "Gather Range",
+  attackRange: "Attack Range",
+};
+
+const OP_LABELS: Record<ModifierOperation, string> = {
+  flat: "flat",
+  percent_add: "%+",
+  percent_multiply: "×%",
+};
+
+function formatStatValue(key: StatKey, value: number): string {
+  return value === 0 && (key === "speed" || key === "gatheringRange" || key === "attackRange")
+    ? "—"
+    : String(value);
+}
+
+// ─── Sous-composants ──────────────────────────────────────────────────────
+
+function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="devtools-world__coordinate-row">
       <strong className="devtools-world__coordinate-label">{label}</strong>
@@ -36,22 +97,92 @@ function StatRow({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+function SectionHeader({ label, spaced = false }: { label: string; spaced?: boolean }) {
+  return (
+    <div
+      className={
+        "devtools-world__section-header" +
+        (spaced ? " devtools-world__section-header--spaced" : "")
+      }
+    >
+      {label}
+    </div>
+  );
+}
+
+function TraceStat({ statTrace }: { statTrace: StatTrace }) {
+  const label = STAT_LABELS[statTrace.stat] ?? statTrace.stat;
+  const changed = statTrace.finalValue !== statTrace.baseValue;
+
+  return (
+    <div className="devtools-world__trace-stat">
+      <div className="devtools-world__trace-stat-header">
+        <span className="devtools-world__trace-stat-name">{label}</span>
+        <span className="devtools-world__trace-stat-values">
+          {changed
+            ? `${statTrace.baseValue} → ${statTrace.finalValue}`
+            : String(statTrace.finalValue)}
+        </span>
+      </div>
+      {statTrace.modifiers.map((app) => (
+        <div key={app.modifierId} className="devtools-world__trace-modifier">
+          <span className="devtools-world__trace-modifier-source">{app.sourceLabel}</span>
+          <span className="devtools-world__trace-modifier-op">{OP_LABELS[app.operation]}</span>
+          <span className="devtools-world__trace-modifier-contribution">
+            {app.contribution >= 0 ? "+" : ""}
+            {app.contribution}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Panneau principal ────────────────────────────────────────────────────
+
+const STAT_KEYS: StatKey[] = [
+  "maxHp",
+  "attackPower",
+  "defenseTotal",
+  "speed",
+  "gatheringRange",
+  "attackRange",
+];
+
 export default function RuntimeStatsPanel() {
   const [isOpen, setIsOpen] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
+
   const [stats, setStats] = useState<RuntimeStats | null>(null);
+  const [trace, setTrace] = useState<RuntimeTrace | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const authHeader = () => ({
+    Authorization: `Bearer ${localStorage.getItem("token")}`,
+  });
+
+  const loadStats = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/player-runtime/me/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API}/player-runtime/me/stats`, { headers: authHeader() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStats(await res.json());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadTrace = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/player-runtime/me/trace`, { headers: authHeader() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setTrace(await res.json());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
@@ -62,52 +193,86 @@ export default function RuntimeStatsPanel() {
   const handleToggle = () => {
     const next = !isOpen;
     setIsOpen(next);
-    if (next && !stats) load();
+    if (next && !stats) loadStats();
+  };
+
+  const handleTraceToggle = () => {
+    const next = !traceOpen;
+    setTraceOpen(next);
+    if (next && !trace) loadTrace();
+  };
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    loadStats();
+    if (traceOpen) loadTrace();
   };
 
   return (
-    <section className="devtools-world__inspector" aria-label="Runtime stats">
+    <section className="devtools-world__inspector" aria-label="Player Runtime">
       <h3
         className="devtools-world__title devtools-world__title--clickable"
         onClick={handleToggle}
       >
         <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
         Player Runtime
-        <button
-          className="devtools-world__refresh-btn"
-          onClick={(e) => { e.stopPropagation(); load(); }}
-          title="Rafraîchir"
-          style={{ marginLeft: "auto", fontSize: "10px", padding: "1px 5px" }}
-        >
+        <button className="devtools-world__refresh-btn" onClick={handleRefresh} title="Rafraîchir">
           ↺
         </button>
       </h3>
 
       {isOpen && (
         <div className="devtools-world__coordinate-list">
-          {loading && <div className="devtools-world__coordinate-row">Chargement…</div>}
-          {error && <div className="devtools-world__coordinate-row" style={{ color: "#f66" }}>{error}</div>}
+          {loading && (
+            <div className="devtools-world__coordinate-row">Chargement…</div>
+          )}
+          {error && (
+            <div className="devtools-world__error">{error}</div>
+          )}
 
           {stats && (
             <>
-              <div className="devtools-world__coordinate-row" style={{ fontWeight: "bold", color: "#aaa", fontSize: "10px", textTransform: "uppercase" }}>
-                Base Stats
-              </div>
+              <SectionHeader label="Base Stats" />
               <StatRow label="Level" value={stats.base.level} />
               <StatRow label="HP" value={`${stats.base.health} / ${stats.base.maxHealth}`} />
               <StatRow label="Attack" value={stats.base.attack} />
               <StatRow label="Defense" value={stats.base.defense} />
               <StatRow label="XP" value={stats.base.experience} />
 
-              <div className="devtools-world__coordinate-row" style={{ fontWeight: "bold", color: "#aaa", fontSize: "10px", textTransform: "uppercase", marginTop: "4px" }}>
-                Derived Stats
-              </div>
-              <StatRow label="Max HP" value={stats.derived.maxHp} />
-              <StatRow label="Attack Power" value={stats.derived.attackPower} />
-              <StatRow label="Defense Total" value={stats.derived.defenseTotal} />
-              <StatRow label="Speed" value={stats.derived.speed === 0 ? "—" : stats.derived.speed} />
-              <StatRow label="Gather Range" value={stats.derived.gatheringRange === 0 ? "—" : stats.derived.gatheringRange} />
-              <StatRow label="Attack Range" value={stats.derived.attackRange === 0 ? "—" : stats.derived.attackRange} />
+              <SectionHeader label="Derived Stats" spaced />
+              {STAT_KEYS.map((key) => (
+                <StatRow
+                  key={key}
+                  label={STAT_LABELS[key]}
+                  value={formatStatValue(key, stats.derived[key])}
+                />
+              ))}
+
+              <h3
+                className="devtools-world__title devtools-world__title--clickable"
+                onClick={handleTraceToggle}
+              >
+                <span className="devtools-world__chevron">
+                  {traceOpen ? "▼" : "▶"}
+                </span>
+                Trace
+              </h3>
+
+              {traceOpen && (
+                <>
+                  {trace ? (
+                    STAT_KEYS.map((key) => {
+                      const st = trace.stats[key];
+                      if (!st) return null;
+                      return <TraceStat key={key} statTrace={st} />;
+                    })
+                  ) : (
+                    <div className="devtools-world__trace-empty">
+                      Chargement trace…
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

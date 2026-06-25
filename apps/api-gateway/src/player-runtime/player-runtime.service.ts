@@ -8,7 +8,9 @@ import { WorldService } from '../world/world.service';
 import { PlayerRuntimeCalculator } from './player-runtime.calculator';
 import {
   PlayerRuntime,
+  RuntimeModifier,
   RuntimeStatsResult,
+  RuntimeTrace,
 } from './player-runtime.types';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 
@@ -34,7 +36,8 @@ export class PlayerRuntimeService {
 
     const connected = this.worldService.getConnectedPlayerByCharacterId(characterId);
     const base = PlayerRuntimeCalculator.calculateBaseStats(character);
-    const derived = PlayerRuntimeCalculator.calculateDerivedStats(base);
+    const modifiers = this.resolveModifiers(characterId);
+    const derived = PlayerRuntimeCalculator.calculateDerivedStats(base, modifiers);
 
     return {
       characterId: character.id,
@@ -51,7 +54,6 @@ export class PlayerRuntimeService {
 
   /**
    * Retourne uniquement BaseStats + DerivedStats sans position.
-   * Plus léger que getPlayerRuntime() quand la position n'est pas nécessaire.
    */
   async getRuntimeStats(characterId: string): Promise<RuntimeStatsResult | null> {
     const character = await this.characterRepository.findOne({
@@ -60,16 +62,44 @@ export class PlayerRuntimeService {
     if (!character) return null;
 
     const base = PlayerRuntimeCalculator.calculateBaseStats(character);
-    const derived = PlayerRuntimeCalculator.calculateDerivedStats(base);
+    const modifiers = this.resolveModifiers(characterId);
+    const derived = PlayerRuntimeCalculator.calculateDerivedStats(base, modifiers);
     return { base, derived };
   }
 
   /**
+   * Retourne la trace complète du calcul DerivedStats.
+   * Utilisé par le Studio SDK pour l'affichage de l'origine des stats.
+   */
+  async getRuntimeTrace(characterId: string): Promise<RuntimeTrace | null> {
+    const character = await this.characterRepository.findOne({
+      where: { id: characterId },
+    });
+    if (!character) return null;
+
+    const base = PlayerRuntimeCalculator.calculateBaseStats(character);
+    const modifiers = this.resolveModifiers(characterId);
+    const { trace } = PlayerRuntimeCalculator.calculateWithTrace(base, modifiers);
+    return trace;
+  }
+
+  /**
    * Recalcule le runtime depuis la DB sans modification.
-   * Équivalent à getPlayerRuntime() en phase 1.
-   * Sera étendu quand Equipment et Buffs contribueront aux stats.
    */
   async recalculateRuntime(characterId: string): Promise<PlayerRuntime | null> {
     return this.getPlayerRuntime(characterId);
+  }
+
+  /**
+   * Résout la liste des RuntimeModifier actifs pour un personnage.
+   *
+   * Phase 2 : aucun modifier — retourne toujours [].
+   * Phase suivante : charger l'équipement actif, les buffs, les talents passifs…
+   * et construire la liste de RuntimeModifier correspondante.
+   *
+   * Point d'injection unique pour tous les futurs systèmes de modification de stats.
+   */
+  private resolveModifiers(_characterId: string): RuntimeModifier[] {
+    return [];
   }
 }

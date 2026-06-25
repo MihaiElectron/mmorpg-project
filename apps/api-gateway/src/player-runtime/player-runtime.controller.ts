@@ -38,6 +38,20 @@ export class PlayerRuntimeController {
   }
 
   /**
+   * GET /player-runtime/me/trace
+   * Trace complète du calcul DerivedStats : origine de chaque stat,
+   * liste des modifiers appliqués et leur contribution.
+   * Conçu pour le Studio SDK.
+   */
+  @Get('me/trace')
+  async getMyTrace(@Request() req) {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    const trace = await this.playerRuntimeService.getRuntimeTrace(character.id);
+    if (!trace) throw new NotFoundException('Trace introuvable');
+    return trace;
+  }
+
+  /**
    * POST /player-runtime/me/recalculate
    * Recalcule et retourne le PlayerRuntime depuis la DB.
    */
