@@ -6,7 +6,13 @@ import { Repository } from 'typeorm';
 import { Character } from '../characters/entities/character.entity';
 import { WorldService } from '../world/world.service';
 import { PlayerRuntimeCalculator } from './player-runtime.calculator';
-import { EffectSource, EquipmentSource, PlayerRuntimeSnapshot, RuntimeSource } from './runtime-source';
+import {
+  DebugRuntimeSource,
+  EffectSource,
+  EquipmentSource,
+  PlayerRuntimeSnapshot,
+  RuntimeSource,
+} from './runtime-source';
 import {
   PlayerRuntime,
   PlayerRuntimeEffect,
@@ -14,6 +20,7 @@ import {
   RuntimeStatsResult,
   RuntimeTrace,
 } from './player-runtime.types';
+import { DebugModifierInput, DebugModifierRegistry } from './debug-modifier.registry';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 
 const EQUIPMENT_RELATIONS: string[] = ['equipment', 'equipment.item'];
@@ -24,6 +31,7 @@ export class PlayerRuntimeService {
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
+    private readonly debugRegistry: DebugModifierRegistry,
   ) {}
 
   /**
@@ -124,6 +132,33 @@ export class PlayerRuntimeService {
     return this.getPlayerRuntime(characterId);
   }
 
+  // ─── Debug (dev/admin uniquement) ────────────────────────────────────────────
+
+  /**
+   * Ajoute un modifier debug en mémoire pour un personnage.
+   * Visible immédiatement dans le prochain snapshot/trace.
+   * Admin uniquement — exposé via POST /player-runtime/debug/modifiers.
+   */
+  addDebugModifier(characterId: string, input: DebugModifierInput): RuntimeModifier {
+    return this.debugRegistry.addModifier(characterId, input);
+  }
+
+  /**
+   * Supprime tous les modifiers debug d'un personnage.
+   * Admin uniquement — exposé via DELETE /player-runtime/debug/modifiers/:characterId.
+   */
+  clearDebugModifiers(characterId: string): void {
+    this.debugRegistry.clearModifiers(characterId);
+  }
+
+  /**
+   * Liste les modifiers debug actifs pour un personnage.
+   * Admin uniquement — exposé via GET /player-runtime/debug/modifiers/:characterId.
+   */
+  listDebugModifiers(characterId: string): RuntimeModifier[] {
+    return this.debugRegistry.listModifiers(characterId);
+  }
+
   // ─── Méthodes privées ────────────────────────────────────────────────────────
 
   private async loadCharacter(characterId: string): Promise<Character | null> {
@@ -144,15 +179,15 @@ export class PlayerRuntimeService {
     return [
       new EquipmentSource(character.equipment ?? []),
       new EffectSource(effects),
+      new DebugRuntimeSource(this.debugRegistry.getModifiers(character.id)),
     ];
   }
 
   /**
    * Point d'injection pour les effets runtime actifs du personnage.
    *
-   * Phase 5 : retourne [] — EffectSource existe mais ne produit rien.
+   * Phase 5+ : retourne [] — EffectSource existe mais ne produit rien encore.
    * Phase suivante : charger buffs actifs, consommables utilisés, auras de zone, etc.
-   * Aucune persistance ici — les effets sont construits en mémoire.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private resolveEffects(_characterId: string): PlayerRuntimeEffect[] {

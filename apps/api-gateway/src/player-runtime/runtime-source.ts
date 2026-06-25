@@ -28,7 +28,8 @@ export type RuntimeSourceKind =
   | 'passive_skill'
   | 'aura'
   | 'mount'
-  | 'zone';
+  | 'zone'
+  | 'debug';
 
 /**
  * Contrat commun de toute source de RuntimeModifier[].
@@ -72,6 +73,26 @@ export class EffectSource implements RuntimeSource {
 
   getModifiers(): RuntimeModifier[] {
     return effectToModifiers(this.effects);
+  }
+}
+
+/**
+ * Source debug : injecte des RuntimeModifier[] arbitraires en mémoire.
+ *
+ * Règles :
+ * - Dev/admin uniquement — jamais activée en production hors outillage explicite.
+ * - Désactivée par défaut : DebugModifierRegistry retourne [] si aucun modifier ajouté.
+ * - Aucune persistance — les modifiers sont perdus au redémarrage.
+ * - Aucun gameplay réel — sourceType = 'debug', clairement identifiable dans la trace.
+ * - Visible dans snapshot.sources[kind='debug'] et RuntimeTrace.
+ */
+export class DebugRuntimeSource implements RuntimeSource {
+  readonly kind: RuntimeSourceKind = 'debug';
+
+  constructor(private readonly modifiers: RuntimeModifier[]) {}
+
+  getModifiers(): RuntimeModifier[] {
+    return this.modifiers;
   }
 }
 

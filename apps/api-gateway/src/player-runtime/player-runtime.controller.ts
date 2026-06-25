@@ -1,9 +1,24 @@
 // apps/api-gateway/src/player-runtime/player-runtime.controller.ts
 
-import { Controller, Get, Post, UseGuards, Request, NotFoundException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../common/roles.guard';
+import { Roles } from '../common/roles.decorator';
+import { UserRole } from '../users/entities/user.entity';
 import { CharacterService } from '../characters/character.service';
 import { PlayerRuntimeService } from './player-runtime.service';
+import { DebugModifierInput } from './debug-modifier.registry';
 
 @Controller('player-runtime')
 @UseGuards(JwtAuthGuard)
@@ -74,5 +89,48 @@ export class PlayerRuntimeController {
     const runtime = await this.playerRuntimeService.recalculateRuntime(character.id);
     if (!runtime) throw new NotFoundException('Runtime introuvable');
     return runtime;
+  }
+
+  // ─── Debug (admin uniquement) ─────────────────────────────────────────────
+
+  /**
+   * POST /player-runtime/debug/modifiers
+   * Ajoute un modifier debug en mémoire pour un personnage.
+   * Visible immédiatement dans le prochain snapshot/trace.
+   * Admin uniquement — ne jamais exposer en production sans garde.
+   */
+  @Post('debug/modifiers')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  addDebugModifier(@Body() body: { characterId: string } & DebugModifierInput) {
+    const { characterId, ...input } = body;
+    const modifier = this.playerRuntimeService.addDebugModifier(characterId, input);
+    return { added: modifier };
+  }
+
+  /**
+   * DELETE /player-runtime/debug/modifiers/:characterId
+   * Supprime tous les modifiers debug d'un personnage.
+   * Admin uniquement.
+   */
+  @Delete('debug/modifiers/:characterId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(200)
+  clearDebugModifiers(@Param('characterId') characterId: string) {
+    this.playerRuntimeService.clearDebugModifiers(characterId);
+    return { cleared: true, characterId };
+  }
+
+  /**
+   * GET /player-runtime/debug/modifiers/:characterId
+   * Liste les modifiers debug actifs pour un personnage.
+   * Admin uniquement.
+   */
+  @Get('debug/modifiers/:characterId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  listDebugModifiers(@Param('characterId') characterId: string) {
+    return { characterId, modifiers: this.playerRuntimeService.listDebugModifiers(characterId) };
   }
 }

@@ -10,31 +10,39 @@ import { CharacterService } from '../characters/character.service';
 const mockCharacter = { id: 'char-1', name: 'Hero' };
 const mockReq = { user: { userId: 'user-1' } };
 
+type MockRuntimeService = jest.Mocked<Pick<
+  PlayerRuntimeService,
+  | 'getPlayerRuntime'
+  | 'getRuntimeStats'
+  | 'getRuntimeTrace'
+  | 'getRuntimeSnapshot'
+  | 'recalculateRuntime'
+  | 'addDebugModifier'
+  | 'clearDebugModifiers'
+  | 'listDebugModifiers'
+>>;
+
 function makeController(): {
   controller: PlayerRuntimeController;
   characterService: jest.Mocked<Pick<CharacterService, 'findFirstByUser'>>;
-  runtimeService: jest.Mocked<Pick<
-    PlayerRuntimeService,
-    | 'getPlayerRuntime'
-    | 'getRuntimeStats'
-    | 'getRuntimeTrace'
-    | 'getRuntimeSnapshot'
-    | 'recalculateRuntime'
-  >>;
+  runtimeService: MockRuntimeService;
 } {
   const characterService = {
     findFirstByUser: jest.fn().mockResolvedValue(mockCharacter),
   } as any;
 
-  const runtimeService = {
+  const runtimeService: MockRuntimeService = {
     getPlayerRuntime: jest.fn(),
     getRuntimeStats: jest.fn(),
     getRuntimeTrace: jest.fn(),
     getRuntimeSnapshot: jest.fn(),
     recalculateRuntime: jest.fn(),
+    addDebugModifier: jest.fn(),
+    clearDebugModifiers: jest.fn(),
+    listDebugModifiers: jest.fn(),
   } as any;
 
-  const controller = new PlayerRuntimeController(characterService, runtimeService);
+  const controller = new PlayerRuntimeController(characterService, runtimeService as any);
   return { controller, characterService, runtimeService };
 }
 
@@ -156,6 +164,79 @@ describe('PlayerRuntimeController', () => {
       runtimeService.recalculateRuntime.mockResolvedValue(null);
 
       await expect(controller.recalculateMyRuntime(mockReq)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('addDebugModifier — POST /debug/modifiers', () => {
+    it('délègue à addDebugModifier avec characterId et input séparés', () => {
+      const { controller, runtimeService } = makeController();
+      const modifier = { id: 'debug:char-1:1', sourceType: 'debug', value: 10 };
+      runtimeService.addDebugModifier.mockReturnValue(modifier as any);
+
+      const body = { characterId: 'char-1', targetStat: 'attackPower', operation: 'flat', value: 10 };
+      const result = controller.addDebugModifier(body as any);
+
+      expect(runtimeService.addDebugModifier).toHaveBeenCalledWith('char-1', {
+        targetStat: 'attackPower',
+        operation: 'flat',
+        value: 10,
+      });
+      expect(result).toEqual({ added: modifier });
+    });
+
+    it('transmet sourceLabel et reason optionnels', () => {
+      const { controller, runtimeService } = makeController();
+      runtimeService.addDebugModifier.mockReturnValue({ id: 'debug:char-1:2' } as any);
+
+      controller.addDebugModifier({
+        characterId: 'char-1',
+        targetStat: 'maxHp',
+        operation: 'flat',
+        value: 50,
+        sourceLabel: 'Test',
+        reason: 'CI test',
+      } as any);
+
+      expect(runtimeService.addDebugModifier).toHaveBeenCalledWith('char-1', {
+        targetStat: 'maxHp',
+        operation: 'flat',
+        value: 50,
+        sourceLabel: 'Test',
+        reason: 'CI test',
+      });
+    });
+  });
+
+  describe('clearDebugModifiers — DELETE /debug/modifiers/:characterId', () => {
+    it('délègue à clearDebugModifiers et retourne { cleared: true, characterId }', () => {
+      const { controller, runtimeService } = makeController();
+      runtimeService.clearDebugModifiers.mockReturnValue(undefined);
+
+      const result = controller.clearDebugModifiers('char-1');
+
+      expect(runtimeService.clearDebugModifiers).toHaveBeenCalledWith('char-1');
+      expect(result).toEqual({ cleared: true, characterId: 'char-1' });
+    });
+  });
+
+  describe('listDebugModifiers — GET /debug/modifiers/:characterId', () => {
+    it('délègue à listDebugModifiers et retourne { characterId, modifiers }', () => {
+      const { controller, runtimeService } = makeController();
+      const mods = [{ id: 'debug:char-1:1', value: 5 }];
+      runtimeService.listDebugModifiers.mockReturnValue(mods as any);
+
+      const result = controller.listDebugModifiers('char-1');
+
+      expect(runtimeService.listDebugModifiers).toHaveBeenCalledWith('char-1');
+      expect(result).toEqual({ characterId: 'char-1', modifiers: mods });
+    });
+
+    it('retourne { modifiers: [] } si aucun modifier', () => {
+      const { controller, runtimeService } = makeController();
+      runtimeService.listDebugModifiers.mockReturnValue([]);
+
+      const result = controller.listDebugModifiers('char-99');
+      expect(result).toEqual({ characterId: 'char-99', modifiers: [] });
     });
   });
 });

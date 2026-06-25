@@ -52,7 +52,8 @@ export type ModifierSourceType =
   | 'mount'
   | 'consumable'
   | 'event'
-  | 'base';
+  | 'base'
+  | 'debug';
 
 /**
  * Modifier générique et data-driven.

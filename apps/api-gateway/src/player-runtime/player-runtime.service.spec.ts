@@ -6,6 +6,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { Item } from '../items/entities/item.entity';
 import { ConnectedPlayer } from '../world/world.service';
 import { PlayerRuntimeEffect } from './player-runtime.types';
+import { DebugModifierRegistry } from './debug-modifier.registry';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ function makeConnectedPlayer(overrides: Partial<ConnectedPlayer> = {}): Connecte
 function makeService(
   character: Character | null,
   connected: ConnectedPlayer | null = null,
+  debugRegistry?: DebugModifierRegistry,
 ): PlayerRuntimeService {
   const characterRepo = {
     findOne: jest.fn().mockResolvedValue(character),
@@ -82,7 +84,7 @@ function makeService(
   const worldService = {
     getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(connected),
   } as any;
-  return new PlayerRuntimeService(characterRepo, worldService);
+  return new PlayerRuntimeService(characterRepo, worldService, debugRegistry ?? new DebugModifierRegistry());
 }
 
 function makeEffect(overrides: Partial<PlayerRuntimeEffect> = {}): PlayerRuntimeEffect {
@@ -421,6 +423,94 @@ describe('PlayerRuntimeService', () => {
       ]);
       expect(snap!.derivedStats.attackPower).toBe(stats!.derived.attackPower);
       expect(snap!.derivedStats.defenseTotal).toBe(stats!.derived.defenseTotal);
+    });
+  });
+
+  describe('debug modifiers', () => {
+    it('snapshot inclut source debug avec kind="debug"', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      const debugSrc = snap!.sources.find((s) => s.kind === 'debug');
+      expect(debugSrc).toBeDefined();
+    });
+
+    it('source debug vide par défaut — aucun modifier', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      const debugSrc = snap!.sources.find((s) => s.kind === 'debug');
+      expect(debugSrc!.modifiers).toHaveLength(0);
+    });
+
+    it('modifier debug ajouté apparaît dans snapshot.modifiers', async () => {
+      const registry = new DebugModifierRegistry();
+      const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
+      registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 25 });
+
+      const snap = await svc.getRuntimeSnapshot('char-1');
+      expect(snap!.modifiers).toHaveLength(1);
+      expect(snap!.modifiers[0].sourceType).toBe('debug');
+      expect(snap!.modifiers[0].value).toBe(25);
+    });
+
+    it('modifier debug inclus dans le calcul derivedStats', async () => {
+      const registry = new DebugModifierRegistry();
+      const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
+      registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 30 });
+
+      const snap = await svc.getRuntimeSnapshot('char-1');
+      expect(snap!.derivedStats.attackPower).toBe(40);
+    });
+
+    it('modifier debug apparaît dans la trace', async () => {
+      const registry = new DebugModifierRegistry();
+      const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
+      registry.addModifier('char-1', {
+        targetStat: 'attackPower',
+        operation: 'flat',
+        value: 15,
+        sourceLabel: 'Test Debug',
+      });
+
+      const snap = await svc.getRuntimeSnapshot('char-1');
+      const appMod = snap!.trace.stats.attackPower?.modifiers[0];
+      expect(appMod?.sourceLabel).toBe('Test Debug');
+      expect(appMod?.contribution).toBe(15);
+      expect(snap!.trace.modifierCount).toBe(1);
+    });
+
+    it('clearDebugModifiers vide la source debug', async () => {
+      const registry = new DebugModifierRegistry();
+      const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
+      registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 20 });
+      svc.clearDebugModifiers('char-1');
+
+      const snap = await svc.getRuntimeSnapshot('char-1');
+      expect(snap!.modifiers).toHaveLength(0);
+      expect(snap!.derivedStats.attackPower).toBe(10);
+    });
+
+    it('listDebugModifiers retourne les modifiers actifs', () => {
+      const registry = new DebugModifierRegistry();
+      const svc = makeService(makeCharacter(), null, registry);
+      registry.addModifier('char-1', { targetStat: 'maxHp', operation: 'flat', value: 50 });
+
+      const list = svc.listDebugModifiers('char-1');
+      expect(list).toHaveLength(1);
+      expect(list[0].targetStat).toBe('maxHp');
+    });
+
+    it('non-régression : debug source vide ne change pas les stats', async () => {
+      const snap = await makeService(makeCharacter({ attack: 10 })).getRuntimeSnapshot('char-1');
+      expect(snap!.derivedStats.attackPower).toBe(10);
+    });
+
+    it('debug + équipement — les deux sources contribuent', async () => {
+      const registry = new DebugModifierRegistry();
+      const sword = makeItem({ attack: 5, defense: 0 });
+      const svc = makeService(makeCharacter({ attack: 10 }, [makeEquip(sword)]), null, registry);
+      registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 3 });
+
+      const snap = await svc.getRuntimeSnapshot('char-1');
+      expect(snap!.derivedStats.attackPower).toBe(18);
+      expect(snap!.modifiers).toHaveLength(2);
     });
   });
 });

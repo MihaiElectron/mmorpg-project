@@ -2,7 +2,7 @@
 
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { Item } from '../items/entities/item.entity';
-import { EquipmentSource, EffectSource, RuntimeSource } from './runtime-source';
+import { EquipmentSource, EffectSource, DebugRuntimeSource, RuntimeSource } from './runtime-source';
 import { PlayerRuntimeEffect, RuntimeModifier } from './player-runtime.types';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
@@ -162,6 +162,61 @@ describe('EffectSource', () => {
   });
 });
 
+// ─── DebugRuntimeSource ───────────────────────────────────────────────────────
+
+function makeDebugModifier(overrides: Partial<RuntimeModifier> = {}): RuntimeModifier {
+  return {
+    id: 'debug:char-1:1',
+    sourceType: 'debug',
+    sourceId: 'debug-registry',
+    sourceLabel: 'Debug',
+    targetStat: 'attackPower',
+    operation: 'flat',
+    value: 10,
+    priority: 99,
+    enabled: true,
+    ...overrides,
+  };
+}
+
+describe('DebugRuntimeSource', () => {
+  it('kind === "debug"', () => {
+    expect(new DebugRuntimeSource([]).kind).toBe('debug');
+  });
+
+  it('implémente RuntimeSource', () => {
+    const src: RuntimeSource = new DebugRuntimeSource([]);
+    expect(typeof src.getModifiers).toBe('function');
+    expect(src.kind).toBe('debug');
+  });
+
+  it('retourne [] si aucun modifier', () => {
+    expect(new DebugRuntimeSource([]).getModifiers()).toEqual([]);
+  });
+
+  it('retourne les modifiers passés en construction', () => {
+    const mod = makeDebugModifier({ value: 25 });
+    const mods = new DebugRuntimeSource([mod]).getModifiers();
+    expect(mods).toHaveLength(1);
+    expect(mods[0]).toBe(mod);
+  });
+
+  it('retourne plusieurs modifiers', () => {
+    const mods = [makeDebugModifier({ id: 'd1' }), makeDebugModifier({ id: 'd2', targetStat: 'maxHp' })];
+    expect(new DebugRuntimeSource(mods).getModifiers()).toHaveLength(2);
+  });
+
+  it('sourceType = "debug" sur les modifiers passés', () => {
+    const mod = makeDebugModifier();
+    expect(new DebugRuntimeSource([mod]).getModifiers()[0].sourceType).toBe('debug');
+  });
+
+  it('priority = 99 sur les modifiers debug', () => {
+    const mod = makeDebugModifier();
+    expect(new DebugRuntimeSource([mod]).getModifiers()[0].priority).toBe(99);
+  });
+});
+
 // ─── Agrégation multi-sources ─────────────────────────────────────────────────
 
 describe('RuntimeSource — agrégation', () => {
@@ -196,5 +251,22 @@ describe('RuntimeSource — agrégation', () => {
 
     expect(eqMod?.priority).toBe(10);
     expect(effMod?.priority).toBe(20);
+  });
+
+  it('trois sources : equipment + effect + debug — tous les modifiers agrégés', () => {
+    const item     = makeItem({ attack: 5, defense: 0 });
+    const effect   = makeEffect();
+    const debugMod = makeDebugModifier();
+    const sources: RuntimeSource[] = [
+      new EquipmentSource([makeEquip(item)]),
+      new EffectSource([effect]),
+      new DebugRuntimeSource([debugMod]),
+    ];
+    const all = sources.flatMap((s) => s.getModifiers());
+
+    expect(all).toHaveLength(3);
+    expect(all.some((m) => m.sourceType === 'equipment')).toBe(true);
+    expect(all.some((m) => m.sourceType === 'buff')).toBe(true);
+    expect(all.some((m) => m.sourceType === 'debug')).toBe(true);
   });
 });

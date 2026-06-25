@@ -7,6 +7,7 @@ import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
 import { PlayerRuntimeService } from './player-runtime.service';
 import { PlayerRuntimeController } from './player-runtime.controller';
+import { DebugModifierRegistry } from './debug-modifier.registry';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { PlayerRuntimeController } from './player-runtime.controller';
     CharactersModule,
     WorldModule,
   ],
-  providers: [PlayerRuntimeService],
+  providers: [PlayerRuntimeService, DebugModifierRegistry],
   controllers: [PlayerRuntimeController],
   exports: [PlayerRuntimeService],
 })
