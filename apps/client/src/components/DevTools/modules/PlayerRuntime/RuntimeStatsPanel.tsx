@@ -15,7 +15,6 @@ type StatKey =
   | "attackRange";
 
 type ModifierOperation = "flat" | "percent_add" | "percent_multiply";
-type ModifierSourceType = string;
 
 interface BaseStats {
   level: number;
@@ -35,15 +34,26 @@ interface DerivedStats {
   attackRange: number;
 }
 
-interface RuntimeStats {
-  base: BaseStats;
-  derived: DerivedStats;
+interface RuntimeModifier {
+  id: string;
+  sourceType: string;
+  sourceLabel: string;
+  targetStat: StatKey;
+  operation: ModifierOperation;
+  value: number;
+  priority: number;
+  enabled: boolean;
+  reason?: string;
+}
+
+interface RuntimeSourceEntry {
+  kind: string;
+  modifiers: RuntimeModifier[];
 }
 
 interface ModifierApplication {
   modifierId: string;
-  sourceType: ModifierSourceType;
-  sourceId: string;
+  sourceType: string;
   sourceLabel: string;
   operation: ModifierOperation;
   value: number;
@@ -60,6 +70,17 @@ interface StatTrace {
 interface RuntimeTrace {
   stats: Partial<Record<StatKey, StatTrace>>;
   modifierCount: number;
+  computedAt: string;
+}
+
+interface PlayerRuntimeSnapshot {
+  characterId: string;
+  name: string;
+  baseStats: BaseStats;
+  derivedStats: DerivedStats;
+  sources: RuntimeSourceEntry[];
+  modifiers: RuntimeModifier[];
+  trace: RuntimeTrace;
   computedAt: string;
 }
 
@@ -110,6 +131,18 @@ function SectionHeader({ label, spaced = false }: { label: string; spaced?: bool
   );
 }
 
+function SourceRow({ source }: { source: RuntimeSourceEntry }) {
+  const count = source.modifiers.length;
+  return (
+    <div className="devtools-world__source-row">
+      <span className="devtools-world__source-kind">{source.kind}</span>
+      <span className="devtools-world__source-count">
+        {count} {count === 1 ? "mod" : "mods"}
+      </span>
+    </div>
+  );
+}
+
 function TraceStat({ statTrace }: { statTrace: StatTrace }) {
   const label = STAT_LABELS[statTrace.stat] ?? statTrace.stat;
   const changed = statTrace.finalValue !== statTrace.baseValue;
@@ -152,37 +185,19 @@ const STAT_KEYS: StatKey[] = [
 export default function RuntimeStatsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
-
-  const [stats, setStats] = useState<RuntimeStats | null>(null);
-  const [trace, setTrace] = useState<RuntimeTrace | null>(null);
+  const [snapshot, setSnapshot] = useState<PlayerRuntimeSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const authHeader = () => ({
-    Authorization: `Bearer ${localStorage.getItem("token")}`,
-  });
-
-  const loadStats = useCallback(async () => {
+  const loadSnapshot = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/player-runtime/me/stats`, { headers: authHeader() });
+      const res = await fetch(`${API}/player-runtime/me/snapshot`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setStats(await res.json());
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadTrace = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API}/player-runtime/me/trace`, { headers: authHeader() });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setTrace(await res.json());
+      setSnapshot(await res.json());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
@@ -193,19 +208,14 @@ export default function RuntimeStatsPanel() {
   const handleToggle = () => {
     const next = !isOpen;
     setIsOpen(next);
-    if (next && !stats) loadStats();
+    if (next && !snapshot) loadSnapshot();
   };
 
-  const handleTraceToggle = () => {
-    const next = !traceOpen;
-    setTraceOpen(next);
-    if (next && !trace) loadTrace();
-  };
+  const handleTraceToggle = () => setTraceOpen((v) => !v);
 
   const handleRefresh = (e: React.MouseEvent) => {
     e.stopPropagation();
-    loadStats();
-    if (traceOpen) loadTrace();
+    loadSnapshot();
   };
 
   return (
@@ -230,48 +240,57 @@ export default function RuntimeStatsPanel() {
             <div className="devtools-world__error">{error}</div>
           )}
 
-          {stats && (
+          {snapshot && (
             <>
               <SectionHeader label="Base Stats" />
-              <StatRow label="Level" value={stats.base.level} />
-              <StatRow label="HP" value={`${stats.base.health} / ${stats.base.maxHealth}`} />
-              <StatRow label="Attack" value={stats.base.attack} />
-              <StatRow label="Defense" value={stats.base.defense} />
-              <StatRow label="XP" value={stats.base.experience} />
+              <StatRow label="Level" value={snapshot.baseStats.level} />
+              <StatRow label="HP" value={`${snapshot.baseStats.health} / ${snapshot.baseStats.maxHealth}`} />
+              <StatRow label="Attack" value={snapshot.baseStats.attack} />
+              <StatRow label="Defense" value={snapshot.baseStats.defense} />
+              <StatRow label="XP" value={snapshot.baseStats.experience} />
 
               <SectionHeader label="Derived Stats" spaced />
               {STAT_KEYS.map((key) => (
                 <StatRow
                   key={key}
                   label={STAT_LABELS[key]}
-                  value={formatStatValue(key, stats.derived[key])}
+                  value={formatStatValue(key, snapshot.derivedStats[key])}
                 />
               ))}
 
+              <SectionHeader
+                label={`Sources (${snapshot.modifiers.length} mod${snapshot.modifiers.length !== 1 ? "s" : ""} actif${snapshot.modifiers.length !== 1 ? "s" : ""})`}
+                spaced
+              />
+              {snapshot.sources.map((src) => (
+                <SourceRow key={src.kind} source={src} />
+              ))}
+
               <h3
-                className="devtools-world__title devtools-world__title--clickable"
+                className="devtools-world__title devtools-world__title--clickable devtools-world__title--spaced"
                 onClick={handleTraceToggle}
               >
                 <span className="devtools-world__chevron">
                   {traceOpen ? "▼" : "▶"}
                 </span>
                 Trace
+                <span className="devtools-world__trace-badge">
+                  {snapshot.trace.modifierCount} mod.
+                </span>
               </h3>
 
               {traceOpen && (
-                <>
-                  {trace ? (
-                    STAT_KEYS.map((key) => {
-                      const st = trace.stats[key];
-                      if (!st) return null;
-                      return <TraceStat key={key} statTrace={st} />;
-                    })
-                  ) : (
-                    <div className="devtools-world__trace-empty">
-                      Chargement trace…
-                    </div>
-                  )}
-                </>
+                snapshot.trace.modifierCount === 0 ? (
+                  <div className="devtools-world__trace-empty">
+                    Aucun modifier actif.
+                  </div>
+                ) : (
+                  STAT_KEYS.map((key) => {
+                    const st = snapshot.trace.stats[key];
+                    if (!st || st.modifiers.length === 0) return null;
+                    return <TraceStat key={key} statTrace={st} />;
+                  })
+                )
               )}
             </>
           )}

@@ -330,4 +330,38 @@
     flex-shrink: 0;
     font-weight: bold;
   }
+
+  &__title--spaced {
+    margin-top: 6px;
+  }
+
+  &__source-row {
+    background: vars.$panel-header-bg;
+    border-left: 2px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    display: flex;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+    justify-content: space-between;
+    padding: 3px 8px;
+  }
+
+  &__source-kind {
+    color: vars.$color-text-gold;
+    font-weight: bold;
+  }
+
+  &__source-count {
+    color: vars.$color-text-muted;
+  }
+
+  &__trace-badge {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    font-weight: normal;
+    letter-spacing: 0;
+    margin-left: auto;
+    text-transform: none;
+  }
 }
