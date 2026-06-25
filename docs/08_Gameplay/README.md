@@ -49,6 +49,8 @@ entity-model.md  ← the concept of a game entity
 ↓
 crafting-runtime.md ← runtime crafting through placed stations
 ↓
+runtime/README.md   ← entity runtime architecture (stat calculation pipeline)
+↓
 (future documents, one per domain when development begins)
 ```
 
@@ -58,5 +60,6 @@ crafting-runtime.md ← runtime crafting through placed stations
 - [World Model](world-model.md)
 - [Entity Model](entity-model.md)
 - [Crafting Runtime](crafting-runtime.md)
+- [Runtime — Index](runtime/README.md)
 - [Architecture Overview](../01_Architecture/overview.md)
 - [ROADMAP](../ROADMAP.md)

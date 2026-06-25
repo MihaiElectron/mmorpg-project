@@ -133,6 +133,13 @@ If a contradiction is found:
 - [Resource Runtime Gap Analysis](08_Gameplay/resource-runtime-gap-analysis.md) - Status: Draft - Audit de conformité Resources : écarts entre l'implémentation actuelle et l'architecture conceptuelle, plan de migration incrémental.
 - [World Model](08_Gameplay/world-model.md) - Status: Draft - World, Map, Chunk, and Tile concepts — technology-independent.
 - [Entity Model](08_Gameplay/entity-model.md) - Status: Draft - Entity concept and specialized entity types.
+- [Runtime — Index](08_Gameplay/runtime/README.md) - Status: Draft - Index du sous-répertoire Runtime : EntityRuntime, sources, modifiers, trace, snapshot, Inspector.
+- [Runtime Entity](08_Gameplay/runtime/runtime-entity.md) - Status: Draft - Architecture générique EntityRuntime : kinds, identité, contrats EntityRuntimeService, PlayerRuntime première implémentation.
+- [Runtime Sources](08_Gameplay/runtime/runtime-sources.md) - Status: Draft - Pipelines de modifiers : RuntimeSource, SourceKind vs SourceType, EquipmentSource, EffectSource, DebugRuntimeSource, buildSources.
+- [Runtime Modifiers](08_Gameplay/runtime/runtime-modifiers.md) - Status: Draft - RuntimeModifier, StatKey, ModifierOperation, pipeline flat→%add→%mult, PlayerRuntimeEffect.
+- [Runtime Trace](08_Gameplay/runtime/runtime-trace.md) - Status: Draft - RuntimeTrace, StatTrace, ModifierApplication — audit complet du calcul.
+- [Runtime Snapshot](08_Gameplay/runtime/runtime-snapshot.md) - Status: Draft - EntityRuntimeSnapshot générique, PlayerRuntimeSnapshot, cohérence interne, règles Studio SDK.
+- [Runtime Inspector](08_Gameplay/runtime/runtime-inspector.md) - Status: Draft - RuntimeInspectorPanel, runtimeApi, modifierForm, règles Studio, flux debug.
 
 ### 09_Workflow
 
