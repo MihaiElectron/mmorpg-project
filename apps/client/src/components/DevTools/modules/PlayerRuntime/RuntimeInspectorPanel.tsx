@@ -13,7 +13,7 @@ import {
   type StatKey,
 } from "./player-runtime.types";
 import { fetchSnapshot, addDebugModifier, clearDebugModifiers } from "./runtimeApi";
-import { getDebugModifiers, validateModifierValue, formatModifierCount } from "./modifierForm";
+import { getDebugModifiers, getEquipmentModifiers, validateModifierValue, formatModifierCount } from "./modifierForm";
 import "./RuntimeInspector.scss";
 
 // ─── Sous-composants génériques ───────────────────────────────────────────────
@@ -71,22 +71,24 @@ function ModifierRow({ modifier }: { modifier: RuntimeModifier }) {
 }
 
 /**
- * Liste de modifiers avec bouton "clear all" optionnel.
+ * Liste de modifiers avec label configurable et bouton "clear all" optionnel.
  * Générique — prend des RuntimeModifier[] et un callback onClear.
  */
 function ModifierList({
   modifiers,
   onClear,
   emptyLabel,
+  label = "Modifiers actifs",
 }: {
   modifiers: RuntimeModifier[];
   onClear?: () => void;
   emptyLabel: string;
+  label?: string;
 }) {
   return (
     <>
       <SectionBar
-        label="Modifiers actifs"
+        label={label}
         badge={`(${formatModifierCount(modifiers.length)})`}
         spaced
       >
@@ -299,6 +301,7 @@ export default function RuntimeInspectorPanel() {
     }
   }, [snapshot, load]);
 
+  const equipmentModifiers = snapshot ? getEquipmentModifiers(snapshot) : [];
   const debugModifiers = snapshot ? getDebugModifiers(snapshot) : [];
 
   return (
@@ -330,6 +333,12 @@ export default function RuntimeInspectorPanel() {
 
           {snapshot && (
             <>
+              <ModifierList
+                label="Equipment"
+                modifiers={equipmentModifiers}
+                emptyLabel="Aucun équipement avec modificateurs."
+              />
+
               <ModifierList
                 modifiers={debugModifiers}
                 onClear={handleClear}

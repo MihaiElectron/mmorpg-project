@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import {
   validateModifierValue,
+  getEquipmentModifiers,
   getDebugModifiers,
   formatModifierSummary,
   formatModifierCount,
@@ -81,6 +82,54 @@ describe("validateModifierValue", () => {
 
   it("parse un grand nombre", () => {
     expect(validateModifierValue("9999")).toBe(9999);
+  });
+});
+
+// ─── getEquipmentModifiers ────────────────────────────────────────────────────
+
+describe("getEquipmentModifiers", () => {
+  it("retourne [] si aucune source equipment", () => {
+    const snap = makeSnapshot([
+      { kind: "debug", modifiers: [makeModifier({ sourceType: "debug" })] },
+    ]);
+    expect(getEquipmentModifiers(snap)).toEqual([]);
+  });
+
+  it("retourne les modifiers de la source equipment", () => {
+    const m1 = makeModifier({ id: "eq-1", sourceType: "equipment", sourceLabel: "Sword" });
+    const m2 = makeModifier({ id: "eq-2", sourceType: "equipment", sourceLabel: "Helm" });
+    const snap = makeSnapshot([
+      { kind: "equipment", modifiers: [m1, m2] },
+      { kind: "debug", modifiers: [] },
+    ]);
+
+    const result = getEquipmentModifiers(snap);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(m1);
+    expect(result[1]).toBe(m2);
+  });
+
+  it("retourne [] si source equipment présente mais vide", () => {
+    const snap = makeSnapshot([{ kind: "equipment", modifiers: [] }]);
+    expect(getEquipmentModifiers(snap)).toEqual([]);
+  });
+
+  it("retourne [] si sources vides", () => {
+    expect(getEquipmentModifiers(makeSnapshot([]))).toEqual([]);
+  });
+
+  it("ignore les sources debug et effect", () => {
+    const snap = makeSnapshot([
+      { kind: "debug", modifiers: [makeModifier({ sourceType: "debug" })] },
+      { kind: "effect", modifiers: [makeModifier({ sourceType: "buff" })] },
+    ]);
+    expect(getEquipmentModifiers(snap)).toEqual([]);
+  });
+
+  it("sourceType equipment conservé sur les modifiers retournés", () => {
+    const m = makeModifier({ id: "eq-1", sourceType: "equipment", value: 15 });
+    const snap = makeSnapshot([{ kind: "equipment", modifiers: [m] }]);
+    expect(getEquipmentModifiers(snap)[0].sourceType).toBe("equipment");
   });
 });
 

@@ -16,11 +16,27 @@ export function validateModifierValue(raw: string): number | null {
 }
 
 /**
+ * Extrait les modifiers d'une source par kind depuis un snapshot.
+ * Retourne [] si la source est absente.
+ */
+function getSourceModifiers(snapshot: PlayerRuntimeSnapshot, kind: string): RuntimeModifier[] {
+  return snapshot.sources.find((s) => s.kind === kind)?.modifiers ?? [];
+}
+
+/**
+ * Extrait les modifiers de la source "equipment" d'un snapshot.
+ * Retourne [] si aucune pièce d'équipement ne génère de modifier.
+ */
+export function getEquipmentModifiers(snapshot: PlayerRuntimeSnapshot): RuntimeModifier[] {
+  return getSourceModifiers(snapshot, "equipment");
+}
+
+/**
  * Extrait les modifiers de la source "debug" d'un snapshot.
  * Retourne [] si aucune source debug n'est présente.
  */
 export function getDebugModifiers(snapshot: PlayerRuntimeSnapshot): RuntimeModifier[] {
-  return snapshot.sources.find((s) => s.kind === "debug")?.modifiers ?? [];
+  return getSourceModifiers(snapshot, "debug");
 }
 
 /**
