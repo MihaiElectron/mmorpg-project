@@ -4,6 +4,8 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { equipmentToModifiers } from './equipment-modifier.mapper';
 import { effectToModifiers } from './effect-modifier.mapper';
 import {
+  BaseStats,
+  DerivedStats,
   PlayerRuntimeEffect,
   RuntimeModifier,
   RuntimeTrace,
@@ -89,6 +91,37 @@ export interface RuntimeSourceSnapshot {
     kind: RuntimeSourceKind;
     modifiers: ReadonlyArray<RuntimeModifier>;
   }>;
+  trace: RuntimeTrace;
+  computedAt: Date;
+}
+
+/**
+ * Snapshot complet du Player Runtime — surface principale du Studio SDK.
+ *
+ * Contient en un seul objet :
+ *   - identité du personnage (characterId, name)
+ *   - baseStats  : stats brutes issues de la DB
+ *   - derivedStats : stats calculées après application de tous les modifiers
+ *   - sources    : par pipeline (EquipmentSource, EffectSource…) avec ses modifiers
+ *   - modifiers  : liste plate de tous les modifiers actifs (union de toutes les sources)
+ *   - trace      : audit complet par stat (baseValue, chaque contribution, finalValue)
+ *   - computedAt : horodatage du calcul
+ *
+ * Règles Studio SDK :
+ *   - Lecture seule — le Studio observe, ne recalcule jamais.
+ *   - `modifiers` et `sources[].modifiers` sont cohérents (même données, vues différentes).
+ *   - La trace suffit pour afficher l'impact de chaque modifier sur chaque stat.
+ */
+export interface PlayerRuntimeSnapshot {
+  characterId: string;
+  name: string;
+  baseStats: BaseStats;
+  derivedStats: DerivedStats;
+  sources: ReadonlyArray<{
+    kind: RuntimeSourceKind;
+    modifiers: ReadonlyArray<RuntimeModifier>;
+  }>;
+  modifiers: ReadonlyArray<RuntimeModifier>;
   trace: RuntimeTrace;
   computedAt: Date;
 }

@@ -313,4 +313,114 @@ describe('PlayerRuntimeService', () => {
       expect(eff.expiresAt).toBeDefined();
     });
   });
+
+  describe('getRuntimeSnapshot', () => {
+    it('retourne null si le personnage est introuvable', async () => {
+      expect(await makeService(null).getRuntimeSnapshot('unknown')).toBeNull();
+    });
+
+    it('contient characterId et name', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.characterId).toBe('char-1');
+      expect(snap!.name).toBe('Hero');
+    });
+
+    it('contient baseStats cohérentes avec Character', async () => {
+      const snap = await makeService(makeCharacter({ attack: 12, defense: 4 })).getRuntimeSnapshot('char-1');
+      expect(snap!.baseStats.attack).toBe(12);
+      expect(snap!.baseStats.defense).toBe(4);
+      expect(snap!.baseStats.level).toBe(3);
+    });
+
+    it('contient derivedStats calculées', async () => {
+      const snap = await makeService(makeCharacter({ attack: 10, maxHealth: 100 })).getRuntimeSnapshot('char-1');
+      expect(snap!.derivedStats.attackPower).toBe(10);
+      expect(snap!.derivedStats.maxHp).toBe(100);
+    });
+
+    it('derivedStats inclut les bonus d\'équipement', async () => {
+      const sword = makeItem({ attack: 7, defense: 0 });
+      const snap = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeSnapshot('char-1');
+      expect(snap!.derivedStats.attackPower).toBe(17);
+    });
+
+    it('sources[] contient EquipmentSource et EffectSource', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      const kinds = snap!.sources.map((s) => s.kind);
+      expect(kinds).toContain('equipment');
+      expect(kinds).toContain('effect');
+    });
+
+    it('sources[equipment].modifiers vide sans équipement', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      const eqSrc = snap!.sources.find((s) => s.kind === 'equipment');
+      expect(eqSrc!.modifiers).toHaveLength(0);
+    });
+
+    it('sources[equipment].modifiers contient le bonus d\'équipement', async () => {
+      const sword = makeItem({ name: 'Iron Sword', attack: 5, defense: 0 });
+      const snap = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeSnapshot('char-1');
+      const eqSrc = snap!.sources.find((s) => s.kind === 'equipment');
+      expect(eqSrc!.modifiers).toHaveLength(1);
+      expect(eqSrc!.modifiers[0].sourceLabel).toBe('Iron Sword');
+    });
+
+    it('modifiers[] est la liste plate de toutes les sources', async () => {
+      const sword = makeItem({ attack: 5, defense: 3 });
+      const snap = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeSnapshot('char-1');
+      // attack + defense = 2 modifiers depuis EquipmentSource
+      expect(snap!.modifiers).toHaveLength(2);
+    });
+
+    it('modifiers[] vide sans équipement ni effets', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.modifiers).toHaveLength(0);
+    });
+
+    it('contient une trace complète', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.trace).toBeDefined();
+      expect(snap!.trace.stats.maxHp).toBeDefined();
+      expect(snap!.trace.stats.attackPower).toBeDefined();
+      expect(snap!.trace.modifierCount).toBe(0);
+    });
+
+    it('trace reflète les bonus d\'équipement', async () => {
+      const sword = makeItem({ name: 'Sword', attack: 5, defense: 0 });
+      const snap = await makeService(
+        makeCharacter({ attack: 10 }, [makeEquip(sword)]),
+      ).getRuntimeSnapshot('char-1');
+      expect(snap!.trace.modifierCount).toBe(1);
+      expect(snap!.trace.stats.attackPower?.finalValue).toBe(15);
+      expect(snap!.trace.stats.attackPower?.modifiers[0]?.sourceLabel).toBe('Sword');
+    });
+
+    it('computedAt est une Date', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.computedAt).toBeInstanceOf(Date);
+    });
+
+    it('computedAt === trace.computedAt — cohérence temporelle', async () => {
+      const snap = await makeService(makeCharacter()).getRuntimeSnapshot('char-1');
+      expect(snap!.computedAt).toBe(snap!.trace.computedAt);
+    });
+
+    it('non-régression : getRuntimeStats et snapshot retournent derivedStats identiques', async () => {
+      const sword = makeItem({ attack: 5, defense: 2 });
+      const char = makeCharacter({ attack: 10, defense: 5 }, [makeEquip(sword)]);
+      const svc = makeService(char);
+      const [stats, snap] = await Promise.all([
+        svc.getRuntimeStats('char-1'),
+        svc.getRuntimeSnapshot('char-1'),
+      ]);
+      expect(snap!.derivedStats.attackPower).toBe(stats!.derived.attackPower);
+      expect(snap!.derivedStats.defenseTotal).toBe(stats!.derived.defenseTotal);
+    });
+  });
 });

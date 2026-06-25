@@ -52,6 +52,19 @@ export class PlayerRuntimeController {
   }
 
   /**
+   * GET /player-runtime/me/snapshot
+   * Snapshot complet Studio SDK : identity, baseStats, derivedStats,
+   * sources par pipeline, modifiers plats, trace, computedAt.
+   */
+  @Get('me/snapshot')
+  async getMySnapshot(@Request() req) {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    const snapshot = await this.playerRuntimeService.getRuntimeSnapshot(character.id);
+    if (!snapshot) throw new NotFoundException('Snapshot introuvable');
+    return snapshot;
+  }
+
+  /**
    * POST /player-runtime/me/recalculate
    * Recalcule et retourne le PlayerRuntime depuis la DB.
    */

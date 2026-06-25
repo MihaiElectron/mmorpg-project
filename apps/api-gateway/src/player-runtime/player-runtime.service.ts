@@ -6,7 +6,7 @@ import { Repository } from 'typeorm';
 import { Character } from '../characters/entities/character.entity';
 import { WorldService } from '../world/world.service';
 import { PlayerRuntimeCalculator } from './player-runtime.calculator';
-import { EffectSource, EquipmentSource, RuntimeSource } from './runtime-source';
+import { EffectSource, EquipmentSource, PlayerRuntimeSnapshot, RuntimeSource } from './runtime-source';
 import {
   PlayerRuntime,
   PlayerRuntimeEffect,
@@ -80,6 +80,41 @@ export class PlayerRuntimeService {
     const sources = this.buildSources(character, this.resolveEffects(characterId));
     const { trace } = PlayerRuntimeCalculator.calculateWithTrace(base, this.resolveModifiers(sources));
     return trace;
+  }
+
+  /**
+   * Retourne un snapshot complet du Player Runtime pour le Studio SDK.
+   *
+   * Contient en un seul appel : baseStats, derivedStats, sources par pipeline,
+   * liste plate des modifiers actifs et trace complète.
+   *
+   * Optimisation : getModifiers() est appelé une seule fois par source —
+   * la liste plate et la vue par source partagent les mêmes données.
+   */
+  async getRuntimeSnapshot(characterId: string): Promise<PlayerRuntimeSnapshot | null> {
+    const character = await this.loadCharacter(characterId);
+    if (!character) return null;
+
+    const base = PlayerRuntimeCalculator.calculateBaseStats(character);
+    const runtimeSources = this.buildSources(character, this.resolveEffects(characterId));
+
+    const sourceData = runtimeSources.map((s) => ({
+      kind: s.kind,
+      modifiers: s.getModifiers(),
+    }));
+    const modifiers: RuntimeModifier[] = sourceData.flatMap((s) => s.modifiers);
+    const { derived, trace } = PlayerRuntimeCalculator.calculateWithTrace(base, modifiers);
+
+    return {
+      characterId: character.id,
+      name: character.name,
+      baseStats: base,
+      derivedStats: derived,
+      sources: sourceData,
+      modifiers,
+      trace,
+      computedAt: trace.computedAt,
+    };
   }
 
   /**
