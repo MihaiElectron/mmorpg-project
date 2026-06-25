@@ -1,105 +1,18 @@
 // apps/client/src/components/DevTools/modules/PlayerRuntime/RuntimeStatsPanel.tsx
 
 import { useState, useCallback } from "react";
+import {
+  STAT_KEYS,
+  STAT_LABELS,
+  OP_LABELS,
+  type StatKey,
+  type PlayerRuntimeSnapshot,
+  type RuntimeSourceEntry,
+  type StatTrace,
+} from "./player-runtime.types";
+import { fetchSnapshot } from "./runtimeApi";
 
-const API = import.meta.env.VITE_API_URL as string;
-
-// ─── Types (miroir du backend, sans dépendance) ────────────────────────────
-
-type StatKey =
-  | "maxHp"
-  | "attackPower"
-  | "defenseTotal"
-  | "speed"
-  | "gatheringRange"
-  | "attackRange";
-
-type ModifierOperation = "flat" | "percent_add" | "percent_multiply";
-
-interface BaseStats {
-  level: number;
-  health: number;
-  maxHealth: number;
-  attack: number;
-  defense: number;
-  experience: number;
-}
-
-interface DerivedStats {
-  maxHp: number;
-  attackPower: number;
-  defenseTotal: number;
-  speed: number;
-  gatheringRange: number;
-  attackRange: number;
-}
-
-interface RuntimeModifier {
-  id: string;
-  sourceType: string;
-  sourceLabel: string;
-  targetStat: StatKey;
-  operation: ModifierOperation;
-  value: number;
-  priority: number;
-  enabled: boolean;
-  reason?: string;
-}
-
-interface RuntimeSourceEntry {
-  kind: string;
-  modifiers: RuntimeModifier[];
-}
-
-interface ModifierApplication {
-  modifierId: string;
-  sourceType: string;
-  sourceLabel: string;
-  operation: ModifierOperation;
-  value: number;
-  contribution: number;
-}
-
-interface StatTrace {
-  stat: StatKey;
-  baseValue: number;
-  modifiers: ModifierApplication[];
-  finalValue: number;
-}
-
-interface RuntimeTrace {
-  stats: Partial<Record<StatKey, StatTrace>>;
-  modifierCount: number;
-  computedAt: string;
-}
-
-interface PlayerRuntimeSnapshot {
-  characterId: string;
-  name: string;
-  baseStats: BaseStats;
-  derivedStats: DerivedStats;
-  sources: RuntimeSourceEntry[];
-  modifiers: RuntimeModifier[];
-  trace: RuntimeTrace;
-  computedAt: string;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
-const STAT_LABELS: Record<StatKey, string> = {
-  maxHp: "Max HP",
-  attackPower: "Attack Power",
-  defenseTotal: "Defense Total",
-  speed: "Speed",
-  gatheringRange: "Gather Range",
-  attackRange: "Attack Range",
-};
-
-const OP_LABELS: Record<ModifierOperation, string> = {
-  flat: "flat",
-  percent_add: "%+",
-  percent_multiply: "×%",
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatStatValue(key: StatKey, value: number): string {
   return value === 0 && (key === "speed" || key === "gatheringRange" || key === "attackRange")
@@ -107,7 +20,7 @@ function formatStatValue(key: StatKey, value: number): string {
     : String(value);
 }
 
-// ─── Sous-composants ──────────────────────────────────────────────────────
+// ─── Sous-composants ──────────────────────────────────────────────────────────
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -171,16 +84,7 @@ function TraceStat({ statTrace }: { statTrace: StatTrace }) {
   );
 }
 
-// ─── Panneau principal ────────────────────────────────────────────────────
-
-const STAT_KEYS: StatKey[] = [
-  "maxHp",
-  "attackPower",
-  "defenseTotal",
-  "speed",
-  "gatheringRange",
-  "attackRange",
-];
+// ─── Panneau principal ────────────────────────────────────────────────────────
 
 export default function RuntimeStatsPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -193,11 +97,7 @@ export default function RuntimeStatsPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/player-runtime/me/snapshot`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSnapshot(await res.json());
+      setSnapshot(await fetchSnapshot());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
