@@ -5,7 +5,7 @@
  * exploitable par le Studio SDK.
  *
  * Aucune dépendance DB. Aucun effet de bord. Aucune logique métier.
- * kind "spawn_point" — distinct des entités vivantes (Animal, Resource).
+ * kind "spawn_point" — distinct des entités vivantes (Creature, Resource).
  */
 
 import { CreatureSpawn } from '../entities/creature-spawn.entity';
@@ -14,7 +14,7 @@ import { CreatureSpawn } from '../entities/creature-spawn.entity';
 
 export type CreatureSpawnCapability =
   | 'transform'    // position dans le monde (WU ou legacy pixels)
-  | 'spawn'        // génère une instance d'Animal au démarrage ou via admin
+  | 'spawn'        // génère une instance d'Creature au démarrage ou via admin
   | 'respawn'      // timer configurable — anime le cycle mort/résurrection
   | 'patrol'       // rayon de patrouille défini par le template
   | 'persistence'  // état persisté en base de données

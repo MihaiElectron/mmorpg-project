@@ -204,7 +204,7 @@ Implemented:
 - `WsAuthService` validates the JWT with `JwtService.verifyAsync`.
 - `WsAuthService` returns `userId`, optional `username`, and optional `role`
   when the token is valid.
-- `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway` call
+- `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway` call
   `WsAuthService.authenticate` in `handleConnection`.
 - Those gateways disconnect the socket when authentication fails.
 - Those gateways set `client.data.userId` and `client.data.role` after
@@ -216,7 +216,7 @@ Implemented:
 |---|---|---|---|---|---|
 | `WorldGateway` | Calls `WsAuthService.authenticate` in `handleConnection`; disconnects invalid sockets. | `userId`, `role`, and later `player` after `join_world`. | `join_world` checks that the character belongs to `client.data.userId`. | Normal movement authorization beyond basic payload and joined-player state is outside this JWT document and not treated as proven here. | `Implemented` |
 | `ResourcesGateway` | Calls `WsAuthService.authenticate` in `handleConnection`; disconnects invalid sockets. | `userId`, `role`, and uses `player` after world join. | Resource interaction uses joined socket player state instead of trusting a submitted character id. | General abuse protection for repeated events is `Not verified`. | `Implemented` |
-| `AnimalsGateway` | Calls `WsAuthService.authenticate` in `handleConnection`; disconnects invalid sockets. | `userId`, `role`, and uses `player` after world join. | Animal attack uses joined socket player state instead of trusting a submitted character id. | General replay or duplicate-event protection is `Not verified`. | `Implemented` |
+| `CreaturesGateway` | Calls `WsAuthService.authenticate` in `handleConnection`; disconnects invalid sockets. | `userId`, `role`, and uses `player` after world join. | Creature attack uses joined socket player state instead of trusting a submitted character id. | General replay or duplicate-event protection is `Not verified`. | `Implemented` |
 | `AdminGateway` | No independent JWT `handleConnection` hook observed. | Reads `client.data.role`. | Each observed admin socket handler checks `client.data.role === 'admin'`. | Server-guaranteed provenance of `client.data.role` is `Not verified`; connection hook ordering is `Not verified`; independent `AdminGateway` authentication is `Not verified`. | `Not verified` |
 
 Not verified:
@@ -279,7 +279,7 @@ Not verified:
 | Client-side role modification | User edits local client state or tampers with decoded role display. | HTTP admin routes use server-side `RolesGuard`; admin socket handlers check `client.data.role`. | Guaranteed provenance of `client.data.role` for `AdminGateway` is `Not verified`. | `Not verified` |
 | Compromised JWT secret | Attacker signs arbitrary tokens if the signing secret is exposed. | Secret is referenced by configuration name only. | Secret strength, storage hardening, rotation, and emergency invalidation are `Not verified`. | `Not verified` |
 | No revocation | Valid token remains accepted until expiration. | Expiration is configured as `1h`. | Revocation, forced logout, and token versioning are `Not verified`. | `Not verified` |
-| WebSocket with invalid token | Client connects with absent, malformed, or invalid JWT. | `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway` disconnect invalid sockets. | Independent `AdminGateway` authentication and shared-hook ordering are `Not verified`. | `Not verified` |
+| WebSocket with invalid token | Client connects with absent, malformed, or invalid JWT. | `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway` disconnect invalid sockets. | Independent `AdminGateway` authentication and shared-hook ordering are `Not verified`. | `Not verified` |
 | Admin operation through authenticated but unauthorized socket | Authenticated non-admin socket emits admin events. | Observed admin socket handlers check `client.data.role === 'admin'`. | Role provenance and connection ordering for `client.data.role` are `Not verified`. | `Not verified` |
 
 ## Verified protections
@@ -302,7 +302,7 @@ Implemented:
 - `RolesGuard` and `@Roles` protect observed admin HTTP endpoints and item
   write endpoints.
 - `WsAuthService` validates Socket.IO JWTs for the observed world, resources,
-  and animals gateways.
+  and creatures gateways.
 - Local logout removes the token from browser storage.
 
 ## Known gaps
@@ -366,7 +366,7 @@ Not verified:
 
 - JWT validation is performed per protected HTTP request.
 - WebSocket JWT validation is observed at connection time for
-  `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway`.
+  `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway`.
 - No JWT-specific performance benchmark was found.
 - No token cache, revocation lookup, or session lookup cost was observed in the
   inspected auth code.

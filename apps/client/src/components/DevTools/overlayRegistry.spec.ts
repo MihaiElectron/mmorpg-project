@@ -5,8 +5,8 @@ function makeMap(overrides: Partial<OverlayBindingsMap> = {}): OverlayBindingsMa
   return {
     resourceOverlayEnabled: false,
     toggleResourceOverlayEnabled: vi.fn(),
-    animalOverlayEnabled: false,
-    toggleAnimalOverlayEnabled: vi.fn(),
+    creatureOverlayEnabled: false,
+    toggleCreatureOverlayEnabled: vi.fn(),
     creatureSpawnOverlayEnabled: false,
     toggleCreatureSpawnOverlayEnabled: vi.fn(),
     stationRadiusOverlayEnabled: false,
@@ -39,20 +39,20 @@ describe("getOverlayBinding", () => {
       expect(toggle).toHaveBeenCalledOnce();
     });
 
-    it("animal.overlay — enabled false par défaut", () => {
-      const binding = getOverlayBinding("animal.overlay", makeMap());
+    it("creature.overlay — enabled false par défaut", () => {
+      const binding = getOverlayBinding("creature.overlay", makeMap());
       expect(binding).not.toBeNull();
       expect(binding!.enabled).toBe(false);
     });
 
-    it("animal.overlay — enabled true si animalOverlayEnabled=true", () => {
-      const binding = getOverlayBinding("animal.overlay", makeMap({ animalOverlayEnabled: true }));
+    it("creature.overlay — enabled true si creatureOverlayEnabled=true", () => {
+      const binding = getOverlayBinding("creature.overlay", makeMap({ creatureOverlayEnabled: true }));
       expect(binding!.enabled).toBe(true);
     });
 
-    it("animal.overlay — toggle appelle toggleAnimalOverlayEnabled", () => {
+    it("creature.overlay — toggle appelle toggleCreatureOverlayEnabled", () => {
       const toggle = vi.fn();
-      const binding = getOverlayBinding("animal.overlay", makeMap({ toggleAnimalOverlayEnabled: toggle }));
+      const binding = getOverlayBinding("creature.overlay", makeMap({ toggleCreatureOverlayEnabled: toggle }));
       binding!.toggle();
       expect(toggle).toHaveBeenCalledOnce();
     });

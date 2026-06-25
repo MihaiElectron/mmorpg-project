@@ -66,7 +66,7 @@ risk for commands that create, move, reset, or update server-side state.
 | `RolesGuard` | Server-controlled | No direct user control | Compare required role metadata with `request.user.role`. | Replace payload validation or action-specific checks. | `Implemented` |
 | `AdminGateway` | Server-controlled | No direct user control | Check `client.data.role` and route admin events to services. | Prove role provenance without guaranteed socket authentication order. | `Not verified` |
 | Server services | Server-controlled | No direct user control | Read, update, and persist admin-targeted state through repositories. | Treat client payloads as valid without checks. | `Implemented` |
-| PostgreSQL | Server-controlled persistence | No direct user control | Store users, roles, templates, spawns, animals, and character positions. | Decide authorization by itself. | `Implemented` |
+| PostgreSQL | Server-controlled persistence | No direct user control | Store users, roles, templates, spawns, creatures, and character positions. | Decide authorization by itself. | `Implemented` |
 
 ## Role model
 
@@ -81,7 +81,7 @@ risk for commands that create, move, reset, or update server-side state.
 
 | Route or area | Method | Guard or decorator observed | Role required | Server checks observed | Status |
 |---|---|---|---|---|---|
-| `/admin/overview` | `GET` | Class-level `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)` on `AdminController`. | `admin` | Authenticated JWT and required role through guards; service counts templates, spawns, and active animals. | `Implemented` |
+| `/admin/overview` | `GET` | Class-level `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)` on `AdminController`. | `admin` | Authenticated JWT and required role through guards; service counts templates, spawns, and active creatures. | `Implemented` |
 | `/admin/templates` | `GET` | Class-level `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)` on `AdminController`. | `admin` | Authenticated JWT and required role through guards; service returns templates ordered by name. | `Implemented` |
 | `/admin/spawns` | `GET` | Class-level `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)` on `AdminController`. | `admin` | Authenticated JWT and required role through guards; service returns spawns with template relation. | `Implemented` |
 | `/admin/templates/:key` | `PATCH` | Class-level `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)` on `AdminController`. | `admin` | Authenticated JWT and required role through guards; template key is used to find a template; missing template throws `NotFoundException`. Field whitelist equivalent to the socket template command is `Not verified`. | `Not verified` |
@@ -91,11 +91,11 @@ risk for commands that create, move, reset, or update server-side state.
 
 | Event | Gateway | Role check observed | Payload validation observed | Side effect | Gaps | Status |
 |---|---|---|---|---|---|---|
-| `admin:spawn` | `AdminGateway` | `client.data.role === 'admin'` | Requires `templateKey`, numeric `x`, numeric `y`; service returns null for unknown template. | Creates a spawn and an animal, then sends an update event. | Independent JWT authentication in `AdminGateway`, role provenance, idempotence, and rate limiting are `Not verified`. | `Not verified` |
+| `admin:spawn` | `AdminGateway` | `client.data.role === 'admin'` | Requires `templateKey`, numeric `x`, numeric `y`; service returns null for unknown template. | Creates a spawn and an creature, then sends an update event. | Independent JWT authentication in `AdminGateway`, role provenance, idempotence, and rate limiting are `Not verified`. | `Not verified` |
 | `admin:teleport` | `AdminGateway` | `client.data.role === 'admin'` | Requires `characterId`, numeric `x`, numeric `y`; resolves a connected player by id or name. | Updates a connected character position and persists rounded coordinates. | UUID validation, authorization beyond admin role, idempotence, and replay protection are `Not verified`. | `Not verified` |
 | `admin:update_template` | `AdminGateway` | `client.data.role === 'admin'` | Requires `key` and `fields`; allows only listed numeric fields; rejects negative or non-numeric values; checks template existence. | Updates a template and sends a category update response. | Fine-grained permissions, audit, idempotence, and concurrent update handling are `Not verified`. | `Not verified` |
-| `admin:move_animal` | `AdminGateway` | `client.data.role === 'admin'` | Requires `animalId`, numeric `x`, numeric `y`; service rejects missing or dead animal. | Moves a live animal, persists rounded coordinates, and returns the moved animal data. | UUID validation, replay protection, idempotence, and rate limiting are `Not verified`. | `Not verified` |
-| `admin:respawn_all` | `AdminGateway` | `client.data.role === 'admin'` | Requires `templateKey`; service counts matching live animals. | Resets matching animals for the template and persists state changes. | Mass-operation confirmation on the server, idempotence, rate limiting, and audit are `Not verified`. | `Not verified` |
+| `admin:move_creature` | `AdminGateway` | `client.data.role === 'admin'` | Requires `creatureId`, numeric `x`, numeric `y`; service rejects missing or dead creature. | Moves a live creature, persists rounded coordinates, and returns the moved creature data. | UUID validation, replay protection, idempotence, and rate limiting are `Not verified`. | `Not verified` |
+| `admin:respawn_all` | `AdminGateway` | `client.data.role === 'admin'` | Requires `templateKey`; service counts matching live creatures. | Resets matching creatures for the template and persists state changes. | Mass-operation confirmation on the server, idempotence, rate limiting, and audit are `Not verified`. | `Not verified` |
 
 For `AdminGateway`, no independent JWT `handleConnection` hook was observed.
 The gateway depends on `client.data.role`. Guaranteed server-side provenance of
@@ -106,11 +106,11 @@ The gateway depends on `client.data.role`. Guaranteed server-side provenance of
 
 | Command | Transport | Target | Main effect | Persistence impact | Broadcast or response | Status |
 |---|---|---|---|---|---|---|
-| `/spawn <template> [x] [y]` | Socket.IO `admin:spawn` | Template key and coordinates. | Creates an admin spawn at a resolved position. | Persists a spawn row and an animal row through the service. | Acknowledgement result and update event from the server. | `Implemented` |
-| `/tp [id] <x> <y>` | Socket.IO `admin:teleport` or `admin:move_animal` | Player id/name or selected animal. | Teleports a connected player or moves a live animal. | Persists character position for player teleport; persists animal coordinates for animal move. | Acknowledgement result and server update to affected clients. | `Implemented` |
+| `/spawn <template> [x] [y]` | Socket.IO `admin:spawn` | Template key and coordinates. | Creates an admin spawn at a resolved position. | Persists a spawn row and an creature row through the service. | Acknowledgement result and update event from the server. | `Implemented` |
+| `/tp [id] <x> <y>` | Socket.IO `admin:teleport` or `admin:move_creature` | Player id/name or selected creature. | Teleports a connected player or moves a live creature. | Persists character position for player teleport; persists creature coordinates for creature move. | Acknowledgement result and server update to affected clients. | `Implemented` |
 | `/sethp <template> <value>` | Socket.IO `admin:update_template` | Template key. | Updates `baseHealth`. | Persists template field update. | Acknowledgement result and category update event. | `Implemented` |
 | `/aggro <template> <radius>` | Socket.IO `admin:update_template` | Template key. | Updates `aggroRadius`. | Persists template field update. | Acknowledgement result and category update event. | `Implemented` |
-| `/respawn all <template>` | Socket.IO `admin:respawn_all` | Template key. | Forces matching live animals back to their spawn state. | Persists affected animal state and coordinates. | Acknowledgement result and service update events. | `Implemented` |
+| `/respawn all <template>` | Socket.IO `admin:respawn_all` | Template key. | Forces matching live creatures back to their spawn state. | Persists affected creature state and coordinates. | Acknowledgement result and service update events. | `Implemented` |
 | `/decor <sprite> [x] [y]` | None observed | Client command text only. | Returns a not-implemented result. | None observed. | Local command response. | `TBD` |
 | `/help [command]` | None observed | Command registry metadata. | Shows command usage. | None observed. | Local command response. | `Implemented` |
 
@@ -118,11 +118,11 @@ The gateway depends on `client.data.role`. Guaranteed server-side provenance of
 
 | Input category | Source | Validation observed | Missing or unverified validation | Status |
 |---|---|---|---|---|
-| UUID | `animalId`, `characterId`, item ids, and entity ids. | Required as non-empty values in some admin socket handlers; some ids are resolved by service lookups. | Formal UUID validation is `Not verified`. | `Not verified` |
-| Coordinates | Admin spawn, teleport, and animal move commands. | Server checks `typeof x === 'number'` and `typeof y === 'number`; services round before persistence. | Bounds, allowed destination, and extreme-value handling are `Not verified`. | `Not verified` |
+| UUID | `creatureId`, `characterId`, item ids, and entity ids. | Required as non-empty values in some admin socket handlers; some ids are resolved by service lookups. | Formal UUID validation is `Not verified`. | `Not verified` |
+| Coordinates | Admin spawn, teleport, and creature move commands. | Server checks `typeof x === 'number'` and `typeof y === 'number`; services round before persistence. | Bounds, allowed destination, and extreme-value handling are `Not verified`. | `Not verified` |
 | Template | Template key in HTTP and socket admin paths. | Required key; service checks existence for update and spawn paths; command registry can compare against loaded template keys. | Server-side format constraints and rate limiting by template are `Not verified`. | `Not verified` |
 | Spawn data | `admin:spawn`. | Requires template key and numeric coordinates; service creates a generated spawn key. | Idempotency key, duplicate prevention, and quota checks are `Not verified`. | `Not verified` |
-| Animal id | `admin:move_animal`. | Requires non-empty `animalId`; service checks live animal presence and rejects dead animals. | UUID validation and authorization by target are `Not verified`. | `Not verified` |
+| Creature id | `admin:move_creature`. | Requires non-empty `creatureId`; service checks live creature presence and rejects dead creatures. | UUID validation and authorization by target are `Not verified`. | `Not verified` |
 | Character id | `admin:teleport`. | Requires non-empty value; server resolves by connected player id or name. | UUID-only enforcement, offline target handling, and destination policy are `Not verified`. | `Not verified` |
 | Role | HTTP `request.user.role`; socket `client.data.role`. | HTTP role is checked by `RolesGuard`; socket role is compared with `admin`. | `AdminGateway` role provenance and connection ordering are `Not verified`. | `Not verified` |
 | Free-form fields | HTTP `PATCH /admin/templates/:key` and socket template update fields. | Socket template update uses an allowed-field list and numeric non-negative checks. | Equivalent HTTP field whitelist is `Not verified`; complete DTO validation is `Not verified`. | `Not verified` |
@@ -183,7 +183,7 @@ Not verified:
 - Idempotence of `admin:spawn`.
 - Idempotence of `admin:teleport`.
 - Idempotence of `admin:update_template`.
-- Idempotence of `admin:move_animal`.
+- Idempotence of `admin:move_creature`.
 - Idempotence of `admin:respawn_all`.
 - Server-side deduplication keys.
 - Retry protection after client timeout.
@@ -241,7 +241,7 @@ Implemented:
 - Socket template updates use an allowed-field list and numeric non-negative
   checks.
 - Admin services return null or failure results for missing templates, missing
-  connected players, or missing/dead animals in observed paths.
+  connected players, or missing/dead creatures in observed paths.
 
 ## Known gaps
 

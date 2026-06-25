@@ -7,7 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
-import { AnimalsService } from '../animals/animals.service';
+import { CreaturesService } from '../creatures/creatures.service';
 import { WorldService } from '../world/world.service';
 import { AdminService } from './admin.service';
 import { ResourcesService } from '../resources/resources.service';
@@ -17,7 +17,7 @@ type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
 type TeleportPayload = { characterId: string; worldX: number; worldY: number };
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
-type MoveAnimalPayload = { animalId: string; worldX: number; worldY: number };
+type MoveCreaturePayload = { creatureId: string; worldX: number; worldY: number };
 type UpdateEntityPayload = { id: string; fields: Record<string, number> };
 type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
 type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
@@ -32,7 +32,7 @@ export class AdminGateway {
   server: Server;
 
   constructor(
-    private readonly animalsService: AnimalsService,
+    private readonly creaturesService: CreaturesService,
     private readonly worldService: WorldService,
     private readonly adminService: AdminService,
     private readonly resourcesService: ResourcesService,
@@ -52,12 +52,12 @@ export class AdminGateway {
       return { success: false, message: 'Payload invalide : templateKey, worldX, worldY requis.' };
     }
 
-    const dto = await this.animalsService.createAdminSpawn(templateKey, worldX, worldY);
+    const dto = await this.creaturesService.createAdminSpawn(templateKey, worldX, worldY);
     if (!dto) {
       return { success: false, message: `Template "${templateKey}" introuvable.` };
     }
 
-    this.server.emit('animal_update', dto);
+    this.server.emit('creature_update', dto);
     return {
       success: true,
       message: `"${dto.name}" spawné en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${dto.id}`,
@@ -157,7 +157,7 @@ export class AdminGateway {
       .map(([k, v]) => `${k} ${beforeValues[k]}→${v}`)
       .join(', ');
 
-    this.animalsService.refreshTemplateInMemory(key, safeFields as any);
+    this.creaturesService.refreshTemplateInMemory(key, safeFields as any);
     this.server.emit('category:updated', updated);
     return {
       success: true,
@@ -166,23 +166,23 @@ export class AdminGateway {
     };
   }
 
-  @SubscribeMessage('admin:move_animal')
-  async onMoveAnimal(
+  @SubscribeMessage('admin:move_creature')
+  async onMoveCreature(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: MoveAnimalPayload,
+    @MessageBody() payload: MoveCreaturePayload,
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { animalId, worldX, worldY } = payload ?? {};
-    if (!animalId || typeof worldX !== 'number' || typeof worldY !== 'number') {
-      return { success: false, message: 'Payload invalide : animalId, worldX, worldY requis.' };
+    const { creatureId, worldX, worldY } = payload ?? {};
+    if (!creatureId || typeof worldX !== 'number' || typeof worldY !== 'number') {
+      return { success: false, message: 'Payload invalide : creatureId, worldX, worldY requis.' };
     }
 
-    const dto = await this.animalsService.moveAnimal(animalId, worldX, worldY);
+    const dto = await this.creaturesService.moveCreature(creatureId, worldX, worldY);
     if (!dto) {
-      return { success: false, message: `Animal "${animalId}" introuvable ou mort.` };
+      return { success: false, message: `Creature "${creatureId}" introuvable ou mort.` };
     }
 
     return {
@@ -206,17 +206,17 @@ export class AdminGateway {
       return { success: false, message: 'Payload invalide : templateKey requis.' };
     }
 
-    const count = await this.animalsService.forceRespawnAll(templateKey);
+    const count = await this.creaturesService.forceRespawnAll(templateKey);
     return {
       success: count > 0,
       message: count > 0
         ? `${count} "${templateKey}" réinitialisé(s) à leur position de spawn (state: alive, HP max).`
-        : `Aucun animal "${templateKey}" trouvé en mémoire.`,
+        : `Aucun creature "${templateKey}" trouvé en mémoire.`,
     };
   }
 
-  @SubscribeMessage('admin:update_animal')
-  async onUpdateAnimal(
+  @SubscribeMessage('admin:update_creature')
+  async onUpdateCreature(
     @ConnectedSocket() client: WorldSocket,
     @MessageBody() payload: UpdateEntityPayload,
   ): Promise<CmdResult> {
@@ -246,8 +246,8 @@ export class AdminGateway {
       }
     }
 
-    const dto = await this.animalsService.adminUpdateAnimal(id, safe as any);
-    if (!dto) return { success: false, message: `Animal "${id}" introuvable ou mort.` };
+    const dto = await this.creaturesService.adminUpdateCreature(id, safe as any);
+    if (!dto) return { success: false, message: `Creature "${id}" introuvable ou mort.` };
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${dto.name}" (${dto.id}) mis à jour : ${changes}.`, data: dto };
@@ -329,8 +329,8 @@ export class AdminGateway {
     };
   }
 
-  @SubscribeMessage('admin:delete_animal')
-  async onDeleteAnimal(
+  @SubscribeMessage('admin:delete_creature')
+  async onDeleteCreature(
     @ConnectedSocket() client: WorldSocket,
     @MessageBody() payload: { id: string },
   ): Promise<CmdResult> {
@@ -339,10 +339,10 @@ export class AdminGateway {
     const { id } = payload ?? {};
     if (!id) return { success: false, message: 'Payload invalide : id requis.' };
 
-    const dto = await this.animalsService.adminDeleteAnimal(id);
-    if (!dto) return { success: false, message: `Animal "${id}" introuvable en mémoire.` };
+    const dto = await this.creaturesService.adminDeleteCreature(id);
+    if (!dto) return { success: false, message: `Creature "${id}" introuvable en mémoire.` };
 
-    this.server.emit('animal_update', { ...dto, state: 'dead' });
+    this.server.emit('creature_update', { ...dto, state: 'dead' });
     return { success: true, message: `"${dto.name}" (${dto.id}) supprimé.` };
   }
 
@@ -409,7 +409,7 @@ export class AdminGateway {
       }
     }
 
-    let tpl: import('../animals/entities/creature-template.entity').CreatureTemplate;
+    let tpl: import('../creatures/entities/creature-template.entity').CreatureTemplate;
     try {
       tpl = await this.adminService.createCreatureTemplate(safe as any);
     } catch (err: any) {

@@ -17,7 +17,7 @@ type JwtPayload = {
 
 /**
  * Valide le JWT transmis par un client Socket.IO à la connexion.
- * Mutualisé entre les gateways (world, resources, animals) qui partagent
+ * Mutualisé entre les gateways (world, resources, creatures) qui partagent
  * la même connexion socket côté client.
  */
 @Injectable()

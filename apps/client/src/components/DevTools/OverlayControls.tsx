@@ -7,8 +7,8 @@ import "./OverlayControls.scss";
 function useOverlayBindingsMap(): OverlayBindingsMap {
   const resourceOverlayEnabled = useDevToolsStore((s) => s.resourceOverlayEnabled);
   const toggleResourceOverlayEnabled = useDevToolsStore((s) => s.toggleResourceOverlayEnabled);
-  const animalOverlayEnabled = useDevToolsStore((s) => s.animalOverlayEnabled);
-  const toggleAnimalOverlayEnabled = useDevToolsStore((s) => s.toggleAnimalOverlayEnabled);
+  const creatureOverlayEnabled = useDevToolsStore((s) => s.creatureOverlayEnabled);
+  const toggleCreatureOverlayEnabled = useDevToolsStore((s) => s.toggleCreatureOverlayEnabled);
   const creatureSpawnOverlayEnabled = useDevToolsStore((s) => s.creatureSpawnOverlayEnabled);
   const toggleCreatureSpawnOverlayEnabled = useDevToolsStore(
     (s) => s.toggleCreatureSpawnOverlayEnabled,
@@ -29,8 +29,8 @@ function useOverlayBindingsMap(): OverlayBindingsMap {
   return {
     resourceOverlayEnabled,
     toggleResourceOverlayEnabled,
-    animalOverlayEnabled,
-    toggleAnimalOverlayEnabled,
+    creatureOverlayEnabled,
+    toggleCreatureOverlayEnabled,
     creatureSpawnOverlayEnabled,
     toggleCreatureSpawnOverlayEnabled,
     stationRadiusOverlayEnabled,

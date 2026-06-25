@@ -16,8 +16,8 @@
   - `apps/client/src/phaser/world/MapLoader.js`
   - `apps/api-gateway/src/world/world.gateway.ts`
   - `apps/api-gateway/src/world/world.service.ts`
-  - `apps/api-gateway/src/animals/animals.gateway.ts`
-  - `apps/api-gateway/src/animals/animals.service.ts`
+  - `apps/api-gateway/src/creatures/creatures.gateway.ts`
+  - `apps/api-gateway/src/creatures/creatures.service.ts`
   - `apps/api-gateway/src/resources/resources.gateway.ts`
 
 ---
@@ -193,7 +193,7 @@ triggers the direct-steering fallback.
 ### Validations present
 
 **JWT authentication** (all gateways): `WsAuthService.authenticate` is called
-in `handleConnection` for `WorldGateway`, `AnimalsGateway`, and
+in `handleConnection` for `WorldGateway`, `CreaturesGateway`, and
 `ResourcesGateway`. A socket without a valid JWT is disconnected immediately.
 This is the only security layer that exists before movement events are
 processed.
@@ -208,19 +208,19 @@ checks `this.isInRange(player, resource)` with `RESOURCE_INTERACT_RANGE = 100`
 `client.data.player`, which is itself client-reported (see below). The
 distance is validated, but against an untrusted position.
 
-**Attack cooldown** (`attack_animal`): `AnimalsService.attack` enforces a
+**Attack cooldown** (`attack_creature`): `CreaturesService.attack` enforces a
 `ATTACK_COOLDOWN_MS = 700` ms minimum between attacks per character. This is
 a real server-side enforcement that cannot be bypassed from the client.
 
-**Attack range** (`attack_animal`): `AnimalsService.resolveAttackRange`
+**Attack range** (`attack_creature`): `CreaturesService.resolveAttackRange`
 computes the effective range based on equipped weapon. The distance between
-`attackerPosition` and the animal is checked. However, `attackerPosition` is
+`attackerPosition` and the creature is checked. However, `attackerPosition` is
 `{ x: player.x, y: player.y }` from `client.data.player`, which is
 client-reported (see below).
 
-**Animal health and death**: animal HP and state transitions are fully
+**Creature health and death**: creature HP and state transitions are fully
 server-authoritative. The server computes damage, applies it, and decides
-when an animal dies. The client cannot set animal health.
+when an creature dies. The client cannot set creature health.
 
 **Gather movement check** (`runGatherCycle`): if the player moved more than
 `MOVE_TOLERANCE = 4 px` between the start and end of a gather cycle (based on
@@ -266,15 +266,15 @@ No validation. The server stores whatever `x / y` the client sent.
 
 ---
 
-## 5. Animals — comparison with player movement
+## 5. Creatures — comparison with player movement
 
-### Who decides animal movement?
+### Who decides creature movement?
 
-The server, entirely. `AnimalsService.tickPatrol` runs every `PATROL_TICK_MS =
+The server, entirely. `CreaturesService.tickPatrol` runs every `PATROL_TICK_MS =
 200 ms` via `setInterval`. The server computes direction, applies speed, and
-updates `animal.x / animal.y` in the `liveAnimals` map. No client input is
-accepted for animal movement. Animals are broadcast to clients via
-`server.emit('animal_update', toDto(animal))`.
+updates `creature.x / creature.y` in the `liveCreatures` map. No client input is
+accepted for creature movement. Creatures are broadcast to clients via
+`server.emit('creature_update', toDto(creature))`.
 
 ### Where are speeds applied?
 
@@ -282,26 +282,26 @@ On the server. Speed is integrated per tick:
 
 ```ts
 const dt = PATROL_TICK_MS / 1000; // 0.2 s
-animal.x = Math.round(animal.x + dirX * template.speedMax * dt);
-animal.y = Math.round(animal.y + dirY * template.speedMax * dt);
+creature.x = Math.round(creature.x + dirX * template.speedMax * dt);
+creature.y = Math.round(creature.y + dirY * template.speedMax * dt);
 ```
 
 Speed values (`speedMin`, `speedMax`) are stored in `CreatureTemplate` and
-applied by the server exclusively. The client cannot influence animal speed.
+applied by the server exclusively. The client cannot influence creature speed.
 
 ### Where are collisions applied?
 
-Nowhere. Animals have no tile collision. They move through all obstacles. The
-only spatial constraint is `patrolRadius` (animals are clamped to a circle
+Nowhere. Creatures have no tile collision. They move through all obstacles. The
+only spatial constraint is `patrolRadius` (creatures are clamped to a circle
 around their spawn point) and `LEASH_MULTIPLIER × patrolRadius` for combat.
-There is no walkability lookup for animals.
+There is no walkability lookup for creatures.
 
-Animals also have no map bounds check. An animal with a spawn point near the
+Creatures also have no map bounds check. An creature with a spawn point near the
 edge of any defined area can move outside any expected boundary.
 
 ### Contrast with player movement
 
-| Property | Player | Animal |
+| Property | Player | Creature |
 |---|---|---|
 | Who computes position | Client | Server |
 | Position authority | Client (reported to server) | Server (computed and stored) |
@@ -310,7 +310,7 @@ edge of any defined area can move outside any expected boundary.
 | Map bounds | Client (Phaser world bounds 2000×2000) | None |
 | Broadcast source | Client → server → other clients | Server → all clients |
 
-The animal model is closer to the target architecture defined in
+The creature model is closer to the target architecture defined in
 `movement-model.md`. The player model is not.
 
 ---
@@ -363,21 +363,21 @@ Because the server re-broadcasts the client's own reported coordinates, a
 client that reports a false position causes all other clients to render it at
 the false position.
 
-### `animal_update` (Server → Client, broadcast)
+### `creature_update` (Server → Client, broadcast)
 
 | Field | Content | Trust level |
 |---|---|---|
 | `x`, `y` | Server-computed coordinates | Authoritative |
 | `health`, `state` | Server-computed values | Authoritative |
-| All fields | Derived from server-owned `liveAnimals` map | Authoritative |
+| All fields | Derived from server-owned `liveCreatures` map | Authoritative |
 
-Fully trustworthy: the server computes and owns all animal state.
+Fully trustworthy: the server computes and owns all creature state.
 
-### `attack_animal` (Client → Server)
+### `attack_creature` (Client → Server)
 
 | Field | Content | Validation |
 |---|---|---|
-| `targetId` | Animal ID string | Existence check in `liveAnimals` |
+| `targetId` | Creature ID string | Existence check in `liveCreatures` |
 | (position) | Not in payload — uses `client.data.player` | Client-reported position, no distance gate to server source |
 
 **Note**: the attacker's position is not sent explicitly in the payload.
@@ -417,7 +417,7 @@ unconditionally. The position is stored in memory and rebroadcast.
 inside walls, outside the map, or across any distance. This affects:
 - Visual rendering for all other clients (they are told the player is elsewhere).
 - Combat range validation (`client.data.player` is used as the attacker position
-  in `attack_animal`).
+  in `attack_creature`).
 - Resource gather range validation (same source).
 - Persisted position on disconnect.
 
@@ -435,11 +435,11 @@ arbitrarily fast. The server has no way to detect this.
 
 ### 3. Combat range bypass
 
-**Mechanism**: emit `player_move: { x: <animal.x>, y: <animal.y> }` to
-place the player at the animal's position, then emit `attack_animal`.
+**Mechanism**: emit `player_move: { x: <creature.x>, y: <creature.y> }` to
+place the player at the creature's position, then emit `attack_creature`.
 
-**Impact**: the attack range check in `animalsService.attack` will compute
-`distance = Math.hypot(animal.x - player.x, animal.y - player.y) = 0`, which
+**Impact**: the attack range check in `creaturesService.attack` will compute
+`distance = Math.hypot(creature.x - player.x, creature.y - player.y) = 0`, which
 is always `≤ MELEE_RANGE = 60`. Melee attacks succeed from any real distance.
 For ranged attacks, the same technique places the player within any effective
 range.
@@ -507,16 +507,16 @@ out-of-bounds values, and reconnect there at next login.
 | Player destination (pathfinding) | **Client** (A\* computed locally) | Client or Server (open question, see movement-model.md §10) |
 | Player collision | **Client** (Phaser only) | Server (mandatory tile check per movement event) |
 | Map bounds enforcement | **Client** (Phaser world bounds 2000×2000) | Server (validate against real map dimensions) |
-| Combat range (player→animal) | **Server formula, client-supplied position** | Server formula, server-authoritative position |
+| Combat range (player→creature) | **Server formula, client-supplied position** | Server formula, server-authoritative position |
 | Gather range | **Server formula, client-supplied position** | Server formula, server-authoritative position |
 | Attack cooldown | **Server** | Server (already correct) |
-| Animal position | **Server** | Server (already correct) |
-| Animal speed | **Server** | Server (already correct) |
-| Animal AI (aggro, patrol, flee) | **Server** | Server (already correct) |
+| Creature position | **Server** | Server (already correct) |
+| Creature speed | **Server** | Server (already correct) |
+| Creature AI (aggro, patrol, flee) | **Server** | Server (already correct) |
 | Knockback | Not implemented | Server |
 | Teleportation (admin `/tp`) | **Server** | Server (already correct) |
 | Spawn / respawn (player) | **Server** | Server (already correct) |
-| Spawn / respawn (animal) | **Server** | Server (already correct) |
+| Spawn / respawn (creature) | **Server** | Server (already correct) |
 | Pathfinding grid | **Client** (32 px tiles) | To be decided (see open question §10 in movement-model.md) |
 | Map transition | Not implemented | Server |
 | Interaction (resource) | **Server validates range against client position** | Server validates range against server-authoritative position |
@@ -531,17 +531,17 @@ out-of-bounds values, and reconnect there at next login.
 | Gap | Location | Required change |
 |---|---|---|
 | Coordinates stored as pixel-equivalent `positionX / positionY` | `character` entity | Rename to `worldX / worldY`, convert values |
-| Coordinates stored as pixel-equivalent `x / y` | `animal`, `resource`, `creature_spawn`, `respawn_point` entities | Rename to `worldX / worldY`, convert values |
+| Coordinates stored as pixel-equivalent `x / y` | `creature`, `resource`, `creature_spawn`, `respawn_point` entities | Rename to `worldX / worldY`, convert values |
 | `player_move` payload uses `{ x, y }` in pixel units | `WorldGateway`, `WorldScene.syncLocalPlayer` | Change to `{ mapId, worldX, worldY }` |
 | `player_moved` broadcast uses `{ x, y }` in pixel units | `WorldGateway`, all clients consuming `player_moved` | Change to `{ mapId, worldX, worldY }` |
 | `world_joined` uses `{ x, y }` | `WorldService.joinPlayer`, client handler | Change to `{ mapId, worldX, worldY }` |
-| `animal_update` uses `{ x, y }` | `AnimalsService.toDto`, client handler | Change to `{ mapId, worldX, worldY }` |
+| `creature_update` uses `{ x, y }` | `CreaturesService.toDto`, client handler | Change to `{ mapId, worldX, worldY }` |
 | `character_teleport` uses `{ x, y }` | `WorldService.teleportCharacter`, client handler | Change to `{ mapId, worldX, worldY }` |
 | `character_respawn` uses `{ x, y }` | `WorldService.respawnCharacter`, client handler | Change to `{ mapId, worldX, worldY }` |
 | Client pathfinder uses 32 px tiles, not `localTileX / localTileY` | `PlayerController.calculatePath`, `pathfinding.js` | Rebuild grid to match `localTileX / localTileY` after migration |
 | `WorldScene` spawns player at `character.positionX / positionY` | `WorldScene.create` | Use `worldX / worldY` with projection formula |
 | Remote player sprites positioned at `player.x / player.y` (pixel) | `WorldScene.upsertRemotePlayer` | Apply projection formula to tile coordinates |
-| Animal sprites positioned at `animal.x / animal.y` (pixel) | `WorldScene.upsertAnimal` | Apply projection formula to tile coordinates |
+| Creature sprites positioned at `creature.x / creature.y` (pixel) | `WorldScene.upsertCreature` | Apply projection formula to tile coordinates |
 | Keyboard input in screen-space axes | `PlayerController.update` | Remap to `worldX / worldY` isometric axes |
 | `physics.world.setBounds(0, 0, 2000, 2000)` — arbitrary pixel bounds | `WorldScene.create` | Derive from map dimensions in tile units after migration |
 
@@ -550,7 +550,7 @@ out-of-bounds values, and reconnect there at next login.
 | Gap | Location | Required change |
 |---|---|---|
 | `character` uses `positionX / positionY` instead of `worldX / worldY` | `character.entity.ts` | Column rename + add `mapId` |
-| `animal` uses `x / y` instead of `worldX / worldY` | `animal.entity.ts` | Column rename + add `mapId` |
+| `creature` uses `x / y` instead of `worldX / worldY` | `creature.entity.ts` | Column rename + add `mapId` |
 | `resource` uses `x / y` | `resource.entity.ts` | Column rename + add `mapId` |
 | `creature_spawn` uses `spawnX / spawnY` | `creature-spawn.entity.ts` | Column rename + add `mapId` |
 | `respawn_point` uses `x / y` | `respawn-point.entity.ts` | Column rename + add `mapId` |
@@ -563,14 +563,14 @@ out-of-bounds values, and reconnect there at next login.
 | No server-side distance gate on `player_move` | `WorldService.updatePlayer` | Add: distance from last validated position ≤ `effectiveSpeed × dt × tolerance` |
 | No server-side walkability check on player positions | `WorldService.updatePlayer` | Add: lookup tile at `floor(worldX >> 10), floor(worldY >> 10)` before accepting |
 | No server-side map bounds check on player positions | `WorldService.updatePlayer` | Add: `0 ≤ worldX < mapWidthChunks × CHUNK_SIZE_WU`, same for Y |
-| No map bounds check on animal positions | `AnimalsService` (all movement methods) | Add: clamp to map bounds on every tick |
+| No map bounds check on creature positions | `CreaturesService` (all movement methods) | Add: clamp to map bounds on every tick |
 | No `effectiveSpeed` pipeline | Server | Create: `baseSpeed × product(modifiers)`, used for all entity types |
 | Speed in pixel-equivalent units, not tile/s | All entities, seeds | Convert after ADR-0001 conversion factor is decided |
 | Drag mode crosses walls | `PlayerController.directMoveToTarget` + server | Server must reject out-of-bounds or blocked final positions |
 | Keyboard direction in screen axes | `PlayerController.update` | Remap to isometric diagonal axes |
 | `RESOURCE_INTERACT_RANGE = 100` in pixel-equivalent units | `ResourcesGateway` | Convert to tile units after migration |
-| `MELEE_RANGE = 60` in pixel-equivalent units | `AnimalsService` | Convert to tile units after migration |
-| No `mapId` validation on position events | `WorldGateway`, `AnimalsGateway`, `ResourcesGateway` | Add `mapId` check after ADR-0002 column migration |
+| `MELEE_RANGE = 60` in pixel-equivalent units | `CreaturesService` | Convert to tile units after migration |
+| No `mapId` validation on position events | `WorldGateway`, `CreaturesGateway`, `ResourcesGateway` | Add `mapId` check after ADR-0002 column migration |
 
 ---
 
@@ -582,8 +582,8 @@ reports, rebroadcasts it, and uses it for range checks in combat and gathering.
 There is no speed validation, no walkability check, and no map bounds
 enforcement on the server for player movement.
 
-Animal movement is the inverse: fully server-authoritative. The server computes
-every position, applies every speed, and enforces leash constraints. Animals
+Creature movement is the inverse: fully server-authoritative. The server computes
+every position, applies every speed, and enforces leash constraints. Creatures
 have no tile collision and no map bounds enforcement, but their positions cannot
 be manipulated by any client.
 

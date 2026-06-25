@@ -81,7 +81,7 @@ une Entity.
 | Area | Non — délimite une région | Non |
 | Spawn Point | Non — génère des Entities | Non |
 | Interaction Object | À définir (Trigger, Teleporter, Checkpoint…) | TBD |
-| Animal | Oui — vivant, aggro, mort, respawn | Oui |
+| Creature | Oui — vivant, aggro, mort, respawn | Oui |
 | Resource | Oui — disponible, épuisée, respawn | Oui |
 | Player | Oui — connecté, déconnecté, mort | Oui |
 | Building | Oui — intact, endommagé, détruit | Oui |
@@ -159,7 +159,7 @@ Aucun respawn possible.
 |---|---|---|
 | Loup vivant en patrouille | alive | active |
 | Arbre mort avec loot disponible | dead | active |
-| Animal en attente de respawn | dead | removed |
+| Creature en attente de respawn | dead | removed |
 | Player déconnecté | inactive | active |
 | Projectile expiré | dead | destroyed |
 | Bâtiment détruit définitivement | dead | destroyed |
@@ -176,7 +176,7 @@ Pas de respawn, pas de loot, plus de présence dans le monde.
 | Type | LifeStates spécifiques | Lifecycle |
 |---|---|---|
 | Player | alive, dead, inactive (déconnecté, AFK) | active / removed (logout long) |
-| Animal | alive (patrol/aggro/fleeing), dead | active / removed (respawn) |
+| Creature | alive (patrol/aggro/fleeing), dead | active / removed (respawn) |
 | Resource | alive (available/harvesting), dead (depleted) | active / removed (respawn) |
 | Building | alive (intact/damaged), dead (destroyed) | active / destroyed |
 | Door | alive (open/closed/locked), dead (broken) | active / destroyed |
@@ -208,7 +208,7 @@ identifiant de valeur — mais pas le même identifiant complet (qui inclut la M
 ### Type et sous-type
 
 Le type classe l'Entity dans la hiérarchie du WOM : catégorie Entity, sous-type
-Animal, Resource, Player, etc.
+Creature, Resource, Player, etc.
 
 Le sous-type est une classification métier. Il ne définit pas le comportement —
 les capacités le font.
@@ -288,7 +288,7 @@ Les dimensions sont exprimées en WU. Elles complètent la position pour défini
 l'emprise spatiale de l'Entity.
 
 Toutes les Entities ne possèdent pas de dimensions explicites. Un Player ou
-un Animal peuvent être modélisés comme un point avec un rayon de collision
+un Creature peuvent être modélisés comme un point avec un rayon de collision
 implicite défini par leur template.
 
 ---
@@ -322,8 +322,8 @@ se bloquent pas mutuellement.
 
 | Dimension | Valeurs possibles | Applicable à |
 |---|---|---|
-| Mouvement | idle, moving, blocked | Animal, Player, NPC |
-| Combat | neutral, aggro, fighting, fleeing | Animal, NPC, Player |
+| Mouvement | idle, moving, blocked | Creature, Player, NPC |
+| Combat | neutral, aggro, fighting, fleeing | Creature, NPC, Player |
 | Interaction | available, busy, locked | Resource, Door, NPC |
 | Charge | full, depleted | Resource |
 | Structure | intact, damaged | Building |
@@ -428,7 +428,7 @@ de base de données, de protocole réseau, ou de moteur de rendu.
 
 | Source | Description | Exemples |
 |---|---|---|
-| IA autonome | Règles internes, FSM, planification | Patrouille, aggro, fuite d'un Animal |
+| IA autonome | Règles internes, FSM, planification | Patrouille, aggro, fuite d'un Creature |
 | Input joueur | Intentions transmises par le client | Déplacement, attaque, interaction d'un Player |
 | Règle passive | Réaction à un événement externe | Dégâts reçus, épuisement d'une Resource |
 | Interaction Object | Déclenché par un système dédié | Ouverture d'une Door par un Trigger |
@@ -514,7 +514,7 @@ finale après collision.
 ### Rôle du Studio
 
 Le Studio observe sans interférer avec le gameplay. Quand il agit (modifier les
-HP d'un animal, forcer un respawn), il passe par les mêmes APIs que le jeu
+HP d'un creature, forcer un respawn), il passe par les mêmes APIs que le jeu
 normal. Le Runtime applique les mêmes validations.
 
 Le Studio n'a pas d'accès privilégié au modèle interne des Entities. Il reçoit
@@ -531,7 +531,7 @@ du profil actif.
 
 Recevoir les mises à jour d'état d'une Entity en temps réel via le Monitoring.
 
-Exemples : un Animal passe de `patrolling` à `aggro` → le Monitoring l'enregistre.
+Exemples : un Creature passe de `patrolling` à `aggro` → le Monitoring l'enregistre.
 La position d'un Player change → le Monitoring peut l'afficher sur un overlay.
 
 Aucune permission spéciale requise pour observer. C'est la capacité de base du Studio.
@@ -552,7 +552,7 @@ Envoyer une requête de modification au Runtime. Le Runtime valide et applique
 ou rejette.
 
 Exemples : forcer les HP à 100%, changer l'état d'une Door (Open → Closed),
-mettre un Animal en état `fleeing`, modifier les récoltes restantes d'une
+mettre un Creature en état `fleeing`, modifier les récoltes restantes d'une
 Resource.
 
 Le Studio ne peut modifier que ce que le Runtime autorise selon le profil.
@@ -659,11 +659,11 @@ son timer tourne). Ce n'est pas la même chose qu'être Destroyed.
 
 ### Wolf (Loup)
 
-Un animal avec une IA autonome de combat.
+Un creature avec une IA autonome de combat.
 
 | Concept | Description |
 |---|---|
-| Identity | Id unique, type Animal, template "wolf", pas de propriétaire |
+| Identity | Id unique, type Creature, template "wolf", pas de propriétaire |
 | Localization | Position WU dynamique, orientation (direction de déplacement) |
 | LifeState | alive (patrol / aggro / fighting / fleeing) → dead |
 | Lifecycle | active → removed (respawn prévu) → active (réapparition) |
@@ -777,14 +777,14 @@ est-il nécessaire, ou un identifiant de session suffit-il ?
 
 | Concept | État |
 |---|---|
-| Entity (Player, Animal, Resource) | **Implémenté** — sans contrat formel |
-| Cycle de vie Animal | **Implémenté** (partiel — états FSM en mémoire) |
+| Entity (Player, Creature, Resource) | **Implémenté** — sans contrat formel |
+| Cycle de vie Creature | **Implémenté** (partiel — états FSM en mémoire) |
 | Cycle de vie Resource | **Implémenté** (partiel — timer respawn) |
 | Cycle de vie Player | **Implémenté** (partiel — connect/disconnect/dead) |
 | Template CreatureTemplate | **Implémenté** |
 | Template ResourceTemplate | **Implémenté** |
 | Capacités formelles | **Futur** — implicites dans le code |
-| Behaviors (IA) | **Implémenté** (partiel — FSM Animal) |
+| Behaviors (IA) | **Implémenté** (partiel — FSM Creature) |
 | Events formels | **Futur** — implicites dans les événements Socket.IO |
 | Door, Building, Portal | **Futur** |
 | Projectile, Mount, Vehicle | **Futur** |

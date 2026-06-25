@@ -6,7 +6,7 @@ function makeCtx(overrides: Partial<StudioCommandContext> = {}): StudioCommandCo
   return {
     clearSelectedWorldObject: vi.fn(),
     incrementResourcesRefreshKey: vi.fn(),
-    incrementAnimalsRefreshKey: vi.fn(),
+    incrementCreaturesRefreshKey: vi.fn(),
     incrementCreatureSpawnsRefreshKey: vi.fn(),
     selectedWorldObjectId: null,
     ...overrides,

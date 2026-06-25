@@ -35,7 +35,7 @@ The specialized entity types in this project are:
 | Type | Description |
 |---|---|
 | **Player** | A character controlled by a human player. Has stats, inventory, and interacts with the world. |
-| **Animal** | A creature controlled by the game. Has behavior (patrol, aggro, flee), stats, and a lifecycle linked to combat and respawn. |
+| **Creature** | A creature controlled by the game. Has behavior (patrol, aggro, flee), stats, and a lifecycle linked to combat and respawn. |
 | **NPC** | A non-player character with a defined role (vendor, quest giver, guard). Not controlled by a player. |
 | **Resource** | A harvestable object in the world (tree, ore, plant). Has a loot pool and a respawn cycle. |
 | **Building** | A static or player-constructed structure in the world. Has state (intact, damaged, destroyed). |

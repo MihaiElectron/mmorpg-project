@@ -30,9 +30,9 @@ Fichier : `src/characters/entities/character.entity.ts`
   donc hors de la grille de jeu isométrique. Le défaut devra être recalibré.
 - Aucun conflit structurel de type, mais conflit sémantique sur les valeurs stockées.
 
-### 1.2 `animals` (table `animals`)
+### 1.2 `creatures` (table `creatures`)
 
-Fichier : `src/animals/entities/animal.entity.ts`
+Fichier : `src/creatures/entities/creature.entity.ts`
 
 | Colonne | Type TypeORM | Type PG inféré | Nullable | Défaut |
 |---|---|---|---|---|
@@ -42,7 +42,7 @@ Fichier : `src/animals/entities/animal.entity.ts`
 - Pas de `mapId`.
 - Types `int` explicites : compatibles avec WU.
 - Valeurs à l'écriture : copiées depuis `spawn.spawnX` / `spawn.spawnY` au démarrage,
-  puis mises à jour en continu par `AnimalsService` via arithmétique pixel.
+  puis mises à jour en continu par `CreaturesService` via arithmétique pixel.
 - Les colonnes `x` et `y` portent des noms courts qui **n'indiquent pas l'espace de
   coordonnées**. Après migration, des colonnes `worldX / worldY` distinctes évitent
   toute ambiguïté.
@@ -57,7 +57,7 @@ Fichier : `src/resources/entities/resource.entity.ts`
 | `y` | `@Column('int')` | `integer` | non | aucun |
 
 - Pas de `mapId`.
-- Même situation que `animals` : noms courts, types int compatibles, valeurs pixel.
+- Même situation que `creatures` : noms courts, types int compatibles, valeurs pixel.
 - Les ressources sont placées manuellement via le drag-and-drop admin.
   Les coordonnées enregistrées sont les positions Phaser au moment du drop.
 - Aucune mise à jour continue en runtime (ressources statiques), donc pas de
@@ -65,7 +65,7 @@ Fichier : `src/resources/entities/resource.entity.ts`
 
 ### 1.4 `creature_spawn` (table `creature_spawn`)
 
-Fichier : `src/animals/entities/creature-spawn.entity.ts`
+Fichier : `src/creatures/entities/creature-spawn.entity.ts`
 
 | Colonne | Type TypeORM | Type PG inféré | Nullable | Défaut |
 |---|---|---|---|---|
@@ -75,8 +75,8 @@ Fichier : `src/animals/entities/creature-spawn.entity.ts`
 - Pas de `mapId`.
 - Types int compatibles avec WU.
 - `spawnX` / `spawnY` sont les positions de spawn des animaux.
-  Ils sont utilisés comme point de référence pour le patrol (`animal.spawn.spawnX`)
-  et pour la contrainte de leash. Toute la logique de patrol dans `AnimalsService`
+  Ils sont utilisés comme point de référence pour le patrol (`creature.spawn.spawnX`)
+  et pour la contrainte de leash. Toute la logique de patrol dans `CreaturesService`
   repose sur ces valeurs en pixels.
 - La colonne `key` a une contrainte `UNIQUE`.
 
@@ -100,7 +100,7 @@ Fichier : `src/world/entities/respawn-point.entity.ts`
 | Entité | Colonnes pixel actuelles | Type actuel PG | Conflit de type avec WU | Conflit de valeur |
 |---|---|---|---|---|
 | `character` | `positionX`, `positionY` | `integer` | **Non** | **Oui** — valeurs pixel |
-| `animals` | `x`, `y` | `integer` | **Non** | **Oui** — valeurs pixel |
+| `creatures` | `x`, `y` | `integer` | **Non** | **Oui** — valeurs pixel |
 | `resources` | `x`, `y` | `integer` | **Non** | **Oui** — valeurs pixel |
 | `creature_spawn` | `spawnX`, `spawnY` | `integer` | **Non** | **Oui** — valeurs pixel |
 | `respawn_point` | `x`, `y`, `radius` | `integer` | **Non** | **Oui** — valeurs pixel |
@@ -144,9 +144,9 @@ y: character.positionY ?? payload.y ?? 300,
 **Valeur fallback :** `(400, 300)` — pixels Phaser. Ce fallback est aussi le
 défaut TypeORM dans l'entité (`@Column({ default: 400 })`).
 
-### 3.2 Animal — seed de spawn
+### 3.2 Creature — seed de spawn
 
-Fichier : `src/animals/animals.service.ts:638`
+Fichier : `src/creatures/creatures.service.ts:638`
 
 ```ts
 spawnX: 600,
@@ -154,7 +154,7 @@ spawnY: 580,
 ```
 
 Seul spawn seedé : `turkey_spawn_1` à `(600, 580)` en pixels Phaser.
-L'instance animale est créée avec `x = spawn.spawnX`, `y = spawn.spawnY`.
+L'instance creaturee est créée avec `x = spawn.spawnX`, `y = spawn.spawnY`.
 
 ### 3.3 Respawn point — seed unique
 
@@ -245,8 +245,8 @@ Toutes les colonnes pixel sont lues et écrites en continu :
 
 - `character.positionX / positionY` : lues à la connexion, écrites à chaque
   déplacement (`world.service.ts:189–190`) et au respawn (`world.service.ts:246`).
-- `animal.x / y` : lues et écrites à chaque tick patrol/fight/escape dans
-  `AnimalsService` (≈ 5 ticks/seconde).
+- `creature.x / y` : lues et écrites à chaque tick patrol/fight/escape dans
+  `CreaturesService` (≈ 5 ticks/seconde).
 - `creature_spawn.spawnX / spawnY` : lues à chaque tick pour calculer le patrol
   radius et la contrainte de leash. Jamais écrites après le seed.
 - `resource.x / y` : lues au démarrage et à chaque `findAll`.
@@ -302,11 +302,11 @@ colonnes simultanément.
 
 ### 5.5 Risque d'écriture dans les anciennes colonnes après ajout des nouvelles
 
-`AnimalsService` repose entièrement sur `animal.x` et `animal.y` pour le mouvement
+`CreaturesService` repose entièrement sur `creature.x` et `creature.y` pour le mouvement
 (40+ références directes aux colonnes pixel). Ces valeurs sont calculées via
 arithmétique pixel (`dx/dist * speed * dt`). Après l'ajout des colonnes WU, si
-le code continue d'écrire `animal.x / y` en pixel et que le runtime commence à
-lire `animal.worldX / worldY`, les deux divergent immédiatement.
+le code continue d'écrire `creature.x / y` en pixel et que le runtime commence à
+lire `creature.worldX / worldY`, les deux divergent immédiatement.
 
 La bascule doit donc être atomique par module : soit le module entier lit/écrit
 en WU, soit il reste entièrement en pixel. Pas de mélange intra-module.
@@ -343,8 +343,8 @@ UPDATE character
 SET "worldX" = ROUND(8 * ("positionX" - 1000) + 16 * ("positionY" - 0)),
     "worldY" = ROUND(-8 * ("positionX" - 1000) + 16 * ("positionY" - 0));
 
--- animals
-UPDATE animals
+-- creatures
+UPDATE creatures
 SET "worldX" = ROUND(8 * (x - 1000) + 16 * (y - 0)),
     "worldY" = ROUND(-8 * (x - 1000) + 16 * (y - 0));
 
@@ -382,7 +382,7 @@ peut basculer module par module et réinitialiser la DB entre les phases.
 Module par module (ordre recommandé dans le plan de migration) :
 
 1. `world.service.ts` — lecture/écriture `worldX/worldY` pour `character`
-2. `animals.service.ts` — lecture/écriture `worldX/worldY` pour `animals` et
+2. `creatures.service.ts` — lecture/écriture `worldX/worldY` pour `creatures` et
    `creature_spawn`
 3. `resources.gateway.ts` — lecture `worldX/worldY` pour `resources`
 4. `admin.gateway.ts` et `admin.service.ts` — lecture/écriture admin en WU
@@ -414,7 +414,7 @@ avant la bascule runtime.
 
 ```sql
 SELECT COUNT(*) FROM character WHERE "worldX" IS NULL OR "worldY" IS NULL;
-SELECT COUNT(*) FROM animals   WHERE "worldX" IS NULL OR "worldY" IS NULL;
+SELECT COUNT(*) FROM creatures   WHERE "worldX" IS NULL OR "worldY" IS NULL;
 SELECT COUNT(*) FROM creature_spawn WHERE "worldX" IS NULL OR "worldY" IS NULL;
 SELECT COUNT(*) FROM resources WHERE "worldX" IS NULL OR "worldY" IS NULL;
 SELECT COUNT(*) FROM respawn_point WHERE "worldX" IS NULL OR "worldY" IS NULL;
@@ -442,7 +442,7 @@ Résultat attendu : 0 lignes (tolérance de ±1 pour les arrondis).
 
 ```sql
 SELECT COUNT(*) FROM character WHERE "mapId" IS NULL OR "mapId" != 1;
-SELECT COUNT(*) FROM animals   WHERE "mapId" IS NULL OR "mapId" != 1;
+SELECT COUNT(*) FROM creatures   WHERE "mapId" IS NULL OR "mapId" != 1;
 -- etc. pour toutes les entités avec mapId
 ```
 
@@ -522,11 +522,11 @@ Avant d'ajouter `worldX / worldY / mapId` aux entités TypeORM :
 - [ADR-0001 — Système de coordonnées](adr/ADR-0001-world-coordinate-system.md)
 - [STATUS.md](../../STATUS.md)
 - Code : `src/characters/entities/character.entity.ts`
-- Code : `src/animals/entities/animal.entity.ts`
-- Code : `src/animals/entities/creature-spawn.entity.ts`
+- Code : `src/creatures/entities/creature.entity.ts`
+- Code : `src/creatures/entities/creature-spawn.entity.ts`
 - Code : `src/resources/entities/resource.entity.ts`
 - Code : `src/world/entities/respawn-point.entity.ts`
 - Code : `src/app.module.ts`
 - Code : `src/world/world.service.ts`
-- Code : `src/animals/animals.service.ts`
+- Code : `src/creatures/creatures.service.ts`
 - Code : `src/common/world-coordinates.ts`

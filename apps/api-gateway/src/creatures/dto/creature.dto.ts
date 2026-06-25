@@ -1,4 +1,4 @@
-export type AnimalDto = {
+export type CreatureDto = {
   id: string;
   templateKey: string;
   type: string;

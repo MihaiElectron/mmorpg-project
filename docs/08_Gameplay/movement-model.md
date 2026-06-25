@@ -313,7 +313,7 @@ distance reachable given `effectiveSpeed` and elapsed time. A position that
 fails validation is rejected. The server sends a correction to the originating
 client.
 
-For server-driven entities (animals, NPCs), the server computes the position
+For server-driven entities (creatures, NPCs), the server computes the position
 at each game tick. No client input is accepted for these entities. Their
 position is always authoritative.
 
@@ -407,7 +407,7 @@ before the corresponding behavior can be implemented.
 
 2. **Exact speed values in WU/s.** What is `baseSpeed` for the player?
    What are `speedMin`, `speedMax`, `patrolRadius`, and `aggroRadius` for each
-   animal template? Requires gameplay calibration after per-map origin is fixed.
+   creature template? Requires gameplay calibration after per-map origin is fixed.
 
 3. **Exact distance and range values in WU.** `RESOURCE_INTERACT_RANGE`
    and similar constants. Requires calibration.

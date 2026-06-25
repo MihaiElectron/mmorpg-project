@@ -159,7 +159,7 @@ function update(data: any): void
 function update(data: UpdatePlayerDto): void
 ```
 
-Utiliser les enums pour les états (`AnimalState`, `UserRole`, `EquipmentSlot`).
+Utiliser les enums pour les états (`CreatureState`, `UserRole`, `EquipmentSlot`).
 Ne pas utiliser de string brut là où un enum existe.
 
 ### Entités TypeORM

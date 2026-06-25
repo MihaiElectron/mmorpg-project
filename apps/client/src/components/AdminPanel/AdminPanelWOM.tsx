@@ -38,7 +38,7 @@ async function postAdmin(path: string): Promise<{ success: boolean; message: str
 type Overview = {
   templates: number;
   spawns: number;
-  activeAnimals: number;
+  activeCreatures: number;
   connectedPlayers: number;
   registeredCharacters: number;
 };
@@ -102,8 +102,8 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
     dragEvent: "admin:spawn",
     getDragPayload: (t, worldX, worldY) => ({ templateKey: t.key, worldX, worldY }),
-    getInstancesForGroup: (animals, template) =>
-      animals.filter((a) => a.templateKey === template.key),
+    getInstancesForGroup: (creatures, template) =>
+      creatures.filter((a) => a.templateKey === template.key),
     getInstanceKey:  (a) => a.id,
     getInstanceName: (a) => a.id.slice(0, 8),
     getInstanceBadge: (a) => a.state,
@@ -114,10 +114,10 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "worldX",         label: "WU X",          min: 0 },
       { key: "worldY",         label: "WU Y",          min: 0 },
     ],
-    instanceSaveEvent: "admin:update_animal",
+    instanceSaveEvent: "admin:update_creature",
     getInstanceSavePayload: (a, fields) => ({ id: a.id, fields }),
     getInstanceTpPosition: (a) => (a.worldX != null && a.worldY != null ? { worldX: a.worldX, worldY: a.worldY } : null),
-    instanceDeleteEvent: "admin:delete_animal",
+    instanceDeleteEvent: "admin:delete_creature",
     getInstanceDeletePayload: (a) => ({ id: a.id }),
     getInstanceInfoLine: (a) => {
       const parts: string[] = [];
@@ -247,7 +247,7 @@ const SECTION_CONFIGS: SectionConfig[] = [
 
 // ── Adapters WOM → formes legacy ──────────────────────────────────────────────
 
-function wosToAnimalInstances(wos: WorldObject[]): any[] {
+function wosToCreatureInstances(wos: WorldObject[]): any[] {
   return wos.map((wo) => ({
     id: wo.id,
     templateKey: wo.type,
@@ -376,7 +376,7 @@ export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
   const highlightIds: Record<string, string | null> = {
-    creatures: selectedWO?.category === "animal"   ? selectedWO.id : null,
+    creatures: selectedWO?.category === "creature"   ? selectedWO.id : null,
     resources: selectedWO?.category === "resource" ? selectedWO.id : null,
     craftingStations: selectedWO?.category === "crafting_station" ? selectedWO.id : null,
   };
@@ -422,8 +422,8 @@ export default function AdminPanelWOM() {
       fetchAdmin<any[]>("/admin/templates", token).then((data) =>
         setGroupData((prev) => ({ ...prev, creatures: data }))
       ),
-      fetchAdmin<WorldObject[]>("/admin/animals/world-objects", token).then((wos) =>
-        setInstanceData((prev) => ({ ...prev, creatures: wosToAnimalInstances(wos) }))
+      fetchAdmin<WorldObject[]>("/admin/creatures/world-objects", token).then((wos) =>
+        setInstanceData((prev) => ({ ...prev, creatures: wosToCreatureInstances(wos) }))
       ),
       // Ressources : templates dérivés du WOM, instances du WOM
       fetchAdmin<WorldObject[]>("/admin/resources/world-objects", token).then((wos) => {
@@ -462,7 +462,7 @@ export default function AdminPanelWOM() {
     const socket = getSocket();
     if (!socket) return;
 
-    function onAnimalUpdate(dto: any) {
+    function onCreatureUpdate(dto: any) {
       setInstanceData((prev) => {
         const list: any[] = prev.creatures ?? [];
         const idx = list.findIndex((a) => a.id === dto.id);
@@ -507,13 +507,13 @@ export default function AdminPanelWOM() {
     function onPlayerJoined() { setOverview((prev) => prev ? { ...prev, connectedPlayers: prev.connectedPlayers + 1 } : prev); }
     function onPlayerLeft()   { setOverview((prev) => prev ? { ...prev, connectedPlayers: Math.max(0, prev.connectedPlayers - 1) } : prev); }
 
-    socket.on('animal_update', onAnimalUpdate);
+    socket.on('creature_update', onCreatureUpdate);
     socket.on('resource_update', onResourceUpdate);
     socket.on('crafting_station_update', onCraftingStationUpdate);
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_left', onPlayerLeft);
     return () => {
-      socket.off('animal_update', onAnimalUpdate);
+      socket.off('creature_update', onCreatureUpdate);
       socket.off('resource_update', onResourceUpdate);
       socket.off('crafting_station_update', onCraftingStationUpdate);
       socket.off('player_joined', onPlayerJoined);
@@ -658,7 +658,7 @@ export default function AdminPanelWOM() {
             <div className="admin-panel__overview">
               <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.connectedPlayers}</span><span className="admin-panel__stat-label">Connectés</span></div>
               <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.registeredCharacters}</span><span className="admin-panel__stat-label">Personnages</span></div>
-              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeAnimals}</span><span className="admin-panel__stat-label">Animaux</span></div>
+              <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.activeCreatures}</span><span className="admin-panel__stat-label">Animaux</span></div>
               <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.templates}</span><span className="admin-panel__stat-label">Templates</span></div>
               <div className="admin-panel__stat"><span className="admin-panel__stat-value">{overview.spawns}</span><span className="admin-panel__stat-label">Spawns</span></div>
             </div>

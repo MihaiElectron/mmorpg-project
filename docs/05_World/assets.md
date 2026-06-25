@@ -14,7 +14,7 @@ This document describes world-facing client assets observed in `apps/client/publ
 
 It also documents the official graphic production pipeline for this project, based in `apps/client/src/assets/source`.
 
-It covers player sprites, animal sprites, resource sprites, item images used by world events, map-related static files, Phaser preload behavior, runtime usage, trust boundaries, the production pipeline workflow, the official terrain tile geometry specification, and known production gaps.
+It covers player sprites, creature sprites, resource sprites, item images used by world events, map-related static files, Phaser preload behavior, runtime usage, trust boundaries, the production pipeline workflow, the official terrain tile geometry specification, and known production gaps.
 
 It does not treat client assets as gameplay authority.
 
@@ -36,7 +36,7 @@ These files are client-side resources. They can help the official client look co
 Observed asset groups:
 
 - Player sprites are stored under `apps/client/public/assets/player`.
-- Animal sprites are stored under `apps/client/public/assets/bestiary`.
+- Creature sprites are stored under `apps/client/public/assets/bestiary`.
 - Resource and static world sprites are stored under `apps/client/public/assets/sprites`.
 - Item images are stored under `apps/client/public/assets/images/items`.
 - Map-related files are stored under `apps/client/public/assets/maps`.
@@ -49,7 +49,7 @@ The active world scene mainly renders direct Phaser objects. Full tilemap render
 | Asset category | Location | Used by | Purpose | Status |
 |---|---|---|---|---|
 | Player sprites | `apps/client/public/assets/player/player_male_32x64.png`, `apps/client/public/assets/player/player_female_32x64.png` | `PreloadScene`, `WorldScene`, `Player` | Render local and remote player sprites by sex | Implemented |
-| Animal sprites | `apps/client/public/assets/bestiary/turkey_32.png`, `apps/client/public/assets/bestiary/turkey_64.png` | `PreloadScene` loads `turkey_32.png`; `WorldScene` uses texture key `turkey` or fallback | Render observed animal data; `turkey_64.png` active use is Not verified | Implemented / Not verified |
+| Creature sprites | `apps/client/public/assets/bestiary/turkey_32.png`, `apps/client/public/assets/bestiary/turkey_64.png` | `PreloadScene` loads `turkey_32.png`; `WorldScene` uses texture key `turkey` or fallback | Render observed creature data; `turkey_64.png` active use is Not verified | Implemented / Not verified |
 | Resource sprites | `apps/client/public/assets/sprites/dead_tree.png` | `PreloadScene`, `WorldScene.renderResources` | Render resource targets and fallback resource texture | Implemented |
 | Static world sprite | `apps/client/public/assets/sprites/fire_camp.png` | `PreloadScene`, `WorldScene.create` | Render the campfire at observed coordinates | Implemented |
 | Item images | `apps/client/public/assets/images/items/*.png` | `PreloadScene` loads `wooden_stick`; world loot update paths may reference item image fields | Display item or loot images in client UI/cache paths | Implemented / Not verified |
@@ -81,11 +81,11 @@ The active world scene mainly renders direct Phaser objects. Full tilemap render
 - `turkey` from `/assets/bestiary/turkey_32.png`;
 - `wooden_stick` from `/assets/images/items/wooden_stick.png`.
 
-Preloading of all images under `public/assets` is Not verified. Fallback behavior for missing assets is Not verified except for texture-key fallbacks observed in `WorldScene` for resources and animals.
+Preloading of all images under `public/assets` is Not verified. Fallback behavior for missing assets is Not verified except for texture-key fallbacks observed in `WorldScene` for resources and creatures.
 
 ## Tilesets and sprites
 
-Player, animal, resource, item, and campfire images are used as direct Phaser image or sprite textures in the active world path.
+Player, creature, resource, item, and campfire images are used as direct Phaser image or sprite textures in the active world path.
 
 Tileset-related files are present:
 
@@ -207,7 +207,7 @@ The full geometry reference is in `apps/client/src/assets/source/templates/guide
 | Remote player rendering | Player sprites | `WorldScene` creates tinted remote sprites and name labels | Visual only; remote player data comes from server events | Implemented |
 | Campfire rendering | `fire_camp` texture | `WorldScene` creates a static image at observed coordinates | No gameplay authority observed | Implemented |
 | Resource rendering | Resource type texture or `dead_tree` fallback | `WorldScene.renderResources` creates interactive resource images | Resource availability and loot must remain server-side | Implemented |
-| Animal rendering | Animal type texture or `turkey` fallback | `WorldScene.upsertAnimal` creates and updates animal images | Combat, health, cooldowns, and position-sensitive effects must remain server-side | Implemented |
+| Creature rendering | Creature type texture or `turkey` fallback | `WorldScene.upsertCreature` creates and updates creature images | Combat, health, cooldowns, and position-sensitive effects must remain server-side | Implemented |
 | Loot and inventory display | Item image path from server event or local path fallback | `resource_loot` and `inventory_update` update local display cache | Display only; inventory authority is server-side | Implemented / Not verified |
 | Map display | `world.json`, map WebP, tileset descriptors | Active map rendering was not observed | Client map files are not authoritative | Not verified |
 | Collision display or pathing | Collision JSON and pathfinding helper | Helper code exists; active scene wiring is Not verified | Client collision files must not grant movement rights | Not verified |
@@ -226,15 +226,15 @@ Client-side visual fallbacks are acceptable for display, but they must not becom
 
 The active preload list is small. The inspected code does not show an atlas pipeline, lazy loading by area, asset bundles, production CDN cache strategy, texture memory budget, or complete size optimization.
 
-Rendering uses individual Phaser images and sprites for resources, animals, remote players, labels, and bars. Performance with large entity counts or large maps is Not verified.
+Rendering uses individual Phaser images and sprites for resources, creatures, remote players, labels, and bars. Performance with large entity counts or large maps is Not verified.
 
 ## Verified behavior
 
 - Static world assets exist under `apps/client/public/assets`.
 - `PreloadScene` loads six named image textures from public asset paths.
-- `WorldScene` renders the local player, remote players, resources, animals, and campfire with Phaser objects.
+- `WorldScene` renders the local player, remote players, resources, creatures, and campfire with Phaser objects.
 - `WorldScene` falls back to `dead_tree` when a resource texture is missing.
-- `WorldScene` falls back to `turkey` when an animal texture is missing.
+- `WorldScene` falls back to `turkey` when an creature texture is missing.
 - Loot-related client updates can reference item image paths.
 - Map and collision files exist in the repository.
 - Active tilemap loading in `WorldScene` was not verified.

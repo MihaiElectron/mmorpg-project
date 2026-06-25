@@ -13,7 +13,7 @@ React monté dans l'interface joueur, et un module NestJS dédié côté backend
 ### 1.1 Backend (`apps/api-gateway/src/admin/`)
 
 ```
-admin.module.ts        — Câblage NestJS (TypeORM, AnimalsModule, WorldModule, CommonModule)
+admin.module.ts        — Câblage NestJS (TypeORM, CreaturesModule, WorldModule, CommonModule)
 admin.controller.ts    — Routes HTTP REST sécurisées (JwtAuthGuard + RolesGuard ADMIN)
 admin.service.ts       — Logique métier, agrégation, conversion de coordonnées
 admin.gateway.ts       — Gateway WebSocket : 11 événements Socket.IO admin:*
@@ -79,7 +79,7 @@ connectés, personnages enregistrés.
 
 ### 2.6 Mises à jour temps réel
 
-- Écoute de `animal_update`, `resource_update`, `player_joined`, `player_left` pour
+- Écoute de `creature_update`, `resource_update`, `player_joined`, `player_left` pour
   mettre à jour le panneau sans rechargement.
 
 ---
@@ -146,8 +146,8 @@ passe par la scène Phaser principale (partagée avec le joueur).
 | Dépendance | Usage |
 |---|---|
 | `WorldService` | Nombre de joueurs connectés, téléportation |
-| `AnimalsService` | Spawn, respawn, état des animaux |
-| TypeORM repositories | CreatureTemplate, CreatureSpawn, Animal, Character, Resource, ResourceTemplate |
+| `CreaturesService` | Spawn, respawn, état des animaux |
+| TypeORM repositories | CreatureTemplate, CreatureSpawn, Creature, Character, Resource, ResourceTemplate |
 | Socket.IO server | `server.emit()` broadcast sur toutes les actions |
 | `isoScreenToWorldWU()` | Conversion coordonnées écran → WU |
 
@@ -276,13 +276,13 @@ admin-map.service.ts      (nouveau — edition tilemap, décor)
 | **M3 — Pagination serveur** | AdminController | Aucune | Haute |
 | **M4 — Overlay chunks** | WorldScene (Phaser) | Module overlay Phaser | Moyenne |
 | **M5 — Overlay collisions** | collisionGrid WorldScene | Module overlay Phaser | Moyenne |
-| **M6 — Overlay aggro/respawn** | AnimalsService, RespawnPoint repo | Admin debug endpoint | Moyenne |
+| **M6 — Overlay aggro/respawn** | CreaturesService, RespawnPoint repo | Admin debug endpoint | Moyenne |
 | **M7 — Overlay pathfinding** | pathfinder WorldScene | Module overlay Phaser | Moyenne |
-| **M8 — Overlay IA states** | AnimalsService (in-memory state) | Flux WebSocket debug | Basse |
+| **M8 — Overlay IA states** | CreaturesService (in-memory state) | Flux WebSocket debug | Basse |
 | **M9 — Audit log** | AdminGateway | Table `admin_log` ou logger structuré | Basse |
 | **M10 — Gestion users** | User repo, UserRole | Nouvel endpoint + section UI | Basse |
 | **M11 — Map editor** | Tilemap Phaser, asset pipeline | Éditeur de tiles Phaser | Basse |
-| **M12 — Gameplay tools** | AnimalsService, WorldService | Simulation engine | Très basse |
+| **M12 — Gameplay tools** | CreaturesService, WorldService | Simulation engine | Très basse |
 
 ---
 
@@ -294,7 +294,7 @@ admin-map.service.ts      (nouveau — edition tilemap, décor)
    indépendamment, ne plus dépendre de `client.data.role` seul. Bloquant pour
    la sécurité en développement partagé.
 
-2. **M3 — Pagination serveur** : les endpoints `/admin/animals`, `/admin/resources`,
+2. **M3 — Pagination serveur** : les endpoints `/admin/creatures`, `/admin/resources`,
    `/admin/characters` doivent accepter `?page=&limit=` et renvoyer un total.
    Bloquant dès que les datasets grossissent.
 
@@ -319,7 +319,7 @@ admin-map.service.ts      (nouveau — edition tilemap, décor)
 ### Phase C — Monitoring
 
 8. **M8 — Overlay états IA** : afficher l'état FSM (`alive/fighting/escaping/dead`)
-   de chaque animal sur le sprite, configurable depuis l'onglet Debug.
+   de chaque creature sur le sprite, configurable depuis l'onglet Debug.
 
 9. **M9 — Audit log** : enregistrer chaque action admin (événement, payload,
    résultat, timestamp, userId) dans un log consultable dans l'onglet Monitoring.

@@ -48,7 +48,7 @@ Chunks are therefore a future design area or a known gap, not an implemented gam
 | Server player state | `WorldService` stores connected players in a memory map keyed by socket id | Chunk membership per player is Not verified | Implemented / Not verified |
 | Realtime movement | `player_move` updates connected-player memory and broadcasts movement | Room-scoped or chunk-scoped movement emission is Not verified | Implemented / Not verified |
 | Resource updates | Resource updates are emitted globally where observed | Chunk-scoped resource visibility is Not verified | Implemented / Not verified |
-| Animal updates | Animal updates are emitted globally where observed | Chunk-scoped animal visibility is Not verified | Implemented / Not verified |
+| Creature updates | Creature updates are emitted globally where observed | Chunk-scoped creature visibility is Not verified | Implemented / Not verified |
 | Position persistence | Character position is persisted on disconnect and admin teleport | Persistence grouped by chunk is Not verified | Implemented / Not verified |
 | Interest management | No chunk or room filter was observed for ordinary world updates | Interest management is Not verified | Not verified |
 
@@ -70,7 +70,7 @@ Chunks are therefore a future design area or a known gap, not an implemented gam
 
 | Responsibility | Client behavior observed | Server authority implication | Status |
 |---|---|---|---|
-| Render current world view | Phaser renders direct sprites, images, labels, bars, resources, animals, and remote players | Rendering does not decide chunk access | Implemented |
+| Render current world view | Phaser renders direct sprites, images, labels, bars, resources, creatures, and remote players | Rendering does not decide chunk access | Implemented |
 | Report movement | Phaser emits rounded local position and direction | Server must validate sensitive movement and future chunk transitions | Implemented / Not verified |
 | Use local path helpers | Client pathfinding helper exists and expects a grid | Client pathing cannot prove allowed movement | Not verified |
 | Load map or chunk data | Static map files and helpers exist | Loading a client file cannot grant rights or visibility | Not verified |
@@ -81,18 +81,18 @@ Chunks are therefore a future design area or a known gap, not an implemented gam
 
 | Responsibility | Server behavior observed | Missing or unverified behavior | Status |
 |---|---|---|---|
-| Authenticate sockets | World, resource, and animal gateways authenticate observed connections | Independent admin connection authentication remains outside this document | Implemented / Not verified |
+| Authenticate sockets | World, resource, and creature gateways authenticate observed connections | Independent admin connection authentication remains outside this document | Implemented / Not verified |
 | Join player to world | Server checks character ownership before joining | Chunk assignment during join is Not verified | Implemented / Not verified |
 | Store live positions | Connected-player memory stores live `x` and `y` | Chunk membership, speed checks, and collision checks are Not verified | Implemented / Not verified |
 | Broadcast movement | Movement is broadcast to other sockets | Room, zone, or chunk broadcast filtering is Not verified | Implemented / Not verified |
 | Persist position | Position is persisted on disconnect and admin teleport | Chunk-based persistence is Not verified | Implemented / Not verified |
 | Validate resource interactions | Resource gathering checks joined player, range, state, and movement during gathering | Chunk authority for resources is Not verified | Implemented / Not verified |
-| Validate animal interactions | Animal attack and AI logic use server-side positions and ranges | Chunk authority for animals is Not verified | Implemented / Not verified |
+| Validate creature interactions | Creature attack and AI logic use server-side positions and ranges | Chunk authority for creatures is Not verified | Implemented / Not verified |
 | Enforce chunk transitions | No server-side chunk transition validation observed | Anti-teleport and inter-chunk validation are Not verified | Not verified |
 
 ## Socket.IO scope
 
-All observed gateways use the default Socket.IO namespace. Movement uses `client.broadcast.emit`. Resource and animal updates use global emission in observed paths. Targeted events use socket ids for damage, teleport, or respawn.
+All observed gateways use the default Socket.IO namespace. Movement uses `client.broadcast.emit`. Resource and creature updates use global emission in observed paths. Targeted events use socket ids for damage, teleport, or respawn.
 
 No Socket.IO rooms, zone channels, chunk rooms, or room join/leave flow was observed for normal world visibility.
 
@@ -100,7 +100,7 @@ This means chunks are not currently a verified Socket.IO scope boundary. Broadca
 
 ## Persistence and loading
 
-Character positions are persisted during disconnect and admin teleport paths. Respawn points, resources, animals, creature templates, and creature spawns exist as server-side world data.
+Character positions are persisted during disconnect and admin teleport paths. Respawn points, resources, creatures, creature templates, and creature spawns exist as server-side world data.
 
 No persisted chunk table, chunk file index, per-chunk entity storage policy, dynamic chunk load/unload lifecycle, or chunk recovery strategy was observed.
 
@@ -136,7 +136,7 @@ Without verified server chunk implementation, chunks remain a known limitation. 
 - The server stores connected players in memory by socket id.
 - The server updates live player position from numeric movement payloads.
 - The server broadcasts movement to other sockets.
-- Resource and animal systems use server-side positions for range-sensitive interactions.
+- Resource and creature systems use server-side positions for range-sensitive interactions.
 - No complete chunk system was verified.
 - No Socket.IO chunk rooms were verified.
 
@@ -208,7 +208,7 @@ Current chunk performance, room performance, sharding, and multi-instance readin
 - Should the project introduce server-owned chunks, zones, or both?
 - What chunk size should be used if the current `2000` by `2000` world grows?
 - Should Socket.IO rooms follow chunk ids, larger zones, or gameplay-interest groups?
-- Should resources and animals be loaded by chunk or by a different spatial index?
+- Should resources and creatures be loaded by chunk or by a different spatial index?
 - How should movement be corrected when a client reports a forbidden cross-boundary position?
 - What metrics are required before choosing a chunk size?
 

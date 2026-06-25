@@ -117,7 +117,7 @@ React 19 + Vite
 `window.__GLOBAL_*_STORE__` pour survivre aux montages/démontages Phaser.
 
 **Socket.IO** [CONFIRMÉ] : socket unique créé dans `WorldPage.jsx`, attaché à
-`window.game.socket`. Les trois gateways backend (World, Resources, Animals)
+`window.game.socket`. Les trois gateways backend (World, Resources, Creatures)
 partagent ce socket.
 
 ### Backend
@@ -130,7 +130,7 @@ NestJS 11 (apps/api-gateway/src/)
 ├── users/                — CRUD utilisateurs
 ├── characters/           — CRUD personnages, équipement
 ├── world/                — Gateway WebSocket, position, respawn, loot
-├── animals/              — IA, combat, patrol, respawn
+├── creatures/              — IA, combat, patrol, respawn
 ├── resources/            — Récolte, inventaire, range check
 ├── inventory/            — Service/controller inventaire
 ├── items/                — CRUD items [MODULE NON IMPORTÉ]
@@ -161,9 +161,9 @@ Trois gateways indépendantes sur le même socket :
 | Gateway | Événements entrants | Événements sortants |
 |---|---|---|
 | `WorldGateway` | `join_world`, `player_move`, `respawn_request` | `world_joined`, `player_joined`, `player_moved`, `player_left`, `current_players`, `character_damaged`, `character_respawn`, `character_teleport` |
-| `AnimalsGateway` | `attack_animal`, `get_animals` | `animal_update`, `animal_list` |
+| `CreaturesGateway` | `attack_creature`, `get_creatures` | `creature_update`, `creature_list` |
 | `ResourcesGateway` | `interact_resource`, `stop_gather` | `gather_start`, `gather_tick`, `gather_complete`, `gather_failed`, `inventory_update`, `resource_update`, `resource_loot` |
-| `AdminGateway` | `admin:spawn`, `admin:teleport`, `admin:update_template`, `admin:move_animal`, `admin:respawn_all`, `admin:update_animal`, `admin:update_resource_template`, `admin:spawn_resource`, `admin:update_character`, `admin:update_resource`, `admin:delete_animal`, `admin:delete_resource` | `animal_update`, `resource_update`, `category:updated` |
+| `AdminGateway` | `admin:spawn`, `admin:teleport`, `admin:update_template`, `admin:move_creature`, `admin:respawn_all`, `admin:update_creature`, `admin:update_resource_template`, `admin:spawn_resource`, `admin:update_character`, `admin:update_resource`, `admin:delete_creature`, `admin:delete_resource` | `creature_update`, `resource_update`, `category:updated` |
 
 **Diffusion** [CONFIRMÉ] : `server.emit()` broadcast global à tous les clients
 connectés. Pas de rooms, pas de zones. Acceptable en prototype, dette de
@@ -184,7 +184,7 @@ Tables actives :
 | `item` | Item | Entité complète, controller injoignable |
 | `resources` | Resource | Type en string (pas enum) |
 | `resource_template` | ResourceTemplate | defaultRemainingLoots = 9999 |
-| `animals` | Animal | State enum + double colonnes position |
+| `creatures` | Creature | State enum + double colonnes position |
 | `creature_template` | CreatureTemplate | Paramètres IA editables |
 | `creature_spawn` | CreatureSpawn | Colonnes WU nullable (migration partielle) |
 | `respawn_point` | RespawnPoint | Radius en pixels (non migré) |
@@ -277,7 +277,7 @@ skills, classes de personnage.
 
 ---
 
-### Créatures / IA (AnimalsService / AnimalsGateway)
+### Créatures / IA (CreaturesService / CreaturesGateway)
 
 **Rôle :** IA des animaux, patrol, combat, fuite, respawn.
 
@@ -297,10 +297,10 @@ pathfinding serveur, comportements scriptés, loot sur mort.
 
 ### Combat
 
-**Rôle :** Résolution des dégâts joueur ↔ animal.
+**Rôle :** Résolution des dégâts joueur ↔ creature.
 
 **Avancement :** Basique mais fonctionnel. Formule : `max(attaque − défense, 1)`.
-Auto-attaque animaux implémentée. Riposte (player → animal) implémentée. Pas
+Auto-attaque animaux implémentée. Riposte (player → creature) implémentée. Pas
 de système de sorts, buffs, débuffs.
 
 **Qualité :** Prototype. Formule hardcodée. Aucun test de combat end-to-end.
@@ -459,7 +459,7 @@ _Ce qui est confirmé fonctionnel dans le code._
 - Profondeur isométrique (depth sorting par Y).
 - Récolte de ressources avec timer serveur et anti-cheat distance WU.
 - IA animaux : patrouille, aggro, fuite, auto-attaque, respawn (20 s).
-- Combat joueur contre animal : dégâts, mort, respawn joueur.
+- Combat joueur contre creature : dégâts, mort, respawn joueur.
 - Barre de vie flottante sur sprites (joueur et animaux).
 - Panneau personnage : portrait, 16 slots d'équipement, inventaire.
 - Équipement / déséquipement d'items (transactionnel).
@@ -529,7 +529,7 @@ _Systèmes non existants dans le code source._
 
 - **Validation serveur des déplacements** (ADR-0003 proposé non implémenté) :
   pas de borne de vitesse, pas de walkability check, pas de correction client.
-- **Système de loot sur mort d'animal** : LootService existe pour les
+- **Système de loot sur mort d'creature** : LootService existe pour les
   ressources, rien pour les animaux.
 - **Respawn de ressources** : les ressources épuisées restent à `remainingLoots = 0`
   indéfiniment.
@@ -576,7 +576,7 @@ personnage ne varient jamais selon l'équipement. L'interface laisse croire
 que le calcul existe.
 
 **DT-04 — Timers de respawn en mémoire**
-Les `setTimeout` de respawn des animaux (`AnimalsService`) sont en mémoire.
+Les `setTimeout` de respawn des animaux (`CreaturesService`) sont en mémoire.
 Tout redémarrage du serveur les perd. Les animaux tués restent morts après
 redémarrage.
 
@@ -589,7 +589,7 @@ migrations TypeORM avant tout environnement partagé.
 
 ### Important (à traiter dans les prochains chantiers)
 
-**DT-06 — Constantes magiques dans AnimalsService (15+)**
+**DT-06 — Constantes magiques dans CreaturesService (15+)**
 `MELEE_RANGE_WU = 960`, `PATROL_TICK_MS = 200`, `AUTO_ATTACK_COOLDOWN_MS = 1500`,
 `LEASH_MULTIPLIER = 2`, etc. Non configurables, non documentés, impossibles à
 calibrer depuis le panneau admin.
@@ -808,7 +808,7 @@ de `client.data.role` seul.
 ### Phase 2 — DevTools (valeur immédiate pour le développement)
 
 **P2.1 — Pagination serveur admin**
-Ajouter `?page=&limit=` sur `/admin/animals`, `/admin/resources`,
+Ajouter `?page=&limit=` sur `/admin/creatures`, `/admin/resources`,
 `/admin/characters`.
 
 **P2.2 — Spawns et respawn points éditables**
@@ -823,7 +823,7 @@ Chunks (grille 64×64), collisions (heatmap), zones d'aggro et respawn
 
 ### Phase 3 — Loot et progression
 
-**P3.1 — Loot sur mort d'animal**
+**P3.1 — Loot sur mort d'creature**
 Table de loot configurable par template (`CreatureTemplate.lootTable`), drop
 aléatoire, ajout à l'inventaire.
 
@@ -854,7 +854,7 @@ Brancher `MapLoader.js` dans `WorldScene`.
 ### Phase 5 — Gameplay
 
 **P5.1 — Scripting IA / comportements configurables**
-Remplacer les 15 constantes magiques d'`AnimalsService` par des paramètres
+Remplacer les 15 constantes magiques d'`CreaturesService` par des paramètres
 de template éditables depuis l'admin.
 
 **P5.2 — Combat enrichi**
@@ -872,7 +872,7 @@ P1.1 (ItemModule)       → P1.2 (stats) → P1.3 (inventaire)
 P1.4 (Auth WS admin)    → P2.1 (pagination) → P2.2 (spawns)
 P2.2 (spawns)           → P2.3 (overlays)
 P4.1 (grille serveur)   → P4.2 (validation mouvement) → P5.3 (rooms)
-P3.1 (loot animal)      → P3.3 (exp/niveaux)
+P3.1 (loot creature)      → P3.3 (exp/niveaux)
 P4.3 (tilemap prod)     → P4.1 (grille collision depuis tilemap)
 ```
 
@@ -918,7 +918,7 @@ P4.3 (tilemap prod)     → P4.1 (grille collision depuis tilemap)
 
 ### Ce qui devra probablement être réécrit un jour
 
-- **`AnimalsService`** : la boucle IA dans un `setInterval` NestJS avec état
+- **`CreaturesService`** : la boucle IA dans un `setInterval` NestJS avec état
   in-memory atteindra ses limites avec 100+ animaux ou une logique plus
   complexe. Un système d'entités (ECS) ou des workers dédiés seront nécessaires.
 - **Broadcast global** : `server.emit` sera remplacé par un système de

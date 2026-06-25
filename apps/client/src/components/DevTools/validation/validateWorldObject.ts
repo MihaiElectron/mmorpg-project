@@ -94,13 +94,13 @@ function validateResource(obj: WorldObject, out: Diagnostic[]): void {
   }
 }
 
-// ── Règles spécifiques à la catégorie animal ──────────────────────────────────
+// ── Règles spécifiques à la catégorie creature ──────────────────────────────────
 
-function validateAnimal(obj: WorldObject, out: Diagnostic[]): void {
+function validateCreature(obj: WorldObject, out: Diagnostic[]): void {
   if (obj.health == null || obj.health < 0) {
     out.push({
       severity: "error",
-      code: "ANIMAL_INVALID_HEALTH",
+      code: "CREATURE_INVALID_HEALTH",
       message: `health invalide (${obj.health ?? "absent"})`,
     });
   }
@@ -108,16 +108,16 @@ function validateAnimal(obj: WorldObject, out: Diagnostic[]): void {
   if (obj.state === "dead" && obj.health != null && obj.health > 0) {
     out.push({
       severity: "warning",
-      code: "ANIMAL_DEAD_WITH_HP",
-      message: `animal dead mais health = ${obj.health}`,
+      code: "CREATURE_DEAD_WITH_HP",
+      message: `creature dead mais health = ${obj.health}`,
     });
   }
 
   if ((obj.state === "alive" || obj.state === "fighting") && obj.health === 0) {
     out.push({
       severity: "warning",
-      code: "ANIMAL_ALIVE_NO_HP",
-      message: `animal ${obj.state} mais health = 0`,
+      code: "CREATURE_ALIVE_NO_HP",
+      message: `creature ${obj.state} mais health = 0`,
     });
   }
 }
@@ -159,7 +159,7 @@ function validateCreatureSpawn(obj: WorldObject, out: Diagnostic[]): void {
 
 const CATEGORY_VALIDATORS: Record<string, (obj: WorldObject, out: Diagnostic[]) => void> = {
   resource: validateResource,
-  animal: validateAnimal,
+  creature: validateCreature,
   creature_spawn: validateCreatureSpawn,
 };
 

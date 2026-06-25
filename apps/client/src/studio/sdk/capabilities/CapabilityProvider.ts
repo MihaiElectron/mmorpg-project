@@ -48,7 +48,7 @@ export function isCommandProvider(p: CapabilityProvider): p is CommandProvider {
  * Décrit l'overlay sans contenir de logique de rendu — le rendu reste dans Phaser/WorldScene.
  */
 export interface StudioOverlayDefinition {
-  /** Identifiant unique : "resource.overlay", "animal.overlay", etc. */
+  /** Identifiant unique : "resource.overlay", "creature.overlay", etc. */
   readonly id: string;
   /** Libellé affiché dans l'UI (bouton, légende). */
   readonly label: string;

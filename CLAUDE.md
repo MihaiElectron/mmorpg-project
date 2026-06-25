@@ -37,7 +37,7 @@ Tables metier attendues selon l'etat actuel:
 - `inventory`: inventaires des personnages.
 - `item`: objets.
 - `resources`: ressources de recolte sur la map.
-- `animals`: animaux chassables.
+- `creatures`: animaux chassables.
 
 Toute evolution de schema doit rester explicite, prudente et justifiee. Pour une
 approche production, privilegier des migrations TypeORM plutot que
@@ -83,7 +83,7 @@ Infrastructure, depuis la racine:
 - Trois gateways Socket.IO independantes coexistent sur le namespace par
   defaut: `WorldGateway` (deplacement des joueurs, gathering avec timer
   serveur, anti-cheat par distance), `ResourcesGateway` (recolte instantanee
-  des ressources) et `AnimalsGateway` (combat contre les animaux). Elles ne
+  des ressources) et `CreaturesGateway` (combat contre les animaux). Elles ne
   sont pas isolees par room: `server.emit` broadcast a tous les clients
   connectes, a surveiller en montee en charge (cf. Performance Temps Reel).
 - `WorldService.checkInteraction` (verification de distance joueur/objet) est

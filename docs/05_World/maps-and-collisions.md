@@ -31,7 +31,7 @@ The current repository contains map-related files and helper code, but a complet
 
 ## Map overview
 
-The active `WorldScene` renders a direct Phaser scene with a green background, a `2000` by `2000` world bound, a campfire image, player sprites, remote player sprites, resources, animals, labels, and bars.
+The active `WorldScene` renders a direct Phaser scene with a green background, a `2000` by `2000` world bound, a campfire image, player sprites, remote player sprites, resources, creatures, labels, and bars.
 
 `terrain_pipeline_test.tmj` is the first active tilemap. It is a 64×64 isometric grass map rendered in `WorldScene` with `TILEMAP_TEST_OFFSET_X = 936` to center the north vertex of the isometric diamond at world x=1000. This offset is a **temporary display alignment for the terrain pipeline test**. It does not represent a final world coordinate system.
 
@@ -66,7 +66,7 @@ Other static map files exist under `apps/client/public/assets/maps`, and helper 
 
 ## Client loading
 
-`PreloadScene` loads player, resource, animal, campfire, and item images. It does not load `world.json`, `Grass_03_64w.webp`, `collisions.json`, or tileset descriptors in the inspected active code.
+`PreloadScene` loads player, resource, creature, campfire, and item images. It does not load `world.json`, `Grass_03_64w.webp`, `collisions.json`, or tileset descriptors in the inspected active code.
 
 `MapLoader` can create a Phaser tilemap from a cache key, add a tileset named `tiles`, apply collision indexes from local `collisions.json`, and create layers by name. Active use of `MapLoader` from `WorldScene` was Not verified.
 
@@ -89,7 +89,7 @@ These behaviors are client-side only. They can improve local feel, but they do n
 
 The server verifies ownership during world join and uses persisted character position when available. It stores live player position in server memory after `player_move` events and persists position on disconnect and admin teleport.
 
-Resource interaction checks use server-side connected-player position, resource position, range, resource state, and movement tolerance during gathering. Animal attack and animal AI use server-side connected-player position for range and combat behavior.
+Resource interaction checks use server-side connected-player position, resource position, range, resource state, and movement tolerance during gathering. Creature attack and creature AI use server-side connected-player position for range and combat behavior.
 
 No authoritative server map, server collision grid, blocked-zone model, or server-side tile property validation was verified.
 
@@ -103,7 +103,7 @@ No authoritative server map, server collision grid, blocked-zone model, or serve
 | Click pathing | Client may use pathfinder if present, otherwise direct target movement | No path acceptance validation was observed | Path validity is client-only | Not verified |
 | Drag steering | Client moves directly toward pointer | Server movement correction was not observed | Direct movement validity is Not verified | Not verified |
 | Resource range | Client selects visible resource target | Server checks joined player position and resource range | Collision between player and resource is Not verified | Implemented / Not verified |
-| Animal attack range | Client emits attack target id during auto-attack | Server checks character, target, cooldown, health, and range | Collision and line-of-sight are Not verified | Implemented / Not verified |
+| Creature attack range | Client emits attack target id during auto-attack | Server checks character, target, cooldown, health, and range | Collision and line-of-sight are Not verified | Implemented / Not verified |
 | Admin teleport | Client admin command can submit coordinates | Server role check and target lookup paths exist; destination policy is Not verified | Collision or forbidden destination policy is Not verified | Implemented / Not verified |
 
 ## Mobility rules
@@ -155,7 +155,7 @@ Performance of a large map, active tile layers, collision layers, pathfinding gr
 - `PlayerController` can fall back to direct movement when no pathfinder exists.
 - The server checks ownership on world join.
 - The server stores live player positions from movement payloads.
-- Resource and animal systems use server-side positions for range checks.
+- Resource and creature systems use server-side positions for range checks.
 
 ## Known gaps
 

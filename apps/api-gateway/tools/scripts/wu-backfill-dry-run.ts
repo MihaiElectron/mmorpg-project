@@ -24,9 +24,9 @@ try {
 
 import { Character } from '../../src/characters/entities/character.entity';
 import { CharacterEquipment } from '../../src/characters/entities/character-equipment.entity';
-import { Animal } from '../../src/animals/entities/animal.entity';
-import { CreatureSpawn } from '../../src/animals/entities/creature-spawn.entity';
-import { CreatureTemplate } from '../../src/animals/entities/creature-template.entity';
+import { Creature } from '../../src/creatures/entities/creature.entity';
+import { CreatureSpawn } from '../../src/creatures/entities/creature-spawn.entity';
+import { CreatureTemplate } from '../../src/creatures/entities/creature-template.entity';
 import { Resource } from '../../src/resources/entities/resource.entity';
 import { RespawnPoint } from '../../src/world/entities/respawn-point.entity';
 import { User } from '../../src/users/entities/user.entity';
@@ -65,7 +65,7 @@ function buildDataSource(): DataSource {
     // même celles qu'on ne lit pas directement.
     entities: [
       Character, CharacterEquipment,
-      Animal, CreatureSpawn, CreatureTemplate,
+      Creature, CreatureSpawn, CreatureTemplate,
       Resource,
       RespawnPoint,
       User,
@@ -88,9 +88,9 @@ async function main() {
 
   console.log('[wu-dry-run] Lecture des entités…\n');
 
-  const [characters, animals, resources, spawns, respawnPoints] = await Promise.all([
+  const [characters, creatures, resources, spawns, respawnPoints] = await Promise.all([
     ds.getRepository(Character).find(),
-    ds.getRepository(Animal).find(),
+    ds.getRepository(Creature).find(),
     ds.getRepository(Resource).find(),
     ds.getRepository(CreatureSpawn).find(),
     ds.getRepository(RespawnPoint).find(),
@@ -112,10 +112,10 @@ async function main() {
     ),
 
     generateEntityReport(
-      'animal',
-      animals as unknown as PositionedRecord[],
+      'creature',
+      creatures as unknown as PositionedRecord[],
       (r) => {
-        const a = r as unknown as Animal;
+        const a = r as unknown as Creature;
         return { x: a.x, y: a.y };
       },
       3,

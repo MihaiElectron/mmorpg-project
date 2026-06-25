@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CreatureTemplate } from '../animals/entities/creature-template.entity';
-import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
-import { Animal } from '../animals/entities/animal.entity';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
+import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
+import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -14,7 +14,7 @@ import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 import { CraftingStationTemplate } from '../crafting/entities/crafting-station-template.entity';
 import { CraftingStation } from '../crafting/entities/crafting-station.entity';
 import { Item } from '../items/entities/item.entity';
-import { AnimalsModule } from '../animals/animals.module';
+import { CreaturesModule } from '../creatures/creatures.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { WorldModule } from '../world/world.module';
 import { CommonModule } from '../common/common.module';
@@ -25,14 +25,14 @@ import { AdminGateway } from './admin.gateway';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      CreatureTemplate, CreatureSpawn, Animal, Character,
+      CreatureTemplate, CreatureSpawn, Creature, Character,
       Resource, ResourceTemplate,
       SkillDefinition, PlayerSkill,
       CraftingRecipe, CraftingIngredient, CraftingResult,
       CraftingStationTemplate, CraftingStation,
       Item,
     ]),
-    AnimalsModule,
+    CreaturesModule,
     ResourcesModule,
     WorldModule,
     CommonModule,

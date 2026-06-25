@@ -72,11 +72,11 @@ fondamentale d'un objet — ce qu'il est, pas ce qu'il fait.
 Un objet avec une identité, une position et un cycle de vie, qui participe
 directement au gameplay.
 
-Sous-types : Player, Animal, NPC, Resource, Building, Effect.
+Sous-types : Player, Creature, NPC, Resource, Building, Effect.
 
 Référence complète : `docs/08_Gameplay/entity-model.md`.
 
-Un Animal de type Loup est un World Object de catégorie Entity, sous-type Animal.
+Un Creature de type Loup est un World Object de catégorie Entity, sous-type Creature.
 Sa nature spécifique (Loup) n'est pas visible du Studio — seulement ses capacités.
 
 ### Area
@@ -232,7 +232,7 @@ Format recommandé : `{ kind: "entity" | "area" | "tile" | "chunk" | "trigger" |
 ### type
 
 La catégorie du World Object (Entity, Area, Tile, Chunk…) et son sous-type
-spécifique (Animal/Loup, Resource/DeadTree, Chunk/Grassland).
+spécifique (Creature/Loup, Resource/DeadTree, Chunk/Grassland).
 
 Le sous-type est une information de classification. Il ne définit pas le
 comportement — les capacités s'en chargent.
@@ -304,7 +304,7 @@ Studio) : le client, mais ils ne sont pas de vrais World Objects.
 Comment l'objet apparaît, évolue et disparaît.
 
 Exemples :
-- Entity/Animal : spawné par un Spawn Point, vivant, combattant, mort, respawné.
+- Entity/Creature : spawné par un Spawn Point, vivant, combattant, mort, respawné.
 - Resource : disponible, en cours de récolte, épuisée, en respawn.
 - Chunk : non chargé, en cours de chargement, chargé, en cours de déchargement.
 - Trigger : inactif, écoute, déclenché, cooldown.
@@ -328,17 +328,17 @@ plusieurs. Ajouter un nouveau type d'objet = définir ses capacités.
 |---|---|---|
 | `transform` | Position WU, orientation, échelle | Entity, Spawn Point, Portal, Area |
 | `bounds` | Étendue spatiale rectangulaire ou polygonale | Area, Chunk, Tile, Weather Zone |
-| `health` | Points de vie, max, seuils (fuite, mort) | Player, Animal, NPC, Building |
-| `combat` | Inflige et reçoit des dégâts, a des stats de combat | Animal, Player, NPC |
+| `health` | Points de vie, max, seuils (fuite, mort) | Player, Creature, NPC, Building |
+| `combat` | Inflige et reçoit des dégâts, a des stats de combat | Creature, Player, NPC |
 | `inventory` | Contient des items | Player, NPC, Building |
-| `loot` | Génère des récompenses à la mort ou à la récolte | Animal, Resource |
+| `loot` | Génère des récompenses à la mort ou à la récolte | Creature, Resource |
 | `harvestable` | Peut être récolté, a un nombre de récoltes restantes | Resource |
-| `navigation` | Peut se déplacer, utilise un pathfinder | Player, Animal, NPC |
-| `ai` | A un comportement autonome (FSM, patrol, aggro, flee) | Animal, NPC |
+| `navigation` | Peut se déplacer, utilise un pathfinder | Player, Creature, NPC |
+| `ai` | A un comportement autonome (FSM, patrol, aggro, flee) | Creature, NPC |
 | `dialogue` | Peut initier ou recevoir une conversation | NPC |
 | `quest` | Porte une relation avec le système de quêtes | NPC, Trigger, Area |
 | `spawn` | Génère d'autres World Objects selon des règles | Spawn Point |
-| `respawn` | Peut réapparaître après mort ou épuisement | Animal, Resource, Player |
+| `respawn` | Peut réapparaître après mort ou épuisement | Creature, Resource, Player |
 | `collision` | A une forme de collision qui bloque le mouvement | Entity, Tile, Building |
 | `terrain` | Définit le type de surface et la walkabilité | Tile |
 | `height` | Porte des données d'élévation | Tile |
@@ -605,7 +605,7 @@ décide de corriger.
 
 | Concept WOM | État |
 |---|---|
-| Entity (Player, Animal, Resource) | **Implémenté** — sans contrat WOM formel |
+| Entity (Player, Creature, Resource) | **Implémenté** — sans contrat WOM formel |
 | Tile (concept) | **Implémenté** — pas d'objet inspectable isolément |
 | Chunk (concept) | **Implémenté** — pas d'objet inspectable isolément |
 | Spawn Point (CreatureSpawn) | **Implémenté** — pas de capacités exposées |
@@ -667,7 +667,7 @@ de données runtime.
   dynamique à l'initialisation du Studio ?
 
 - **Comment synchroniser le WOM avec le réseau ?** Le protocole WebSocket
-  actuel transporte des payloads spécifiques (character_moved, animal_update).
+  actuel transporte des payloads spécifiques (character_moved, creature_update).
   Un événement `world_object_update` générique est-il pertinent, ou faut-il
   maintenir les événements spécialisés et les mapper côté Studio ?
 

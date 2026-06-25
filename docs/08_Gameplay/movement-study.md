@@ -79,11 +79,11 @@ to `localTileX / localTileY`.
 
 ### Server
 
-Animals use continuous movement driven by a server tick. Speed is applied as:
+Creatures use continuous movement driven by a server tick. Speed is applied as:
 
 ```
-newX = animal.x + dirX * speed * dt
-newY = animal.y + dirY * speed * dt
+newX = creature.x + dirX * speed * dt
+newY = creature.y + dirY * speed * dt
 ```
 
 Current seed values (pixel-equivalent units):
@@ -256,8 +256,8 @@ intentions; the server validates and broadcasts the resulting position.
 4. If the position is rejected, the server sends a correction event to the
    originating client.
 
-**Animal movement**: fully server-driven. The server computes new positions
-every AI tick and broadcasts them. No client input is accepted for animal
+**Creature movement**: fully server-driven. The server computes new positions
+every AI tick and broadcasts them. No client input is accepted for creature
 movement.
 
 **Current state**: step 2 is not yet implemented for players. The server
@@ -353,7 +353,7 @@ corrects it.
 
 ### 11. Client interpolation
 
-Without interpolation, remote entities (other players, animals) teleport on
+Without interpolation, remote entities (other players, creatures) teleport on
 each received position update. With interpolation, the client smoothly moves
 the sprite between the last known position and the newly received position over
 the network interval.
@@ -416,7 +416,7 @@ the client.
 This validation is currently absent for player movement. It is the primary
 anti-cheat measure for speed hacking.
 
-### 14. Shared movement model for players, animals, and NPCs
+### 14. Shared movement model for players, creatures, and NPCs
 
 All moving entities share the same position representation (`worldX`,
 `worldY`, `mapId`) and the same speed integration formula. What differs is
@@ -425,7 +425,7 @@ who drives the movement:
 | Entity | Movement driver | Path source | Speed authority |
 |---|---|---|---|
 | Player | Client input → server validates | Client pathfinder, server-corrected | Server (`effectiveSpeed`) |
-| Animal | Server AI tick | Server pathfinder or steering | Server unconditionally |
+| Creature | Server AI tick | Server pathfinder or steering | Server unconditionally |
 | NPC (future) | Server behavior script | Server pathfinder | Server unconditionally |
 
 The pathfinding algorithm, tile walkability lookup, and speed integration are
@@ -433,7 +433,7 @@ the same for all entity types. The differences are in input source and
 authority level.
 
 Unifying the movement model under a shared service (`MovementService` or
-equivalent) on the server prevents logic duplication between `AnimalsService`
+equivalent) on the server prevents logic duplication between `CreaturesService`
 and future player movement validation.
 
 ### 15. Client and server costs
@@ -444,15 +444,15 @@ and future player movement validation.
 - Speed integration and screen projection are two additions per entity per
   frame. Negligible.
 - Interpolation for remote entities adds one lerp per entity per frame.
-  Negligible at current player and animal counts.
+  Negligible at current player and creature counts.
 
 **Server:**
-- Animal AI ticks run every game loop interval. Current implementation loops
-  over all live animals per tick. This grows linearly with animal count.
+- Creature AI ticks run every game loop interval. Current implementation loops
+  over all live creatures per tick. This grows linearly with creature count.
   Acceptable now; must be chunked per zone when entity counts grow.
 - Player position validation adds one distance check per `player_move` event.
   Negligible.
-- Pathfinding for server-driven entities (animals, future NPCs) runs on the
+- Pathfinding for server-driven entities (creatures, future NPCs) runs on the
   server. At current entity counts, a simple A\* per entity per aggro event is
   acceptable. At scale, pathfinding must be cached or chunked.
 
@@ -600,7 +600,7 @@ it is required to convert existing pixel-equivalent seed positions to WU.
 
 Add server-side distance validation on `player_move`. Enforce tile walkability
 at the server. Introduce a server-side movement service shared by players and
-animals. Add a speed modifier pipeline. Send position corrections to clients on
+creatures. Add a speed modifier pipeline. Send position corrections to clients on
 validation failure.
 
 Do not implement full prediction + reconciliation (Approach C) until the player

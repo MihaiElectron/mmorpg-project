@@ -40,7 +40,7 @@ function makeCtx(overrides: Partial<StudioCommandContext> = {}): StudioCommandCo
   return {
     clearSelectedWorldObject: vi.fn(),
     incrementResourcesRefreshKey: vi.fn(),
-    incrementAnimalsRefreshKey: vi.fn(),
+    incrementCreaturesRefreshKey: vi.fn(),
     incrementCreatureSpawnsRefreshKey: vi.fn(),
     selectedWorldObjectId: "wo-test",
     ...overrides,
@@ -192,12 +192,12 @@ describe("getActionsForWorldObject", () => {
   });
 
   it("retourne [] pour un objet sans capability reconnue", () => {
-    const obj = makeWorldObject(["combat", "health", "validation"], "animal");
+    const obj = makeWorldObject(["combat", "health", "validation"], "creature");
     expect(getActionsForWorldObject(obj)).toHaveLength(0);
   });
 
   it("retourne worldObject.focusCamera pour un objet avec transform", () => {
-    const obj = makeWorldObject(["transform", "combat", "health"], "animal");
+    const obj = makeWorldObject(["transform", "combat", "health"], "creature");
     const ids = getActionsForWorldObject(obj).map((a) => a.id);
     expect(ids).toContain("worldObject.focusCamera");
   });

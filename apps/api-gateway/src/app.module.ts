@@ -22,7 +22,7 @@ import { CharactersModule } from './characters/characters.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { ResourcesModule } from './resources/resources.module';
 import { WorldModule } from './world/world.module';
-import { AnimalsModule } from './animals/animals.module';
+import { CreaturesModule } from './creatures/creatures.module';
 import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
 import { CraftingModule } from './crafting/crafting.module';
@@ -67,7 +67,7 @@ import { CraftingModule } from './crafting/crafting.module';
     InventoryModule,
     ResourcesModule,
     WorldModule,
-    AnimalsModule,
+    CreaturesModule,
     AdminModule,
     SkillsModule,
     CraftingModule,

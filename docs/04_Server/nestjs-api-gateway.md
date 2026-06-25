@@ -33,7 +33,7 @@ The gateway relies on JWT bearer authentication for protected HTTP routes. Admin
 
 The application role is to expose server-side APIs and to centralize HTTP security boundaries. The code shows public authentication endpoints, authenticated player-facing endpoints, and admin-only endpoints.
 
-The root application imports domain modules for authentication, users, characters, inventory, resources, world services, animals, admin functionality, and common shared services. Some imported modules provide non-HTTP providers; their HTTP routes are only documented when a controller is observed.
+The root application imports domain modules for authentication, users, characters, inventory, resources, world services, creatures, admin functionality, and common shared services. Some imported modules provide non-HTTP providers; their HTTP routes are only documented when a controller is observed.
 
 ## Bootstrap configuration
 
@@ -54,7 +54,7 @@ Observed bootstrap configuration:
 
 | Module | File or package | Main responsibility | Imported dependencies observed | Status |
 | --- | --- | --- | --- | --- |
-| AppModule | `apps/api-gateway/src/app.module.ts` | Root Nest module and application composition | ConfigModule, TypeOrmModule, AuthModule, CommonModule, CharactersModule, InventoryModule, ResourcesModule, WorldModule, AnimalsModule, AdminModule | Implemented |
+| AppModule | `apps/api-gateway/src/app.module.ts` | Root Nest module and application composition | ConfigModule, TypeOrmModule, AuthModule, CommonModule, CharactersModule, InventoryModule, ResourcesModule, WorldModule, CreaturesModule, AdminModule | Implemented |
 | ConfigModule | `@nestjs/config` | Load configuration for injected `ConfigService` usage | Global root import in AppModule | Configured |
 | TypeOrmModule root | `@nestjs/typeorm` | Configure database connection and entity loading | ConfigService, database environment variable names | Configured |
 | AuthModule | `apps/api-gateway/src/auth/auth.module.ts` | Authentication routes, JWT signing, JWT strategy | ConfigModule, UserModule, TypeOrmModule for User, PassportModule, JwtModule | Implemented |
@@ -65,8 +65,8 @@ Observed bootstrap configuration:
 | ItemModule | `apps/api-gateway/src/items/item.module.ts` | Item catalogue HTTP routes and item service | TypeOrmModule for Item | Implemented |
 | ResourcesModule | `apps/api-gateway/src/resources/resources.module.ts` | Resource service provider registration | TypeOrmModule for Resource, InventoryModule, CommonModule | Implemented |
 | WorldModule | `apps/api-gateway/src/world/world.module.ts` | World service provider registration | TypeOrmModule for Character and RespawnPoint, CommonModule | Implemented |
-| AnimalsModule | `apps/api-gateway/src/animals/animals.module.ts` | Animal service provider registration | TypeOrmModule for Animal, CreatureTemplate, CreatureSpawn, Character; CommonModule; WorldModule | Implemented |
-| AdminModule | `apps/api-gateway/src/admin/admin.module.ts` | Admin HTTP routes and admin providers | TypeOrmModule for CreatureTemplate, CreatureSpawn, Animal; AnimalsModule; WorldModule; CommonModule | Implemented |
+| CreaturesModule | `apps/api-gateway/src/creatures/creatures.module.ts` | Creature service provider registration | TypeOrmModule for Creature, CreatureTemplate, CreatureSpawn, Character; CommonModule; WorldModule | Implemented |
+| AdminModule | `apps/api-gateway/src/admin/admin.module.ts` | Admin HTTP routes and admin providers | TypeOrmModule for CreatureTemplate, CreatureSpawn, Creature; CreaturesModule; WorldModule; CommonModule | Implemented |
 | Swagger | `@nestjs/swagger` and `swagger-ui-express` | Generate and serve API documentation | DocumentBuilder, SwaggerModule | Configured |
 | CORS | `app.enableCors` in `main.ts` | Browser-facing cross-origin HTTP access | `CLIENT_ORIGIN` environment variable name | Configured |
 

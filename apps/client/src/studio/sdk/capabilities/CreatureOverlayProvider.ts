@@ -1,19 +1,19 @@
 import type { OverlayProvider, StudioOverlayDefinition } from "./CapabilityProvider";
 
-const ANIMAL_OVERLAY: StudioOverlayDefinition = {
-  id: "animal.overlay",
+const CREATURE_OVERLAY: StudioOverlayDefinition = {
+  id: "creature.overlay",
   label: "Créatures",
-  category: "animal",
+  category: "creature",
   capability: "combat",
   description: "Affiche les créatures actives et leur position sur la map.",
 };
 
 /**
  * Provider d'overlay pour les WorldObjects portant la capability "combat".
- * Le rendu effectif est délégué à DevToolsOverlayManager.redrawAnimals().
+ * Le rendu effectif est délégué à DevToolsOverlayManager.redrawCreatures().
  */
-export const animalOverlayProvider: OverlayProvider = {
+export const creatureOverlayProvider: OverlayProvider = {
   kind: "overlay",
   capabilities: ["combat"],
-  getOverlays: () => [ANIMAL_OVERLAY],
+  getOverlays: () => [CREATURE_OVERLAY],
 };

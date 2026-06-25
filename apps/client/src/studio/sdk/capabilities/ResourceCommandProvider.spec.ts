@@ -26,7 +26,7 @@ function makeCtx(): StudioCommandContext {
   return {
     clearSelectedWorldObject: vi.fn(),
     incrementResourcesRefreshKey: vi.fn(),
-    incrementAnimalsRefreshKey: vi.fn(),
+    incrementCreaturesRefreshKey: vi.fn(),
     incrementCreatureSpawnsRefreshKey: vi.fn(),
     selectedWorldObjectId: null,
   };
@@ -60,7 +60,7 @@ describe("resourceCommandProvider", () => {
     const ctx = makeCtx();
     const cmds = resourceCommandProvider.getCommands(ctx);
     const ids = cmds.map((c) => c.id);
-    expect(ids).not.toContain("animal.refresh");
+    expect(ids).not.toContain("creature.refresh");
     expect(ids).not.toContain("creature_spawn.refresh");
   });
 });

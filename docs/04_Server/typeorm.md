@@ -33,7 +33,7 @@ TypeORM is the server data access layer. Services use repositories to query, cre
 
 The NestJS API configures TypeORM in `AppModule` through `TypeOrmModule.forRootAsync`. Domain modules register repositories through `TypeOrmModule.forFeature`.
 
-Observed persistence domains include users, characters, character equipment, inventory, items, resources, animals, creature templates, creature spawns, and respawn points.
+Observed persistence domains include users, characters, character equipment, inventory, items, resources, creatures, creature templates, creature spawns, and respawn points.
 
 The database type is configured as `postgres`. Production readiness of the current TypeORM configuration is Not verified.
 
@@ -65,14 +65,14 @@ The root configuration uses entity auto-loading through a file pattern and has `
 | Entity | Module or domain | Main purpose | Key relations observed | Status |
 |---|---|---|---|---|
 | `User` | Users, Auth | Stores account identity, password hash column, active flag, and role | One user has many characters | Implemented |
-| `Character` | Characters, World, Animals | Stores playable character data, stats, position, owner id, and sex | Many characters belong to one user; one character has many equipment entries and inventory entries | Implemented |
+| `Character` | Characters, World, Creatures | Stores playable character data, stats, position, owner id, and sex | Many characters belong to one user; one character has many equipment entries and inventory entries | Implemented |
 | `CharacterEquipment` | Characters | Stores equipped item per character slot | Many equipment entries belong to one character; many equipment entries reference one item; unique character-slot constraint | Implemented |
 | `Inventory` | Inventory, Characters | Stores character item quantities and equipped flag | Many inventory entries belong to one character; many inventory entries reference one item; unique character-item constraint | Implemented |
 | `Item` | Items, Characters, Inventory | Stores item catalogue data and equipment metadata | One item can be referenced by equipment entries and inventory entries | Implemented |
 | `Resource` | Resources | Stores resource type, coordinates, state, and remaining loot count | No TypeORM relation observed | Implemented |
-| `Animal` | Animals, Admin | Stores animal instance position, health, and state | Many animals may reference one creature spawn | Implemented |
-| `CreatureTemplate` | Animals, Admin | Stores creature category data and combat or movement fields | Referenced by creature spawns | Implemented |
-| `CreatureSpawn` | Animals, Admin | Stores spawn key, template, coordinates, and respawn delay | Many spawns reference one creature template; animals reference spawns | Implemented |
+| `Creature` | Creatures, Admin | Stores creature instance position, health, and state | Many creatures may reference one creature spawn | Implemented |
+| `CreatureTemplate` | Creatures, Admin | Stores creature category data and combat or movement fields | Referenced by creature spawns | Implemented |
+| `CreatureSpawn` | Creatures, Admin | Stores spawn key, template, coordinates, and respawn delay | Many spawns reference one creature template; creatures reference spawns | Implemented |
 | `RespawnPoint` | World | Stores character respawn coordinates and radius | No TypeORM relation observed | Implemented |
 
 ## Repository usage
@@ -92,13 +92,13 @@ The root configuration uses entity auto-loading through a file pattern and has `
 | ResourcesService | Resource repository | Find, update | Resource existence and state checks in consume flow | Implemented |
 | WorldService | Character repository | Find, update position, update health | Character ownership check during join; position updates after runtime state changes | Implemented |
 | WorldService | RespawnPoint repository | Count, save, find | Creates default respawn point when none exist | Implemented |
-| AnimalsService | Animal repository | Find, save, update, delete through query builder | Target existence, state, health, range, and cooldown checks observed in attack flow | Implemented |
-| AnimalsService | CreatureTemplate repository | Find, upsert | Template existence checks for admin spawn and seed setup | Implemented |
-| AnimalsService | CreatureSpawn repository | Find, save, update | Existing spawn check during seed setup | Implemented |
-| AnimalsService | Character repository | Find and update health | Character existence and health checks during attack flow | Implemented |
+| CreaturesService | Creature repository | Find, save, update, delete through query builder | Target existence, state, health, range, and cooldown checks observed in attack flow | Implemented |
+| CreaturesService | CreatureTemplate repository | Find, upsert | Template existence checks for admin spawn and seed setup | Implemented |
+| CreaturesService | CreatureSpawn repository | Find, save, update | Existing spawn check during seed setup | Implemented |
+| CreaturesService | Character repository | Find and update health | Character existence and health checks during attack flow | Implemented |
 | AdminService | CreatureTemplate repository | Find, save, count | Template existence check before update | Implemented |
 | AdminService | CreatureSpawn repository | Find, count | No mutation in AdminService except through other services | Implemented |
-| AdminService | Animal repository | Count | Counts active animals | Implemented |
+| AdminService | Creature repository | Count | Counts active creatures | Implemented |
 
 ## Relations and ownership
 
@@ -108,7 +108,7 @@ The root configuration uses entity auto-loading through a file pattern and has `
 | Character equipment | Character, CharacterEquipment, Item | Unique character-slot constraint and transactional replacement observed | Slot validation is split across DTO and service checks | Implemented |
 | Character inventory | Character, Inventory, Item | Unique character-item constraint observed | Inventory routes do not prove request user ownership in inspected controller path | Not verified |
 | Resource persistence | Resource | Resource state and remaining loot count update after interaction service flow | Exactly-once loot delivery and concurrent gather safety are Not verified | Not verified |
-| Animal spawn relationship | Animal, CreatureSpawn, CreatureTemplate | Animal references spawn; spawn references template with eager loading | Cascade safety and template deletion behavior are Not verified | Not verified |
+| Creature spawn relationship | Creature, CreatureSpawn, CreatureTemplate | Creature references spawn; spawn references template with eager loading | Cascade safety and template deletion behavior are Not verified | Not verified |
 | Respawn points | Character, RespawnPoint | WorldService finds nearest respawn point and updates character state | Multiple-respawn policy and concurrency behavior are Not verified | Not verified |
 | Admin template updates | CreatureTemplate | Admin HTTP route requires admin role; service checks template existence | Field whitelist and concurrency handling for HTTP update are Not verified | Not verified |
 | User role | User | Role is persisted and included in JWT at login | Role-change invalidation for existing tokens is Not verified | Not verified |
@@ -130,16 +130,16 @@ The root configuration uses entity auto-loading through a file pattern and has `
 | Resource consume | Resource interaction service flow through ResourcesService | Resource, Inventory through InventoryService | No shared explicit transaction observed | Not verified |
 | Character position persistence | WorldService disconnect or teleport path | Character | No explicit transaction observed | Implemented |
 | Character respawn | WorldService respawn path | Character, RespawnPoint | No explicit transaction observed | Implemented |
-| Animal startup seed | AnimalsService module init | CreatureTemplate, CreatureSpawn, Animal | No explicit transaction observed | Implemented |
-| Animal attack | AnimalsService attack path | Animal, Character | No explicit transaction observed | Not verified |
-| Admin spawn | AdminGateway through AnimalsService | CreatureSpawn, Animal | No explicit transaction observed | Not verified |
+| Creature startup seed | CreaturesService module init | CreatureTemplate, CreatureSpawn, Creature | No explicit transaction observed | Implemented |
+| Creature attack | CreaturesService attack path | Creature, Character | No explicit transaction observed | Not verified |
+| Admin spawn | AdminGateway through CreaturesService | CreatureSpawn, Creature | No explicit transaction observed | Not verified |
 | Admin template update | AdminController or AdminGateway through AdminService | CreatureTemplate | No explicit transaction observed | Implemented / Not verified |
 
 ## Transactions and concurrency
 
 `CharacterService` uses `DataSource.transaction` for character equipment replacement, unequip, and character removal. These transactions group multiple updates that affect equipment and inventory consistency.
 
-No explicit transaction was observed for inventory add, resource consume plus inventory update, animal attack, admin spawn, template update, or respawn flows.
+No explicit transaction was observed for inventory add, resource consume plus inventory update, creature attack, admin spawn, template update, or respawn flows.
 
 Database locking, optimistic locking, idempotence keys, rollback guarantees, and concurrent update handling are Not verified.
 
@@ -215,7 +215,7 @@ Global pagination is Not verified. N+1 query review is Not verified. Index cover
 - [ ] Every user-owned entity write is reviewed for ownership checks.
 - [ ] Inventory and equipment consistency is reviewed after related changes.
 - [ ] Resource and loot flows are reviewed for duplicate write risk.
-- [ ] Animal and character health updates are reviewed for concurrency risk.
+- [ ] Creature and character health updates are reviewed for concurrency risk.
 - [ ] Admin persistence actions are reviewed for role checks and payload validation.
 - [ ] Production schema changes use an explicit migration plan.
 - [ ] Environment variable names are documented without values.
@@ -265,7 +265,7 @@ Relation-heavy reads and repeated repository calls should be reviewed before pro
 ## TODO
 
 - [ ] Add or verify production migration strategy.
-- [ ] Review transaction needs for inventory, resource, animal, and admin flows.
+- [ ] Review transaction needs for inventory, resource, creature, and admin flows.
 - [ ] Review ownership checks before all user-owned persistence writes.
 - [ ] Review complete index and constraint requirements.
 - [ ] Add or verify migration tests.

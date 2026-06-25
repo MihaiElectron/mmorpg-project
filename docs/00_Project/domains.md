@@ -125,7 +125,7 @@ ressources, PNJ, bâtiments, effets.
 ### Responsabilités
 
 - Définition du modèle d'entité : identité, position, état, cycle de vie.
-- Typage des entités : joueur, animal, ressource, PNJ, bâtiment, effet.
+- Typage des entités : joueur, creature, ressource, PNJ, bâtiment, effet.
 - Templates d'entités : définitions réutilisables pour les créatures et
   ressources (stats, comportements par défaut).
 - Points de spawn et de respawn.
@@ -159,7 +159,7 @@ ressources, PNJ, bâtiments, effets.
 | Type d'entité | État |
 |---|---|
 | Joueur (Character) | **Implémenté** |
-| Animal | **Implémenté** |
+| Creature | **Implémenté** |
 | Ressource | **Implémenté** |
 | Template créature | **Implémenté** |
 | Template ressource | **Implémenté** |
@@ -182,7 +182,7 @@ dans le monde.
 
 - Combat : résolution des dégâts, états (vivant, mort), cooldowns.
 - Récolte : conditions d'interaction, timer serveur, loot, épuisement.
-- Respawn : joueur (point le plus proche), animal (spawn d'origine).
+- Respawn : joueur (point le plus proche), creature (spawn d'origine).
 - Loot : génération de récompenses selon le type d'entité.
 - Progression : expérience, niveaux, statistiques.
 - Skills métiers : définitions de skills, XP et niveaux joueur.
@@ -222,12 +222,12 @@ dans le monde.
 
 | Mécanique | État |
 |---|---|
-| Combat joueur/animal | **Implémenté** (partiel — formule basique) |
+| Combat joueur/creature | **Implémenté** (partiel — formule basique) |
 | Récolte (gathering) | **Implémenté** |
 | Respawn joueur | **Implémenté** |
-| Respawn animal | **Implémenté** |
+| Respawn creature | **Implémenté** |
 | Loot ressource | **Implémenté** (partiel — table hardcodée) |
-| Loot animal | **Futur** |
+| Loot creature | **Futur** |
 | Progression (exp, niveaux) | **Implémenté** pour skills de craft |
 | Métiers / skills | **Implémenté** pour SkillDefinition + PlayerSkill XP/niveaux |
 | Crafting | **Implémenté** pour recettes, stations, ActionPanel runtime et validation serveur WU |
@@ -688,10 +688,10 @@ Avant toute implémentation, un agent doit :
 | Domaine | Backend | Frontend |
 |---|---|---|
 | World | `world/` | `phaser/world/`, `WorldScene.js` |
-| Entities | `animals/`, `resources/`, `characters/` | `phaser/core/WorldScene.js` (sprites) |
-| Gameplay | `world/loot.service.ts`, `animals/`, `resources/` | `phaser/player/`, `ActionPanel` |
+| Entities | `creatures/`, `resources/`, `characters/` | `phaser/core/WorldScene.js` (sprites) |
+| Gameplay | `world/loot.service.ts`, `creatures/`, `resources/` | `phaser/player/`, `ActionPanel` |
 | Identity | `auth/`, `users/` | `api/auth.js`, `LoginPage` |
-| Networking | `world/world.gateway.ts`, `animals/animals.gateway.ts`, `resources/resources.gateway.ts` | `phaser/network/socket.js`, `WorldPage.jsx` |
+| Networking | `world/world.gateway.ts`, `creatures/creatures.gateway.ts`, `resources/resources.gateway.ts` | `phaser/network/socket.js`, `WorldPage.jsx` |
 | Persistence | `**/*.entity.ts`, `**/*.service.ts` (repos) | (N/A) |
 | DevTools | `admin/` | `components/AdminPanel/`, `phaser/admin/` |
 | Assets | (N/A) | `public/assets/`, `src/assets/source/` |

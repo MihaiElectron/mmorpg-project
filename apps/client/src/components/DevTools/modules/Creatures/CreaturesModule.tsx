@@ -1,20 +1,20 @@
 import { useDevToolsStore } from "../../../../store/devtools.store";
 import { WorldObjectListModule } from "../../WorldObjectListModule";
-import { patchAnimalWorldObject } from "./animalWorldObjectClientAdapter";
+import { patchCreatureWorldObject } from "./creatureWorldObjectClientAdapter";
 
-export default function AnimalsModule() {
-  const refreshKey       = useDevToolsStore((s) => s.animalsRefreshKey);
+export default function CreaturesModule() {
+  const refreshKey       = useDevToolsStore((s) => s.creaturesRefreshKey);
   const selectedId       = useDevToolsStore((s) => s.selectedWorldObject?.id ?? null);
   const onSelect         = useDevToolsStore((s) => s.setSelectedWorldObject);
-  const onRefresh        = useDevToolsStore((s) => s.incrementAnimalsRefreshKey);
+  const onRefresh        = useDevToolsStore((s) => s.incrementCreaturesRefreshKey);
   const onClearSelection = useDevToolsStore((s) => s.clearSelectedWorldObject);
 
   return (
     <WorldObjectListModule
-      title="Animals (WOM)"
-      fetchUrl="/admin/animals/world-objects"
-      socketEvent="animal_update"
-      patchFn={patchAnimalWorldObject}
+      title="Creatures (WOM)"
+      fetchUrl="/admin/creatures/world-objects"
+      socketEvent="creature_update"
+      patchFn={patchCreatureWorldObject}
       refreshKey={refreshKey}
       selectedId={selectedId}
       onSelect={onSelect}

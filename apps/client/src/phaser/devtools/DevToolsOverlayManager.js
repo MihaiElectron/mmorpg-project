@@ -1,7 +1,7 @@
 // DevToolsOverlayManager — centralise les couches Graphics/Text des overlays Studio.
 //
 // WorldScene reste responsable :
-//   - des données (resourceData, animalSprites, creatureSpawnData)
+//   - des données (resourceData, creatureSprites, creatureSpawnData)
 //   - des subscriptions store
 //   - des appels redraw
 // Ce manager ne fait que gérer les objets Phaser Graphics/Text de chaque couche.
@@ -46,7 +46,7 @@ export class DevToolsOverlayManager {
     this._scene        = scene;
     this._onSpawnClick = onSpawnClick;
     this._resources    = makeLayer();
-    this._animals      = makeLayer();
+    this._creatures      = makeLayer();
     this._spawns       = { ...makeLayer(), zones: new Map() };
   }
 
@@ -101,24 +101,24 @@ export class DevToolsOverlayManager {
     }
   }
 
-  // ── Animals ─────────────────────────────────────────────────────────────────
+  // ── Creatures ─────────────────────────────────────────────────────────────────
 
-  redrawAnimals(animalSprites, enabled, selectedId) {
-    this._clearLayer(this._animals);
+  redrawCreatures(creatureSprites, enabled, selectedId) {
+    this._clearLayer(this._creatures);
     if (!enabled) return;
-    this._ensureGraphics(this._animals);
+    this._ensureGraphics(this._creatures);
 
-    for (const [id, entry] of animalSprites.entries()) {
-      const animal = entry.animal;
-      const { x, y } = resolveScreen(animal);
+    for (const [id, entry] of creatureSprites.entries()) {
+      const creature = entry.creature;
+      const { x, y } = resolveScreen(creature);
       const isSelected = id === selectedId;
       const color  = isSelected ? 0xf1c40f : 0xe74c3c;
       const alpha  = isSelected ? 1.0 : 0.75;
       const radius = isSelected ? 14 : 9;
 
-      this._animals.graphics.lineStyle(isSelected ? 3 : 2, color, alpha);
-      this._animals.graphics.strokeCircle(x, y - 18, radius);
-      this._addLabel(this._animals, id, x, y - 34, animal.type, _shortId(id),
+      this._creatures.graphics.lineStyle(isSelected ? 3 : 2, color, alpha);
+      this._creatures.graphics.strokeCircle(x, y - 18, radius);
+      this._addLabel(this._creatures, id, x, y - 34, creature.type, _shortId(id),
         isSelected ? "#f1c40f" : "#e74c3c");
     }
   }
@@ -168,7 +168,7 @@ export class DevToolsOverlayManager {
   // ── Cleanup ──────────────────────────────────────────────────────────────────
 
   destroy() {
-    for (const layer of [this._resources, this._animals, this._spawns]) {
+    for (const layer of [this._resources, this._creatures, this._spawns]) {
       this._clearLayer(layer);
       if (layer.graphics) {
         layer.graphics.destroy();

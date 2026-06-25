@@ -81,7 +81,7 @@ La chaîne est : **visualisable → inspectable → modifiable**.
 
 Toute information doit d'abord être rendue visible avant d'être modifiable.
 Un overlay qui affiche les chunks précède un éditeur de chunks. Un inspector qui
-lit les stats d'un animal précède un formulaire pour les modifier.
+lit les stats d'un creature précède un formulaire pour les modifier.
 
 ### Indépendance des modules
 
@@ -186,7 +186,7 @@ pour la capacité correspondante. Il ne connaît pas les types spécifiques (Lou
 Arbre Mort) — seulement les capacités qu'ils exposent.
 
 Exemples de contenu selon la sélection :
-- Animal sélectionné → capacités `health`, `combat`, `ai`, `navigation`, `loot`
+- Creature sélectionné → capacités `health`, `combat`, `ai`, `navigation`, `loot`
 - Tile sélectionné → capacités `terrain`, `collision`, `height`, coordonnées (screen/WU/tile/chunk)
 - Chunk sélectionné → capacités `bounds`, `streaming`, `entities`
 - Joueur sélectionné → capacités `transform`, `health`, `inventory`
@@ -251,7 +251,7 @@ Chaque module peut publier des événements :
 Le DevTools les agrège, les filtre par source ou niveau, et les affiche en flux
 ou en graphique selon leur nature.
 
-**État actuel :** non implémenté. `AdminPanel.tsx` écoute `animal_update`,
+**État actuel :** non implémenté. `AdminPanel.tsx` écoute `creature_update`,
 `resource_update`, `player_joined`, `player_left` pour mettre à jour ses listes —
 c'est le précurseur naturel du Monitoring.
 
@@ -282,7 +282,7 @@ La sélection est globale : toutes les zones du DevTools partagent la même
 sélection courante.
 
 Une sélection peut porter sur :
-- une entité (animal, ressource, joueur, NPC) ;
+- une entité (creature, ressource, joueur, NPC) ;
 - un tile ;
 - un chunk ;
 - une zone (rectangle de tiles) ;
@@ -316,7 +316,7 @@ Cette réflexion doit répondre à au moins ces questions :
 | Quel overlay permet de visualiser cette mécanique ? | Zone d'aggro, rayon de récolte, zone de spawn |
 | Quel Inspector permet de lire son état ? | Stats d'une entité, état d'une FSM, valeurs d'un timer |
 | Quelles commandes permettent de la déclencher manuellement ? | `/spawn`, `/tp`, futur `/craft`, `/trigger_event` |
-| Quels événements Monitoring publie-t-elle ? | `animal:state_changed`, `resource:depleted`, `player:respawned` |
+| Quels événements Monitoring publie-t-elle ? | `creature:state_changed`, `resource:depleted`, `player:respawned` |
 | Quels outils d'automatisation sont utiles ? | Génération de spawns, validation de zones, reconstruction de tables |
 
 Une mécanique sans aucune intégration DevTools n'est pas interdite — elle doit

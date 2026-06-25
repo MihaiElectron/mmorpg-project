@@ -45,7 +45,7 @@ Observed stores:
 | Store | File | Main state held | Server source or sync path | Status |
 |---|---|---|---|---|
 | `useCharacterStore` / `getCharacterStore` | `store/character.store.js` | Current character, panel open flag, inventory display list, equipment map | Fetches current character; equip and unequip reload character data; socket loot and damage events update local cache | Implemented |
-| `useActionPanelStore` / `getActionPanelStore` | `store/actionPanel.store.ts` | Panel open flag, selected target, available actions, overlapping targets | Updated by Phaser world click handling and animal health events | Implemented |
+| `useActionPanelStore` / `getActionPanelStore` | `store/actionPanel.store.ts` | Panel open flag, selected target, available actions, overlapping targets | Updated by Phaser world click handling and creature health events | Implemented |
 | `useAdminStore` / `getAdminStore` | `store/admin.store.ts` | Admin console focus flag, last clicked position, command history, history index | Updated by React admin inputs and Phaser world clicks | Implemented |
 | `useItemsStore` | `store/items.store.ts` | Local inventory list and equipment map | No server fetch observed in this store | Implemented / Not verified |
 
@@ -74,7 +74,7 @@ Observed stores:
 | Unequip update | `POST /characters/:id/unequip`, then `loadCharacter` | Equipment double click through character store action | Server must validate ownership and slot rules | Implemented |
 | Inventory cache update | `updateInventoryItem` | Socket loot or inventory update listener in world scene | Display update only; server remains authority | Implemented |
 | Health update | `setHealth` | Character damage or respawn listener in world scene | Display update only; server remains authority | Implemented |
-| Action target | `openPanel`, `closePanel`, `updateTargetHealth` | Phaser click handling and animal update listener | Display update only | Implemented |
+| Action target | `openPanel`, `closePanel`, `updateTargetHealth` | Phaser click handling and creature update listener | Display update only | Implemented |
 | Admin focus | `setConsoleActive` | Admin console focus and blur | Affects client keyboard capture only | Implemented |
 | Admin last clicked position | `setLastClickedPos` | Phaser pointer click on world background | Client coordinate suggestion only | Implemented |
 | Item store inventory | Local store actions only | Direct callers not observed in active search | No server validation observed in this store | Not verified |

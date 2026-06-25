@@ -179,7 +179,7 @@ export default function ActionPanel() {
     const socket = getDevToolsSocket();
     if (!socket?.connected || !target || target.kind === "crafting_station") return;
 
-    const event = target.kind === "animal" ? "admin:delete_animal" : "admin:delete_resource";
+    const event = target.kind === "creature" ? "admin:delete_creature" : "admin:delete_resource";
     socket.emit(event, { id: target.id }, (res: any) => {
       if (!res?.success) console.warn("[admin delete]", res?.message);
     });
@@ -196,7 +196,7 @@ export default function ActionPanel() {
     const socket = getDevToolsSocket();
     if (!socket?.connected || !character?.id) { closePanel(); return; }
 
-    if (target?.kind === "animal") {
+    if (target?.kind === "creature") {
       const scene = getWorldScene();
       if (scene?.startAutoAttack) scene.startAutoAttack(target.id);
     } else {
@@ -213,7 +213,7 @@ export default function ActionPanel() {
         {(target.name ?? target.type).replace(/_/g, " ").toUpperCase()}
       </div>
 
-      {target.kind === "animal" &&
+      {target.kind === "creature" &&
         target.health != null &&
         target.maxHealth != null && (
           <HealthBar health={target.health} maxHealth={target.maxHealth} />

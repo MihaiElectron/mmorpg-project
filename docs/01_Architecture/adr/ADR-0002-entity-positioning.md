@@ -15,7 +15,7 @@
 - Supersedes: None
 - Superseded by: None
 - Related documents: docs/05_World/maps-and-collisions.md, docs/04_Server/websockets.md, docs/06_Database/schema.md
-- Related code: apps/api-gateway/src/characters/entities/character.entity.ts, apps/api-gateway/src/animals/entities/animal.entity.ts, apps/api-gateway/src/resources/entities/resource.entity.ts, apps/api-gateway/src/animals/entities/creature-spawn.entity.ts, apps/api-gateway/src/world/entities/respawn-point.entity.ts
+- Related code: apps/api-gateway/src/characters/entities/character.entity.ts, apps/api-gateway/src/creatures/entities/creature.entity.ts, apps/api-gateway/src/resources/entities/resource.entity.ts, apps/api-gateway/src/creatures/entities/creature-spawn.entity.ts, apps/api-gateway/src/world/entities/respawn-point.entity.ts
 
 ## Context
 
@@ -26,7 +26,7 @@ At the time this ADR is written, five entity types carry world positions:
 | Entity | Current columns | Movement | Precision needed |
 |---|---|---|---|
 | `character` | `positionX INT`, `positionY INT` | Continuous, server-tracked in memory | Sub-tile |
-| `animal` | `x INT`, `y INT` | Continuous, server-driven AI | Sub-tile |
+| `creature` | `x INT`, `y INT` | Continuous, server-driven AI | Sub-tile |
 | `resource` | `x INT`, `y INT` | Static | Tile-exact |
 | `creature_spawn` | `spawnX INT`, `spawnY INT` | Static | Tile-exact |
 | `respawn_point` | `x INT`, `y INT` | Static | Tile-exact |
@@ -94,7 +94,7 @@ All position-bearing entities adopt the following columns:
 | Entity | Movement class | `worldX/Y` value | Notes |
 |---|---|---|---|
 | `character` | Dynamic | Continuous WU integer (sub-tile via `& 1023`) | Controlled by player input; server validates |
-| `animal` | Dynamic | Continuous WU integer (sub-tile via `& 1023`) | Driven by server AI; always authoritative |
+| `creature` | Dynamic | Continuous WU integer (sub-tile via `& 1023`) | Driven by server AI; always authoritative |
 | `resource` | Static | Integer (whole tile) | Placed at map authoring time; never moves |
 | `creature_spawn` | Static | Integer (whole tile) | Spawn point; never moves at runtime |
 | `respawn_point` | Static | Integer (whole tile) | Respawn anchor; never moves at runtime |
@@ -112,7 +112,7 @@ All socket events that carry a world position must include `mapId`, `worldX`, an
 | `world_joined` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
 | `character_teleport` | Server → Client | `{ x, y }` | `{ mapId, worldX, worldY }` |
 | `character_respawn` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
-| `animals` / `animal_update` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
+| `creatures` / `creature_update` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
 | `resources` | Server → Client | `{ x, y, ... }` | `{ mapId, worldX, worldY, ... }` |
 
 `mapId` is mandatory in every position-carrying payload. A client must not infer map context from connection state alone.
@@ -122,7 +122,7 @@ All socket events that carry a world position must include `mapId`, `worldX`, an
 - All incoming position values (`worldX`, `worldY`) are client intentions. They must be validated server-side before producing gameplay effects.
 - The server must reject or correct positions outside the bounds of the declared `mapId`.
 - `mapId` must be validated: a character cannot report a position on a map it has not legitimately entered.
-- Dynamic entity positions are authoritative only when set by the server (AI-driven animals, admin teleport, respawn). Client-reported positions are inputs to server validation.
+- Dynamic entity positions are authoritative only when set by the server (AI-driven creatures, admin teleport, respawn). Client-reported positions are inputs to server validation.
 
 ## Rationale
 
@@ -158,12 +158,12 @@ Uniform naming with a signed integer column type (decided in ADR-0001) avoids in
 | Component | Impact |
 |---|---|
 | `character` entity | Rename `positionX/Y` → `worldX/Y`; add `mapId` |
-| `animal` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
+| `creature` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
 | `resource` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
 | `creature_spawn` entity | Rename `spawnX/Y` → `worldX/Y`; add `mapId` |
 | `respawn_point` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
 | `WorldService` | Update all position reads/writes; add `mapId` validation |
-| `AnimalsService` | Update AI movement; rename `x/y` fields; add `mapId` context |
+| `CreaturesService` | Update AI movement; rename `x/y` fields; add `mapId` context |
 | `ResourcesGateway` | Update range check to use `worldX/Y`; validate `mapId` |
 | `WorldGateway` | Update `player_move` and join handlers; broadcast `mapId` |
 | WebSocket payloads | All position events: `x/y` → `worldX/Y`, add `mapId` |
@@ -194,15 +194,15 @@ Migration order is an open question. A safe approach:
 
 1. Confirm DB column type (`INTEGER` vs `BIGINT`) based on planned world size.
 2. Migrate entities one type at a time, starting with static entities (resources, spawns, respawn points) where no in-memory state is affected.
-3. Migrate dynamic entities (characters, animals) with a cutover that updates both entity columns and WebSocket payloads simultaneously.
+3. Migrate dynamic entities (characters, creatures) with a cutover that updates both entity columns and WebSocket payloads simultaneously.
 4. Seed data must be updated to use WU values before or at migration time.
 
 No mixed-state operation: during migration of a given entity type, all code paths that read or write its position must be updated atomically.
 
 ## Validation
 
-- [x] Existing entity schemas analyzed (character, animal, resource, creature_spawn, respawn_point).
-- [x] Existing socket events analyzed (player_move, player_moved, world_joined, character_teleport, character_respawn, animals, animal_update, resources).
+- [x] Existing entity schemas analyzed (character, creature, resource, creature_spawn, respawn_point).
+- [x] Existing socket events analyzed (player_move, player_moved, world_joined, character_teleport, character_respawn, creatures, creature_update, resources).
 - [x] ADR-0001 reviewed.
 - [x] Security impact reviewed.
 - [x] Performance impact reviewed.

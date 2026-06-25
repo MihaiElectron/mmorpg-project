@@ -45,9 +45,9 @@ current state of the codebase:
   verbatim in memory with no validation beyond a type check. These values are
   re-broadcast to all other clients and used as the attacker's position in
   combat and gathering range checks.
-- **Animal movement** is already server-authoritative. The server computes all
-  animal positions via a 200 ms tick loop, applies speed integration, and
-  broadcasts results. No client input can alter an animal's position.
+- **Creature movement** is already server-authoritative. The server computes all
+  creature positions via a 200 ms tick loop, applies speed integration, and
+  broadcasts results. No client input can alter an creature's position.
 
 The gap between these two models is the subject of this ADR.
 
@@ -58,7 +58,7 @@ The gap between these two models is the subject of this ADR.
    unconditionally. The player is instantly placed at the claimed position in
    memory, in other clients' renderings, and in the database on disconnect.
 
-2. **Combat and gathering range bypass**: `AnimalsService.attack` and
+2. **Combat and gathering range bypass**: `CreaturesService.attack` and
    `ResourcesGateway.isInRange` compute distances against `client.data.player`,
    which is set by `player_move`. A client that falsifies its position before
    attacking or gathering bypasses all range checks.
@@ -93,7 +93,7 @@ Without a defined movement authority model:
 - The coordinate migration required by ADR-0001 and ADR-0002 cannot be
   completed safely: migrating coordinate types without also adding server-side
   validation would replace one unvalidated coordinate space with another.
-- The animal movement model (server-authoritative) and the player movement
+- The creature movement model (server-authoritative) and the player movement
   model (client-authoritative) are architecturally inconsistent, preventing a
   unified movement service.
 - There is no defined contract between client input and server-accepted position,
@@ -153,7 +153,7 @@ The client continues to compute movement locally for responsiveness. It reports
 the resulting position to the server. The server validates the reported position
 against defined rules and either accepts or corrects it.
 
-This is the same model used for animal AI tick positions (server computes and
+This is the same model used for creature AI tick positions (server computes and
 enforces) but applied in the direction of client → server: the client proposes,
 the server decides.
 
@@ -172,7 +172,7 @@ a full movement loop on the server immediately.
 | Entity type | Movement driver | Authority |
 |---|---|---|
 | Player | Client input, locally predicted | Server validates and corrects |
-| Animal | Server AI tick | Server unconditionally |
+| Creature | Server AI tick | Server unconditionally |
 | NPC (future) | Server behavior script | Server unconditionally |
 
 The client's role is to:
@@ -261,7 +261,7 @@ Full prediction with sequence numbers and replay of unacknowledged inputs is
 not required at this stage. It is an open question for future implementation
 when latency or player count makes it necessary.
 
-For remote entities (other players, animals), the client interpolates between
+For remote entities (other players, creatures), the client interpolates between
 server-broadcast positions. Interpolation has no gameplay effect. It is a
 display technique only.
 
@@ -326,12 +326,12 @@ These events must:
 The current implementation (`teleportCharacter`, `respawnCharacter`) already
 follows this pattern. It must continue to do so after the coordinate migration.
 
-### 7. Animal movement — reference model
+### 7. Creature movement — reference model
 
-The current animal movement implementation is closer to the target than the
+The current creature movement implementation is closer to the target than the
 current player movement implementation.
 
-| Property | Animal (current) | Player (current) | Player (target) |
+| Property | Creature (current) | Player (current) | Player (target) |
 |---|---|---|---|
 | Position computed by | Server tick | Client physics | Server validates client report |
 | Speed applied by | Server | Client | Server enforces `effectiveSpeed` |
@@ -340,11 +340,11 @@ current player movement implementation.
 | Broadcast source | Server | Client via server relay | Server (validated) |
 | Client can falsify? | No | Yes | No |
 
-The animal model demonstrates that the server tick loop + broadcast pattern is
+The creature model demonstrates that the server tick loop + broadcast pattern is
 implementable at the current project scale. The player authority model targets
 the same result via validation rather than full server-side computation.
 
-Remaining gaps in the animal model (no tile collision, no map bounds check)
+Remaining gaps in the creature model (no tile collision, no map bounds check)
 are technical debt shared with the player migration. They must be addressed
 for both entity types when the coordinate migration is complete.
 
@@ -381,7 +381,7 @@ validation to the existing `player_move` handler rather than replacing the
 movement architecture entirely. Option B remains available as a future upgrade
 if server-side movement computation becomes necessary at scale.
 
-The animal model proves the broadcast-from-server pattern is viable at the
+The creature model proves the broadcast-from-server pattern is viable at the
 current project scale. The player model can be aligned with it via validation
 without the full complexity of server-side movement integration.
 
@@ -460,7 +460,7 @@ These items are not defined by this ADR but block its implementation.
 | 1.5 | Implement walkability check on `player_move` | 1.4 |
 | 1.6 | Implement map bounds check on `player_move` | 0.2, 0.3 |
 | 1.7 | Implement `player_position_correction` event on the client | 1.3 |
-| 1.8 | Add map bounds check and tile collision to animal positions (debt closure) | 1.4 |
+| 1.8 | Add map bounds check and tile collision to creature positions (debt closure) | 1.4 |
 
 ### Phase 2 — Client alignment
 
@@ -504,7 +504,7 @@ The following questions are not resolved by this ADR.
 
 5. **Server tick rate for validation.** Is validating `player_move` events
    on receipt (event-driven) sufficient, or does the server need a dedicated
-   position validation tick for players (analogous to the animal AI tick)?
+   position validation tick for players (analogous to the creature AI tick)?
 
 6. **Tile collision data format on the server.** Which format should the
    server use to store and query walkability? A per-chunk boolean grid?
@@ -532,12 +532,12 @@ The following questions are not resolved by this ADR.
 ## Validation checklist
 
 - [x] Current codebase analyzed (world.gateway.ts, world.service.ts,
-  animals.service.ts, animals.gateway.ts, resources.gateway.ts, Player.js,
+  creatures.service.ts, creatures.gateway.ts, resources.gateway.ts, Player.js,
   PlayerController.js, WorldScene.js, pathfinding.js).
 - [x] Security gaps identified and documented in movement-authority-audit.md.
 - [x] ADR-0001 and ADR-0002 reviewed for dependency.
 - [x] movement-model.md reviewed for consistency.
-- [x] Animal model analyzed as reference implementation.
+- [x] Creature model analyzed as reference implementation.
 - [x] Security impact reviewed.
 - [x] Performance impact reviewed.
 - [ ] Human approval recorded.

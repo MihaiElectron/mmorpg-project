@@ -1,16 +1,16 @@
 import type { WorldObject } from "../../types/worldObject.types";
 
-const ANIMAL_CAPABILITIES = Object.freeze([
+const CREATURE_CAPABILITIES = Object.freeze([
   "transform", "combat", "health", "persistence", "validation",
 ]);
 
-export function toAnimalClientWorldObject(a: Record<string, any>): WorldObject {
+export function toCreatureClientWorldObject(a: Record<string, any>): WorldObject {
   const hasWU =
     a.worldX != null && a.worldY != null && a.mapId != null;
 
   return {
     kind: "entity",
-    category: "animal",
+    category: "creature",
     id: String(a.id),
     type: String(a.type ?? "unknown"),
     mapId: a.mapId ?? null,
@@ -20,7 +20,7 @@ export function toAnimalClientWorldObject(a: Record<string, any>): WorldObject {
     state: String(a.state ?? "alive"),
     health:    a.health    != null ? Number(a.health)    : undefined,
     maxHealth: a.maxHealth != null ? Number(a.maxHealth) : undefined,
-    capabilities: Array.isArray(a.capabilities) ? a.capabilities : [...ANIMAL_CAPABILITIES],
+    capabilities: Array.isArray(a.capabilities) ? a.capabilities : [...CREATURE_CAPABILITIES],
     metadata: {
       legacy:
         a.x != null && a.y != null ? { x: Number(a.x), y: Number(a.y) } : null,
@@ -28,7 +28,7 @@ export function toAnimalClientWorldObject(a: Record<string, any>): WorldObject {
   };
 }
 
-export function patchAnimalWorldObject(
+export function patchCreatureWorldObject(
   existing: WorldObject,
   data: Record<string, any>,
 ): WorldObject {

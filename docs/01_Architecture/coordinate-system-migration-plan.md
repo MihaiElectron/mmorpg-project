@@ -34,11 +34,11 @@ dehors des phases définies ci-dessous et sans validation humaine préalable.
 | Fichier | Colonnes actuelles | Action requise |
 |---|---|---|
 | `src/characters/entities/character.entity.ts` | `positionX INT`, `positionY INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
-| `src/animals/entities/animal.entity.ts` | `x INT`, `y INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
+| `src/creatures/entities/creature.entity.ts` | `x INT`, `y INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
 | `src/resources/entities/resource.entity.ts` | `x INT`, `y INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
-| `src/animals/entities/creature-spawn.entity.ts` | `spawnX INT`, `spawnY INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
+| `src/creatures/entities/creature-spawn.entity.ts` | `spawnX INT`, `spawnY INT` | Renommer → `worldX`, `worldY`; ajouter `mapId` |
 | `src/world/entities/respawn-point.entity.ts` | `x INT`, `y INT`, `radius INT` | Renommer → `worldX`, `worldY`; `radius` → `worldRadius`; ajouter `mapId` |
-| `src/animals/entities/creature-template.entity.ts` | `patrolRadius INT`, `speedMin INT`, `speedMax INT`, `aggroRadius INT` | Colonnes GameplayData — valeurs à recalibrer en WU/WU/s (pas de renommage obligatoire, mais les valeurs seront incorrectes) |
+| `src/creatures/entities/creature-template.entity.ts` | `patrolRadius INT`, `speedMin INT`, `speedMax INT`, `aggroRadius INT` | Colonnes GameplayData — valeurs à recalibrer en WU/WU/s (pas de renommage obligatoire, mais les valeurs seront incorrectes) |
 
 ### Services et gateways (logique de position)
 
@@ -46,8 +46,8 @@ dehors des phases définies ci-dessous et sans validation humaine préalable.
 |---|---|
 | `src/world/world.service.ts` | Type `ConnectedPlayer` (`x`, `y`); toutes les méthodes positionnelles: `joinPlayer`, `updatePlayer`, `persistPlayerPosition`, `respawnCharacter`, `teleportCharacter`; seed du `RespawnPoint` en (600, 300) |
 | `src/world/world.gateway.ts` | Payloads `player_move` (`{ x, y, direction }`), types `JoinWorldPayload` (`x?`, `y?`) |
-| `src/animals/animals.service.ts` | Toute la logique de mouvement AI (`doPatrolMovement`, `doFighting`, `doEscaping`); constantes `MELEE_RANGE`, `RANGED_RANGE_DEFAULT`; seed des templates avec coordonnées pixel; `createAdminSpawn` |
-| `src/animals/animals.gateway.ts` | Utilise `player.x`, `player.y` pour la vérification de portée d'attaque |
+| `src/creatures/creatures.service.ts` | Toute la logique de mouvement AI (`doPatrolMovement`, `doFighting`, `doEscaping`); constantes `MELEE_RANGE`, `RANGED_RANGE_DEFAULT`; seed des templates avec coordonnées pixel; `createAdminSpawn` |
+| `src/creatures/creatures.gateway.ts` | Utilise `player.x`, `player.y` pour la vérification de portée d'attaque |
 | `src/resources/resources.gateway.ts` | Constante `RESOURCE_INTERACT_RANGE = 100`; `MOVE_TOLERANCE = 4`; méthode `isInRange` basée sur `Math.hypot` en pixels |
 | `src/admin/admin.gateway.ts` | Payloads `admin:spawn` et `admin:teleport` avec `{ x, y }`; rendu des coordonnées dans les messages de retour |
 | `src/admin/admin.service.ts` | Potentiellement impacté si des positions sont manipulées dans des réponses HTTP |
@@ -69,7 +69,7 @@ dehors des phases définies ci-dessous et sans validation humaine préalable.
 
 | Fichier | Raison |
 |---|---|
-| `src/phaser/core/WorldScene.js` | **Impact majeur.** Toutes les positions Phaser → WU: `syncLocalPlayer` émet `{ x, y }` → `{ worldX, worldY }`; `joinWorld` émet `x`, `y`; réception de `world_joined`, `player_moved`, `character_teleport`, `character_respawn`, `animals`, `animal_update` avec `x`/`y`; rendu des sprites à `player.x`, `player.y`; world bounds hardcodés (2000×2000); `TILEMAP_TEST_OFFSET_X = 936` (temporaire) |
+| `src/phaser/core/WorldScene.js` | **Impact majeur.** Toutes les positions Phaser → WU: `syncLocalPlayer` émet `{ x, y }` → `{ worldX, worldY }`; `joinWorld` émet `x`, `y`; réception de `world_joined`, `player_moved`, `character_teleport`, `character_respawn`, `creatures`, `creature_update` avec `x`/`y`; rendu des sprites à `player.x`, `player.y`; world bounds hardcodés (2000×2000); `TILEMAP_TEST_OFFSET_X = 936` (temporaire) |
 | `src/phaser/player/Player.js` | `this.speed = 100` (px/s) — doit être recalibré en WU/s une fois le module WU disponible |
 | `src/phaser/player/PlayerController.js` | `tileSize = 32` pour le pathfinding (grid `player.x / tileSize`); `arrivalThreshold = 8` (pixels); waypoints centrés sur `waypoint.x * 32 + 16`; distance de poursuite en combat: `dist > 60` |
 | `src/phaser/world/MapLoader.js` | `this.tileSize = 32` — sera aligné sur la grille WU, mais le rôle du MapLoader reste le rendu client |
@@ -97,7 +97,7 @@ dehors des phases définies ci-dessous et sans validation humaine préalable.
 | Entité | Table | Colonnes position actuelles | Cible |
 |---|---|---|---|
 | `Character` | `character` | `positionX`, `positionY` | `worldX`, `worldY`, `mapId` |
-| `Animal` | `animals` | `x`, `y` | `worldX`, `worldY`, `mapId` |
+| `Creature` | `creatures` | `x`, `y` | `worldX`, `worldY`, `mapId` |
 | `Resource` | `resources` | `x`, `y` | `worldX`, `worldY`, `mapId` |
 | `CreatureSpawn` | `creature_spawn` | `spawnX`, `spawnY` | `worldX`, `worldY`, `mapId` |
 | `RespawnPoint` | `respawn_point` | `x`, `y` | `worldX`, `worldY`, `mapId` |
@@ -120,7 +120,7 @@ renommage de colonne imposé).
 | `admin:spawn` | `{ templateKey, x, y }` | `{ templateKey, mapId, worldX, worldY }` |
 | `admin:teleport` | `{ characterId, x, y }` | `{ characterId, mapId, worldX, worldY }` |
 
-Les événements `attack_animal` et `interact_resource` ne transportent pas de
+Les événements `attack_creature` et `interact_resource` ne transportent pas de
 coordonnées dans leur payload — le serveur utilise la position en mémoire du
 joueur (`client.data.player`). Ils ne sont pas affectés structurellement, mais
 la position en mémoire (`player.x`, `player.y`) devra avoir été migrée.
@@ -135,8 +135,8 @@ la position en mémoire (`player.x`, `player.y`) devra avoir été migrée.
 | `current_players` | tableau de players avec `x`, `y` | tableau avec `worldX`, `worldY`, `mapId` |
 | `character_teleport` | `{ x, y }` | `{ mapId, worldX, worldY }` |
 | `character_respawn` | `{ characterId, x, y, health, maxHealth }` | `{ characterId, mapId, worldX, worldY, health, maxHealth }` |
-| `animals` | tableau de `AnimalDto` avec `x`, `y` | tableau avec `worldX`, `worldY`, `mapId` |
-| `animal_update` | `AnimalDto` avec `x`, `y` | `worldX`, `worldY`, `mapId` |
+| `creatures` | tableau de `CreatureDto` avec `x`, `y` | tableau avec `worldX`, `worldY`, `mapId` |
+| `creature_update` | `CreatureDto` avec `x`, `y` | `worldX`, `worldY`, `mapId` |
 | `resources` | tableau avec `x`, `y` | tableau avec `worldX`, `worldY`, `mapId` |
 
 ---
@@ -146,11 +146,11 @@ la position en mémoire (`player.x`, `player.y`) devra avoir été migrée.
 Ces constantes sont actuellement en unités pixel-équivalentes. Elles devront
 être recalibrées après la migration des coordonnées, via gameplay testing.
 
-### Backend — `src/animals/animals.service.ts`
+### Backend — `src/creatures/creatures.service.ts`
 
 | Constante | Valeur actuelle (px) | Rôle |
 |---|---|---|
-| `MELEE_RANGE` | `60` | Portée de mêlée joueur et animal |
+| `MELEE_RANGE` | `60` | Portée de mêlée joueur et creature |
 | `RANGED_RANGE_DEFAULT` | `300` | Portée à distance par défaut |
 
 ### Backend — `src/resources/resources.gateway.ts`
@@ -160,7 +160,7 @@ Ces constantes sont actuellement en unités pixel-équivalentes. Elles devront
 | `RESOURCE_INTERACT_RANGE` | `100` | Portée de récolte |
 | `MOVE_TOLERANCE` | `4` | Déplacement autorisé entre deux ticks de récolte |
 
-### Backend — seeds dans `AnimalsService.seedTemplates()`
+### Backend — seeds dans `CreaturesService.seedTemplates()`
 
 Ces valeurs sont stockées en base via `upsert`. La recalibration nécessite une
 mise à jour de la seed **et** une migration des valeurs déjà présentes en DB.
@@ -203,7 +203,7 @@ Phase 1 — Module central de coordonnées
 Phase 2 — Entités statiques (resource, creature_spawn, respawn_point)
 Phase 3 — Type ConnectedPlayer et service monde
 Phase 4 — Entité character
-Phase 5 — Entité animal + logique AI
+Phase 5 — Entité creature + logique AI
 Phase 6 — Payloads WebSocket (server → client)
 Phase 7 — Frontend rendering
 Phase 8 — Recalibration des constantes gameplay
@@ -233,7 +233,7 @@ numérique. Aucune modification de code dans cette phase.
 
 2. **Métrique de distance gameplay** : la méthode `isInRange` dans
    `resources.gateway.ts` et les comparaisons de distance dans
-   `animals.service.ts` utilisent `Math.hypot` (Euclidienne pixels). Après
+   `creatures.service.ts` utilisent `Math.hypot` (Euclidienne pixels). Après
    migration, le serveur opérera en WU. Faut-il garder la distance Euclidienne
    en WU, ou passer à Chebyshev (max absolu) qui est un carré — plus adapté
    à la grille isométrique ? Cette décision change les valeurs de calibration.
@@ -308,9 +308,9 @@ leur position n'est modifiée qu'en seed ou via l'outil admin.
 **Fichiers concernés** :
 
 - `src/resources/entities/resource.entity.ts` — renommer `x`, `y` → `worldX`, `worldY`; ajouter `mapId`
-- `src/animals/entities/creature-spawn.entity.ts` — renommer `spawnX`, `spawnY` → `worldX`, `worldY`; ajouter `mapId`
+- `src/creatures/entities/creature-spawn.entity.ts` — renommer `spawnX`, `spawnY` → `worldX`, `worldY`; ajouter `mapId`
 - `src/world/entities/respawn-point.entity.ts` — renommer `x`, `y` → `worldX`, `worldY`; `radius` → `worldRadius`; ajouter `mapId`
-- `src/animals/animals.service.ts` — mise à jour des accès `a.spawn.spawnX` → `a.spawn.worldX`, seed des positions en WU
+- `src/creatures/creatures.service.ts` — mise à jour des accès `a.spawn.spawnX` → `a.spawn.worldX`, seed des positions en WU
 - `src/world/world.service.ts` — seed du `RespawnPoint` en WU, mise à jour des accès `nearest.x` → `nearest.worldX`
 - `src/admin/admin.gateway.ts` — mise à jour des payloads de ressources émis vers le client
 
@@ -323,7 +323,7 @@ conversion en WU dépend de l'offset final de la tilemap (Phase 0).
 - `synchronize: true` en dev : TypeORM renommera les colonnes en DROP + ADD,
   ce qui efface les données existantes. Sauvegarder ou réinitialiser la DB avant
   cette phase.
-- Accès résiduels à `animal.spawn.spawnX` dans `animals.service.ts` — à
+- Accès résiduels à `creature.spawn.spawnX` dans `creatures.service.ts` — à
   auditer exhaustivement avant merge.
 
 **Critères de validation** :
@@ -352,10 +352,10 @@ conversion en WU dépend de l'offset final de la tilemap (Phase 0).
 
 - `src/world/world.service.ts` — renommer `x`, `y` dans `ConnectedPlayer` et `JoinedPlayer` → `worldX`, `worldY`; ajouter `mapId`; mettre à jour toutes les méthodes qui lisent/écrivent ces champs; mettre à jour `persistPlayerPosition`
 - `src/world/world.gateway.ts` — `JoinWorldPayload` et `handlePlayerMove`
-- `src/animals/animals.gateway.ts` — `player.x`, `player.y` dans `onAttackAnimal`
+- `src/creatures/creatures.gateway.ts` — `player.x`, `player.y` dans `onAttackCreature`
 - `src/resources/resources.gateway.ts` — `player.x`, `player.y` dans les sessions de récolte
 
-**Note** : `animals.service.ts` lit aussi `p.x`, `p.y` via `findNearestPlayer`. À
+**Note** : `creatures.service.ts` lit aussi `p.x`, `p.y` via `findNearestPlayer`. À
 mettre à jour en même temps.
 
 **Risques** :
@@ -417,15 +417,15 @@ en développement; à anticiper en pré-production.
 
 ---
 
-### Phase 5 — Entité Animal + logique AI
+### Phase 5 — Entité Creature + logique AI
 
-**Objectif** : migrer les colonnes `x`, `y` de l'entité `Animal` et toute la
-logique de mouvement AI dans `animals.service.ts`.
+**Objectif** : migrer les colonnes `x`, `y` de l'entité `Creature` et toute la
+logique de mouvement AI dans `creatures.service.ts`.
 
 **Fichiers concernés** :
 
-- `src/animals/entities/animal.entity.ts` — renommer `x`, `y` → `worldX`, `worldY`; ajouter `mapId`
-- `src/animals/animals.service.ts` — toute la logique de mouvement (`doPatrolMovement`, `doFighting`, `doEscaping`), `toDto`, `findNearestPlayer`, `createAdminSpawn`, accès aux champs `animal.x`, `animal.spawn.spawnX`
+- `src/creatures/entities/creature.entity.ts` — renommer `x`, `y` → `worldX`, `worldY`; ajouter `mapId`
+- `src/creatures/creatures.service.ts` — toute la logique de mouvement (`doPatrolMovement`, `doFighting`, `doEscaping`), `toDto`, `findNearestPlayer`, `createAdminSpawn`, accès aux champs `creature.x`, `creature.spawn.spawnX`
 
 **Note** : les constantes `MELEE_RANGE`, `RANGED_RANGE_DEFAULT`, `patrolRadius`,
 `speedMin`, `speedMax`, `aggroRadius` ne sont **pas** recalibrées dans cette
@@ -434,23 +434,23 @@ comportement observable pendant la migration. La recalibration est en Phase 8.
 
 **Risques** :
 
-- Les calculs de distance (`Math.hypot`) et de déplacement (`animal.x + dirX * speed * dt`)
+- Les calculs de distance (`Math.hypot`) et de déplacement (`creature.x + dirX * speed * dt`)
   doivent être convertis pour opérer en WU. Sans recalibration des constantes,
   les distances seront incorrectes mais le code sera fonctionnel.
 - Risque de régression sur le comportement AI : les 15 tests Jest de
-  `AnimalsService` doivent passer après migration.
+  `CreaturesService` doivent passer après migration.
 
 **Critères de validation** :
 
-- `npm run test -- animals.service` — tous les tests verts.
+- `npm run test -- creatures.service` — tous les tests verts.
 - `npm run build` sans erreur.
 - Les animaux patrouillent, agressent et fuient dans la scène.
 
 **Tests manuels** :
 
 - Observer le comportement de patrouille d'un turkey et d'un goblin.
-- Attaquer un animal, vérifier l'aggro, la poursuite, la fuite.
-- Vérifier le respawn d'un animal tué.
+- Attaquer un creature, vérifier l'aggro, la poursuite, la fuite.
+- Vérifier le respawn d'un creature tué.
 
 ---
 
@@ -463,8 +463,8 @@ qu'ils transportent `worldX`, `worldY`, `mapId` au lieu de `x`, `y`.
 
 - `src/world/world.service.ts` — `character_respawn`, `character_teleport`
 - `src/world/world.gateway.ts` — `world_joined`, `player_joined`, `player_moved`, `current_players`
-- `src/animals/animals.service.ts` — `AnimalDto` (`x`, `y` → `worldX`, `worldY`, `mapId`)
-- `src/animals/animals.gateway.ts` — `animals`, `animal_update`
+- `src/creatures/creatures.service.ts` — `CreatureDto` (`x`, `y` → `worldX`, `worldY`, `mapId`)
+- `src/creatures/creatures.gateway.ts` — `creatures`, `creature_update`
 - `src/resources/resources.gateway.ts` — `resources`, `resource_update`
 
 **Note** : cette phase est le point de rupture avec le client existant. Client et
@@ -486,7 +486,7 @@ temporaire doit être activée (voir section 8).
 
 - Deux fenêtres de navigateur connectées : vérifier que le joueur distant
   apparaît à la bonne position et se déplace correctement.
-- Un animal se déplace : vérifier la correspondance position serveur / sprite.
+- Un creature se déplace : vérifier la correspondance position serveur / sprite.
 
 ---
 
@@ -537,7 +537,7 @@ ajuste des nombres.
 
 **Fichiers concernés** :
 
-- `src/animals/animals.service.ts` — `MELEE_RANGE`, `RANGED_RANGE_DEFAULT`, seeds `patrolRadius`, `speedMin`, `speedMax`, `aggroRadius`
+- `src/creatures/creatures.service.ts` — `MELEE_RANGE`, `RANGED_RANGE_DEFAULT`, seeds `patrolRadius`, `speedMin`, `speedMax`, `aggroRadius`
 - `src/resources/resources.gateway.ts` — `RESOURCE_INTERACT_RANGE`, `MOVE_TOLERANCE`
 - `src/world/world.service.ts` — seed `RespawnPoint` en WU
 - `src/phaser/player/Player.js` — `this.speed` en WU/s
@@ -554,7 +554,7 @@ Euclidienne en WU n'est pas proportionnelle à la distance visuelle (voir
 
 - Un joueur peut récolter une ressource en s'approchant à une distance visuelle
   raisonnable.
-- Un animal commence à agresser à une distance agréable pour le gameplay.
+- Un creature commence à agresser à une distance agréable pour le gameplay.
 - La vitesse de déplacement du joueur semble naturelle.
 
 **Tests manuels** :
@@ -719,7 +719,7 @@ la tile (0, 0) pour chaque map du projet ?
 ### 11.2 Métrique de distance gameplay
 
 `isInRange` dans `resources.gateway.ts` et les comparaisons dans
-`animals.service.ts` utilisent `Math.hypot` (distance Euclidienne). En WU
+`creatures.service.ts` utilisent `Math.hypot` (distance Euclidienne). En WU
 isométrique, la distance Euclidienne WU ne correspond pas à la distance visuelle
 à l'écran (voir `docs/08_Gameplay/world-units-study.md`). Les options sont :
 
@@ -772,7 +772,7 @@ Avant d'écrire la première ligne de code :
 - [ ] Phase 0 : `INTEGER` vs `BIGINT` confirmé
 - [ ] Phase 0 : `mapId` par défaut défini
 - [ ] DB sauvegardée (ou réinitialisée proprement) avant Phase 2
-- [ ] Tests unitaires existants de `AnimalsService` tous verts avant Phase 5
+- [ ] Tests unitaires existants de `CreaturesService` tous verts avant Phase 5
 - [ ] Module central créé et testé unitairement avant Phase 2
 
 ---

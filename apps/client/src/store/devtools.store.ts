@@ -230,21 +230,21 @@ const storeLogic = (set, get) => ({
   toggleResourceOverlayEnabled: () =>
     set({ resourceOverlayEnabled: !get().resourceOverlayEnabled }),
 
-  // ── Commandes Studio — Animals ────────────────────────────────────────────
-  // Incrémenter force AnimalsModule à relancer son fetch initial.
-  animalsRefreshKey: 0,
+  // ── Commandes Studio — Creatures ────────────────────────────────────────────
+  // Incrémenter force CreaturesModule à relancer son fetch initial.
+  creaturesRefreshKey: 0,
 
-  incrementAnimalsRefreshKey: () =>
-    set({ animalsRefreshKey: get().animalsRefreshKey + 1 }),
+  incrementCreaturesRefreshKey: () =>
+    set({ creaturesRefreshKey: get().creaturesRefreshKey + 1 }),
 
-  // ── Overlay Studio — Animals ──────────────────────────────────────────────
-  animalOverlayEnabled: false,
+  // ── Overlay Studio — Creatures ──────────────────────────────────────────────
+  creatureOverlayEnabled: false,
 
-  setAnimalOverlayEnabled: (enabled: boolean) =>
-    set({ animalOverlayEnabled: enabled }),
+  setCreatureOverlayEnabled: (enabled: boolean) =>
+    set({ creatureOverlayEnabled: enabled }),
 
-  toggleAnimalOverlayEnabled: () =>
-    set({ animalOverlayEnabled: !get().animalOverlayEnabled }),
+  toggleCreatureOverlayEnabled: () =>
+    set({ creatureOverlayEnabled: !get().creatureOverlayEnabled }),
 
   // ── Commandes Studio — CreatureSpawns ─────────────────────────────────────
   // Incrémenter force CreatureSpawnsModule à relancer son fetch initial.

@@ -30,25 +30,25 @@ _Portée : backend NestJS uniquement — aucun code modifié_
 
 ---
 
-### `animals.service.ts` — Animaux
+### `creatures.service.ts` — Animaux
 
 | Ligne | Fonction | Variable | L/É | Encore nécessaire | Legacy temp. | À migrer |
 |---|---|---|---|---|---|---|
-| 54–55 | `toDto()` | `animal.x/y` | Lecture | Oui — payload socket client | **Permanent** | Non — cache pixel pour frontend |
+| 54–55 | `toDto()` | `creature.x/y` | Lecture | Oui — payload socket client | **Permanent** | Non — cache pixel pour frontend |
 | 131–132 | `onModuleInit` | `spawn.spawnX/Y` | Lecture | Oui — init cache pixel | Oui | Oui — utiliser `spawn.worldX/Y` après backfill spawn |
 | 133 | `onModuleInit` | `pixelToWUSafe(a.x, a.y)` | Lecture | Oui — calcule WU au démarrage | Oui | Oui |
 | 223, 271, 336 | `doPatrol/doFighting/doEscaping` | `spawn.spawnX/Y` | Lecture | Oui — fallback si `spawn.worldX/Y` null | Oui | Oui — après backfill creature_spawn |
-| 244–245, 291–292, 361–362 | `doPatrol/doFighting/doEscaping` | `animal.x/y = wuToIsoScreen(...)` | Écriture | Oui — cache pixel dérivé de WU | **Permanent** | Non — cache de rendu |
-| 389–390 | `respawnAnimal` | `spawn.spawnX/Y` | Lecture | Oui — reset position | Oui | Oui — utiliser `spawn.worldX/Y` |
-| 391 | `respawnAnimal` | `pixelToWUSafe(a.x, a.y)` | Lecture | Oui — calcule WU depuis spawn | Oui | Oui |
-| 397–398 | `respawnAnimal` | `spawn.spawnX/Y` (DB update) | Écriture | Oui — double-write legacy | Oui | Oui |
-| 541–542 | `adminSpawnAnimal` | `spawnX/Y` (DB write) | Écriture | Oui — création spawn depuis admin pixels | Oui | Oui — quand admin envoie WU |
-| 547 | `adminSpawnAnimal` | `pixelToWUSafe(x, y)` | Lecture | Oui — convertit entrée admin | Oui | Oui |
-| 614–615 | `adminUpdateAnimal` | `animal.x/y` | Écriture | Oui — admin modifie position pixel | Oui | Oui |
-| 625 | `adminUpdateAnimal` | `pixelToWUSafe(animal.x, animal.y)` | Lecture | Oui — double-write après admin update | Oui | Oui |
-| 640–641 | `moveAnimal` | `animal.x/y` | Écriture | Oui — drag-and-drop admin pixel | Oui | Oui |
-| 643, 646 | `moveAnimal` | `pixelToWUSafe` + `x/y` (DB) | L+É | Oui — double-write drag-drop | Oui | Oui |
-| 662–663 | `forceRespawnAll` | `spawn.spawnX/Y` | Lecture | Oui — même que `respawnAnimal` | Oui | Oui |
+| 244–245, 291–292, 361–362 | `doPatrol/doFighting/doEscaping` | `creature.x/y = wuToIsoScreen(...)` | Écriture | Oui — cache pixel dérivé de WU | **Permanent** | Non — cache de rendu |
+| 389–390 | `respawnCreature` | `spawn.spawnX/Y` | Lecture | Oui — reset position | Oui | Oui — utiliser `spawn.worldX/Y` |
+| 391 | `respawnCreature` | `pixelToWUSafe(a.x, a.y)` | Lecture | Oui — calcule WU depuis spawn | Oui | Oui |
+| 397–398 | `respawnCreature` | `spawn.spawnX/Y` (DB update) | Écriture | Oui — double-write legacy | Oui | Oui |
+| 541–542 | `adminSpawnCreature` | `spawnX/Y` (DB write) | Écriture | Oui — création spawn depuis admin pixels | Oui | Oui — quand admin envoie WU |
+| 547 | `adminSpawnCreature` | `pixelToWUSafe(x, y)` | Lecture | Oui — convertit entrée admin | Oui | Oui |
+| 614–615 | `adminUpdateCreature` | `creature.x/y` | Écriture | Oui — admin modifie position pixel | Oui | Oui |
+| 625 | `adminUpdateCreature` | `pixelToWUSafe(creature.x, creature.y)` | Lecture | Oui — double-write après admin update | Oui | Oui |
+| 640–641 | `moveCreature` | `creature.x/y` | Écriture | Oui — drag-and-drop admin pixel | Oui | Oui |
+| 643, 646 | `moveCreature` | `pixelToWUSafe` + `x/y` (DB) | L+É | Oui — double-write drag-drop | Oui | Oui |
+| 662–663 | `forceRespawnAll` | `spawn.spawnX/Y` | Lecture | Oui — même que `respawnCreature` | Oui | Oui |
 | 664, 673–674 | `forceRespawnAll` | `pixelToWUSafe` + `spawn.spawnX/Y` (DB) | L+É | Oui — double-write | Oui | Oui |
 | 718 | `seedInstances` | `pixelToWUSafe(spawn.spawnX, spawn.spawnY)` | Lecture | Oui — WU pour le seed initial | Oui | Oui — après creature_spawn natif WU |
 
@@ -84,17 +84,17 @@ _Portée : backend NestJS uniquement — aucun code modifié_
 
 ## 2. Conversions restantes
 
-### `pixelToWUSafe` — AnimalsService uniquement
+### `pixelToWUSafe` — CreaturesService uniquement
 
 | Site d'appel | Raison | Peut être supprimé quand |
 |---|---|---|
 | `onModuleInit` | Init WU depuis spawn pixels | creature_spawn.worldX/Y backfillés et utilisés directement |
-| `respawnAnimal` | WU depuis spawn pixels | idem |
+| `respawnCreature` | WU depuis spawn pixels | idem |
 | `forceRespawnAll` | WU depuis spawn pixels | idem |
 | `doPatrol/doFighting/doEscaping` (×3) | Fallback spawn WU | creature_spawn.worldX/Y garantis non null |
-| `adminSpawnAnimal` | Entrée admin pixels → WU | Admin envoie WU nativement |
-| `adminUpdateAnimal` | Entrée admin pixels → WU | idem |
-| `moveAnimal` | Drag-and-drop admin pixels | idem |
+| `adminSpawnCreature` | Entrée admin pixels → WU | Admin envoie WU nativement |
+| `adminUpdateCreature` | Entrée admin pixels → WU | idem |
+| `moveCreature` | Drag-and-drop admin pixels | idem |
 | `seedInstances` | Seed pixels → WU | creature_spawn natif WU |
 
 **Résidu permanent** : fonctions admin recevant des pixels depuis le panneau (3 fonctions). `pixelToWUSafe` ne peut pas être supprimé tant que le protocole admin reste en pixels.
@@ -105,7 +105,7 @@ _Portée : backend NestJS uniquement — aucun code modifié_
 
 | Fichier | Fonction | Peut être supprimé quand |
 |---|---|---|
-| `animals.service.ts` | `pixelToWUSafe` (interne) | Voir ci-dessus |
+| `creatures.service.ts` | `pixelToWUSafe` (interne) | Voir ci-dessus |
 | `world.service.ts` | `updatePlayer` | `player_move` client envoie `worldX/Y` |
 | `world.service.ts` | `persistPlayerPosition` (fallback) | Colonne `positionX/Y` supprimée et WU stable |
 | `world.service.ts` | `respawnCharacter` (drift pixel→WU) | `RespawnPoint.radius` migré en WU |
@@ -139,15 +139,15 @@ Utilisé uniquement dans `wu-backfill-report.ts` (outil de diagnostic). Jamais s
 |---|---|---|
 | **Joueurs en mémoire** | `ConnectedPlayer.worldX/Y/mapId` | ✅ — vérité depuis R0 |
 | **Joueurs en DB** | `character.worldX/Y/mapId` | ✅ — double-write depuis R0, backfill Phase 1 ✅ |
-| **Animaux en mémoire** | `animal.worldX/Y/mapId` | ✅ — vérité depuis A2+A4 |
-| **Animaux en DB** | `animal.worldX/Y/mapId` | ✅ — double-write depuis A1 |
-| **IA — mouvement** | `animal.worldX/Y` (patrol, fight, escape) | ✅ — depuis A4 |
+| **Animaux en mémoire** | `creature.worldX/Y/mapId` | ✅ — vérité depuis A2+A4 |
+| **Animaux en DB** | `creature.worldX/Y/mapId` | ✅ — double-write depuis A1 |
+| **IA — mouvement** | `creature.worldX/Y` (patrol, fight, escape) | ✅ — depuis A4 |
 | **IA — aggro/portée** | `chebyshevDistanceWU` sur `worldX/Y` | ✅ — depuis A3 |
-| **Combat joueur→animal** | `attack()` → `animal.worldX/Y` direct | ✅ — depuis A7 |
+| **Combat joueur→creature** | `attack()` → `creature.worldX/Y` direct | ✅ — depuis A7 |
 | **Ressources en DB** | `resource.worldX/Y/mapId` | ✅ — double-write depuis R1 |
 | **Ressources — portée de récolte** | `chebyshevDistanceWU` via `readWorldPosition` | ✅ — depuis R2 |
 | **Respawn personnage — sélection du point** | `chebyshevDistanceWU` via `readWorldPosition` | ✅ — WU logic |
-| **Spawns animaux (creature_spawn)** | `spawn.worldX/Y/mapId` nullable | ⚠️ — colonnes présentes, backfill A0 fait sur `animals`, statut spawn incertain |
+| **Spawns animaux (creature_spawn)** | `spawn.worldX/Y/mapId` nullable | ⚠️ — colonnes présentes, backfill A0 fait sur `creatures`, statut spawn incertain |
 | **Points de respawn (RespawnPoint)** | `rp.worldX/Y/mapId` nullable | ⚠️ — colonnes présentes, backfill non confirmé |
 
 ---
@@ -182,7 +182,7 @@ La logique métier serveur est largement migrée. Les 40% restants sont concentr
 
 ```
 B1 — Backfill creature_spawn.worldX/Y/mapId
-     → débloque onModuleInit, respawnAnimal, forceRespawnAll, les 3 fallbacks IA
+     → débloque onModuleInit, respawnCreature, forceRespawnAll, les 3 fallbacks IA
 
 B2 — Backfill RespawnPoint.worldX/Y/mapId
      → débloque respawnCharacter (drift radius WU)
@@ -192,7 +192,7 @@ B2 — Backfill RespawnPoint.worldX/Y/mapId
 
 ```
 A8 — creature_spawn : utiliser spawn.worldX/Y comme source primaire
-     dans onModuleInit, respawnAnimal, forceRespawnAll, seedInstances
+     dans onModuleInit, respawnCreature, forceRespawnAll, seedInstances
      → supprime 4× pixelToWUSafe(spawn.spawnX/Y)
      → supprime les 3 fallbacks dans doPatrol/doFighting/doEscaping
      Dépend de B1.
@@ -225,7 +225,7 @@ C2 — Supprimer positionX/Y des colonnes DB character
 ### Phase D — Admin protocol
 
 ```
-D1 — adminSpawnAnimal, adminUpdateAnimal, moveAnimal :
+D1 — adminSpawnCreature, adminUpdateCreature, moveCreature :
      accepter worldX/Y depuis le panneau admin
      → supprime pixelToWUSafe dans les 3 fonctions admin
      → admin panel frontend correspondant
@@ -235,9 +235,9 @@ D1 — adminSpawnAnimal, adminUpdateAnimal, moveAnimal :
 ### Phase E — Colonnes legacy animaux
 
 ```
-E1 — animal.x/y : passer de double-write à cache dérivé pur
+E1 — creature.x/y : passer de double-write à cache dérivé pur
      wuToIsoScreenX/Y avant chaque toDto uniquement
-     → supprimer animal.x/y des DB saves (ne garder que worldX/Y)
+     → supprimer creature.x/y des DB saves (ne garder que worldX/Y)
      Dépend de A8 + stabilité prod.
 ```
 
@@ -248,7 +248,7 @@ B1 (backfill spawn) → A8 (utiliser spawn.worldX/Y)
 B2 (backfill RespawnPoint) → B3 (radius WU)
 C1 (player_move WU) → C2 (drop positionX/Y)
 D1 (admin WU, optionnel)
-E1 (drop animal.x/y legacy, optionnel)
+E1 (drop creature.x/y legacy, optionnel)
 ```
 
 B1+B2 et C1 sont indépendants et peuvent avancer en parallèle.

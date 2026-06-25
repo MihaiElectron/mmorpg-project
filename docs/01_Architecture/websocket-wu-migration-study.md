@@ -19,7 +19,7 @@ _Portée : protocole WebSocket_
 | P4.5 | Supprimer `x/y` legacy de `character_respawn` + `character_teleport` | **SOLDÉ** |
 | P5 | `player_move` WU-only — supprimer fallback `x/y` | **SOLDÉ** |
 | P6 | Protocole admin WU — 6 événements admin en `worldX/worldY` | **SOLDÉ** |
-| P7 | Drop colonnes legacy DB (`positionX/Y`, `animal.x/y`) | À faire |
+| P7 | Drop colonnes legacy DB (`positionX/Y`, `creature.x/y`) | À faire |
 
 ---
 
@@ -31,15 +31,15 @@ _Portée : protocole WebSocket_
 |---|---|---|---|---|---|
 | `join_world` | `x?: number, y?: number` | Pixels | `world.gateway.ts:70` | `WorldService.joinPlayer` | Fallback seulement — ignoré si `worldX/Y` valides en DB |
 | `player_move` | `x: number, y: number` | Pixels | `world.gateway.ts:107` | `WorldService.updatePlayer` | Émis depuis `WorldScene.syncLocalPlayer` toutes les 80 ms |
-| `attack_animal` | aucune | — | `animals.gateway.ts:46` | `AnimalsService.attack` | Position joueur prise de `client.data.player.worldX/Y` |
+| `attack_creature` | aucune | — | `creatures.gateway.ts:46` | `CreaturesService.attack` | Position joueur prise de `client.data.player.worldX/Y` |
 | `interact_resource` | aucune | — | `resources.gateway.ts:83` | `ResourcesGateway.onInteract` | Position joueur prise de `client.data.player.worldX/Y` |
 | `get_resources` | aucune | — | `resources.gateway.ts:78` | — | — |
-| `get_animals` | aucune | — | `animals.gateway.ts:41` | — | — |
-| `admin:spawn` | `x: number, y: number` | Pixels | `admin.gateway.ts:35` | `AnimalsService.createAdminSpawn` | Drag-and-drop depuis la map Phaser |
+| `get_creatures` | aucune | — | `creatures.gateway.ts:41` | — | — |
+| `admin:spawn` | `x: number, y: number` | Pixels | `admin.gateway.ts:35` | `CreaturesService.createAdminSpawn` | Drag-and-drop depuis la map Phaser |
 | `admin:teleport` | `x: number, y: number` | Pixels | `admin.gateway.ts:62` | `WorldService.teleportCharacter` | Commande console `/tp x y` |
-| `admin:move_animal` | `x: number, y: number` | Pixels | `admin.gateway.ts:151` | `AnimalsService.moveAnimal` | Drag-and-drop animal sur la map |
+| `admin:move_creature` | `x: number, y: number` | Pixels | `admin.gateway.ts:151` | `CreaturesService.moveCreature` | Drag-and-drop creature sur la map |
 | `admin:spawn_resource` | `x: number, y: number` | Pixels | `admin.gateway.ts:258` | `AdminService.createResource` | Drag-and-drop ressource sur la map |
-| `admin:update_animal` | `fields.x?: number, fields.y?: number` | Pixels | `admin.gateway.ts:200` | `AnimalsService.adminUpdateAnimal` | Édition directe dans le panneau admin |
+| `admin:update_creature` | `fields.x?: number, fields.y?: number` | Pixels | `admin.gateway.ts:200` | `CreaturesService.adminUpdateCreature` | Édition directe dans le panneau admin |
 | `admin:update_resource` | `fields.x?: number, fields.y?: number` | Pixels | `admin.gateway.ts:344` | `AdminService.updateResource` | Édition directe dans le panneau admin |
 
 ### Détail `join_world`
@@ -87,9 +87,9 @@ playerY = character.positionY ?? payload.y ?? 300;
 
 | Événement | Payload coordonnées | Unité | Consommateur frontend | Utilisation |
 |---|---|---|---|---|
-| `animals` | `animal[].x, animal[].y` | Pixels | `WorldScene.js:312` → `renderAnimals` → `upsertAnimal` | `sprite.setPosition(animal.x, animal.y)` |
-| `animal_update` | `animal.x, animal.y` | Pixels | `WorldScene.js:360` → `upsertAnimal` | `tweens.add({ x: animal.x, y: animal.y })` |
-| `animal_hit` | `...AnimalDto` incluant `x, y` | Pixels | Non consommé dans WorldScene (gateway direct) | — |
+| `creatures` | `creature[].x, creature[].y` | Pixels | `WorldScene.js:312` → `renderCreatures` → `upsertCreature` | `sprite.setPosition(creature.x, creature.y)` |
+| `creature_update` | `creature.x, creature.y` | Pixels | `WorldScene.js:360` → `upsertCreature` | `tweens.add({ x: creature.x, y: creature.y })` |
+| `creature_hit` | `...CreatureDto` incluant `x, y` | Pixels | Non consommé dans WorldScene (gateway direct) | — |
 
 ### Ressources
 
@@ -130,7 +130,7 @@ export type ConnectedPlayer = {
 
 | Champ | Rôle | Utilisé par logique métier | Utilisé par frontend |
 |---|---|---|---|
-| `worldX` | Vérité WU — portée, respawn, animaux | ✅ `attack()`, `isInRange()`, `AnimalsGateway`, `ResourcesGateway` | ✅ présent dans payload mais ignoré |
+| `worldX` | Vérité WU — portée, respawn, animaux | ✅ `attack()`, `isInRange()`, `CreaturesGateway`, `ResourcesGateway` | ✅ présent dans payload mais ignoré |
 | `worldY` | idem | ✅ | ✅ présent mais ignoré |
 | `mapId` | Filtre de map | ✅ `findNearestPlayer`, `respawnCharacter`, etc. | ✅ présent mais ignoré |
 | `x` | Cache pixels | ⚠️ `resources.gateway.ts` MOVE_TOLERANCE uniquement | ✅ `upsertRemotePlayer`, `world_joined` |
@@ -236,8 +236,8 @@ player.direction = payload.direction ?? player.direction;
 | `player_moved` | `tweens.add({ x: player.x, y: player.y })` | `WorldScene.js:489` |
 | `character_respawn` | `player.setPosition(data.x, data.y)` | `WorldScene.js:430` |
 | `character_teleport` | `player.setPosition(data.x, data.y)` + `centerOn` | `WorldScene.js:419` |
-| `animals` | `sprite.setPosition(animal.x, animal.y)` | `WorldScene.js:701` |
-| `animal_update` | `tweens.add({ x: animal.x, y: animal.y })` | `WorldScene.js:707` |
+| `creatures` | `sprite.setPosition(creature.x, creature.y)` | `WorldScene.js:701` |
+| `creature_update` | `tweens.add({ x: creature.x, y: creature.y })` | `WorldScene.js:707` |
 | `resources` | `add.image(resource.x, resource.y, ...)` | `WorldScene.js:650` |
 | `resource_update` | `tweens.add({ x: resource.x, y: resource.y })` | `WorldScene.js:671` |
 
@@ -245,7 +245,7 @@ player.direction = payload.direction ?? player.direction;
 
 | Événement | Statut | Action possible maintenant |
 |---|---|---|
-| `attack_animal` | Pas de coordonnées dans le payload | Déjà WU (position joueur via `client.data.player.worldX/Y`) |
+| `attack_creature` | Pas de coordonnées dans le payload | Déjà WU (position joueur via `client.data.player.worldX/Y`) |
 | `interact_resource` | Pas de coordonnées dans le payload | Déjà WU |
 | `character_damaged` | Pas de coordonnées | Rien à faire |
 | `resource_loot` | Pas de coordonnées | Rien à faire |
@@ -335,16 +335,16 @@ Les événements `world_joined`, `player_joined`, `current_players`, `player_mov
 
 ---
 
-### P4 — Événements serveur animaux : `AnimalDto` WU-first
+### P4 — Événements serveur animaux : `CreatureDto` WU-first
 
-**Serveur — `animals.service.ts` `toDto()`** : ajouter `worldX` et `worldY` au DTO (déjà disponibles dans `animal.worldX/Y`).
+**Serveur — `creatures.service.ts` `toDto()`** : ajouter `worldX` et `worldY` au DTO (déjà disponibles dans `creature.worldX/Y`).
 
 **Frontend — après ajout `worldX/Y` dans le DTO** :
-- `upsertAnimal` : utiliser `worldX/Y` pour `tweens.add` et `setPosition`
+- `upsertCreature` : utiliser `worldX/Y` pour `tweens.add` et `setPosition`
 
 **Serveur — après frontend migré** :
-- `toDto()` : supprimer `x: animal.x, y: animal.y`
-- `animal.x/y` deviennent des champs internes non émis
+- `toDto()` : supprimer `x: creature.x, y: creature.y`
+- `creature.x/y` deviennent des champs internes non émis
 
 ---
 
@@ -361,7 +361,7 @@ Les événements `world_joined`, `player_joined`, `current_players`, `player_mov
 
 ### P6 — Admin protocol WU (optionnel, basse priorité)
 
-Les événements admin (`admin:spawn`, `admin:teleport`, `admin:move_animal`, `admin:spawn_resource`) envoient des pixels depuis le panneau Phaser. La migration nécessite :
+Les événements admin (`admin:spawn`, `admin:teleport`, `admin:move_creature`, `admin:spawn_resource`) envoient des pixels depuis le panneau Phaser. La migration nécessite :
 - Que l'admin panel frontend calcule `worldX/Y` avant d'émettre
 - Que les handlers gateway acceptent WU
 
@@ -373,7 +373,7 @@ Peut rester en pixels indéfiniment tant que le panneau admin est usage interne 
 
 Après P1-P5 stables :
 - `character.positionX/Y` : schéma migration TypeORM, supprimer double-write
-- `animal.x/y` : supprimer des colonnes DB (calculés à la volée dans `toDto`)
+- `creature.x/y` : supprimer des colonnes DB (calculés à la volée dans `toDto`)
 - `resource.x/y` : idem
 
 ---
@@ -387,7 +387,7 @@ P1 (player_move additive — serveur + frontend)
    ↓
 P2 (player_move drop x/y — nettoyage)
    ↓
-P3 (frontend joueurs lit worldX/Y)     P4 (AnimalDto + frontend animaux)     P5 (resources)
+P3 (frontend joueurs lit worldX/Y)     P4 (CreatureDto + frontend animaux)     P5 (resources)
    ↓                                        ↓                                      ↓
    P3 cleanup serveur                    P4 cleanup serveur                     P5 cleanup serveur
                          ↓
@@ -410,4 +410,4 @@ P7 nécessite que P3+P4+P5 soient terminés et stables.
 | `mapId` non transmis → mauvais filtre de map | P1 | `DEFAULT_MAP_ID` pour la map unique actuelle ; à étendre avec multi-map |
 | Drop x/y de ConnectedPlayer casse un consommateur non référencé | P3 | Grep exhaustif avant suppression |
 | `resources` sans x/y : ressources mal positionnées si worldX/Y absents | P5 | Valider que 100% des ressources ont `worldX/Y` non null avant drop |
-| `AnimalDto` sans x/y : animaux non positionnés si `animal.worldX/Y` null | P4 | Déjà validé : tous les animaux ont `worldX/Y` en mémoire (vérité depuis A4) |
+| `CreatureDto` sans x/y : animaux non positionnés si `creature.worldX/Y` null | P4 | Déjà validé : tous les animaux ont `worldX/Y` en mémoire (vérité depuis A4) |

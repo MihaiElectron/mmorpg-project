@@ -77,7 +77,7 @@ The project must protect:
 - Items.
 - Resources.
 - Loot.
-- Animals.
+- Creatures.
 - Health points.
 - Cooldowns.
 - Administrative permissions.
@@ -116,7 +116,7 @@ configuration.
 | Socket.IO gateways | Server-controlled, not automatically sufficient | No direct user modification | Authenticate sockets where implemented, validate payloads, route events to services. | Trust client payloads without checks. | Implemented / Not verified |
 | Server services | Server-controlled, not automatically sufficient | No direct user modification | Apply business rules, ownership checks, persistence decisions, combat/resource logic. | Trust client state without validation. | Implemented / Not verified |
 | TypeORM | Server-controlled data access layer | No direct user modification | Persist and query server-side state through repositories. | Act as standalone authorization, security, or gameplay validator. | Implemented |
-| PostgreSQL | Server-controlled persistence | No direct user modification | Store persistent accounts, characters, inventory, resources, animals, and templates. Persisted data may be stale, inconsistent, or produced by a server bug. | Act as authorization authority or standalone gameplay validation engine. | Implemented |
+| PostgreSQL | Server-controlled persistence | No direct user modification | Store persistent accounts, characters, inventory, resources, creatures, and templates. Persisted data may be stale, inconsistent, or produced by a server bug. | Act as authorization authority or standalone gameplay validation engine. | Implemented |
 
 ## Authentication versus authorization
 
@@ -142,7 +142,7 @@ Implemented:
 - `RolesGuard` checks required roles from metadata against `request.user.role`.
 - Admin HTTP routes use `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)`.
 - Item write routes use `RolesGuard` with `UserRole.ADMIN`.
-- WebSocket auth for `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway`
+- WebSocket auth for `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway`
   uses `WsAuthService`.
 - `join_world` checks character ownership server-side before joining the world.
 
@@ -209,12 +209,12 @@ Implemented:
 - `WsAuthService` also supports an `Authorization: Bearer ...` handshake header.
 - `WsAuthService` verifies the JWT and returns `userId`, optional `username`,
   and optional `role`.
-- `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway` call `WsAuthService`
+- `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway` call `WsAuthService`
   in `handleConnection`.
 - Invalid WebSocket authentication disconnects the socket in those gateways.
 - Authenticated gateways set `client.data.userId` and `client.data.role`.
 - `join_world` sets `client.data.player` after server-side ownership checks.
-- Resource and animal events use `client.data.player` instead of trusting the
+- Resource and creature events use `client.data.player` instead of trusting the
   client-supplied character id.
 - Admin Socket.IO events check `client.data.role === 'admin'`.
 
@@ -328,22 +328,22 @@ Security boundary:
 - Client inventory display and Zustand inventory state are not authoritative.
 - Persistent inventory changes must come from validated server-side logic.
 
-## Animals and combat
+## Creatures and combat
 
 Implemented:
 
-- `attack_animal` requires a string `targetId`.
+- `attack_creature` requires a string `targetId`.
 - The gateway uses `client.data.player` from the joined world session.
-- `AnimalsService.attack` checks attack cooldown.
-- Animal existence and dead state are checked.
+- `CreaturesService.attack` checks attack cooldown.
+- Creature existence and dead state are checked.
 - Character existence and health are checked.
 - Attack range is derived from server-side character equipment and checked
   against server-side connected-player position.
 - Successful attacks apply damage server-side.
-- Animal state is persisted.
+- Creature state is persisted.
 - Riposte can update character health server-side.
 - Respawn can persist character position and health.
-- Live animals, patrol states, and cooldown maps are kept in server memory.
+- Live creatures, patrol states, and cooldown maps are kept in server memory.
 
 Not verified:
 
@@ -351,7 +351,7 @@ Not verified:
 - Idempotence for duplicated attack events.
 - Replay protection for old attack events.
 - Complete recovery of live combat state after server restart.
-- Full handling of client/server divergence for displayed animal state.
+- Full handling of client/server divergence for displayed creature state.
 
 ## Admin security
 
@@ -360,7 +360,7 @@ Implemented:
 - React may show the admin tab based on decoded JWT role, but this is UI only.
 - Admin HTTP routes use `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)`.
 - Admin Socket.IO event handlers check `client.data.role === 'admin'`.
-- Observed admin commands include spawn, teleport, template update, animal move,
+- Observed admin commands include spawn, teleport, template update, creature move,
   and respawn all.
 - Admin WebSocket commands validate required payload fields.
 - Admin template update uses a whitelist of editable fields and numeric
@@ -397,7 +397,7 @@ Security rules:
 | Numbers | DTOs and admin fields | Global validation pipe; admin template fields parsed as numbers and checked non-negative in WebSocket path. | Numeric constraints not verified for every HTTP body. | Implemented / Not verified |
 | Inventory | HTTP routes, resource loot | Inventory DTO validates create body; resource loot uses server-side inventory service. | Ownership and concurrent update protection not verified for every inventory route. | Implemented / Not verified |
 | Resources | Socket.IO `interact_resource` | Target string, joined player, existence, range, state, movement during gathering. | Replay, rate limiting, and transaction/locking not verified. | Implemented / Not verified |
-| Animals | Socket.IO `attack_animal` | Target string, joined player, cooldown, range, character and animal state. | Replay and general spam protection beyond cooldown not verified. | Implemented / Not verified |
+| Creatures | Socket.IO `attack_creature` | Target string, joined player, cooldown, range, character and creature state. | Replay and general spam protection beyond cooldown not verified. | Implemented / Not verified |
 | Admin commands | Socket.IO admin events | Role check, required fields, template whitelist for WebSocket template update. | Independent gateway auth, idempotence, deduplication, and audit not verified. | Implemented / Not verified |
 | Roles | JWT payload, request user, socket data | HTTP roles guard checks `request.user.role`; admin socket checks `client.data.role`. | Admin socket role provenance and connection-hook ordering not verified. | Implemented / Not verified |
 | Client maps or properties | Phaser/Tiled/map files | No server-side trust observed. | Server authoritative map, mobility, and collision validation are `TBD` or `Not verified`. | Not verified / TBD |
@@ -411,7 +411,7 @@ Implemented:
 - Resource gathering ignores repeated clicks on the same target while a session
   exists.
 - Resource gathering cancels the previous target when switching targets.
-- Animal attacks have a server-side cooldown.
+- Creature attacks have a server-side cooldown.
 - Admin commands use acknowledgements with a client-side timeout.
 
 Not verified:
@@ -445,12 +445,12 @@ Server memory:
 - Connected players and live connected positions are held in
   `WorldService.connectedPlayers`.
 - Gathering sessions and timers are held in `ResourcesGateway`.
-- Live animals, patrol states, and cooldowns are held in `AnimalsService`.
+- Live creatures, patrol states, and cooldowns are held in `CreaturesService`.
 - Socket user and role data are held in `client.data`.
 
 Persistent state:
 
-- PostgreSQL stores users, characters, inventory, items, resources, animals,
+- PostgreSQL stores users, characters, inventory, items, resources, creatures,
   templates, spawns, equipment, and respawn points through TypeORM.
 - Persisted position and live connected-session position are distinct.
 - PostgreSQL stores data but does not validate gameplay rules by itself.
@@ -483,7 +483,7 @@ their real values must not be copied.
 Observed:
 
 - Some gateway rejections use `console.warn`.
-- Animal patrol tick errors are caught and logged with `console.error`.
+- Creature patrol tick errors are caught and logged with `console.error`.
 - Admin WebSocket handlers return success or failure acknowledgement objects.
 - HTTP errors use NestJS exceptions in several services.
 
@@ -508,7 +508,7 @@ Logging rule:
 | Disable collisions | Client can alter Phaser collision behavior. | Server-side collision and mobility validation. | Server collision authority not verified. | Not verified |
 | Modify `walkable` | Client can alter map or tile properties. | Server authoritative map/mobility data. | Server map authority is `TBD` or not verified. | Not verified / TBD |
 | Forge Socket.IO event | Client can emit arbitrary event payloads. | Authenticate socket and validate each event payload and authorization. | Some event checks observed; full coverage not verified. | Implemented / Not verified |
-| Attack too fast | Client can emit repeated `attack_animal`. | Server-side cooldown and rate limiting. | Attack cooldown observed; general spam protection not verified. | Implemented / Not verified |
+| Attack too fast | Client can emit repeated `attack_creature`. | Server-side cooldown and rate limiting. | Attack cooldown observed; general spam protection not verified. | Implemented / Not verified |
 | Collect twice | Client can repeat `interact_resource`. | Session checks, idempotence, locking, and persistence consistency. | Same-target session ignore observed; locking/idempotence not verified. | Implemented / Not verified |
 | Modify Zustand inventory | Client can change local inventory display. | Server-side inventory persistence and authorization. | Resource loot updates server-side; all inventory route ownership not verified. | Implemented / Not verified |
 | Spoof admin role in client | Client can modify decoded JWT display logic. | Server-side role checks from verified auth. | HTTP admin guards observed; admin socket role provenance not fully verified. | Implemented / Not verified |
@@ -529,12 +529,12 @@ Verified in code:
 - HTTP admin routes use `JwtAuthGuard`, `RolesGuard`, and `@Roles(UserRole.ADMIN)`.
 - Item write routes use admin role guard.
 - WebSocket JWT authentication exists for `WorldGateway`, `ResourcesGateway`,
-  and `AnimalsGateway`.
+  and `CreaturesGateway`.
 - Character ownership is checked for character read/delete and world join.
 - Resource gathering checks joined player, target existence, resource state,
   range, and movement during gathering.
 - Resource loot and inventory update are performed server-side.
-- Animal attack checks cooldown, target, character state, server-side range, and
+- Creature attack checks cooldown, target, character state, server-side range, and
   equipment-derived range.
 - Admin WebSocket template update uses an allowed-field whitelist.
 

@@ -14,9 +14,9 @@ import {
   CraftingStationTemplateWorldObject,
   CraftingStationWorldObject,
 } from '../crafting/adapters/crafting-station-world-object.adapter';
-import { CreatureTemplate } from '../animals/entities/creature-template.entity';
-import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
-import { Animal } from '../animals/entities/animal.entity';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
+import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
+import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -26,8 +26,8 @@ import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../ski
 import { type MovementMetrics, WorldService } from '../world/world.service';
 import { DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
-import { toAnimalWorldObject, AnimalWorldObject } from '../animals/adapters/animal-world-object.adapter';
-import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../animals/adapters/creature-spawn-world-object.adapter';
+import { toCreatureWorldObject, CreatureWorldObject } from '../creatures/adapters/creature-world-object.adapter';
+import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../creatures/adapters/creature-spawn-world-object.adapter';
 
 @Injectable()
 export class AdminService {
@@ -36,8 +36,8 @@ export class AdminService {
     private readonly templateRepo: Repository<CreatureTemplate>,
     @InjectRepository(CreatureSpawn)
     private readonly spawnRepo: Repository<CreatureSpawn>,
-    @InjectRepository(Animal)
-    private readonly animalRepo: Repository<Animal>,
+    @InjectRepository(Creature)
+    private readonly creatureRepo: Repository<Creature>,
     @InjectRepository(Character)
     private readonly characterRepo: Repository<Character>,
     @InjectRepository(Resource)
@@ -258,12 +258,12 @@ export class AdminService {
   }
 
   /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
-  async getAnimalWorldObjects(): Promise<AnimalWorldObject[]> {
-    const animals = await this.animalRepo.find({
+  async getCreatureWorldObjects(): Promise<CreatureWorldObject[]> {
+    const creatures = await this.creatureRepo.find({
       relations: ['spawn', 'spawn.template'],
       order: { state: 'ASC' },
     });
-    return animals.map(toAnimalWorldObject);
+    return creatures.map(toCreatureWorldObject);
   }
 
   async updateResource(
@@ -889,17 +889,17 @@ export class AdminService {
   async getOverview(): Promise<{
     templates: number;
     spawns: number;
-    activeAnimals: number;
+    activeCreatures: number;
     connectedPlayers: number;
     registeredCharacters: number;
   }> {
-    const [templates, spawns, activeAnimals, registeredCharacters] = await Promise.all([
+    const [templates, spawns, activeCreatures, registeredCharacters] = await Promise.all([
       this.templateRepo.count(),
       this.spawnRepo.count(),
-      this.animalRepo.count({ where: { state: Not('dead') } }),
+      this.creatureRepo.count({ where: { state: Not('dead') } }),
       this.characterRepo.count(),
     ]);
     const connectedPlayers = this.worldService.getConnectedCount();
-    return { templates, spawns, activeAnimals, connectedPlayers, registeredCharacters };
+    return { templates, spawns, activeCreatures, connectedPlayers, registeredCharacters };
   }
 }

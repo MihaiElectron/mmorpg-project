@@ -2,13 +2,13 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
-import { Animal } from './entities/animal.entity';
+import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
-import { AnimalDto } from './dto/animal.dto';
+import { CreatureDto } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
@@ -36,39 +36,39 @@ function rand(min: number, max: number): number {
 
 function findNearestPlayer(
   players: ConnectedPlayer[],
-  animal: Animal,
+  creature: Creature,
 ): { player: ConnectedPlayer; dist: number } | null {
-  if (animal.worldX == null || animal.worldY == null) return null;
-  const animalPos = { worldX: animal.worldX, worldY: animal.worldY };
+  if (creature.worldX == null || creature.worldY == null) return null;
+  const creaturePos = { worldX: creature.worldX, worldY: creature.worldY };
   let nearest: ConnectedPlayer | null = null;
   let minDist = Infinity;
   for (const p of players) {
-    if (animal.mapId != null && p.mapId !== animal.mapId) continue;
-    const d = chebyshevDistanceWU({ worldX: p.worldX, worldY: p.worldY }, animalPos);
+    if (creature.mapId != null && p.mapId !== creature.mapId) continue;
+    const d = chebyshevDistanceWU({ worldX: p.worldX, worldY: p.worldY }, creaturePos);
     if (d < minDist) { minDist = d; nearest = p; }
   }
   return nearest ? { player: nearest, dist: minDist } : null;
 }
 
-function toDto(animal: Animal): AnimalDto {
-  const t = animal.spawn.template;
+function toDto(creature: Creature): CreatureDto {
+  const t = creature.spawn.template;
   return {
-    id: animal.id,
+    id: creature.id,
     templateKey: t.key,
     type: t.textureKey,
     textureKey: t.textureKey,
     name: t.name,
-    worldX: animal.worldX ?? null,
-    worldY: animal.worldY ?? null,
-    mapId: animal.mapId ?? null,
-    x: animal.x,
-    y: animal.y,
-    health: animal.health,
+    worldX: creature.worldX ?? null,
+    worldY: creature.worldY ?? null,
+    mapId: creature.mapId ?? null,
+    x: creature.x,
+    y: creature.y,
+    health: creature.health,
     maxHealth: t.baseHealth,
     armor: t.baseArmor,
     attack: t.baseAttack,
-    state: animal.state,
-    respawnAt: animal.respawnAt ?? null,
+    state: creature.state,
+    respawnAt: creature.respawnAt ?? null,
   };
 }
 
@@ -83,7 +83,7 @@ type PatrolState = {
 
 export type AttackSuccess = {
   success: true;
-  dto: AnimalDto;
+  dto: CreatureDto;
   damage: number;
   attackerId: string;
   riposte?: { damage: number; characterHealth: number };
@@ -113,16 +113,16 @@ export function resolveCombatSkill(equipment: CharacterEquipment[]): string {
 }
 
 @Injectable()
-export class AnimalsService implements OnModuleInit {
+export class CreaturesService implements OnModuleInit {
   private readonly lastAttackAt = new Map<string, number>();
-  private readonly lastAnimalAutoAttackAt = new Map<string, number>();
-  private readonly liveAnimals = new Map<string, Animal>();
+  private readonly lastCreatureAutoAttackAt = new Map<string, number>();
+  private readonly liveCreatures = new Map<string, Creature>();
   private readonly patrolStates = new Map<string, PatrolState>();
   private server: Server | null = null;
 
   constructor(
-    @InjectRepository(Animal)
-    private readonly animalRepository: Repository<Animal>,
+    @InjectRepository(Creature)
+    private readonly creatureRepository: Repository<Creature>,
     @InjectRepository(CreatureTemplate)
     private readonly templateRepository: Repository<CreatureTemplate>,
     @InjectRepository(CreatureSpawn)
@@ -137,14 +137,14 @@ export class AnimalsService implements OnModuleInit {
     await this.seedTemplates();
     await this.seedSpawns();
     await this.seedInstances();
-    await this.animalRepository
+    await this.creatureRepository
       .createQueryBuilder()
       .delete()
       .where('spawn_id IS NULL')
       .execute();
 
     // Réinitialiser les états comportementaux non-persistants au redémarrage
-    await this.animalRepository
+    await this.creatureRepository
       .createQueryBuilder()
       .update()
       .set({ state: 'alive' })
@@ -152,15 +152,15 @@ export class AnimalsService implements OnModuleInit {
       .execute();
 
     const now = Date.now();
-    const animals = await this.animalRepository.find();
-    for (const a of animals) {
+    const creatures = await this.creatureRepository.find();
+    for (const a of creatures) {
       if (!a.spawn) continue;
       if (a.state === 'dead') {
         if (a.respawnAt && a.respawnAt.getTime() > now) {
           // Timer encore en cours — replanifier pour le temps restant
-          this.liveAnimals.set(a.id, a);
+          this.liveCreatures.set(a.id, a);
           const remaining = a.respawnAt.getTime() - now;
-          setTimeout(() => this.respawnAnimal(a.id), remaining);
+          setTimeout(() => this.respawnCreature(a.id), remaining);
         } else {
           // Timer expiré ou absent — respawn immédiat
           a.state = 'alive';
@@ -170,17 +170,17 @@ export class AnimalsService implements OnModuleInit {
           a.respawnAt = null;
           const wu = this.pixelToWUSafe(a.x, a.y);
           if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
-          await this.animalRepository.save(a);
-          this.liveAnimals.set(a.id, a);
+          await this.creatureRepository.save(a);
+          this.liveCreatures.set(a.id, a);
         }
       } else {
-        this.liveAnimals.set(a.id, a);
+        this.liveCreatures.set(a.id, a);
       }
     }
   }
 
-  findAll(): AnimalDto[] {
-    return Array.from(this.liveAnimals.values()).map(toDto);
+  findAll(): CreatureDto[] {
+    return Array.from(this.liveCreatures.values()).map(toDto);
   }
 
   startPatrol(server: Server) {
@@ -193,9 +193,9 @@ export class AnimalsService implements OnModuleInit {
     const players = this.worldService.getAllConnectedPlayers();
 
     // Enregistrement paresseux : pick up les animaux charges apres afterInit
-    for (const [id, animal] of this.liveAnimals) {
-      if (!this.patrolStates.has(id) && animal.spawn && animal.state !== 'dead') {
-        const { template } = animal.spawn;
+    for (const [id, creature] of this.liveCreatures) {
+      if (!this.patrolStates.has(id) && creature.spawn && creature.state !== 'dead') {
+        const { template } = creature.spawn;
         this.patrolStates.set(id, {
           dirX: 0, dirY: 0, speed: 0, moveUntil: 0,
           pauseUntil: now + rand(template.pauseMinMs, template.pauseMaxMs),
@@ -204,45 +204,45 @@ export class AnimalsService implements OnModuleInit {
     }
 
     for (const [id, state] of this.patrolStates) {
-      const animal = this.liveAnimals.get(id);
-      if (!animal || !animal.spawn || animal.state === 'dead') continue;
+      const creature = this.liveCreatures.get(id);
+      if (!creature || !creature.spawn || creature.state === 'dead') continue;
 
-      const { template } = animal.spawn;
-      const hpPct = (animal.health / template.baseHealth) * 100;
+      const { template } = creature.spawn;
+      const hpPct = (creature.health / template.baseHealth) * 100;
 
       // Transition : fuite (prioritaire)
-      if (template.fleeThresholdPct > 0 && hpPct < template.fleeThresholdPct && animal.state !== 'escaping') {
-        await this.changeAnimalState(animal, 'escaping');
+      if (template.fleeThresholdPct > 0 && hpPct < template.fleeThresholdPct && creature.state !== 'escaping') {
+        await this.changeCreatureState(creature, 'escaping');
         state.targetCharacterId = undefined;
       }
 
       // Transition : aggro (seulement en patrouille)
-      if (animal.state === 'alive' && template.aggroRadius > 0 && players.length > 0) {
-        const nearest = findNearestPlayer(players, animal);
+      if (creature.state === 'alive' && template.aggroRadius > 0 && players.length > 0) {
+        const nearest = findNearestPlayer(players, creature);
         if (nearest && nearest.dist <= legacyRadiusToWU(template.aggroRadius)) {
-          await this.changeAnimalState(animal, 'fighting');
+          await this.changeCreatureState(creature, 'fighting');
           state.targetCharacterId = nearest.player.characterId;
         }
       }
 
-      switch (animal.state) {
+      switch (creature.state) {
         case 'alive':
-          this.doPatrolMovement(animal, state, template, now);
+          this.doPatrolMovement(creature, state, template, now);
           break;
         case 'fighting':
-          await this.doFighting(animal, state, template, players, now, server);
+          await this.doFighting(creature, state, template, players, now, server);
           break;
         case 'escaping':
-          await this.doEscaping(animal, state, template, players, now);
+          await this.doEscaping(creature, state, template, players, now);
           break;
       }
 
-      server.emit('animal_update', toDto(animal));
+      server.emit('creature_update', toDto(creature));
     }
   }
 
   private doPatrolMovement(
-    animal: Animal,
+    creature: Creature,
     state: PatrolState,
     template: CreatureTemplate,
     now: number,
@@ -257,37 +257,37 @@ export class AnimalsService implements OnModuleInit {
       state.moveUntil = now + rand(PATROL_MOVE_MIN_MS, PATROL_MOVE_MAX_MS);
     }
 
-    if (animal.worldX == null || animal.worldY == null) return;
+    if (creature.worldX == null || creature.worldY == null) return;
 
-    const spawnWU = animal.spawn.worldX != null
-      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
-      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = creature.spawn.worldX != null
+      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
+      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
 
     const dt = PATROL_TICK_MS / 1000;
     const stepWU = legacyRadiusToWU(state.speed * dt);
-    const newWX = animal.worldX + state.dirX * stepWU;
-    const newWY = animal.worldY + state.dirY * stepWU;
+    const newWX = creature.worldX + state.dirX * stepWU;
+    const newWY = creature.worldY + state.dirY * stepWU;
     const dx = newWX - spawnWU.worldX;
     const dy = newWY - spawnWU.worldY;
     const dist = Math.hypot(dx, dy);
     const patrolRadiusWU = legacyRadiusToWU(template.patrolRadius);
 
     if (dist > patrolRadiusWU) {
-      animal.worldX = Math.round(spawnWU.worldX + (dx / dist) * patrolRadiusWU);
-      animal.worldY = Math.round(spawnWU.worldY + (dy / dist) * patrolRadiusWU);
+      creature.worldX = Math.round(spawnWU.worldX + (dx / dist) * patrolRadiusWU);
+      creature.worldY = Math.round(spawnWU.worldY + (dy / dist) * patrolRadiusWU);
       state.moveUntil = 0;
       state.pauseUntil = now + rand(template.pauseMinMs, template.pauseMaxMs);
     } else {
-      animal.worldX = Math.round(newWX);
-      animal.worldY = Math.round(newWY);
+      creature.worldX = Math.round(newWX);
+      creature.worldY = Math.round(newWY);
     }
-    animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
-    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
-    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
+    creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
+    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
+    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
   }
 
   private async doFighting(
-    animal: Animal,
+    creature: Creature,
     state: PatrolState,
     template: CreatureTemplate,
     players: ConnectedPlayer[],
@@ -300,24 +300,24 @@ export class AnimalsService implements OnModuleInit {
 
     // Cible disparue ou laisse rompue → retour en patrouille
     if (!target) {
-      await this.changeAnimalState(animal, 'alive');
+      await this.changeCreatureState(creature, 'alive');
       state.targetCharacterId = undefined;
       return;
     }
 
-    if (animal.worldX == null || animal.worldY == null) return;
+    if (creature.worldX == null || creature.worldY == null) return;
 
-    const spawnWU = animal.spawn.worldX != null
-      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
-      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = creature.spawn.worldX != null
+      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
+      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
 
-    const dx = target.worldX - animal.worldX;
-    const dy = target.worldY - animal.worldY;
+    const dx = target.worldX - creature.worldX;
+    const dy = target.worldY - creature.worldY;
     const dist = Math.hypot(dx, dy);
 
-    const spawnDist = Math.hypot(animal.worldX - spawnWU.worldX, animal.worldY - spawnWU.worldY);
+    const spawnDist = Math.hypot(creature.worldX - spawnWU.worldX, creature.worldY - spawnWU.worldY);
     if (spawnDist > legacyRadiusToWU(template.patrolRadius) * LEASH_MULTIPLIER) {
-      await this.changeAnimalState(animal, 'alive');
+      await this.changeCreatureState(creature, 'alive');
       state.targetCharacterId = undefined;
       return;
     }
@@ -326,17 +326,17 @@ export class AnimalsService implements OnModuleInit {
     if (dist > MELEE_RANGE_WU) {
       const dt = PATROL_TICK_MS / 1000;
       const stepWU = legacyRadiusToWU(template.speedMax * dt);
-      animal.worldX = Math.round(animal.worldX + (dx / dist) * stepWU);
-      animal.worldY = Math.round(animal.worldY + (dy / dist) * stepWU);
-      animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
-      animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
-      animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
+      creature.worldX = Math.round(creature.worldX + (dx / dist) * stepWU);
+      creature.worldY = Math.round(creature.worldY + (dy / dist) * stepWU);
+      creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
+      creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
+      creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
     }
 
     // Auto-attaque
-    const lastAtk = this.lastAnimalAutoAttackAt.get(animal.id) ?? 0;
+    const lastAtk = this.lastCreatureAutoAttackAt.get(creature.id) ?? 0;
     if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
-      this.lastAnimalAutoAttackAt.set(animal.id, now);
+      this.lastCreatureAutoAttackAt.set(creature.id, now);
       const char = await this.characterRepository.findOne({ where: { id: target.characterId } });
       if (char && char.health > 0) {
         const dmg = Math.max(template.baseAttack - char.defense, 1);
@@ -355,36 +355,36 @@ export class AnimalsService implements OnModuleInit {
   }
 
   private async doEscaping(
-    animal: Animal,
+    creature: Creature,
     state: PatrolState,
     template: CreatureTemplate,
     players: ConnectedPlayer[],
     now: number,
   ) {
-    const nearest = findNearestPlayer(players, animal);
+    const nearest = findNearestPlayer(players, creature);
 
     // Plus de joueurs ou suffisamment loin → retour en patrouille
     if (!nearest || nearest.dist > legacyRadiusToWU(template.patrolRadius)) {
-      await this.changeAnimalState(animal, 'alive');
+      await this.changeCreatureState(creature, 'alive');
       state.pauseUntil = now + rand(template.pauseMinMs, template.pauseMaxMs);
       return;
     }
 
-    if (animal.worldX == null || animal.worldY == null) return;
+    if (creature.worldX == null || creature.worldY == null) return;
 
-    const spawnWU = animal.spawn.worldX != null
-      ? { worldX: animal.spawn.worldX, worldY: animal.spawn.worldY as number }
-      : this.pixelToWUSafe(animal.spawn.spawnX, animal.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = creature.spawn.worldX != null
+      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
+      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
 
-    const dx = animal.worldX - nearest.player.worldX;
-    const dy = animal.worldY - nearest.player.worldY;
+    const dx = creature.worldX - nearest.player.worldX;
+    const dy = creature.worldY - nearest.player.worldY;
     const dist = Math.hypot(dx, dy);
     if (dist === 0) return;
 
     const dt = PATROL_TICK_MS / 1000;
     const stepWU = legacyRadiusToWU(template.speedMax * dt);
-    const newWX = animal.worldX + (dx / dist) * stepWU;
-    const newWY = animal.worldY + (dy / dist) * stepWU;
+    const newWX = creature.worldX + (dx / dist) * stepWU;
+    const newWY = creature.worldY + (dy / dist) * stepWU;
 
     const escDx = newWX - spawnWU.worldX;
     const escDy = newWY - spawnWU.worldY;
@@ -392,15 +392,15 @@ export class AnimalsService implements OnModuleInit {
     const maxRadius = legacyRadiusToWU(template.patrolRadius) * ESCAPE_RADIUS_MULTIPLIER;
 
     if (escDist > maxRadius) {
-      animal.worldX = Math.round(spawnWU.worldX + (escDx / escDist) * maxRadius);
-      animal.worldY = Math.round(spawnWU.worldY + (escDy / escDist) * maxRadius);
+      creature.worldX = Math.round(spawnWU.worldX + (escDx / escDist) * maxRadius);
+      creature.worldY = Math.round(spawnWU.worldY + (escDy / escDist) * maxRadius);
     } else {
-      animal.worldX = Math.round(newWX);
-      animal.worldY = Math.round(newWY);
+      creature.worldX = Math.round(newWX);
+      creature.worldY = Math.round(newWY);
     }
-    animal.mapId = animal.mapId ?? DEFAULT_MAP_ID;
-    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
-    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
+    creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
+    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
+    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
   }
 
   private pixelToWUSafe(
@@ -415,35 +415,35 @@ export class AnimalsService implements OnModuleInit {
     }
   }
 
-  private async changeAnimalState(animal: Animal, newState: Animal['state']) {
-    animal.state = newState;
-    await this.animalRepository.update(animal.id, { state: newState });
+  private async changeCreatureState(creature: Creature, newState: Creature['state']) {
+    creature.state = newState;
+    await this.creatureRepository.update(creature.id, { state: newState });
   }
 
-  private async respawnAnimal(id: string) {
-    const animal = this.liveAnimals.get(id);
-    if (!animal || !animal.spawn || animal.state !== 'dead') return;
+  private async respawnCreature(id: string) {
+    const creature = this.liveCreatures.get(id);
+    if (!creature || !creature.spawn || creature.state !== 'dead') return;
 
-    const { template } = animal.spawn;
-    animal.state = 'alive';
-    animal.health = template.baseHealth;
-    animal.x = animal.spawn.spawnX;
-    animal.y = animal.spawn.spawnY;
-    animal.respawnAt = null;
-    const respawnWU = this.pixelToWUSafe(animal.x, animal.y);
-    if (respawnWU) { animal.worldX = respawnWU.worldX; animal.worldY = respawnWU.worldY; animal.mapId = respawnWU.mapId; }
+    const { template } = creature.spawn;
+    creature.state = 'alive';
+    creature.health = template.baseHealth;
+    creature.x = creature.spawn.spawnX;
+    creature.y = creature.spawn.spawnY;
+    creature.respawnAt = null;
+    const respawnWU = this.pixelToWUSafe(creature.x, creature.y);
+    if (respawnWU) { creature.worldX = respawnWU.worldX; creature.worldY = respawnWU.worldY; creature.mapId = respawnWU.mapId; }
 
-    await this.animalRepository.update(id, {
+    await this.creatureRepository.update(id, {
       state: 'alive',
       health: template.baseHealth,
-      x: animal.spawn.spawnX,
-      y: animal.spawn.spawnY,
+      x: creature.spawn.spawnX,
+      y: creature.spawn.spawnY,
       respawnAt: null,
       ...(respawnWU ?? {}),
     });
 
     if (this.server) {
-      this.server.emit('animal_update', toDto(animal));
+      this.server.emit('creature_update', toDto(creature));
     }
   }
 
@@ -458,9 +458,9 @@ export class AnimalsService implements OnModuleInit {
       return { success: false, error: 'Attack on cooldown' };
     }
 
-    const animal = this.liveAnimals.get(id);
-    if (!animal) return { success: false, error: 'Animal not found' };
-    if (animal.state === 'dead') return { success: false, error: 'Animal already dead' };
+    const creature = this.liveCreatures.get(id);
+    if (!creature) return { success: false, error: 'Creature not found' };
+    if (creature.state === 'dead') return { success: false, error: 'Creature already dead' };
 
     const character = await this.characterRepository.findOne({
       where: { id: characterId },
@@ -470,41 +470,41 @@ export class AnimalsService implements OnModuleInit {
     if (character.health <= 0) return { success: false, error: 'Character is dead' };
 
     const range = this.resolveAttackRange(character);
-    if (animal.worldX == null || animal.worldY == null) {
+    if (creature.worldX == null || creature.worldY == null) {
       return { success: false, error: 'Target out of range' };
     }
-    const distance = chebyshevDistanceWU(attackerPosition, { worldX: animal.worldX, worldY: animal.worldY });
+    const distance = chebyshevDistanceWU(attackerPosition, { worldX: creature.worldX, worldY: creature.worldY });
     if (distance > range) return { success: false, error: 'Target out of range' };
 
     this.lastAttackAt.set(characterId, now);
 
-    const { template } = animal.spawn;
+    const { template } = creature.spawn;
     const attack = Math.max(character.attack, 5);
     const damage = Math.max(attack - template.baseArmor, 1);
 
-    animal.health = Math.max(animal.health - damage, 0);
-    if (animal.health === 0) {
-      animal.state = 'dead';
-      this.patrolStates.delete(animal.id);
-      const delay = animal.respawnDelayMs ?? animal.spawn.respawnDelayMs ?? animal.spawn.template.respawnDelayMs;
-      animal.respawnAt = new Date(Date.now() + delay);
-      setTimeout(() => this.respawnAnimal(animal.id), delay);
+    creature.health = Math.max(creature.health - damage, 0);
+    if (creature.health === 0) {
+      creature.state = 'dead';
+      this.patrolStates.delete(creature.id);
+      const delay = creature.respawnDelayMs ?? creature.spawn.respawnDelayMs ?? creature.spawn.template.respawnDelayMs;
+      creature.respawnAt = new Date(Date.now() + delay);
+      setTimeout(() => this.respawnCreature(creature.id), delay);
     }
-    await this.animalRepository.save(animal);
+    await this.creatureRepository.save(creature);
 
     // XP de combat accordée uniquement au kill confirmé serveur.
     // characterId provient du paramètre, jamais du client.
-    if (animal.health === 0) {
+    if (creature.health === 0) {
       const skillKey = resolveCombatSkill(character.equipment ?? []);
       try {
         await this.skills.addXp(characterId, skillKey, KILL_XP);
       } catch (err) {
-        console.warn(`[AnimalsService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
+        console.warn(`[CreaturesService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
       }
     }
 
     let riposte: { damage: number; characterHealth: number } | undefined;
-    if ((animal.state === 'alive' || animal.state === 'fighting') && distance <= MELEE_RANGE_WU) {
+    if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       const riposteDamage = Math.max(template.baseAttack - character.defense, 1);
       const characterHealth = Math.max(character.health - riposteDamage, 0);
       await this.characterRepository.update(characterId, { health: characterHealth });
@@ -514,7 +514,7 @@ export class AnimalsService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: toDto(animal), damage, attackerId: character.id, riposte };
+    return { success: true, dto: toDto(creature), damage, attackerId: character.id, riposte };
   }
 
   private resolveAttackRange(character: Character): number {
@@ -586,7 +586,7 @@ export class AnimalsService implements OnModuleInit {
     templateKey: string,
     worldX: number,
     worldY: number,
-  ): Promise<AnimalDto | null> {
+  ): Promise<CreatureDto | null> {
     const template = await this.templateRepository.findOne({
       where: { key: templateKey },
     });
@@ -610,8 +610,8 @@ export class AnimalsService implements OnModuleInit {
       }),
     );
 
-    const rawAnimal = await this.animalRepository.save(
-      this.animalRepository.create({
+    const rawCreature = await this.creatureRepository.save(
+      this.creatureRepository.create({
         spawn,
         x: px,
         y: py,
@@ -624,41 +624,41 @@ export class AnimalsService implements OnModuleInit {
     );
 
     // Recharger avec les relations eager (spawn.template)
-    const animal = await this.animalRepository.findOne({
-      where: { id: rawAnimal.id },
+    const creature = await this.creatureRepository.findOne({
+      where: { id: rawCreature.id },
     });
-    if (!animal) return null;
+    if (!creature) return null;
 
-    this.liveAnimals.set(animal.id, animal);
-    return toDto(animal);
+    this.liveCreatures.set(creature.id, creature);
+    return toDto(creature);
   }
 
   refreshTemplateInMemory(key: string, fields: Partial<Record<string, number>>): void {
-    for (const animal of this.liveAnimals.values()) {
-      if (animal.spawn?.template?.key === key) {
-        Object.assign(animal.spawn.template, fields);
+    for (const creature of this.liveCreatures.values()) {
+      if (creature.spawn?.template?.key === key) {
+        Object.assign(creature.spawn.template, fields);
         // Recalibrer les HP si baseHealth diminue sous le HP actuel
-        const newMax = (animal.spawn.template as any).baseHealth;
-        if (newMax !== undefined && animal.health > newMax) {
-          animal.health = newMax;
+        const newMax = (creature.spawn.template as any).baseHealth;
+        if (newMax !== undefined && creature.health > newMax) {
+          creature.health = newMax;
         }
       }
     }
   }
 
-  async adminDeleteAnimal(id: string): Promise<AnimalDto | null> {
-    const animal = this.liveAnimals.get(id);
-    if (!animal) return null;
+  async adminDeleteCreature(id: string): Promise<CreatureDto | null> {
+    const creature = this.liveCreatures.get(id);
+    if (!creature) return null;
 
-    const dto = toDto(animal);
-    const spawnId = animal.spawn?.id;
-    const spawnKey = animal.spawn?.key ?? '';
+    const dto = toDto(creature);
+    const spawnId = creature.spawn?.id;
+    const spawnKey = creature.spawn?.key ?? '';
 
-    this.liveAnimals.delete(id);
+    this.liveCreatures.delete(id);
     this.patrolStates.delete(id);
 
-    // Supprimer la ligne Animal — le startup ne pourra plus la ressusciter
-    await this.animalRepository.delete(id);
+    // Supprimer la ligne Creature — le startup ne pourra plus la ressusciter
+    await this.creatureRepository.delete(id);
 
     // Supprimer aussi le spawn si créé par admin (pas de seed à conserver)
     if (spawnKey.startsWith('admin-') && spawnId) {
@@ -668,89 +668,89 @@ export class AnimalsService implements OnModuleInit {
     return dto;
   }
 
-  async adminUpdateAnimal(
+  async adminUpdateCreature(
     id: string,
     fields: Partial<{ health: number; worldX: number; worldY: number; state: string; respawnDelayMs: number | null }>,
-  ): Promise<AnimalDto | null> {
-    const animal = this.liveAnimals.get(id);
-    if (!animal) return null;
+  ): Promise<CreatureDto | null> {
+    const creature = this.liveCreatures.get(id);
+    if (!creature) return null;
 
     if (fields.health !== undefined) {
-      animal.health = Math.max(0, Math.min(fields.health, animal.spawn.template.baseHealth));
+      creature.health = Math.max(0, Math.min(fields.health, creature.spawn.template.baseHealth));
     }
     if (fields.state !== undefined) {
-      animal.state = fields.state as Animal['state'];
+      creature.state = fields.state as Creature['state'];
       if (fields.state === 'alive') {
-        animal.health = animal.spawn.template.baseHealth;
+        creature.health = creature.spawn.template.baseHealth;
       }
     }
 
     if (fields.worldX !== undefined || fields.worldY !== undefined) {
       this.patrolStates.delete(id);
-      if (fields.worldX !== undefined) animal.worldX = Math.round(fields.worldX);
-      if (fields.worldY !== undefined) animal.worldY = Math.round(fields.worldY);
-      animal.mapId = DEFAULT_MAP_ID;
-      animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
-      animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
+      if (fields.worldX !== undefined) creature.worldX = Math.round(fields.worldX);
+      if (fields.worldY !== undefined) creature.worldY = Math.round(fields.worldY);
+      creature.mapId = DEFAULT_MAP_ID;
+      creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
+      creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
     }
 
     // 0 → null (hérite du spawn/template)
     if ('respawnDelayMs' in fields) {
-      animal.respawnDelayMs = (fields.respawnDelayMs != null && fields.respawnDelayMs > 0) ? fields.respawnDelayMs : null;
+      creature.respawnDelayMs = (fields.respawnDelayMs != null && fields.respawnDelayMs > 0) ? fields.respawnDelayMs : null;
     }
 
-    await this.animalRepository.save(animal);
+    await this.creatureRepository.save(creature);
 
-    const dto = toDto(animal);
-    if (this.server) this.server.emit('animal_update', dto);
+    const dto = toDto(creature);
+    if (this.server) this.server.emit('creature_update', dto);
     return dto;
   }
 
-  async moveAnimal(animalId: string, worldX: number, worldY: number): Promise<AnimalDto | null> {
-    const animal = this.liveAnimals.get(animalId);
-    if (!animal || animal.state === 'dead') return null;
+  async moveCreature(creatureId: string, worldX: number, worldY: number): Promise<CreatureDto | null> {
+    const creature = this.liveCreatures.get(creatureId);
+    if (!creature || creature.state === 'dead') return null;
 
-    animal.worldX = Math.round(worldX);
-    animal.worldY = Math.round(worldY);
-    animal.mapId = DEFAULT_MAP_ID;
-    animal.x = Math.round(wuToIsoScreenX(animal.worldX, animal.worldY));
-    animal.y = Math.round(wuToIsoScreenY(animal.worldX, animal.worldY));
-    this.patrolStates.delete(animalId);
+    creature.worldX = Math.round(worldX);
+    creature.worldY = Math.round(worldY);
+    creature.mapId = DEFAULT_MAP_ID;
+    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
+    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
+    this.patrolStates.delete(creatureId);
 
-    await this.animalRepository.update(animalId, { x: animal.x, y: animal.y, worldX: animal.worldX, worldY: animal.worldY, mapId: animal.mapId });
+    await this.creatureRepository.update(creatureId, { x: creature.x, y: creature.y, worldX: creature.worldX, worldY: creature.worldY, mapId: creature.mapId });
 
     if (this.server) {
-      this.server.emit('animal_update', toDto(animal));
+      this.server.emit('creature_update', toDto(creature));
     }
-    return toDto(animal);
+    return toDto(creature);
   }
 
   async forceRespawnAll(templateKey: string): Promise<number> {
     let count = 0;
-    for (const animal of this.liveAnimals.values()) {
-      if (animal.spawn?.template?.key !== templateKey) continue;
+    for (const creature of this.liveCreatures.values()) {
+      if (creature.spawn?.template?.key !== templateKey) continue;
 
-      const { template } = animal.spawn;
-      animal.state = 'alive';
-      animal.health = template.baseHealth;
-      animal.x = animal.spawn.spawnX;
-      animal.y = animal.spawn.spawnY;
-      const forceWU = this.pixelToWUSafe(animal.x, animal.y);
-      if (forceWU) { animal.worldX = forceWU.worldX; animal.worldY = forceWU.worldY; animal.mapId = forceWU.mapId; }
+      const { template } = creature.spawn;
+      creature.state = 'alive';
+      creature.health = template.baseHealth;
+      creature.x = creature.spawn.spawnX;
+      creature.y = creature.spawn.spawnY;
+      const forceWU = this.pixelToWUSafe(creature.x, creature.y);
+      if (forceWU) { creature.worldX = forceWU.worldX; creature.worldY = forceWU.worldY; creature.mapId = forceWU.mapId; }
 
-      this.patrolStates.delete(animal.id);
-      this.lastAnimalAutoAttackAt.delete(animal.id);
+      this.patrolStates.delete(creature.id);
+      this.lastCreatureAutoAttackAt.delete(creature.id);
 
-      await this.animalRepository.update(animal.id, {
+      await this.creatureRepository.update(creature.id, {
         state: 'alive',
         health: template.baseHealth,
-        x: animal.spawn.spawnX,
-        y: animal.spawn.spawnY,
+        x: creature.spawn.spawnX,
+        y: creature.spawn.spawnY,
         ...(forceWU ?? {}),
       });
 
       if (this.server) {
-        this.server.emit('animal_update', toDto(animal));
+        this.server.emit('creature_update', toDto(creature));
       }
       count++;
     }
@@ -784,14 +784,14 @@ export class AnimalsService implements OnModuleInit {
     const spawns = await this.spawnRepository.find();
 
     for (const spawn of spawns) {
-      const existing = await this.animalRepository.findOne({
+      const existing = await this.creatureRepository.findOne({
         where: { spawn: { id: spawn.id } },
       });
       if (existing) continue;
 
       const seedWU = this.pixelToWUSafe(spawn.spawnX, spawn.spawnY);
-      await this.animalRepository.save(
-        this.animalRepository.create({
+      await this.creatureRepository.save(
+        this.creatureRepository.create({
           spawn,
           x: spawn.spawnX,
           y: spawn.spawnY,

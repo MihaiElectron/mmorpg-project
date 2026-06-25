@@ -77,7 +77,7 @@ This document does not claim synchronization is safe for production.
 |---|---|---|---|
 | Start backend in development | `npm run start:dev` is present in the API package | Startup may synchronize schema automatically | Implemented / Not verified |
 | Entity changes | Entity auto-loading and synchronization can update schema at runtime | No explicit migration review is required by current config | Configured |
-| Initial world data | Resource templates, creature templates, creature spawns, animal instances, and respawn point are seeded or upserted in services | Seed timing and idempotence are partial and service-owned | Implemented / Not verified |
+| Initial world data | Resource templates, creature templates, creature spawns, creature instances, and respawn point are seeded or upserted in services | Seed timing and idempotence are partial and service-owned | Implemented / Not verified |
 | Local reset | No dedicated database reset script observed | Manual reset process is Not verified | Not verified |
 | Migration generation | No supported script observed | Developer command path is Not verified | Not verified |
 
@@ -107,7 +107,7 @@ Until a reviewed migration workflow exists, destructive schema changes should be
 Observed seed or startup data behavior:
 
 - `ResourcesService.onModuleInit` upserts resource templates for `dead_tree` and `ore`.
-- `AnimalsService.onModuleInit` seeds creature templates, spawns, and animal instances when missing.
+- `CreaturesService.onModuleInit` seeds creature templates, spawns, and creature instances when missing.
 - `WorldService.onModuleInit` creates a default respawn point when none exist and updates dead characters to full health at startup.
 
 These are service startup behaviors, not reviewed migration files.
@@ -152,7 +152,7 @@ Because no migration workflow is verified, migration performance testing is also
 - Entity auto-loading is configured.
 - No migration files were found under `apps/api-gateway` during inspection.
 - No npm migration script was observed in `apps/api-gateway/package.json`.
-- Service startup seed or upsert behavior exists for resource templates, creature data, animal instances, and respawn points.
+- Service startup seed or upsert behavior exists for resource templates, creature data, creature instances, and respawn points.
 - Production migration workflow is Not verified.
 
 ## Known gaps

@@ -18,7 +18,7 @@ export default function CommandPalette() {
   const obj = useDevToolsStore((s) => s.selectedWorldObject);
   const clearSelectedWorldObject = useDevToolsStore((s) => s.clearSelectedWorldObject);
   const incrementResourcesRefreshKey = useDevToolsStore((s) => s.incrementResourcesRefreshKey);
-  const incrementAnimalsRefreshKey = useDevToolsStore((s) => s.incrementAnimalsRefreshKey);
+  const incrementCreaturesRefreshKey = useDevToolsStore((s) => s.incrementCreaturesRefreshKey);
   const incrementCreatureSpawnsRefreshKey = useDevToolsStore(
     (s) => s.incrementCreatureSpawnsRefreshKey,
   );
@@ -32,7 +32,7 @@ export default function CommandPalette() {
   const ctx: StudioCommandContext = {
     clearSelectedWorldObject,
     incrementResourcesRefreshKey,
-    incrementAnimalsRefreshKey,
+    incrementCreaturesRefreshKey,
     incrementCreatureSpawnsRefreshKey,
     selectedWorldObjectId: obj?.id ?? null,
   };

@@ -2,9 +2,9 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
-import { CreatureTemplate } from '../animals/entities/creature-template.entity';
-import { CreatureSpawn } from '../animals/entities/creature-spawn.entity';
-import { Animal } from '../animals/entities/animal.entity';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
+import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
+import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -74,7 +74,7 @@ describe('AdminService resources', () => {
         AdminService,
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: resourceRepo },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
@@ -358,7 +358,7 @@ describe('AdminService — createSkillDefinition', () => {
         AdminService,
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
@@ -460,7 +460,7 @@ describe('AdminService — updateSkillDefinition', () => {
         AdminService,
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
@@ -532,7 +532,7 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       AdminService,
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-      { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+      { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
@@ -763,7 +763,7 @@ describe('createCreatureTemplate', () => {
         AdminService,
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
@@ -841,7 +841,7 @@ describe('createResourceTemplate', () => {
         AdminService,
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Animal), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },

@@ -95,11 +95,11 @@ contradictoire avec ADR-0001.
 `movement-study.md`, ligne 85-86 :
 
 ```js
-newX = animal.x + dirX * speed * dt
-newY = animal.y + animal.y + dirY * speed * dt   ← animal.y apparaît deux fois
+newX = creature.x + dirX * speed * dt
+newY = creature.y + creature.y + dirY * speed * dt   ← creature.y apparaît deux fois
 ```
 
-La ligne `newY` contient `animal.y + animal.y` au lieu de `animal.y`. Il s'agit
+La ligne `newY` contient `creature.y + creature.y` au lieu de `creature.y`. Il s'agit
 d'une copie du code source avec une coquille. Ce n'est pas une incohérence
 architecturale mais une erreur dans le document d'étude.
 
@@ -363,7 +363,7 @@ Ordre d'implémentation recommandé selon ADR-0002 et ADR-0003 :
 1. Entités statiques (resources, creature_spawn, respawn_point) — pas d'état runtime
 2. WebSocket payloads (avec double format temporaire si nécessaire)
 3. Entité character + player_move validation côté serveur
-4. Entité animal + recalibration du tick
+4. Entité creature + recalibration du tick
 5. Client pathfinding (rebuid de la grille)
 6. Distance gate + walkability check + bounds check
 

@@ -10,14 +10,14 @@ _État : développement local_
 ## État général
 
 Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté
-via Socket.IO. Combat animal complet. Panneau admin fonctionnel avec console de
+via Socket.IO. Combat creature complet. Panneau admin fonctionnel avec console de
 commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers la
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
 Migration WU P0–P6 terminée : protocole WebSocket entièrement WU. `player_move`
 WU-only (plus de `x/y` dans le payload). Tous les événements admin (`admin:spawn`,
-`admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`,
+`admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`,
 `admin:update_resource`) acceptent `worldX/worldY` exclusivement. Pixel cache dérivé
 côté serveur via `wuToIsoScreenX/Y`. Drag-to-map et boutons Tp du panneau admin
 passent en WU via `screenToWorldWU`. Infrastructure DevTools complète : shell, panel,
@@ -71,9 +71,9 @@ autoritaire.
   dérive le pixel cache via `wuToIsoScreenX/Y`. Fallback `isoScreenToWorldWU` supprimé.
   Suite "métriques passives mouvement" de `world.service.spec.ts` mise à jour.
 - **Migration WU P6 — Protocole admin WU pur** : `admin:spawn`, `admin:teleport`,
-  `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`,
+  `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`,
   `admin:update_resource` — tous les payloads de coordonnées en `worldX/worldY`.
-  `AnimalsService.createAdminSpawn/moveAnimal/adminUpdateAnimal`,
+  `CreaturesService.createAdminSpawn/moveCreature/adminUpdateCreature`,
   `AdminService.createResource/updateResource` dérivent le pixel cache côté serveur.
   `commandRegistry.ts` utilise `lastClickedWorldPoint` (WU). `adminPanel.shared.tsx`
   : `toWorldWU()` via `screenToWorldWU`, drag-to-map et boutons Tp passent en WU.
@@ -103,7 +103,7 @@ autoritaire.
 | Domaine | Ce qui fonctionne |
 |---|---|
 | Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
-| Respawn | Animal (20 s), personnage (point le plus proche à 0 PV), resource (timer template) |
+| Respawn | Creature (20 s), personnage (point le plus proche à 0 PV), resource (timer template) |
 | Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
 | UI | ActionPanel, barre de vie flottante, panneau personnage onglet Perso, HUD DevTools admin-only |
 | DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
@@ -111,16 +111,16 @@ autoritaire.
 | DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, ouverture HUD, mode edit, position panneau, lastClickedPos, contexte coordonnées (world click px/WU/tile/chunk) |
 | DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
 | DevTools — World | `CoordinateInspector` lecture seule : activeTool, dernier clic monde Phaser en pixels, WU, tile, chunk |
-| DevTools — overlays | Overlays Resources / Animals / CreatureSpawns avec sélection au clic, Station Radius Overlay pour les stations de craft |
+| DevTools — overlays | Overlays Resources / Creatures / CreatureSpawns avec sélection au clic, Station Radius Overlay pour les stations de craft |
 | DevTools — Command Palette | Input filtré par label/id, Enter = première action, liste cliquable, pending state |
-| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Animals (instances WOM, templates REST). CraftingRecipes et CraftingStations (templates + instances WU, drag-to-map, TP). Players/Overview REST. Console identique legacy. |
+| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Creatures (instances WOM, templates REST). CraftingRecipes et CraftingStations (templates + instances WU, drag-to-map, TP). Players/Overview REST. Console identique legacy. |
 | Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn + Reset Template) |
 | Studio SDK — projection | `wuToScreen()` centralisée dans `phaser/utils/wuProjection.ts` |
 | Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
 | Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé craft : `npm --workspace api-gateway run test -- crafting`, client complet : `npm --workspace client run test` |
-| Migration WU | **P0–P6 soldés.** Protocole WebSocket entièrement WU. `player_move` WU-only, tous les événements admin en `worldX/worldY`. `resolveScreen()` WU-first côté client. Reste : P7 drop colonnes legacy DB (`positionX/Y`, `animal.x/y`). |
+| Migration WU | **P0–P6 soldés.** Protocole WebSocket entièrement WU. `player_move` WU-only, tous les événements admin en `worldX/worldY`. `resolveScreen()` WU-first côté client. Reste : P7 drop colonnes legacy DB (`positionX/Y`, `creature.x/y`). |
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
 | Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
 
@@ -182,7 +182,7 @@ autoritaire.
 
 ## Dette technique connue
 
-- ~~**[CRITIQUE] `animals.service.ts` entièrement en pixels**~~ — **SOLDÉ**.
+- ~~**[CRITIQUE] `creatures.service.ts` entièrement en pixels**~~ — **SOLDÉ**.
 - ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**.
 - ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**.
 - ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**.
@@ -195,7 +195,7 @@ autoritaire.
   `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
 - ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P4.5 : WU + chunkX/Y, x/y supprimés).
 - ~~**[IMPORTANT] `player_move` — x/y fallback à supprimer**~~ — **SOLDÉ** (P5 : payload WU-only, fallback pixel supprimé, pixel cache dérivé côté serveur).
-- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6 : `admin:spawn`, `admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal/resource` en `worldX/worldY`).
+- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6 : `admin:spawn`, `admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature/resource` en `worldX/worldY`).
 - **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
   `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
   `devtools.store` fichier par fichier.
@@ -221,7 +221,7 @@ autoritaire.
   Édition nécessiterait un nouveau socket event ou endpoint REST avec validation JSON.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
-- Pathfinder peut échouer si un animal est sur une tuile bloquante.
+- Pathfinder peut échouer si un creature est sur une tuile bloquante.
 - `synchronize: true` — migrations TypeORM à prévoir pour la prod.
 - Sprite goblin utilise `textureKey: 'turkey'` en placeholder.
 - Le tileset grass ne contient qu'une seule tuile — variété visuelle à construire.
@@ -249,8 +249,8 @@ autoritaire.
 - [x] P4 — `character_respawn` et `character_teleport` : `worldX/worldY/chunkX/chunkY/characterId`, frontend WU-first via `resolveScreen()`
 - [x] P4.5 — supprimer `x/y` legacy de `character_respawn` et `character_teleport`
 - [x] P5 — `player_move` : supprimer fallback `x/y` dans payload client + `updatePlayer` serveur
-- [x] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_animal`, `admin:spawn_resource`, `admin:update_animal`, `admin:update_resource` en WU
-- [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `animal.x/y` en cache pur)
+- [x] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`, `admin:update_resource` en WU
+- [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `creature.x/y` en cache pur)
 
 ### Gameplay / contenu
 - [ ] Système de loot sur les animaux tués
@@ -321,11 +321,11 @@ Quand une mise à jour est demandée :
   `wuToIsoScreenX/Y`, supprime appel `isoScreenToWorldWU`. Suite "métriques passives
   mouvement" mise à jour (retrait `x/y` des payloads de test). 572 tests backend.
 - **Migration WU P6 — Protocole admin WU pur** :
-  - Backend : `AnimalsService.createAdminSpawn`, `moveAnimal`, `adminUpdateAnimal` —
+  - Backend : `CreaturesService.createAdminSpawn`, `moveCreature`, `adminUpdateCreature` —
     signatures `(worldX, worldY)`, pixel cache dérivé. `AdminService.createResource`,
     `updateResource` — idem, guard `isFinite`. `admin.gateway.ts` : types payload
     `worldX/worldY` pour les 6 événements admin de coordonnées.
-  - Frontend `admin.actions.ts` : `spawnCreature/teleportCharacter/moveAnimal` en WU.
+  - Frontend `admin.actions.ts` : `spawnCreature/teleportCharacter/moveCreature` en WU.
     `commandRegistry.ts` : `getLastClickedWorldPoint()`, `resolvePos` utilise WU.
     `/spawn` et `/tp` passent `worldX/worldY`. `adminPanel.shared.tsx` : `toWorldWU()`
     via `screenToWorldWU`, drag-to-map et boutons Tp en WU. `AdminPanelWOM.tsx` :
@@ -442,9 +442,9 @@ Quand une mise à jour est demandée :
 
 ### 2026-06-22 (session 3 — Phase 2 + protocole WebSocket)
 
-- **`animals.service.ts` — migration WU complète** : boucle IA (doPatrolMovement,
+- **`creatures.service.ts` — migration WU complète** : boucle IA (doPatrolMovement,
   doFighting, doEscaping) WU-authoritative, pixel cache dérivé de WU. `findNearestPlayer`
-  WU + filtre `mapId`. `attack()` utilise `animal.worldX/Y` directement. 27/27 tests.
+  WU + filtre `mapId`. `attack()` utilise `creature.worldX/Y` directement. 27/27 tests.
 - **Backfill secondaire validé** : `wu:dry-run` confirme `creature_spawn` et
   `respawn_point` 1/1 WU — prérequis B1/B2 de l'audit satisfaits.
 - **P0** : `join_world` ne fait plus confiance aux coordonnées client — `x/y` supprimés

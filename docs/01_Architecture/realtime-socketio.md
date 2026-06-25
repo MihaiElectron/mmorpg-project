@@ -47,11 +47,11 @@ Implemented:
 - The Phaser game is also exposed as `window.game`, which lets React components
   and Phaser helpers access `window.game.socket`.
 - `WorldScene` reads the socket from the Phaser game instance.
-- `WorldScene` registers listeners for world, resource, animal, and character
+- `WorldScene` registers listeners for world, resource, creature, and character
   events.
 - If the socket is already connected when listeners are registered, `WorldScene`
-  emits `get_resources`, `get_animals`, and `join_world`.
-- On socket `connect`, `WorldScene` emits `get_resources`, `get_animals`, and
+  emits `get_resources`, `get_creatures`, and `join_world`.
+- On socket `connect`, `WorldScene` emits `get_resources`, `get_creatures`, and
   `join_world`.
 - `WorldPage` avoids creating another Phaser game and socket while
   `phaserGameRef.current` exists.
@@ -80,7 +80,7 @@ Implemented:
 - `WsAuthService` also supports an `Authorization: Bearer ...` handshake header.
 - `WsAuthService` verifies the JWT with `JwtService.verifyAsync`.
 - A valid token returns `userId`, optional `username`, and optional `role`.
-- `WorldGateway`, `ResourcesGateway`, and `AnimalsGateway` call
+- `WorldGateway`, `ResourcesGateway`, and `CreaturesGateway` call
   `WsAuthService.authenticate` in `handleConnection`.
 - Invalid authentication disconnects the socket with `client.disconnect(true)`.
 - Authenticated gateways store `client.data.userId` and `client.data.role`.
@@ -91,7 +91,7 @@ Authorization boundary:
 - Authorization is still event-specific.
 - `join_world` verifies that the joined character belongs to
   `client.data.userId`.
-- Resource and animal events require a joined player in `client.data.player`.
+- Resource and creature events require a joined player in `client.data.player`.
 - Admin events check `client.data.role === 'admin'`.
 
 Not verified:
@@ -114,8 +114,8 @@ Not verified:
 |---|---|---|---|---|---|
 | `WorldGateway` | Default namespace | Join world, track connected players, broadcast presence and movement, persist position on disconnect. | Uses `WsAuthService` in `handleConnection`. | `WorldService.connectedPlayers`; `client.data.player`; `client.data.userId`; `client.data.role`. | Implemented |
 | `ResourcesGateway` | Default namespace | Send resources, handle gathering sessions, validate gathering range and movement, emit loot and resource updates. | Uses `WsAuthService` in `handleConnection`. | `gatherSessions`; `client.data.userId`; `client.data.role`; joined player data from shared socket. | Implemented |
-| `AnimalsGateway` | Default namespace | Send animals, handle animal attacks, emit animal and character damage updates. | Uses `WsAuthService` in `handleConnection`. | Delegates live animal, patrol, and cooldown state to `AnimalsService`; uses joined player data from shared socket. | Implemented |
-| `AdminGateway` | Default namespace | Handle observed admin spawn, teleport, template update, animal move, and respawn commands. | Event handlers check `client.data.role === 'admin'`; no independent `handleConnection` authentication hook was observed, and role provenance before admin handling remains to be verified. | Uses world and animal service state; relies on socket data populated elsewhere. | Implemented / Not verified |
+| `CreaturesGateway` | Default namespace | Send creatures, handle creature attacks, emit creature and character damage updates. | Uses `WsAuthService` in `handleConnection`. | Delegates live creature, patrol, and cooldown state to `CreaturesService`; uses joined player data from shared socket. | Implemented |
+| `AdminGateway` | Default namespace | Handle observed admin spawn, teleport, template update, creature move, and respawn commands. | Event handlers check `client.data.role === 'admin'`; no independent `handleConnection` authentication hook was observed, and role provenance before admin handling remains to be verified. | Uses world and creature service state; relies on socket data populated elsewhere. | Implemented / Not verified |
 
 ## Event registry
 
@@ -124,23 +124,23 @@ Not verified:
 | Event | Sender | Gateway | Payload summary | Server checks observed | Side effects | Status |
 |---|---|---|---|---|---|---|
 | `get_resources` | `WorldScene` | `ResourcesGateway` | No payload. | Authenticated connection expected. | Sends current resources to the client. | Implemented |
-| `get_animals` | `WorldScene` | `AnimalsGateway` | No payload. | Authenticated connection expected. | Sends current animals to the client. | Implemented |
+| `get_creatures` | `WorldScene` | `CreaturesGateway` | No payload. | Authenticated connection expected. | Sends current creatures to the client. | Implemented |
 | `join_world` | `WorldScene` | `WorldGateway` | Character id, name, sex, local x/y, direction. | Payload must contain `characterId` and `name`; server loads character and checks ownership against `client.data.userId`. | Adds connected player memory, sets `client.data.player`, emits current players and presence events. | Implemented |
 | `player_move` | `WorldScene` | `WorldGateway` | x, y, optional direction. | Checks that x and y are numbers; joined player must exist in server memory. | Updates connected-player memory and broadcasts `player_moved`. | Implemented / Not verified |
 | `interact_resource` | `ActionPanel` | `ResourcesGateway` | Resource target id; client also sends character id but server uses joined socket player. | Valid target id, joined player, resource existence, resource state, range, duplicate same-target gathering, movement during cycle. | Starts or switches gathering session, emits ticks, grants loot, updates inventory, consumes resource. | Implemented |
-| `attack_animal` | `WorldScene` | `AnimalsGateway` | Animal target id; client also sends character id but gateway uses joined socket player. | Valid target id, joined player, animal existence, character existence, character alive, cooldown, attack range. | Applies damage, may apply riposte, may trigger respawn, emits animal and character updates. | Implemented |
-| `admin:spawn` | Admin helpers | `AdminGateway` | Template key, x, y. | `client.data.role === 'admin'`; payload fields present and numeric where required; template exists. | Creates animal spawn and emits `animal_update`. | Implemented |
+| `attack_creature` | `WorldScene` | `CreaturesGateway` | Creature target id; client also sends character id but gateway uses joined socket player. | Valid target id, joined player, creature existence, character existence, character alive, cooldown, attack range. | Applies damage, may apply riposte, may trigger respawn, emits creature and character updates. | Implemented |
+| `admin:spawn` | Admin helpers | `AdminGateway` | Template key, x, y. | `client.data.role === 'admin'`; payload fields present and numeric where required; template exists. | Creates creature spawn and emits `creature_update`. | Implemented |
 | `admin:teleport` | Admin helpers | `AdminGateway` | Character id or name, x, y. | `client.data.role === 'admin'`; payload fields present; connected player resolved. | Updates live and persisted position, emits teleport and movement update. | Implemented |
 | `admin:update_template` | Admin helpers | `AdminGateway` | Template key and numeric fields. | `client.data.role === 'admin'`; key and fields present; allowed field whitelist; non-negative numeric values; template exists. | Updates template and emits `category:updated`. | Implemented |
-| `admin:move_animal` | Admin helpers | `AdminGateway` | Animal id, x, y. | `client.data.role === 'admin'`; payload fields present and numeric; animal exists and is not dead. | Moves animal, persists position, emits animal update through service if server is available. | Implemented |
-| `admin:respawn_all` | Admin helpers | `AdminGateway` | Template key. | `client.data.role === 'admin'`; template key present. | Resets matching live animals and persists animal state/position. | Implemented |
+| `admin:move_creature` | Admin helpers | `AdminGateway` | Creature id, x, y. | `client.data.role === 'admin'`; payload fields present and numeric; creature exists and is not dead. | Moves creature, persists position, emits creature update through service if server is available. | Implemented |
+| `admin:respawn_all` | Admin helpers | `AdminGateway` | Template key. | `client.data.role === 'admin'`; template key present. | Resets matching live creatures and persists creature state/position. | Implemented |
 
 ### Server to client
 
 | Event | Gateway | Recipients | Payload summary | Trigger | Status |
 |---|---|---|---|---|---|
 | `resources` | `ResourcesGateway` | One client. | Resource list. | Resource gateway connection or `get_resources`. | Implemented |
-| `animals` | `AnimalsGateway` | One client. | Animal list. | Animal gateway connection or `get_animals`. | Implemented |
+| `creatures` | `CreaturesGateway` | One client. | Creature list. | Creature gateway connection or `get_creatures`. | Implemented |
 | `join_world_error` | `WorldGateway` | One client. | Error string. | Invalid `join_world` payload or rejected join. | Implemented |
 | `current_players` | `WorldGateway` | Joining client. | Connected players except the joining socket. | Successful `join_world`. | Implemented |
 | `world_joined` | `WorldGateway` | Joining client. | Joined player state. | Successful `join_world`. | Implemented |
@@ -151,9 +151,9 @@ Not verified:
 | `resource_loot` | `ResourcesGateway` | Gathering client. | Item id, quantity, total, item display data. | Successful gathering cycle. | Implemented |
 | `resource_update` | `ResourcesGateway` | All clients. | Resource id, state, remaining loots. | Resource consumed during gathering. | Implemented |
 | `gather_stopped` | `ResourcesGateway` | Gathering client. | Target id and reason. | Gathering cancelled or depleted. | Implemented |
-| `animal_hit` | `AnimalsGateway` | Attacking client. | Animal dto, damage, attacker id. | Successful `attack_animal`. | Implemented |
-| `animal_update` | `AnimalsGateway` / `AnimalsService` / `AdminGateway` | All clients. | Animal dto. | Attack, patrol tick, respawn, admin spawn, admin move, admin respawn. | Implemented |
-| `character_damaged` | `AnimalsGateway` / `AnimalsService` | Target client. | Character id, damage, health. | Animal attack or auto-attack. | Implemented |
+| `creature_hit` | `CreaturesGateway` | Attacking client. | Creature dto, damage, attacker id. | Successful `attack_creature`. | Implemented |
+| `creature_update` | `CreaturesGateway` / `CreaturesService` / `AdminGateway` | All clients. | Creature dto. | Attack, patrol tick, respawn, admin spawn, admin move, admin respawn. | Implemented |
+| `character_damaged` | `CreaturesGateway` / `CreaturesService` | Target client. | Character id, damage, health. | Creature attack or auto-attack. | Implemented |
 | `character_respawn` | `WorldService` | Respawned character socket. | Character id, x, y, health, max health. | Character reaches zero health and respawns. | Implemented |
 | `character_teleport` | `WorldService` | Teleported character socket. | x and y. | Admin teleport. | Implemented |
 | `category:updated` | `AdminGateway` | All clients. | Updated template/category data. | Admin template update. | Implemented |
@@ -228,30 +228,30 @@ Not verified:
 - Transaction or locking strategy for concurrent gathering of the same resource.
 - Exactly-once loot delivery.
 
-## Animal events
+## Creature events
 
 Implemented:
 
-- `AnimalsGateway` sends `animals` on connection and on `get_animals`.
-- `attack_animal` requires a string `targetId`.
+- `CreaturesGateway` sends `creatures` on connection and on `get_creatures`.
+- `attack_creature` requires a string `targetId`.
 - The gateway uses `client.data.player` from the joined world session.
-- `AnimalsService.attack` checks attack cooldown, animal existence, animal dead
+- `CreaturesService.attack` checks attack cooldown, creature existence, creature dead
   state, character existence, character health, equipment-derived range, and
   distance from server-side player position.
-- Successful attack applies damage, persists animal state, emits `animal_hit` to
-  the attacker, and emits `animal_update` globally.
+- Successful attack applies damage, persists creature state, emits `creature_hit` to
+  the attacker, and emits `creature_update` globally.
 - Riposte can update character health and emit `character_damaged`.
 - If character health reaches zero, `WorldService.respawnCharacter` can persist
   respawn position and emit `character_respawn`.
-- `AnimalsService` keeps live animal state, patrol state, player attack
-  cooldowns, and animal auto-attack cooldowns in memory.
-- Patrol updates emit `animal_update` globally.
-- Dead animals can respawn after a timeout and emit `animal_update`.
+- `CreaturesService` keeps live creature state, patrol state, player attack
+  cooldowns, and creature auto-attack cooldowns in memory.
+- Patrol updates emit `creature_update` globally.
+- Dead creatures can respawn after a timeout and emit `creature_update`.
 
 Not verified:
 
 - General spam protection beyond attack cooldown.
-- Idempotence for duplicated `attack_animal` messages.
+- Idempotence for duplicated `attack_creature` messages.
 - Recovery of all live patrol/cooldown state after server restart.
 
 ## Admin events
@@ -262,16 +262,16 @@ Implemented:
   acknowledgement callback and a 5000 ms client-side timeout.
 - The 5000 ms timeout stops the client-side wait only.
 - `admin:spawn` checks admin role, payload fields, and template existence, then
-  creates a spawn and emits `animal_update`.
+  creates a spawn and emits `creature_update`.
 - `admin:teleport` checks admin role, payload fields, and connected target
   player, then updates live and persisted position.
 - `admin:update_template` checks admin role, payload structure, field whitelist,
   numeric non-negative values, and template existence, then emits
   `category:updated`.
-- `admin:move_animal` checks admin role, payload fields, and live animal state,
-  then moves the animal through the animal service.
+- `admin:move_creature` checks admin role, payload fields, and live creature state,
+  then moves the creature through the creature service.
 - `admin:respawn_all` checks admin role and template key, then resets matching
-  live animals.
+  live creatures.
 
 Security boundary:
 
@@ -306,7 +306,7 @@ Implemented:
 - `client.broadcast.emit` is used for `player_joined`, `player_moved`, and
   disconnect `player_left`, excluding the sender.
 - `server.emit` is used for global updates such as `resource_update`,
-  `animal_update`, `category:updated`, and duplicate-socket `player_left`.
+  `creature_update`, `category:updated`, and duplicate-socket `player_left`.
 - `server.to(socketId).emit` is used for targeted `character_damaged`,
   `character_respawn`, and `character_teleport`.
 - `server.except(socketId).emit` is used after admin teleport to emit
@@ -333,10 +333,10 @@ Broadcast risk:
 | Live connected position | `WorldService.connectedPlayers` and `client.data.player` | While connected. | Persisted only in observed disconnect and admin teleport flows. | Full live-state recovery not verified. | Implemented / Not verified |
 | Gathering sessions | `ResourcesGateway.gatherSessions` | Until timer completes, cancellation, target switch, or disconnect. | No. | Lost on restart. | Implemented |
 | Gathering timers | `ResourcesGateway.gatherSessions[].timer` | One gather cycle at a time. | No. | Lost on restart. | Implemented |
-| Live animals | `AnimalsService.liveAnimals` | Server process lifetime, loaded from database on module init. | Animal rows are persisted, but live map state is in memory. | Rebuilt from database with reset behavior for some states. | Implemented / Not verified |
-| Patrol states | `AnimalsService.patrolStates` | Server process lifetime. | No. | Recreated lazily after restart. | Implemented |
-| Player attack cooldowns | `AnimalsService.lastAttackAt` | Server process lifetime. | No. | Lost on restart. | Implemented |
-| Animal auto-attack cooldowns | `AnimalsService.lastAnimalAutoAttackAt` | Server process lifetime. | No. | Lost on restart. | Implemented |
+| Live creatures | `CreaturesService.liveCreatures` | Server process lifetime, loaded from database on module init. | Creature rows are persisted, but live map state is in memory. | Rebuilt from database with reset behavior for some states. | Implemented / Not verified |
+| Patrol states | `CreaturesService.patrolStates` | Server process lifetime. | No. | Recreated lazily after restart. | Implemented |
+| Player attack cooldowns | `CreaturesService.lastAttackAt` | Server process lifetime. | No. | Lost on restart. | Implemented |
+| Creature auto-attack cooldowns | `CreaturesService.lastCreatureAutoAttackAt` | Server process lifetime. | No. | Lost on restart. | Implemented |
 | Socket auth data | `client.data.userId` and `client.data.role` | Socket lifetime. | No. | Recreated on reconnect after authentication. | Implemented |
 | Joined player data | `client.data.player` | After `join_world` and while connected. | No direct persistence. | Recreated by `join_world`. | Implemented |
 
@@ -369,7 +369,7 @@ Not verified:
   commands.
 - Lost-event recovery.
 - Full reconnection resynchronization of every state domain.
-- Acknowledgements for movement, resource, or animal gameplay events.
+- Acknowledgements for movement, resource, or creature gameplay events.
 
 This document does not claim Socket.IO provides exactly-once semantics.
 
@@ -384,7 +384,7 @@ Implemented:
 - Invalid resource payloads and rejected gathering checks log warnings and
   return without applying effects.
 - Gathering cancellation emits `gather_stopped` with a reason.
-- Rejected animal attacks log warnings and return without applying effects.
+- Rejected creature attacks log warnings and return without applying effects.
 - Admin events return acknowledgement objects with `success: false` and a
   message for unauthorized, invalid, or unresolved operations.
 - Patrol tick errors are caught and logged with `console.error`.
@@ -392,7 +392,7 @@ Implemented:
 Not verified:
 
 - Structured error codes for all gameplay events.
-- Client-visible errors for all rejected movement, resource, or animal actions.
+- Client-visible errors for all rejected movement, resource, or creature actions.
 - Centralized WebSocket exception handling.
 - Metrics or observability for rejected events.
 
@@ -401,10 +401,10 @@ Not verified:
 Implemented:
 
 - Socket authentication uses JWT verification in `WsAuthService`.
-- Invalid tokens disconnect sockets in world, resources, and animals gateways.
+- Invalid tokens disconnect sockets in world, resources, and creatures gateways.
 - Joined character ownership is checked server-side during `join_world`.
 - Resource gathering uses server-side joined player position for range checks.
-- Animal attacks use server-side joined player position for range checks.
+- Creature attacks use server-side joined player position for range checks.
 - Admin Socket.IO handlers check `client.data.role === 'admin'`.
 - Admin template updates use a whitelist of editable fields.
 
@@ -434,14 +434,14 @@ Observed risks:
 
 - `WorldScene.syncLocalPlayer` is observed to emit `player_move` no more than
   once per 80 ms window when position or direction changes.
-- Animal patrol ticks run every 200 ms and can emit `animal_update` globally.
-- `resource_update`, `animal_update`, and `category:updated` use global
+- Creature patrol ticks run every 200 ms and can emit `creature_update` globally.
+- `resource_update`, `creature_update`, and `category:updated` use global
   broadcasts.
 - Movement broadcasts currently use the default namespace without observed
   rooms, zones, or chunks.
 - Gateway and service memory grows with connected players, gathering sessions,
-  live animals, and cooldown maps.
-- Position persistence on disconnect and frequent resource/animal persistence
+  live creatures, and cooldown maps.
+- Position persistence on disconnect and frequent resource/creature persistence
   can grow with player and entity volume.
 - Payload size and message frequency may become significant at MMORPG scale.
 
@@ -476,7 +476,7 @@ Not verified:
 sequenceDiagram
     participant Client
     participant Socket
-    participant AuthGateway as World / Resources / Animals Gateway
+    participant AuthGateway as World / Resources / Creatures Gateway
     participant WsAuth
 
     Client->>Socket: io(VITE_API_URL, auth.token)
@@ -492,7 +492,7 @@ sequenceDiagram
 ```
 
 This connection flow was observed for `WorldGateway`, `ResourcesGateway`, and
-`AnimalsGateway`.
+`CreaturesGateway`.
 
 `AdminGateway` does not have an independently observed authentication hook.
 Its event handlers rely on `client.data.role`, whose initialization and gateway

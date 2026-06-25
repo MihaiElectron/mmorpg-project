@@ -84,7 +84,7 @@ Formules vérifiées par tests unitaires avec vecteurs de référence :
 | Entité | Table | Colonnes legacy | Colonnes WU ajoutées |
 |---|---|---|---|
 | `character` | `character` | `positionX`, `positionY` | `worldX`, `worldY`, `mapId` (nullable int) |
-| `animal` | `animals` | `x`, `y` | `worldX`, `worldY`, `mapId` (nullable int) |
+| `creature` | `creatures` | `x`, `y` | `worldX`, `worldY`, `mapId` (nullable int) |
 | `resource` | `resources` | `x`, `y` | `worldX`, `worldY`, `mapId` (nullable int) |
 | `creature_spawn` | `creature_spawn` | `spawnX`, `spawnY` | `worldX`, `worldY`, `mapId` (nullable int) |
 | `respawn_point` | `respawn_point` | `x`, `y` | `worldX`, `worldY`, `mapId` (nullable int) |
@@ -197,7 +197,7 @@ Appelée à la déconnexion (`handleDisconnect`).
 
 **`character.worldX / worldY / mapId`** — colonnes WU, double-écriture active sur tous les événements persistants.
 
-Pour les entités non joueurs (animal, resource, creature_spawn, respawn_point), les colonnes WU existent mais ne sont pas maintenues au runtime. La source de vérité de ces entités reste leurs colonnes legacy (`x/y`, `spawnX/Y`, `positionX/Y`).
+Pour les entités non joueurs (creature, resource, creature_spawn, respawn_point), les colonnes WU existent mais ne sont pas maintenues au runtime. La source de vérité de ces entités reste leurs colonnes legacy (`x/y`, `spawnX/Y`, `positionX/Y`).
 
 ### Protocole WebSocket
 
@@ -212,15 +212,15 @@ Les payloads émis par le serveur contiennent encore `x / y` en pixels Phaser. `
 
 | Domaine | Dette | Impact |
 |---|---|---|
-| `animals.service.ts` | Toute la boucle IA en pixels : aggro, patrol, pursuit, escape, leash. `MELEE_RANGE=60`, `patrolRadius`, `aggroRadius` en pixels. | Portée visuelle asymétrique en isométrique |
+| `creatures.service.ts` | Toute la boucle IA en pixels : aggro, patrol, pursuit, escape, leash. `MELEE_RANGE=60`, `patrolRadius`, `aggroRadius` en pixels. | Portée visuelle asymétrique en isométrique |
 | `resources.gateway.ts` | `RESOURCE_INTERACT_RANGE=100` pixels + `Math.hypot` — anti-cheat range check | Précision dégradée en isométrique |
-| `client.data.player` | Pas de `worldX/Y` — `AnimalsGateway` et `ResourcesGateway` utilisent `player.x/y` pour les range checks | Décalage possible entre vérité WU et check pixels |
+| `client.data.player` | Pas de `worldX/Y` — `CreaturesGateway` et `ResourcesGateway` utilisent `player.x/y` pour les range checks | Décalage possible entre vérité WU et check pixels |
 
 ### Entités non joueurs
 
 | Entité | Dette |
 |---|---|
-| `animal` | `worldX/Y` jamais écrits au runtime (mouvements, respawn) |
+| `creature` | `worldX/Y` jamais écrits au runtime (mouvements, respawn) |
 | `resource` | `worldX/Y` jamais écrits au runtime |
 | `creature_spawn` | `worldX/Y` jamais lus ni écrits au runtime |
 | `respawn_point` | `radius` en pixels (pas de `radiusWU`) |
@@ -254,7 +254,7 @@ La Phase 1 couvre : module central de coordonnées, adapters, backfill scripts, 
 
 Périmètre suggéré :
 
-1. Migrer `animals.service.ts` : remplacer `Math.hypot` + pixels par `chebyshevDistanceWU` + WU. Convertir `MELEE_RANGE`, `patrolRadius`, `aggroRadius` en WU. Écrire `worldX/Y/mapId` dans `animalRepository.update()`.
+1. Migrer `creatures.service.ts` : remplacer `Math.hypot` + pixels par `chebyshevDistanceWU` + WU. Convertir `MELEE_RANGE`, `patrolRadius`, `aggroRadius` en WU. Écrire `worldX/Y/mapId` dans `creatureRepository.update()`.
 2. Exposer `worldX/Y/mapId` dans `client.data.player`.
 3. Migrer `resources.gateway.ts` : `RESOURCE_INTERACT_RANGE` en WU, range check via `chebyshevDistanceWU`.
 4. (Optionnel, parallélisable) Résoudre les anomalies backfill et exécuter `wu:backfill`.

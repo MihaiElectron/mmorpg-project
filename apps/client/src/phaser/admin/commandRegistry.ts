@@ -3,7 +3,7 @@ import {
   teleportCharacter,
   updateTemplate,
   respawnAll,
-  moveAnimal,
+  moveCreature,
   getMovementMetrics,
   resetMovementMetrics,
 } from "./admin.actions";
@@ -74,7 +74,7 @@ export const commandRegistry: Record<string, CommandDef> = {
   },
 
   tp: {
-    description: "Téléporte/déplace la cible sélectionnée (joueur ou animal) à la position donnée.",
+    description: "Téléporte/déplace la cible sélectionnée (joueur ou creature) à la position donnée.",
     usage: "/tp [id] <x> <y>",
     argNames: ["id?", "x", "y"],
     handler: async (args, _flags, ctx) => {
@@ -108,8 +108,8 @@ export const commandRegistry: Record<string, CommandDef> = {
         return { success: false, message: "Erreur : worldX worldY requis (WU). Ex: /tp 6400 8192" };
       }
 
-      if (entityKind === "animal") {
-        return moveAnimal(entityId!, pos.worldX, pos.worldY, ctx.socket);
+      if (entityKind === "creature") {
+        return moveCreature(entityId!, pos.worldX, pos.worldY, ctx.socket);
       }
       return teleportCharacter(entityId!, pos.worldX, pos.worldY, ctx.socket);
     },

@@ -36,7 +36,7 @@ Implemented:
 - Zustand stores shared between React UI and Phaser systems.
 - NestJS API gateway for HTTP routes and Socket.IO gateways.
 - PostgreSQL persistence through TypeORM entities and repositories.
-- Socket.IO real-time communication for world presence, resources, animals, and
+- Socket.IO real-time communication for world presence, resources, creatures, and
   admin commands.
 - Admin UI exposed inside the React game layout for users whose JWT role is
   `admin`.
@@ -103,7 +103,7 @@ Responsibilities:
 
 - Authenticate users with JWT.
 - Expose HTTP routes for auth, characters, inventory, items, and admin data.
-- Expose Socket.IO gateways for world state, resources, animals, and admin
+- Expose Socket.IO gateways for world state, resources, creatures, and admin
   commands.
 - Persist game data in PostgreSQL through TypeORM.
 - Serve Swagger documentation for HTTP APIs.
@@ -208,11 +208,11 @@ Implemented:
 
 Implemented:
 
-- Renders the world scene, player, remote players, resources, animals, and HP
+- Renders the world scene, player, remote players, resources, creatures, and HP
   bars.
 - Handles pointer movement, keyboard movement, simple pathfinding fallback, and
   direct steering.
-- Emits Socket.IO events for world join, movement, resource interaction, animal
+- Emits Socket.IO events for world join, movement, resource interaction, creature
   attack, and admin commands.
 
 Not verified:
@@ -235,7 +235,7 @@ Implemented:
 - Bootstraps global validation pipes.
 - Enables CORS using configured client origin.
 - Configures Swagger.
-- Loads Auth, Common, Characters, Inventory, Resources, World, Animals, and
+- Loads Auth, Common, Characters, Inventory, Resources, World, Creatures, and
   Admin modules.
 
 ### Socket.IO
@@ -245,8 +245,8 @@ Implemented:
 - Authenticates Socket.IO connections with JWT in shared gateway logic.
 - Handles world presence and movement.
 - Handles resource gathering.
-- Handles animal listing and attacks.
-- Handles admin commands for spawn, teleport, template update, animal move, and
+- Handles creature listing and attacks.
+- Handles admin commands for spawn, teleport, template update, creature move, and
   respawn.
 
 ### TypeORM
@@ -257,13 +257,13 @@ Implemented:
 - Auto-loads entity files.
 - Uses `synchronize: true` in development.
 - Defines entities for users, characters, equipment, inventory, items,
-  resources, animals, creature templates, creature spawns, and respawn points.
+  resources, creatures, creature templates, creature spawns, and respawn points.
 
 ### PostgreSQL
 
 Implemented:
 
-- Stores persistent users, characters, inventory, items, resources, animals,
+- Stores persistent users, characters, inventory, items, resources, creatures,
   creature data, and respawn data through TypeORM.
 
 ## State ownership and persistence
@@ -374,10 +374,10 @@ Security note:
 Implemented:
 
 - TypeORM repositories persist users, characters, inventory, items, resources,
-  animals, creature templates, creature spawns, and respawn points.
+  creatures, creature templates, creature spawns, and respawn points.
 - Character position is persisted on disconnect and during admin teleport.
 - Resource gathering updates inventory and resource state.
-- Animal combat and respawn logic use server-side services and entities.
+- Creature combat and respawn logic use server-side services and entities.
 
 TBD:
 

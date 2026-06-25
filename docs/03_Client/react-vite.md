@@ -86,7 +86,7 @@ Observed routes:
 | `CharacterLayout` | Character side panel | Toggle character and admin tabs; decode browser token role for UI display | None directly | Implemented |
 | `CharacterLayer` | Character equipment | Display character stats and equipment slots; call unequip action on double click | Uses character store action that sends HTTP request | Implemented |
 | `Inventory` | Inventory panel | Display inventory slots; call equip action on double click | Uses character store action that sends HTTP request | Implemented |
-| `ActionPanel` | World interaction panel | Display selected target, health bar, resource or animal action, admin console | Emits resource interaction through socket; admin commands through command registry | Implemented |
+| `ActionPanel` | World interaction panel | Display selected target, health bar, resource or creature action, admin console | Emits resource interaction through socket; admin commands through command registry | Implemented |
 | `AdminPanel` | Admin tab | Load admin overview and templates; execute admin command registry | Fetches admin overview and templates; command handlers use socket or HTTP | Implemented |
 | `CoordinatesLayer` | World overlay | Poll Phaser player coordinates for display | None directly | Implemented |
 | `HealthBar` | UI health display | Render health percentage | None directly | Implemented |

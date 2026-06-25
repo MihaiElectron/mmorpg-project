@@ -31,7 +31,7 @@ Module ownership is descriptive. It is not proof that boundaries are strict or t
 
 ## Module overview
 
-The backend is a NestJS application rooted in `AppModule`. The root module loads configuration, configures TypeORM, and imports domain modules for authentication, users, shared code, characters, inventory, items, resources, world services, animals, and admin functionality.
+The backend is a NestJS application rooted in `AppModule`. The root module loads configuration, configures TypeORM, and imports domain modules for authentication, users, shared code, characters, inventory, items, resources, world services, creatures, and admin functionality.
 
 Observed local modules:
 
@@ -44,7 +44,7 @@ Observed local modules:
 - `ItemModule`
 - `ResourcesModule`
 - `WorldModule`
-- `AnimalsModule`
+- `CreaturesModule`
 - `AdminModule`
 
 Framework modules observed in the module graph include `ConfigModule`, `TypeOrmModule`, `PassportModule`, and `JwtModule`.
@@ -64,14 +64,14 @@ Framework modules observed in the module graph include `ConfigModule`, `TypeOrmM
 | ItemModule | `apps/api-gateway/src/items/item.module.ts` | Item catalogue HTTP routes and item service | `ItemController` | `ItemService` | Implemented |
 | ResourcesModule | `apps/api-gateway/src/resources/resources.module.ts` | Resource providers and resource persistence service | None observed | `ResourcesService`, `ResourcesGateway`, `LootService` | Implemented |
 | WorldModule | `apps/api-gateway/src/world/world.module.ts` | World providers, connected-player service, and respawn persistence | None observed | `WorldGateway`, `WorldService` | Implemented |
-| AnimalsModule | `apps/api-gateway/src/animals/animals.module.ts` | Animal providers, animal state service, and animal persistence | None observed | `AnimalsGateway`, `AnimalsService` | Implemented |
+| CreaturesModule | `apps/api-gateway/src/creatures/creatures.module.ts` | Creature providers, creature state service, and creature persistence | None observed | `CreaturesGateway`, `CreaturesService` | Implemented |
 | AdminModule | `apps/api-gateway/src/admin/admin.module.ts` | Admin HTTP routes and admin-facing providers | `AdminController` | `AdminService`, `AdminGateway` | Implemented |
 
 ## Dependency map
 
 | Module | Imports observed | Exports observed | Depends on TypeORM entities? | Status |
 |---|---|---|---|---|
-| AppModule | `ConfigModule.forRoot`, `TypeOrmModule.forRootAsync`, AuthModule, CommonModule, CharactersModule, InventoryModule, ResourcesModule, WorldModule, AnimalsModule, AdminModule | None observed | Entity auto-loading configured through TypeORM | Implemented |
+| AppModule | `ConfigModule.forRoot`, `TypeOrmModule.forRootAsync`, AuthModule, CommonModule, CharactersModule, InventoryModule, ResourcesModule, WorldModule, CreaturesModule, AdminModule | None observed | Entity auto-loading configured through TypeORM | Implemented |
 | AuthModule | ConfigModule, UserModule, TypeOrmModule for User, PassportModule, JwtModule | None observed | User | Implemented |
 | UserModule | TypeOrmModule for User | UserService, TypeOrmModule | User | Implemented |
 | CommonModule | JwtModule registered with ConfigModule | WsAuthService | No direct entity dependency observed | Implemented |
@@ -80,8 +80,8 @@ Framework modules observed in the module graph include `ConfigModule`, `TypeOrmM
 | ItemModule | TypeOrmModule for Item | ItemService, TypeOrmModule | Item | Implemented |
 | ResourcesModule | TypeOrmModule for Resource, InventoryModule, CommonModule | ResourcesService, ResourcesGateway | Resource | Implemented |
 | WorldModule | TypeOrmModule for Character and RespawnPoint, CommonModule | WorldService | Character, RespawnPoint | Implemented |
-| AnimalsModule | TypeOrmModule for Animal, CreatureTemplate, CreatureSpawn, Character; CommonModule; WorldModule | AnimalsService | Animal, CreatureTemplate, CreatureSpawn, Character | Implemented |
-| AdminModule | TypeOrmModule for CreatureTemplate, CreatureSpawn, Animal; AnimalsModule; WorldModule; CommonModule | None observed | CreatureTemplate, CreatureSpawn, Animal | Implemented |
+| CreaturesModule | TypeOrmModule for Creature, CreatureTemplate, CreatureSpawn, Character; CommonModule; WorldModule | CreaturesService | Creature, CreatureTemplate, CreatureSpawn, Character | Implemented |
+| AdminModule | TypeOrmModule for CreatureTemplate, CreatureSpawn, Creature; CreaturesModule; WorldModule; CommonModule | None observed | CreatureTemplate, CreatureSpawn, Creature | Implemented |
 
 ## Controller ownership
 
@@ -109,12 +109,12 @@ Framework modules observed in the module graph include `ConfigModule`, `TypeOrmM
 | ResourcesService | ResourcesModule | Read resources and update resource loot state | Resource repository | Implemented |
 | LootService | ResourcesModule | Generate item references for resource loot | None observed | Implemented |
 | WorldService | WorldModule | Connected-player memory, character joins, position persistence, respawn point setup | Character and RespawnPoint repositories | Implemented |
-| AnimalsService | AnimalsModule | Animal setup, animal combat state, animal persistence, admin animal operations | Animal, CreatureTemplate, CreatureSpawn, Character repositories | Implemented |
-| AdminService | AdminModule | Read admin overview data and update creature templates | CreatureTemplate, CreatureSpawn, Animal repositories | Implemented |
+| CreaturesService | CreaturesModule | Creature setup, creature combat state, creature persistence, admin creature operations | Creature, CreatureTemplate, CreatureSpawn, Character repositories | Implemented |
+| AdminService | AdminModule | Read admin overview data and update creature templates | CreatureTemplate, CreatureSpawn, Creature repositories | Implemented |
 | ResourcesGateway | ResourcesModule | Socket-facing resource provider | Calls ResourcesService, LootService, InventoryService | Implemented |
 | WorldGateway | WorldModule | Socket-facing world provider | Calls WorldService | Implemented |
-| AnimalsGateway | AnimalsModule | Socket-facing animal provider | Calls AnimalsService | Implemented |
-| AdminGateway | AdminModule | Socket-facing admin provider | Calls AnimalsService, WorldService, AdminService | Implemented |
+| CreaturesGateway | CreaturesModule | Socket-facing creature provider | Calls CreaturesService | Implemented |
+| AdminGateway | AdminModule | Socket-facing admin provider | Calls CreaturesService, WorldService, AdminService | Implemented |
 
 ## Shared and common code
 
@@ -133,9 +133,9 @@ Framework modules observed in the module graph include `ConfigModule`, `TypeOrmM
 | ResourcesModule | InventoryModule | Resource interaction path uses InventoryService to add generated loot | Resource persistence and inventory mutation can become coupled | Implemented |
 | ResourcesModule | CommonModule | ResourcesGateway can use shared socket authentication | Gateway auth behavior depends on CommonModule provider | Implemented |
 | WorldModule | CommonModule | WorldGateway can use shared socket authentication | Gateway auth behavior depends on CommonModule provider | Implemented |
-| AnimalsModule | WorldModule | AnimalsService uses WorldService for connected players and respawn handling | Animal service depends on world runtime memory | Implemented |
-| AnimalsModule | CommonModule | AnimalsGateway can use shared socket authentication | Gateway auth behavior depends on CommonModule provider | Implemented |
-| AdminModule | AnimalsModule | AdminGateway calls AnimalsService for animal admin operations | Admin actions can affect animal persistence | Implemented |
+| CreaturesModule | WorldModule | CreaturesService uses WorldService for connected players and respawn handling | Creature service depends on world runtime memory | Implemented |
+| CreaturesModule | CommonModule | CreaturesGateway can use shared socket authentication | Gateway auth behavior depends on CommonModule provider | Implemented |
+| AdminModule | CreaturesModule | AdminGateway calls CreaturesService for creature admin operations | Admin actions can affect creature persistence | Implemented |
 | AdminModule | WorldModule | AdminGateway calls WorldService for player teleport handling | Admin actions can affect character position persistence | Implemented |
 | AdminModule | CommonModule | AdminModule imports CommonModule | Independent admin socket authentication is Not verified | Not verified |
 
@@ -157,11 +157,11 @@ TypeORM repositories are registered per module with `TypeOrmModule.forFeature`. 
 Observed persistence ownership:
 
 - User persistence is owned by UserModule and used by AuthModule.
-- Character persistence is primarily owned by CharactersModule and also used by WorldModule and AnimalsModule.
+- Character persistence is primarily owned by CharactersModule and also used by WorldModule and CreaturesModule.
 - Inventory persistence is owned by InventoryModule and also touched by CharacterService for equipment consistency.
 - Item persistence is owned by ItemModule and used by character and inventory services.
 - Resource persistence is owned by ResourcesModule.
-- Animal, template, and spawn persistence is owned by AnimalsModule and read or updated by AdminModule.
+- Creature, template, and spawn persistence is owned by CreaturesModule and read or updated by AdminModule.
 - Respawn point persistence is owned by WorldModule.
 
 Database-level module isolation is Not verified.
@@ -176,7 +176,7 @@ Database-level module isolation is Not verified.
 - Services and gateway providers are declared in their owning modules.
 - Several modules export services for cross-module use.
 - AdminModule imports the modules whose services it calls.
-- AnimalsModule imports WorldModule for `WorldService`.
+- CreaturesModule imports WorldModule for `WorldService`.
 
 ## Known gaps
 
@@ -222,7 +222,7 @@ Do not add real environment values, secrets, tokens, passwords, hashes, or copie
 
 The module graph currently keeps several providers inside one NestJS application process. Module-level metrics and per-module healthchecks are Not verified.
 
-Cross-module calls between world, animals, resources, and inventory should be reviewed carefully before scaling assumptions are made.
+Cross-module calls between world, creatures, resources, and inventory should be reviewed carefully before scaling assumptions are made.
 
 ## Related files
 

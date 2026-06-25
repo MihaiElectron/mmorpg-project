@@ -11,8 +11,8 @@ export interface OverlayStoreBinding {
 export interface OverlayBindingsMap {
   resourceOverlayEnabled: boolean;
   toggleResourceOverlayEnabled: () => void;
-  animalOverlayEnabled: boolean;
-  toggleAnimalOverlayEnabled: () => void;
+  creatureOverlayEnabled: boolean;
+  toggleCreatureOverlayEnabled: () => void;
   creatureSpawnOverlayEnabled: boolean;
   toggleCreatureSpawnOverlayEnabled: () => void;
   stationRadiusOverlayEnabled: boolean;
@@ -34,8 +34,8 @@ export function getOverlayBinding(
   switch (overlayId) {
     case "resource.overlay":
       return { enabled: map.resourceOverlayEnabled, toggle: map.toggleResourceOverlayEnabled };
-    case "animal.overlay":
-      return { enabled: map.animalOverlayEnabled, toggle: map.toggleAnimalOverlayEnabled };
+    case "creature.overlay":
+      return { enabled: map.creatureOverlayEnabled, toggle: map.toggleCreatureOverlayEnabled };
     case "creature_spawn.overlay":
       return {
         enabled: map.creatureSpawnOverlayEnabled,

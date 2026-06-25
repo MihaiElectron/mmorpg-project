@@ -28,9 +28,9 @@ try { require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 import { Character } from '../../src/characters/entities/character.entity';
 import { CharacterEquipment } from '../../src/characters/entities/character-equipment.entity';
-import { Animal } from '../../src/animals/entities/animal.entity';
-import { CreatureSpawn } from '../../src/animals/entities/creature-spawn.entity';
-import { CreatureTemplate } from '../../src/animals/entities/creature-template.entity';
+import { Creature } from '../../src/creatures/entities/creature.entity';
+import { CreatureSpawn } from '../../src/creatures/entities/creature-spawn.entity';
+import { CreatureTemplate } from '../../src/creatures/entities/creature-template.entity';
 import { Resource } from '../../src/resources/entities/resource.entity';
 import { RespawnPoint } from '../../src/world/entities/respawn-point.entity';
 import { User } from '../../src/users/entities/user.entity';
@@ -64,7 +64,7 @@ function buildDataSource(): DataSource {
     host, port, username, password, database,
     entities: [
       Character, CharacterEquipment,
-      Animal, CreatureSpawn, CreatureTemplate,
+      Creature, CreatureSpawn, CreatureTemplate,
       Resource, RespawnPoint,
       User, Inventory, Item,
     ],
@@ -77,21 +77,21 @@ function buildDataSource(): DataSource {
 
 interface AllEntities {
   characters: Character[];
-  animals: Animal[];
+  creatures: Creature[];
   resources: Resource[];
   spawns: CreatureSpawn[];
   respawnPoints: RespawnPoint[];
 }
 
 async function readAll(ds: DataSource): Promise<AllEntities> {
-  const [characters, animals, resources, spawns, respawnPoints] = await Promise.all([
+  const [characters, creatures, resources, spawns, respawnPoints] = await Promise.all([
     ds.getRepository(Character).find(),
-    ds.getRepository(Animal).find(),
+    ds.getRepository(Creature).find(),
     ds.getRepository(Resource).find(),
     ds.getRepository(CreatureSpawn).find(),
     ds.getRepository(RespawnPoint).find(),
   ]);
-  return { characters, animals, resources, spawns, respawnPoints };
+  return { characters, creatures, resources, spawns, respawnPoints };
 }
 
 // ─── Rapport ──────────────────────────────────────────────────────────────────
@@ -104,8 +104,8 @@ function buildReports(data: AllEntities) {
       3, DEFAULT_MAP_BOUNDS,
     ),
     generateEntityReport(
-      'animal', data.animals as unknown as PositionedRecord[],
-      (r) => { const a = r as unknown as Animal; return { x: a.x, y: a.y }; },
+      'creature', data.creatures as unknown as PositionedRecord[],
+      (r) => { const a = r as unknown as Creature; return { x: a.x, y: a.y }; },
       3, DEFAULT_MAP_BOUNDS,
     ),
     generateEntityReport(
@@ -180,14 +180,14 @@ async function main() {
   console.log(`\n[wu-backfill] Écriture de ${beforeReport.totalToBackfill} ligne(s)…`);
 
   const charRepo   = ds.getRepository(Character);
-  const animalRepo = ds.getRepository(Animal);
+  const creatureRepo = ds.getRepository(Creature);
   const resRepo    = ds.getRepository(Resource);
   const spawnRepo  = ds.getRepository(CreatureSpawn);
   const rpRepo     = ds.getRepository(RespawnPoint);
 
   const updated =
     await writeWU(charRepo,   before.characters,   (e) => e.id,  (e) => ({ x: e.positionX, y: e.positionY })) +
-    await writeWU(animalRepo, before.animals,       (e) => e.id,  (e) => ({ x: e.x,         y: e.y         })) +
+    await writeWU(creatureRepo, before.creatures,       (e) => e.id,  (e) => ({ x: e.x,         y: e.y         })) +
     await writeWU(resRepo,    before.resources,     (e) => e.id,  (e) => ({ x: e.x,         y: e.y         })) +
     await writeWU(spawnRepo,  before.spawns,        (e) => e.id,  (e) => ({ x: e.spawnX,    y: e.spawnY    })) +
     await writeWU(rpRepo,     before.respawnPoints, (e) => e.id,  (e) => ({ x: e.x,         y: e.y         }));

@@ -136,7 +136,7 @@ production selon le profil.
 Profils : Developer (monitoring debug), GM (monitoring opérationnel), Owner
 (monitoring global).
 
-État actuel : `AdminPanel.tsx` écoute `animal_update`, `resource_update`,
+État actuel : `AdminPanel.tsx` écoute `creature_update`, `resource_update`,
 `player_joined`, `player_left`. C'est le précurseur du Monitoring.
 
 ### 3.4 Automation

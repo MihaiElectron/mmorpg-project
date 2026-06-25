@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { AnimalsService } from '../animals/animals.service';
+import { CreaturesService } from '../creatures/creatures.service';
 import { ResourcesService } from '../resources/resources.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
@@ -13,7 +13,7 @@ import { UserRole } from '../users/entities/user.entity';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly animalsService: AnimalsService,
+    private readonly creaturesService: CreaturesService,
     private readonly resourcesService: ResourcesService,
   ) {}
 
@@ -33,12 +33,12 @@ export class AdminController {
 
   // ── Animaux (instances vivantes) ─────────────────────────────────────────
 
-  @Get('animals')
-  getAnimals() { return this.animalsService.findAll(); }
+  @Get('creatures')
+  getCreatures() { return this.creaturesService.findAll(); }
 
   /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
-  @Get('animals/world-objects')
-  getAnimalWorldObjects() { return this.adminService.getAnimalWorldObjects(); }
+  @Get('creatures/world-objects')
+  getCreatureWorldObjects() { return this.adminService.getCreatureWorldObjects(); }
 
   // ── Créatures ─────────────────────────────────────────────────────────────
 

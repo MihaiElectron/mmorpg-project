@@ -65,7 +65,7 @@ Le scope est **obligatoire**. Il identifie le module ou domaine concerné.
 | Scope | Domaine |
 |---|---|
 | `world` | WorldService, WorldGateway, position, respawn |
-| `animals` | AnimalsService, AnimalsGateway, IA, combat |
+| `creatures` | CreaturesService, CreaturesGateway, IA, combat |
 | `resources` | ResourcesGateway, ResourcesService, récolte |
 | `combat` | Dégâts, attaque, formule de combat |
 | `auth` | Authentification, JWT, registration |
@@ -115,7 +115,7 @@ Scopes multiples (deux domaines également impactés) :
 
 ```
 feat(creatures,resources): persistance respawnAt, insert-or-ignore seeds, UUID copie
-fix(world,animals): corriger la détection de position hors-carte
+fix(world,creatures): corriger la détection de position hors-carte
 ```
 
 ---
@@ -130,10 +130,10 @@ Structure recommandée :
 2. **Dette technique** (si applicable) : ce qui n'est pas fait, ce qui reste en dette, hors scope explicite.
 
 ```
-feat(admin): ajouter la pagination serveur sur /admin/animals
+feat(admin): ajouter la pagination serveur sur /admin/creatures
 
 Les endpoints admin renvoyaient toutes les entités en une seule réponse.
-Ajout de ?page= et ?limit= sur /admin/animals, /admin/resources et
+Ajout de ?page= et ?limit= sur /admin/creatures, /admin/resources et
 /admin/characters.
 
 Dette : pagination côté frontend (AdminPanel.tsx) non couverte — à faire

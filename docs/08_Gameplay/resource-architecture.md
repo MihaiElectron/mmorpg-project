@@ -726,7 +726,7 @@ fraction, selon la saison ou l'état du sol.
 | Identifiant conservé ? | Peut-être (si removed → active) | Toujours |
 | Ce qui se reconstitue | L'existence dans le monde | Les charges / la maturité |
 | Géré par | Runtime + Node | Runtime + Node |
-| Exemples | Animal mort, arbre abattu | Arbre fruitier, mine, buisson |
+| Exemples | Creature mort, arbre abattu | Arbre fruitier, mine, buisson |
 
 ---
 

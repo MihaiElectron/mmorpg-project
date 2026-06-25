@@ -20,7 +20,7 @@
   - apps/client/src/phaser/player/Player.js
   - apps/client/src/phaser/player/PlayerController.js
   - apps/client/src/phaser/core/WorldScene.js
-  - apps/api-gateway/src/animals/animals.service.ts
+  - apps/api-gateway/src/creatures/creatures.service.ts
   - apps/api-gateway/src/resources/resources.gateway.ts
 - Used by: Project owner, developers, conversational assistants,
   repository-aware coding agents
@@ -56,7 +56,7 @@ study distinguishes them explicitly.
 The unit used by the server to compute movement, distances, speed integration,
 range checks, and pathfinding.
 
-Used in: `world.service.ts`, `animals.service.ts`, `resources.gateway.ts`.
+Used in: `world.service.ts`, `creatures.service.ts`, `resources.gateway.ts`.
 
 Characteristics:
 - Must support continuous (fractional) values to integrate movement correctly.
@@ -68,7 +68,7 @@ Characteristics:
 
 The unit used to persist entity positions between sessions.
 
-Used in: `character.entity.ts`, `resource.entity.ts`, `animal.entity.ts`,
+Used in: `character.entity.ts`, `resource.entity.ts`, `creature.entity.ts`,
 `creature-spawn.entity.ts`, `respawn-point.entity.ts`.
 
 Characteristics:
@@ -261,8 +261,8 @@ All range checks in the current codebase compute Euclidean distance in Phaser
 world pixel space:
 
 ```ts
-// combat range — animals.service.ts:376
-Math.hypot(animal.x - attackerPosition.x, animal.y - attackerPosition.y) <= MELEE_RANGE
+// combat range — creatures.service.ts:376
+Math.hypot(creature.x - attackerPosition.x, creature.y - attackerPosition.y) <= MELEE_RANGE
 
 // gathering range — resources.gateway.ts:248
 Math.hypot(target.x - player.x, target.y - player.y) <= RESOURCE_INTERACT_RANGE
@@ -424,7 +424,7 @@ tile-space metric. This is the direction implied by ADR-0001 and ADR-0002.
 
 Risks: simulation in float tile units requires ensuring that the speed
 integration (`pos += speed × dt`) is numerically stable at the chosen
-precision. Animal movement currently uses `Math.round()` at each tick,
+precision. Creature movement currently uses `Math.round()` at each tick,
 which would truncate sub-tile motion at low speeds.
 
 ### Configuration B — Pixel simulation, tile storage
@@ -458,7 +458,7 @@ the desired behavior for a per-map coordinate system.
 Uses fixed-point integer arithmetic for all server-side computation. No
 floating-point precision issues. The sub-tile unit must be chosen to provide
 sufficient precision for speed integration at the server tick rate (200 ms for
-animals, target tick rate for players TBD).
+creatures, target tick rate for players TBD).
 
 Example: at 1/16 tile = 1 unit, `speedMax = 60 px/s` in the current system
 needs to be re-expressed as approximately `speedMax = 0.84 tiles/s` (from the
@@ -506,31 +506,31 @@ re-expressing them in the chosen simulation unit.
 | Phaser world bounds | 2000 × 2000 px | `WorldScene.js:160` |
 | Sync interval | 80 ms | `WorldScene.js:syncLocalPlayer` |
 
-### Animals (turkey template seed)
+### Creatures (turkey template seed)
 
 | Constant | Value | Location |
 |---|---|---|
-| `patrolRadius` | 200 px | `animals.service.ts:443` |
-| `speedMin` | 25 px/s | `animals.service.ts:444` |
-| `speedMax` | 60 px/s | `animals.service.ts:445` |
-| `aggroRadius` | 50 px | `animals.service.ts:448` |
-| Seed spawn X | 600 px | `animals.service.ts:638` |
-| Seed spawn Y | 580 px | `animals.service.ts:639` |
+| `patrolRadius` | 200 px | `creatures.service.ts:443` |
+| `speedMin` | 25 px/s | `creatures.service.ts:444` |
+| `speedMax` | 60 px/s | `creatures.service.ts:445` |
+| `aggroRadius` | 50 px | `creatures.service.ts:448` |
+| Seed spawn X | 600 px | `creatures.service.ts:638` |
+| Seed spawn Y | 580 px | `creatures.service.ts:639` |
 
-### Animals (goblin template seed)
+### Creatures (goblin template seed)
 
 | Constant | Value | Location |
 |---|---|---|
-| `patrolRadius` | 150 px | `animals.service.ts:458` |
-| `speedMin` | 40 px/s | `animals.service.ts:459` |
-| `speedMax` | 80 px/s | `animals.service.ts:460` |
-| `aggroRadius` | 120 px | `animals.service.ts:463` |
+| `patrolRadius` | 150 px | `creatures.service.ts:458` |
+| `speedMin` | 40 px/s | `creatures.service.ts:459` |
+| `speedMax` | 80 px/s | `creatures.service.ts:460` |
+| `aggroRadius` | 120 px | `creatures.service.ts:463` |
 
 ### Ranges
 
 | Constant | Value | Location |
 |---|---|---|
-| `MELEE_RANGE` | 60 px | `animals.service.ts:13` |
+| `MELEE_RANGE` | 60 px | `creatures.service.ts:13` |
 | `RESOURCE_INTERACT_RANGE` | 100 px | `resources.gateway.ts:25` |
 | `MOVE_TOLERANCE` | 4 px | `resources.gateway.ts:31` |
 | Respawn point X (hardcoded) | 600 px | `world.service.ts:hardcoded` |
@@ -549,7 +549,7 @@ re-expressing them in the chosen simulation unit.
 | `TILEMAP_TEST_OFFSET_X` | 936 px | `WorldScene.js:137` (temporary) |
 | `TILEMAP_TEST_OFFSET_Y` | 0 px | `WorldScene.js:138` (temporary) |
 | Pathfinding cell size | 32 px | `PlayerController.js:90` |
-| Animal tick rate | 200 ms | `AnimalsService` tick interval |
+| Creature tick rate | 200 ms | `CreaturesService` tick interval |
 
 ### Derived conversion values
 
@@ -599,8 +599,8 @@ values to tile values or vice versa.
    worldTileY` is needed? This conversion is not trivial for staggered
    isometric maps and depends on Tiled's internal coordinate model.
 
-7. **Animal `Math.round()` at each tick.** In Config A (float tile simulation),
-   removing `Math.round()` from the animal tick loop would accumulate sub-tile
+7. **Creature `Math.round()` at each tick.** In Config A (float tile simulation),
+   removing `Math.round()` from the creature tick loop would accumulate sub-tile
    position drift across ticks. Is this acceptable, or should the simulation
    use fixed-point to avoid it?
 

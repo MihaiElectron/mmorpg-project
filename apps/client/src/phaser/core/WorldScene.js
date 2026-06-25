@@ -53,7 +53,7 @@ const RESOURCE_WO_CAPABILITIES = Object.freeze([
   "transform", "harvestable", "loot", "persistence", "validation",
 ]);
 
-const ANIMAL_WO_CAPABILITIES = Object.freeze([
+const CREATURE_WO_CAPABILITIES = Object.freeze([
   "transform", "combat", "health", "persistence", "validation",
 ]);
 
@@ -80,24 +80,24 @@ const CRAFTING_STATION_LABEL_STYLE = Object.freeze({
   padding: { x: 4, y: 2 },
 });
 
-function animalToWorldObject(animal) {
+function creatureToWorldObject(creature) {
   const hasWU =
-    animal.worldX != null && animal.worldY != null && animal.mapId != null;
+    creature.worldX != null && creature.worldY != null && creature.mapId != null;
   return {
     kind: "entity",
-    category: "animal",
-    id: animal.id,
-    type: animal.type ?? "unknown",
-    mapId: animal.mapId ?? null,
-    position: hasWU ? { worldX: animal.worldX, worldY: animal.worldY } : null,
-    state: animal.state ?? "alive",
-    health:    animal.health    ?? null,
-    maxHealth: animal.maxHealth ?? null,
-    capabilities: ANIMAL_WO_CAPABILITIES,
+    category: "creature",
+    id: creature.id,
+    type: creature.type ?? "unknown",
+    mapId: creature.mapId ?? null,
+    position: hasWU ? { worldX: creature.worldX, worldY: creature.worldY } : null,
+    state: creature.state ?? "alive",
+    health:    creature.health    ?? null,
+    maxHealth: creature.maxHealth ?? null,
+    capabilities: CREATURE_WO_CAPABILITIES,
     metadata: {
       legacy:
-        animal.x != null && animal.y != null
-          ? { x: animal.x, y: animal.y }
+        creature.x != null && creature.y != null
+          ? { x: creature.x, y: creature.y }
           : null,
     },
   };
@@ -260,7 +260,7 @@ export default class WorldScene extends Phaser.Scene {
     this.creatureSpawnData = new Map();
     this.overlayManager = null;
     this.overlayStoreUnsub = null;
-    this.animalSprites = new Map();
+    this.creatureSprites = new Map();
     this.remotePlayers = new Map();
     this.terrainMap = null;
     this.terrainLayer = null;
@@ -305,24 +305,24 @@ export default class WorldScene extends Phaser.Scene {
       const character = getCharacterStore().getState().character;
       if (!character?.id) { this.stopAutoAttack(); return; }
 
-      const entry = this.animalSprites.get(targetId);
+      const entry = this.creatureSprites.get(targetId);
       if (!entry) return;
 
       const dist = Math.hypot(
-        entry.animal.x - this.player.x,
-        entry.animal.y - this.player.y,
+        entry.creature.x - this.player.x,
+        entry.creature.y - this.player.y,
       );
 
-      // Poursuite continue : replanifier vers la position actuelle de l'animal
+      // Poursuite continue : replanifier vers la position actuelle de l'creature
       if (dist > 60 && this.controller) {
-        this.controller.moveTo(entry.animal.x, entry.animal.y);
+        this.controller.moveTo(entry.creature.x, entry.creature.y);
       }
 
       // Attaque toutes les 750 ms (le serveur vérifie aussi le cooldown)
       const now = Date.now();
       if (now - lastAttackEmitAt >= ATTACK_INTERVAL_MS) {
         lastAttackEmitAt = now;
-        this.socket.emit("attack_animal", { targetId, characterId: character.id });
+        this.socket.emit("attack_creature", { targetId, characterId: character.id });
       }
     };
 
@@ -436,16 +436,16 @@ export default class WorldScene extends Phaser.Scene {
       if (targets.length > 0) {
         const store = getActionPanelStore();
         const first = targets[0];
-        const firstAnimal = this.animalSprites.get(first.id)?.animal;
+        const firstCreature = this.creatureSprites.get(first.id)?.creature;
 
         const overlapping = targets.map((t) => {
-          const animalData = this.animalSprites.get(t.id)?.animal;
+          const creatureData = this.creatureSprites.get(t.id)?.creature;
           return {
             id: t.id,
             type: t.type,
             kind: t.kind,
-            health: animalData?.health ?? null,
-            maxHealth: animalData?.maxHealth ?? null,
+            health: creatureData?.health ?? null,
+            maxHealth: creatureData?.maxHealth ?? null,
           };
         });
 
@@ -454,8 +454,8 @@ export default class WorldScene extends Phaser.Scene {
             id: first.id,
             type: first.type,
             kind: first.kind,
-            health: firstAnimal?.health ?? null,
-            maxHealth: firstAnimal?.maxHealth ?? null,
+            health: firstCreature?.health ?? null,
+            maxHealth: firstCreature?.maxHealth ?? null,
           },
           first.actions,
           overlapping.length > 1 ? overlapping : [],
@@ -465,9 +465,9 @@ export default class WorldScene extends Phaser.Scene {
           const rd = this.resourceData.get(first.id);
           if (rd) getDevToolsStore().getState().setSelectedWorldObject(resourceToWorldObject(rd));
         }
-        if (first.kind === "animal") {
-          const entry = this.animalSprites.get(first.id);
-          if (entry?.animal) getDevToolsStore().getState().setSelectedWorldObject(animalToWorldObject(entry.animal));
+        if (first.kind === "creature") {
+          const entry = this.creatureSprites.get(first.id);
+          if (entry?.creature) getDevToolsStore().getState().setSelectedWorldObject(creatureToWorldObject(entry.creature));
         }
 
         return;
@@ -526,7 +526,7 @@ export default class WorldScene extends Phaser.Scene {
 
     this.overlayStoreUnsub = getDevToolsStore().subscribe((state, prev) => {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
-      const animalOverlayChanged        = state.animalOverlayEnabled        !== prev.animalOverlayEnabled;
+      const creatureOverlayChanged        = state.creatureOverlayEnabled        !== prev.creatureOverlayEnabled;
       const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
       const stationRadiusOverlayChanged = state.stationRadiusOverlayEnabled !== prev.stationRadiusOverlayEnabled;
       const walkabilityOverlayChanged   = state.walkabilityOverlayEnabled   !== prev.walkabilityOverlayEnabled;
@@ -538,8 +538,8 @@ export default class WorldScene extends Phaser.Scene {
       if (resourceOverlayChanged || selectionChanged) {
         this.redrawResourceOverlay();
       }
-      if (animalOverlayChanged || selectionChanged) {
-        this.redrawAnimalOverlay();
+      if (creatureOverlayChanged || selectionChanged) {
+        this.redrawCreatureOverlay();
       }
       if (creatureSpawnOverlayChanged || selectionChanged) {
         this.redrawCreatureSpawnOverlay();
@@ -724,7 +724,7 @@ export default class WorldScene extends Phaser.Scene {
     this.updateRemotePlayerLabels();
     this.updateGatherIndicator();
     this.updatePlayerHpBar();
-    this.updateAnimalHpBars();
+    this.updateCreatureHpBars();
   }
 
   updatePlayerHpBar() {
@@ -734,10 +734,10 @@ export default class WorldScene extends Phaser.Scene {
     updateHpBar(this.playerHpBar, char.health, char.maxHealth, this.player.x, this.player.y);
   }
 
-  updateAnimalHpBars() {
-    for (const entry of this.animalSprites.values()) {
+  updateCreatureHpBars() {
+    for (const entry of this.creatureSprites.values()) {
       if (entry.hpBar) {
-        updateHpBar(entry.hpBar, entry.animal.health, entry.animal.maxHealth, entry.sprite.x, entry.sprite.y);
+        updateHpBar(entry.hpBar, entry.creature.health, entry.creature.maxHealth, entry.sprite.x, entry.sprite.y);
       }
     }
   }
@@ -772,7 +772,7 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("connect", () => {
       this.socket.emit("get_resources");
-      this.socket.emit("get_animals");
+      this.socket.emit("get_creatures");
       this.joinWorld();
     });
 
@@ -780,8 +780,8 @@ export default class WorldScene extends Phaser.Scene {
       this.renderResources(resources);
     });
 
-    this.socket.on("animals", (animals) => {
-      this.renderAnimals(animals);
+    this.socket.on("creatures", (creatures) => {
+      this.renderCreatures(creatures);
     });
 
     this.socket.on("inventory_update", (data) => {
@@ -828,25 +828,25 @@ export default class WorldScene extends Phaser.Scene {
       this.stopGatherIndicator(data.targetId);
     });
 
-    this.socket.on("animal_update", (animal) => {
-      if (animal.state === "dead") {
-        this.removeAnimal(animal.id);
-        if (this.autoAttackTargetId === animal.id) {
+    this.socket.on("creature_update", (creature) => {
+      if (creature.state === "dead") {
+        this.removeCreature(creature.id);
+        if (this.autoAttackTargetId === creature.id) {
           this.stopAutoAttack();
         }
         const panelStore = getActionPanelStore();
-        if (panelStore.getState().target?.id === animal.id) {
+        if (panelStore.getState().target?.id === creature.id) {
           panelStore.getState().closePanel();
         }
         return;
       }
 
-      this.upsertAnimal(animal);
+      this.upsertCreature(creature);
 
       const panelStore = getActionPanelStore();
       const panelState = panelStore.getState();
-      if (panelState.target?.id === animal.id) {
-        panelState.updateTargetHealth(animal.health, animal.maxHealth);
+      if (panelState.target?.id === creature.id) {
+        panelState.updateTargetHealth(creature.health, creature.maxHealth);
       }
     });
 
@@ -916,7 +916,7 @@ export default class WorldScene extends Phaser.Scene {
 
     if (this.socket.connected) {
       this.socket.emit("get_resources");
-      this.socket.emit("get_animals");
+      this.socket.emit("get_creatures");
       this.loadCraftingStations();
       this.joinWorld();
     }
@@ -1326,22 +1326,22 @@ export default class WorldScene extends Phaser.Scene {
     }
   }
 
-  renderAnimals(animals) {
-    this.clearAnimals();
+  renderCreatures(creatures) {
+    this.clearCreatures();
 
-    animals
-      .filter((animal) => animal.state === "alive")
-      .forEach((animal) => this.upsertAnimal(animal));
+    creatures
+      .filter((creature) => creature.state === "alive")
+      .forEach((creature) => this.upsertCreature(creature));
 
-    this.redrawAnimalOverlay();
+    this.redrawCreatureOverlay();
   }
 
-  upsertAnimal(animal) {
-    const { x, y } = resolveScreen(animal);
-    const existing = this.animalSprites.get(animal.id);
+  upsertCreature(creature) {
+    const { x, y } = resolveScreen(creature);
+    const existing = this.creatureSprites.get(creature.id);
 
     if (existing) {
-      existing.animal = animal;
+      existing.creature = creature;
       this.tweens.add({
         targets: existing.sprite,
         x,
@@ -1350,7 +1350,7 @@ export default class WorldScene extends Phaser.Scene {
         ease: "Linear",
       });
 
-      const inCombat = animal.state === "fighting" || animal.state === "escaping";
+      const inCombat = creature.state === "fighting" || creature.state === "escaping";
       if (inCombat && !existing.hpBar) {
         existing.hpBar = createHpBar(this, existing.sprite.x, existing.sprite.y);
       } else if (!inCombat && existing.hpBar) {
@@ -1361,8 +1361,8 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     const textureKey = resolveAppearanceTexture({
-      appearanceKey: animal.type,
-      textureKey: animal.textureKey,
+      appearanceKey: creature.type,
+      textureKey: creature.textureKey,
       fallbackTextureKey: "turkey",
       isLoaded: (key) => this.textures.exists(key),
     });
@@ -1373,27 +1373,27 @@ export default class WorldScene extends Phaser.Scene {
       Phaser.Geom.Rectangle.Contains,
     );
 
-    const inCombat = animal.state === "fighting" || animal.state === "escaping";
+    const inCombat = creature.state === "fighting" || creature.state === "escaping";
     const hpBar = inCombat ? createHpBar(this, x, y) : null;
-    if (hpBar) updateHpBar(hpBar, animal.health, animal.maxHealth, x, y);
+    if (hpBar) updateHpBar(hpBar, creature.health, creature.maxHealth, x, y);
 
-    this.animalSprites.set(animal.id, { sprite, animal, hpBar });
+    this.creatureSprites.set(creature.id, { sprite, creature, hpBar });
     this.interactionTargets.push({
       sprite,
-      id: animal.id,
-      type: animal.type,
-      kind: "animal",
+      id: creature.id,
+      type: creature.type,
+      kind: "creature",
       actions: ["attaquer"],
     });
-    this.redrawAnimalOverlay();
+    this.redrawCreatureOverlay();
   }
 
-  // ── Studio SDK — Animal Overlay ──────────────────────────────────────────
+  // ── Studio SDK — Creature Overlay ──────────────────────────────────────────
 
-  redrawAnimalOverlay() {
+  redrawCreatureOverlay() {
     const state = getDevToolsStore().getState();
-    this.overlayManager.redrawAnimals(
-      this.animalSprites, state.animalOverlayEnabled, state.selectedWorldObject?.id ?? null,
+    this.overlayManager.redrawCreatures(
+      this.creatureSprites, state.creatureOverlayEnabled, state.selectedWorldObject?.id ?? null,
     );
   }
 
@@ -1596,17 +1596,17 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawResourceOverlay();
   }
 
-  clearAnimals() {
-    for (const entry of this.animalSprites.values()) {
+  clearCreatures() {
+    for (const entry of this.creatureSprites.values()) {
       entry.sprite.destroy();
       destroyHpBar(entry.hpBar);
     }
 
-    this.animalSprites.clear();
+    this.creatureSprites.clear();
     this.interactionTargets = this.interactionTargets.filter(
-      (target) => target.kind !== "animal",
+      (target) => target.kind !== "creature",
     );
-    this.redrawAnimalOverlay();
+    this.redrawCreatureOverlay();
   }
 
   removeResource(resourceId) {
@@ -1647,32 +1647,32 @@ export default class WorldScene extends Phaser.Scene {
     this.craftingStationData.delete(stationId);
   }
 
-  removeAnimal(animalId) {
-    const entry = this.animalSprites.get(animalId);
+  removeCreature(creatureId) {
+    const entry = this.creatureSprites.get(creatureId);
 
     if (entry) {
       entry.sprite.destroy();
       destroyHpBar(entry.hpBar);
-      this.animalSprites.delete(animalId);
+      this.creatureSprites.delete(creatureId);
     }
 
     this.interactionTargets = this.interactionTargets.filter(
-      (target) => target.id !== animalId,
+      (target) => target.id !== creatureId,
     );
-    this.redrawAnimalOverlay();
+    this.redrawCreatureOverlay();
   }
 
   destroy() {
     if (this.socket) {
       this.socket.off("connect");
       this.socket.off("resources");
-      this.socket.off("animals");
+      this.socket.off("creatures");
       this.socket.off("inventory_update");
       this.socket.off("resource_loot");
       this.socket.off("resource_update");
       this.socket.off("gather_tick");
       this.socket.off("gather_stopped");
-      this.socket.off("animal_update");
+      this.socket.off("creature_update");
       this.socket.off("crafting_station_update");
       this.socket.off("current_players");
       this.socket.off("world_joined");
@@ -1701,7 +1701,7 @@ export default class WorldScene extends Phaser.Scene {
     this.clearCraftingStations();
     destroyHpBar(this.playerHpBar);
     this.playerHpBar = null;
-    this.clearAnimals();
+    this.clearCreatures();
     this.clearRemotePlayers();
     super.destroy();
   }

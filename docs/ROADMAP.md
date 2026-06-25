@@ -123,8 +123,8 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] Collision
 - [ ] Resources
 - [ ] NPC
-- [x] Aggro animal (détection, poursuite, fuite, auto-attaque, riposte)
-- [ ] Animals (système complet)
+- [x] Aggro creature (détection, poursuite, fuite, auto-attaque, riposte)
+- [ ] Creatures (système complet)
 - [ ] Combat (système complet)
 
 ---
@@ -159,7 +159,7 @@ Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.
 - [ ] World persistence
 - [ ] Resources
 - [ ] NPC
-- [ ] Animals
+- [ ] Creatures
 - [ ] Buildings
 
 ---

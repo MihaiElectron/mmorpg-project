@@ -9,22 +9,22 @@ import {
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
-import { AnimalsService, isAttackFailure } from './animals.service';
+import { CreaturesService, isAttackFailure } from './creatures.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
-export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
+export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
   constructor(
-    private readonly animalsService: AnimalsService,
+    private readonly creaturesService: CreaturesService,
     private readonly wsAuthService: WsAuthService,
   ) {}
 
   afterInit(server: Server) {
-    this.animalsService.startPatrol(server);
+    this.creaturesService.startPatrol(server);
   }
 
   async handleConnection(client: WorldSocket) {
@@ -35,16 +35,16 @@ export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
     }
     client.data.userId = auth.userId;
     client.data.role = auth.role;
-    client.emit('animals', this.animalsService.findAll());
+    client.emit('creatures', this.creaturesService.findAll());
   }
 
-  @SubscribeMessage('get_animals')
-  onGetAnimals(@ConnectedSocket() client: WorldSocket) {
-    client.emit('animals', this.animalsService.findAll());
+  @SubscribeMessage('get_creatures')
+  onGetCreatures(@ConnectedSocket() client: WorldSocket) {
+    client.emit('creatures', this.creaturesService.findAll());
   }
 
-  @SubscribeMessage('attack_animal')
-  async onAttackAnimal(
+  @SubscribeMessage('attack_creature')
+  async onAttackCreature(
     @ConnectedSocket() client: WorldSocket,
     @MessageBody() payload: { targetId: string },
   ) {
@@ -56,7 +56,7 @@ export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
       return;
     }
 
-    const result = await this.animalsService.attack(
+    const result = await this.creaturesService.attack(
       payload.targetId,
       player.characterId,
       { worldX: player.worldX, worldY: player.worldY, mapId: player.mapId },
@@ -67,8 +67,8 @@ export class AnimalsGateway implements OnGatewayInit, OnGatewayConnection {
       return;
     }
 
-    client.emit('animal_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
-    this.server.emit('animal_update', result.dto);
+    client.emit('creature_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
+    this.server.emit('creature_update', result.dto);
 
     if (result.riposte) {
       client.emit('character_damaged', {

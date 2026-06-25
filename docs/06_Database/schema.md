@@ -40,7 +40,7 @@ The inspected code defines eleven TypeORM entity classes:
 - `Item`
 - `Resource`
 - `ResourceTemplate`
-- `Animal`
+- `Creature`
 - `CreatureTemplate`
 - `CreatureSpawn`
 - `RespawnPoint`
@@ -58,9 +58,9 @@ Some table names are explicit through `@Entity('...')`. Others use TypeORM defau
 | `Item` | `item` | Items | Store item catalogue and equipment metadata | Implemented |
 | `Resource` | `resources` | Resources | Store resource type, coordinates, state, remaining loot count | Implemented |
 | `ResourceTemplate` | `resource_templates` | Resources | Store resource type defaults | Implemented |
-| `Animal` | `animals` | Animals | Store animal instance position, health, state, and spawn reference | Implemented |
-| `CreatureTemplate` | `creature_template` | Animals | Store creature base stats, behavior fields, and texture key | Implemented |
-| `CreatureSpawn` | `creature_spawn` | Animals | Store spawn key, template reference, coordinates, respawn delay | Implemented |
+| `Creature` | `creatures` | Creatures | Store creature instance position, health, state, and spawn reference | Implemented |
+| `CreatureTemplate` | `creature_template` | Creatures | Store creature base stats, behavior fields, and texture key | Implemented |
+| `CreatureSpawn` | `creature_spawn` | Creatures | Store spawn key, template reference, coordinates, respawn delay | Implemented |
 | `RespawnPoint` | `respawn_point` | World | Store character respawn coordinates and radius | Implemented |
 
 ## Table mapping
@@ -68,15 +68,15 @@ Some table names are explicit through `@Entity('...')`. Others use TypeORM defau
 | Table or entity | Key fields observed | Relations observed | Persistence owner | Status |
 |---|---|---|---|---|
 | `User` | `id`, `username`, `password`, `isActive`, `role`, `createdAt`, `updatedAt` | One user has many characters | User and auth services | Implemented |
-| `Character` | `id`, `name`, `level`, `health`, `maxHealth`, `experience`, `attack`, `defense`, `positionX`, `positionY`, `userId`, `sex`, timestamps | Many characters belong to one user; one character has many equipment and inventory rows | Character, world, animal, and admin services | Implemented |
+| `Character` | `id`, `name`, `level`, `health`, `maxHealth`, `experience`, `attack`, `defense`, `positionX`, `positionY`, `userId`, `sex`, timestamps | Many characters belong to one user; one character has many equipment and inventory rows | Character, world, creature, and admin services | Implemented |
 | `CharacterEquipment` | `id`, `characterId`, `itemId`, `slot`, timestamps | Many rows reference one character and one item | Character service | Implemented |
 | `Inventory` | `id`, `quantity`, `equipped`, timestamps | Many rows reference one character and one item | Inventory and character services | Implemented |
 | `Item` | `id`, `name`, `type`, `category`, `attack`, `defense`, `range`, `slot`, `image`, timestamps | One item can appear in inventory and equipment rows | Item service | Implemented |
 | `Resource` | `id`, `type`, `x`, `y`, `worldX`, `worldY`, `mapId`, `state`, `remainingLoots`, `respawnAt`, `respawnDelayMs` | No TypeORM relation observed | Resource and admin services | Implemented |
 | `ResourceTemplate` | `id`, `type`, `defaultRemainingLoots`, `respawnDelayMs`, `lootPool` | No TypeORM relation observed | Resource and admin services | Implemented |
-| `Animal` | `id`, `spawn`, `x`, `y`, `worldX`, `worldY`, `mapId`, `health`, `state`, `respawnAt`, `respawnDelayMs` | Many animals may reference one creature spawn | Animal and admin services | Implemented |
-| `CreatureTemplate` | `id`, `key`, `name`, `textureKey`, `baseHealth`, `baseArmor`, `baseAttack`, `patrolRadius`, `speedMin`, `speedMax`, `pauseMinMs`, `pauseMaxMs`, `aggroRadius`, `fleeThresholdPct`, `respawnDelayMs` | Referenced by creature spawns | Animal and admin services | Implemented |
-| `CreatureSpawn` | `id`, `key`, `template`, `spawnX`, `spawnY`, `respawnDelayMs` | Many spawns reference one creature template | Animal and admin services | Implemented |
+| `Creature` | `id`, `spawn`, `x`, `y`, `worldX`, `worldY`, `mapId`, `health`, `state`, `respawnAt`, `respawnDelayMs` | Many creatures may reference one creature spawn | Creature and admin services | Implemented |
+| `CreatureTemplate` | `id`, `key`, `name`, `textureKey`, `baseHealth`, `baseArmor`, `baseAttack`, `patrolRadius`, `speedMin`, `speedMax`, `pauseMinMs`, `pauseMaxMs`, `aggroRadius`, `fleeThresholdPct`, `respawnDelayMs` | Referenced by creature spawns | Creature and admin services | Implemented |
+| `CreatureSpawn` | `id`, `key`, `template`, `spawnX`, `spawnY`, `respawnDelayMs` | Many spawns reference one creature template | Creature and admin services | Implemented |
 | `RespawnPoint` | `id`, `x`, `y`, `radius` | No TypeORM relation observed | World service | Implemented |
 
 ## User and authentication data
@@ -115,19 +115,19 @@ Complete inventory route ownership and all concurrent inventory write safety are
 
 No TypeORM relation between resource instances and templates was observed. Resource consume and inventory update are not verified as one shared transaction.
 
-## Animal and spawn data
+## Creature and spawn data
 
 `CreatureTemplate` stores creature category fields such as base stats, movement behavior values, and texture key.
 
 `CreatureSpawn` stores spawn key, template reference, spawn coordinates, and respawn delay.
 
-`Animal` stores live animal instance position, health, state, and optional spawn reference with eager loading.
+`Creature` stores live creature instance position, health, state, and optional spawn reference with eager loading.
 
-Animal service initialization seeds templates, spawns, and instances where missing. Complete production seed workflow and concurrency behavior are Not verified.
+Creature service initialization seeds templates, spawns, and instances where missing. Complete production seed workflow and concurrency behavior are Not verified.
 
 ## Admin-related data
 
-Admin services read and mutate creature templates, creature spawns, animals, characters, resources, and resource templates.
+Admin services read and mutate creature templates, creature spawns, creatures, characters, resources, and resource templates.
 
 No dedicated audit log entity was observed. No admin action history table was observed. Per-field admin authorization beyond observed server-side handlers is Not verified.
 
@@ -140,7 +140,7 @@ No dedicated audit log entity was observed. No admin action history table was ob
 | Item to equipment | `Item`, `CharacterEquipment` | One-to-many from item to equipment; many-to-one from equipment to item | Item catalogue rows can be equipped by many characters | Implemented |
 | Character to inventory | `Character`, `Inventory` | One-to-many from character to inventory; many-to-one from inventory to character | Inventory belongs to a character | Implemented |
 | Item to inventory | `Item`, `Inventory` | One-to-many from item to inventory; many-to-one from inventory to item | Item catalogue rows can appear in many inventories | Implemented |
-| Spawn to animal | `CreatureSpawn`, `Animal` | Many animals may reference one spawn | Animal instance origin can be tied to a spawn | Implemented |
+| Spawn to creature | `CreatureSpawn`, `Creature` | Many creatures may reference one spawn | Creature instance origin can be tied to a spawn | Implemented |
 | Template to spawn | `CreatureTemplate`, `CreatureSpawn` | Many spawns reference one template | Spawn behavior depends on creature template | Implemented |
 | Resource template to resource | `ResourceTemplate`, `Resource` | No TypeORM relation observed | Resource type string is the apparent linkage | Not verified |
 | Respawn point to character | `RespawnPoint`, `Character` | No TypeORM relation observed | Respawn uses runtime lookup, not a stored relation | Implemented / Not verified |
@@ -155,7 +155,7 @@ No dedicated audit log entity was observed. No admin action history table was ob
 | `CreatureTemplate` | `key` column has `unique: true` | Unique creature template key | Full template validation constraints are Not verified | Implemented / Not verified |
 | `CreatureSpawn` | `key` column has `unique: true` | Unique spawn key | Admin-created spawn key collision handling is Not verified beyond current key format | Implemented / Not verified |
 | `ResourceTemplate` | `type` column has `unique: true` | One default template per resource type | Type normalization is Not verified | Implemented / Not verified |
-| Entity timestamps | `CreateDateColumn` and `UpdateDateColumn` on user, character, equipment, inventory, item | Track creation and update dates | Timestamps on resources, animals, templates, spawns, and respawn points are Not verified | Implemented / Not verified |
+| Entity timestamps | `CreateDateColumn` and `UpdateDateColumn` on user, character, equipment, inventory, item | Track creation and update dates | Timestamps on resources, creatures, templates, spawns, and respawn points are Not verified | Implemented / Not verified |
 | Soft delete | No `DeleteDateColumn` observed | Not applicable in current entities | Soft delete is Not verified | Not verified |
 | Performance indexes | No `@Index` decorator observed | Not verified | Query performance indexes are Not verified | Not verified |
 
@@ -170,7 +170,7 @@ No dedicated audit log entity was observed. No admin action history table was ob
 | Items | Server-side item service | Admin write routes are role-protected in observed HTTP controller docs | Business constraints and audit are Not verified | Implemented / Not verified |
 | Resources | Resource id and server state | Resource interaction checks target existence, range, state, and remaining loot count | Duplicate write and full concurrency safety are Not verified | Implemented / Not verified |
 | Resource templates | Resource type | Admin service checks template existence for updates | Full admin payload validation and audit are Not verified | Implemented / Not verified |
-| Animals | Animal id and spawn/template state | Animal attack checks target, character, range, cooldown, health, and state | Concurrent combat consistency is Not verified | Implemented / Not verified |
+| Creatures | Creature id and spawn/template state | Creature attack checks target, character, range, cooldown, health, and state | Concurrent combat consistency is Not verified | Implemented / Not verified |
 | Creature templates and spawns | Template key and spawn key | Admin and seed paths check existence in observed flows | Full deletion and cascade safety are Not verified | Implemented / Not verified |
 | Respawn points | Server-managed rows | World service reads nearest point and seeds default when empty | Multiple-respawn policy and admin management are Not verified | Implemented / Not verified |
 
@@ -194,7 +194,7 @@ Pagination, relation loading strategy, large table query plans, N+1 query review
 
 - Eleven TypeORM entity classes were observed.
 - PostgreSQL connection uses TypeORM entity auto-loading.
-- User, character, equipment, inventory, item, resource, resource template, animal, creature template, creature spawn, and respawn point persistence are represented.
+- User, character, equipment, inventory, item, resource, resource template, creature, creature template, creature spawn, and respawn point persistence are represented.
 - Several relations are represented with TypeORM decorators.
 - Several unique constraints are represented through `unique: true` or `@Unique`.
 - Some entities have created and updated timestamp columns.
@@ -272,7 +272,7 @@ Before production use, review high-cardinality tables, unique constraints, query
 ## TODO
 
 - [ ] Verify generated table names against the live schema.
-- [ ] Review index requirements for character, inventory, resource, animal, and admin queries.
+- [ ] Review index requirements for character, inventory, resource, creature, and admin queries.
 - [ ] Review ownership checks for all user-owned rows.
 - [ ] Review cascade safety for destructive operations.
 - [ ] Add or verify audit storage for sensitive admin changes.

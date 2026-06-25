@@ -28,7 +28,7 @@ architecturale que toute implémentation future devra respecter.
 ### Le problème du couplage direct
 
 Sans médiateur, le Studio devrait connaître la structure interne du Runtime
-pour en extraire des informations utiles. Il devrait savoir qu'un `Animal` a
+pour en extraire des informations utiles. Il devrait savoir qu'un `Creature` a
 un champ `health` dans une entité TypeORM, que les coordonnées sont en WU
 depuis ADR-0001, que l'état IA est une FSM avec cinq états. Ce couplage crée
 une dépendance fragile : chaque évolution interne du Runtime exige une mise à
@@ -191,7 +191,7 @@ Le Studio n'a rien à changer.
 | Représentation Runtime | World Object produit par l'Adapter |
 |---|---|
 | `Resource { id, type: "dead_tree", worldX, worldY, state: "alive", remainingLoots: 3 }` | `{ kind: "entity", subtype: "resource", capabilities: ["transform", "harvestable", "loot", "respawn", "persistence"] }` |
-| `Animal { id, name: "turkey", worldX, worldY, health: 45, maxHealth: 60, state: "patrolling" }` | `{ kind: "entity", subtype: "animal", capabilities: ["transform", "health", "combat", "navigation", "ai", "loot"] }` |
+| `Creature { id, name: "turkey", worldX, worldY, health: 45, maxHealth: 60, state: "patrolling" }` | `{ kind: "entity", subtype: "creature", capabilities: ["transform", "health", "combat", "navigation", "ai", "loot"] }` |
 | `Character { id, name, worldX, worldY, health, inventory }` | `{ kind: "entity", subtype: "player", capabilities: ["transform", "health", "inventory", "navigation"] }` |
 
 ---
@@ -238,7 +238,7 @@ Domaine Resources
 ```
 
 ```
-Domaine Entities / Animals
+Domaine Entities / Creatures
     │
     ├── Provider pour `health`
     ├── Provider pour `combat`
@@ -337,7 +337,7 @@ Domaine Resources
           ├── Overlay "Respawn Radius" — zone de respawn de chaque Resource
           └── Overlay "Harvest Radius" — portée d'interaction valide
 
-Domaine Animals
+Domaine Creatures
     │
     └── Overlay Provider
           ├── Overlay "Patrol Zones" — zone de patrouille des animaux
@@ -387,7 +387,7 @@ Domaine Resources
           ├── Règle : quantité cohérente (0 ≤ remainingLoots ≤ max)
           └── Règle : Resource accessible (tiles adjacentes walkables)
 
-Domaine Animals / Spawn Points
+Domaine Creatures / Spawn Points
     │
     └── Validation Provider
           ├── Règle : CreatureSpawn dans une map valide
@@ -442,15 +442,15 @@ Domaine Resources
           └── /set_quantity <id> <n>
                 → modifie les charges restantes d'une Resource
 
-Domaine Animals
+Domaine Creatures
     │
     └── Command Provider
           ├── /spawn <template> <mapId> <worldX> <worldY>
-          ├── /aggro <animalId> <targetId>
+          ├── /aggro <creatureId> <targetId>
           │     → force l'aggro sur une cible
           ├── /respawn all
           │     → respawn immédiat de tous les animaux morts
-          └── /sethp <animalId> <hp>
+          └── /sethp <creatureId> <hp>
 
 Domaine World / Characters
     │
@@ -507,7 +507,7 @@ Domaine Resources
                 Effet : simule l'opération sans modifier le monde,
                 produit un rapport des changements qui auraient été effectués
 
-Domaine Animals / Spawns
+Domaine Creatures / Spawns
     │
     └── Automation Provider
           ├── Validate spawn coherence
@@ -546,7 +546,7 @@ quels overlays sont disponibles.
 ```
 Au démarrage :
     Domaine Resources enregistre ses Providers
-    Domaine Animals enregistre ses Providers
+    Domaine Creatures enregistre ses Providers
     Domaine World enregistre ses Providers
           │
           ▼
@@ -656,7 +656,7 @@ l'initialisation, ou le SDK découvre-t-il les Providers par convention
 en termes de couplage et de verbosité.
 
 **Q3 — Le SDK définit-il le protocole WebSocket ?**
-Les événements WebSocket actuels (`resource_update`, `animal_update`,
+Les événements WebSocket actuels (`resource_update`, `creature_update`,
 `player_moved`) sont spécifiques à chaque domaine. Le SDK doit-il normaliser
 ces événements vers un format `world_object_update` générique, ou maintenir
 des événements spécialisés que les Adapters transforment à la réception ?

@@ -77,7 +77,7 @@ Observed usage includes:
 - item catalogue reads and admin mutations;
 - resource reads and state updates;
 - resource template reads and upserts;
-- animal, creature template, and spawn reads or writes;
+- creature, creature template, and spawn reads or writes;
 - respawn point reads and seed creation;
 - admin overview and mutation support.
 
@@ -101,15 +101,15 @@ Some multi-entity character flows use explicit TypeORM transactions. Complete tr
 | Domain | Data stored | Access path observed | Status |
 |---|---|---|---|
 | Users | Account id, username, password hash column, active flag, role, timestamps | `AuthService`, `UserService`, `User` repository | Implemented |
-| Characters | Character identity, owner id, stats, sex, position, timestamps | `CharacterService`, `WorldService`, `AnimalsService`, `AdminService` | Implemented |
+| Characters | Character identity, owner id, stats, sex, position, timestamps | `CharacterService`, `WorldService`, `CreaturesService`, `AdminService` | Implemented |
 | Character equipment | Equipped item per character slot | `CharacterService`, `CharacterEquipment` repository | Implemented |
 | Inventory | Character item quantity and equipped flag | `InventoryService`, `CharacterService`, resource interaction paths | Implemented |
 | Items | Item catalogue fields, equipment slot, optional image path, optional combat values | `ItemService`, character and inventory services | Implemented |
 | Resources | Resource type, coordinates, state, remaining loot count | `ResourcesService`, `AdminService` | Implemented |
 | Resource templates | Resource type and default remaining loot count | `ResourcesService`, `AdminService` | Implemented |
-| Animals | Animal instance position, health, and state | `AnimalsService`, `AdminService` | Implemented |
-| Creature templates | Creature base stats, texture key, movement and behavior fields | `AnimalsService`, `AdminService` | Implemented |
-| Creature spawns | Spawn key, creature template, coordinates, respawn delay | `AnimalsService`, `AdminService` | Implemented |
+| Creatures | Creature instance position, health, and state | `CreaturesService`, `AdminService` | Implemented |
+| Creature templates | Creature base stats, texture key, movement and behavior fields | `CreaturesService`, `AdminService` | Implemented |
+| Creature spawns | Spawn key, creature template, coordinates, respawn delay | `CreaturesService`, `AdminService` | Implemented |
 | Respawn points | Respawn coordinates and radius | `WorldService` | Implemented |
 
 ## Local development
@@ -174,7 +174,7 @@ Production performance tuning is Not verified. Pool sizing, slow query monitorin
 - `synchronize: true` is configured.
 - Domain modules register repositories with `TypeOrmModule.forFeature`.
 - A local PostgreSQL service is configured in `docker/docker-compose.yml`.
-- Persistent domains include users, characters, equipment, inventory, items, resources, resource templates, animals, creature templates, creature spawns, and respawn points.
+- Persistent domains include users, characters, equipment, inventory, items, resources, resource templates, creatures, creature templates, creature spawns, and respawn points.
 
 ## Known gaps
 
@@ -247,5 +247,5 @@ Before production use, review connection pool settings, indexes, query volume, r
 - [ ] Define or verify backup and restore procedures.
 - [ ] Review connection pool and timeout settings.
 - [ ] Review index requirements for all high-cardinality tables.
-- [ ] Review transaction needs for resource, inventory, animal, and admin writes.
+- [ ] Review transaction needs for resource, inventory, creature, and admin writes.
 - [ ] Define or verify database monitoring and alerting.

@@ -12,7 +12,7 @@
 
 This document describes the Phaser world client observed under `apps/client/src/phaser` and its mounting path through `apps/client/src/pages/WorldPage.jsx`.
 
-It covers Phaser scenes and classes, asset loading, map and collision helper code, player rendering, input, movement, Socket.IO client integration, remote players, resources, animals, admin-facing world actions, cleanup, and client-side trust limits.
+It covers Phaser scenes and classes, asset loading, map and collision helper code, player rendering, input, movement, Socket.IO client integration, remote players, resources, creatures, admin-facing world actions, cleanup, and client-side trust limits.
 
 It does not define server architecture or treat client-rendered state as authoritative.
 
@@ -25,13 +25,13 @@ It does not define server architecture or treat client-rendered state as authori
 
 ## Purpose
 
-The Phaser world is the browser-side rendering and interaction layer for the game world. It displays the local player, remote players, resources, animals, health bars, gathering indicators, selected targets, and coordinates.
+The Phaser world is the browser-side rendering and interaction layer for the game world. It displays the local player, remote players, resources, creatures, health bars, gathering indicators, selected targets, and coordinates.
 
 Phaser can animate and emit intentions. It must not be treated as authority for movement, collision, combat, loot, inventory, or admin effects.
 
 ## Phaser world overview
 
-The active world path is created in `WorldPage.jsx` with a Phaser config that includes `PreloadScene` and `WorldScene`. `PreloadScene` loads sprite and item assets. `WorldScene` creates the local player, input handlers, camera, socket listeners, resource sprites, animal sprites, remote player sprites, and interaction targets.
+The active world path is created in `WorldPage.jsx` with a Phaser config that includes `PreloadScene` and `WorldScene`. `PreloadScene` loads sprite and item assets. `WorldScene` creates the local player, input handlers, camera, socket listeners, resource sprites, creature sprites, remote player sprites, and interaction targets.
 
 A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines its own config and does not import that config in the inspected code.
 
@@ -40,7 +40,7 @@ A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines
 | Scene or Phaser class | File | Main responsibility | Server interaction observed | Status |
 |---|---|---|---|---|
 | `BootScene` | `phaser/core/BootScene.js` | Minimal boot scene that sets pixel-art related renderer options and starts `PreloadScene` | None observed | Implemented / Not verified |
-| `PreloadScene` | `phaser/core/PreloadScene.js` | Show loading progress and load player, resource, animal, and item images | None observed | Implemented |
+| `PreloadScene` | `phaser/core/PreloadScene.js` | Show loading progress and load player, resource, creature, and item images | None observed | Implemented |
 | `WorldScene` | `phaser/core/WorldScene.js` | Render world entities, register socket listeners, emit join and movement events, handle interactions | Emits and listens through the socket attached by React | Implemented |
 | `Player` | `phaser/player/Player.js` | Local player sprite, physics body, speed, direction, and movement helpers | Reads scene socket reference but does not emit directly in inspected code | Implemented |
 | `PlayerController` | `phaser/player/PlayerController.js` | Keyboard, pointer, direct steering, and path fallback movement | Movement is later synchronized by `WorldScene` | Implemented |
@@ -55,7 +55,7 @@ A separate `phaser.config.js` and `BootScene` exist, but `WorldPage.jsx` defines
 | Player sprites | `/assets/player/player_male_32x64.png`, `/assets/player/player_female_32x64.png` | `PreloadScene` | Local and remote player rendering | Implemented |
 | Resource sprite | `/assets/sprites/dead_tree.png` | `PreloadScene` | Resource rendering fallback and tree resource display | Implemented |
 | Static world sprite | `/assets/sprites/fire_camp.png` | `PreloadScene` | Campfire visual in `WorldScene` | Implemented |
-| Animal sprite | `/assets/bestiary/turkey_32.png` | `PreloadScene` | Animal rendering fallback and turkey display | Implemented |
+| Creature sprite | `/assets/bestiary/turkey_32.png` | `PreloadScene` | Creature rendering fallback and turkey display | Implemented |
 | Item sprite | `/assets/images/items/wooden_stick.png` | `PreloadScene` and inventory update paths | Loot or inventory display | Implemented |
 | Terrain tilemap | `public/assets/maps/terrain_pipeline_test.tmj` | `PreloadScene` via `tilemapTiledJSON` | Isometric terrain pipeline test | Implemented |
 | Grass tileset image | `public/assets/maps/tilesets/grass_01.png` | `PreloadScene` via `load.image("tileset_grass", ...)` | Grass tile texture for terrain test | Implemented |
@@ -100,7 +100,7 @@ Remote players are rendered as tinted sprites with name labels and are tracked i
 | Keyboard arrows | `PlayerController` sets velocity unless admin console is active | Server validation is not proven from client code | Client intention only | Implemented |
 | Pointer click | Short click attempts path calculation if pathfinder exists; otherwise direct target fallback | Server validation is not proven from client code | Client prediction only | Implemented / Not verified |
 | Pointer drag | Drag after hold threshold uses direct steering toward pointer | Server validation is not proven from client code | Client prediction only | Implemented |
-| Programmatic movement | Auto-attack calls `controller.moveTo` toward animal position | Server validation is not proven from client code | Client intention only | Implemented |
+| Programmatic movement | Auto-attack calls `controller.moveTo` toward creature position | Server validation is not proven from client code | Client intention only | Implemented |
 | Movement sync | `WorldScene.syncLocalPlayer` emits rounded position and direction at most every 80 ms when changed | Rejection or correction flow is Not verified from client code | Client-reported movement | Implemented / Not verified |
 | World bounds | Phaser physics bounds are set to 2000 by 2000 | Server-side bounds check is Not verified from client code | Visual/client constraint only | Implemented / Not verified |
 
@@ -108,18 +108,18 @@ Remote players are rendered as tinted sprites with name labels and are tracked i
 
 | Event or listener | Direction | Phaser responsibility | Server authority implication | Status |
 |---|---|---|---|---|
-| `connect` | Server to client | Request resources, animals, and world join after connection | Server must validate socket and later actions | Implemented |
+| `connect` | Server to client | Request resources, creatures, and world join after connection | Server must validate socket and later actions | Implemented |
 | `get_resources` | Client to server | Ask for current resources | Client request only | Implemented |
-| `get_animals` | Client to server | Ask for current animals | Client request only | Implemented |
+| `get_creatures` | Client to server | Ask for current creatures | Client request only | Implemented |
 | `join_world` | Client to server | Send character id, name, sex, position, and direction from current client state | Server must validate ownership and accepted state | Implemented |
 | `player_move` | Client to server | Send rounded local position and direction when changed | Server must validate sensitive movement effects | Implemented / Not verified |
 | `resources` | Server to client | Render current resources | Server data drives display | Implemented |
-| `animals` | Server to client | Render current animals | Server data drives display | Implemented |
+| `creatures` | Server to client | Render current creatures | Server data drives display | Implemented |
 | `resource_loot` | Server to client | Update local character-store inventory display | Display update only; inventory authority is server-side | Implemented |
 | `resource_update` | Server to client | Remove depleted resource from scene | Display update only | Implemented |
 | `gather_tick` | Server to client | Start or refresh local gathering indicator | Display update only | Implemented |
 | `gather_stopped` | Server to client | Stop local gathering indicator | Display update only | Implemented |
-| `animal_update` | Server to client | Upsert or remove animal, update action panel health | Display update only | Implemented |
+| `creature_update` | Server to client | Upsert or remove creature, update action panel health | Display update only | Implemented |
 | `current_players` | Server to client | Replace remote player set | Display update only | Implemented |
 | `world_joined` | Server to client | Snap local player to accepted position | Server accepted position affects display | Implemented |
 | `player_joined` | Server to client | Add remote player | Display update only | Implemented |
@@ -145,17 +145,17 @@ Resource interaction is triggered from `ActionPanel`, which emits `interact_reso
 
 Exactly-once loot delivery, server rate limiting, and full replay protection are Not verified from client code.
 
-## Animals and combat display
+## Creatures and combat display
 
-Animals are rendered from `animals` and `animal_update` data. `WorldScene` stores animal sprites in a map, creates optional health bars for fighting or escaping states, and removes dead animals from the scene.
+Creatures are rendered from `creatures` and `creature_update` data. `WorldScene` stores creature sprites in a map, creates optional health bars for fighting or escaping states, and removes dead creatures from the scene.
 
-The action panel can start auto-attack. `WorldScene.startAutoAttack` periodically moves toward the animal and emits `attack_animal` at an observed interval. Server-side cooldown and combat validation are outside the client and must remain authoritative.
+The action panel can start auto-attack. `WorldScene.startAutoAttack` periodically moves toward the creature and emits `attack_creature` at an observed interval. Server-side cooldown and combat validation are outside the client and must remain authoritative.
 
 Complete anti-spam protection and recovery of combat display after reconnect are Not verified from client code.
 
 ## Admin world actions
 
-Admin command helpers parse local command text and emit socket actions such as spawn, teleport, template update, animal move, and respawn. `ActionPanel` and `AdminPanel` use the same command registry.
+Admin command helpers parse local command text and emit socket actions such as spawn, teleport, template update, creature move, and respawn. `ActionPanel` and `AdminPanel` use the same command registry.
 
 `WorldScene` records the last clicked world position in the admin store so commands can use it as a coordinate source.
 
@@ -192,7 +192,7 @@ Observed cleanup:
 
 - `WorldPage` destroys the Phaser game on component cleanup.
 - `WorldScene.destroy()` removes many socket listeners.
-- `WorldScene.destroy()` clears resource, animal, remote player, gather indicator, and player health bar visuals.
+- `WorldScene.destroy()` clears resource, creature, remote player, gather indicator, and player health bar visuals.
 - `CoordinatesLayer` clears its interval on unmount.
 
 Not verified:
@@ -217,19 +217,19 @@ No real secret, token, password, or hash is documented here.
 
 ## Performance considerations
 
-The active scene updates controller state, local player sync checks, depth, remote labels, gather indicators, player health bar, and animal health bars every frame.
+The active scene updates controller state, local player sync checks, depth, remote labels, gather indicators, player health bar, and creature health bars every frame.
 
-Observed movement sync is throttled to at most one emit every 80 ms when local position or direction changes. Remote movement uses short tweens. Performance with many remote players, resources, animals, labels, and bars is Not verified.
+Observed movement sync is throttled to at most one emit every 80 ms when local position or direction changes. Remote movement uses short tweens. Performance with many remote players, resources, creatures, labels, and bars is Not verified.
 
 ## Verified behavior
 
 - `WorldPage.jsx` creates the Phaser game and attaches a Socket.IO client.
-- `PreloadScene` loads player, resource, animal, and item images.
+- `PreloadScene` loads player, resource, creature, and item images.
 - `WorldScene` creates the local player and camera.
-- `WorldScene` registers socket listeners for world, resources, animals, and character updates.
+- `WorldScene` registers socket listeners for world, resources, creatures, and character updates.
 - `WorldScene` emits `join_world` and `player_move`.
-- `WorldScene` renders resources, animals, and remote players.
-- `ActionPanel` can trigger resource interaction and animal auto-attack paths.
+- `WorldScene` renders resources, creatures, and remote players.
+- `ActionPanel` can trigger resource interaction and creature auto-attack paths.
 - Admin command helpers emit admin socket actions.
 - `WorldScene.destroy()` removes several listeners and destroys multiple visual collections.
 

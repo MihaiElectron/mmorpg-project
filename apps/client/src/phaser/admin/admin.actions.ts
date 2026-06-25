@@ -61,9 +61,9 @@ export function updateTemplate(
   return ackPromise(socket, "admin:update_template", { key, fields });
 }
 
-/** Déplace un animal vivant à la position donnée (WU). */
-export function moveAnimal(animalId: string, worldX: number, worldY: number, socket: any): Promise<ActionResult> {
-  return ackPromise(socket, 'admin:move_animal', { animalId, worldX, worldY });
+/** Déplace un creature vivant à la position donnée (WU). */
+export function moveCreature(creatureId: string, worldX: number, worldY: number, socket: any): Promise<ActionResult> {
+  return ackPromise(socket, 'admin:move_creature', { creatureId, worldX, worldY });
 }
 
 /** Force le respawn de tous les animaux d'un template. */

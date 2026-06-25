@@ -8,7 +8,7 @@ import {
 import { CreatureSpawn } from './creature-spawn.entity';
 
 @Entity('animals')
-export class Animal {
+export class Creature {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

@@ -15,11 +15,11 @@
 - Supersedes: None
 - Superseded by: None
 - Related documents: docs/05_World/chunks.md, docs/05_World/maps-and-collisions.md, docs/03_Client/phaser-world.md, docs/05_World/tiled.md
-- Related code: apps/api-gateway/src/characters/entities/character.entity.ts, apps/api-gateway/src/animals/entities/animal.entity.ts, apps/api-gateway/src/resources/entities/resource.entity.ts, apps/client/src/phaser/core/WorldScene.js
+- Related code: apps/api-gateway/src/characters/entities/character.entity.ts, apps/api-gateway/src/creatures/entities/creature.entity.ts, apps/api-gateway/src/resources/entities/resource.entity.ts, apps/client/src/phaser/core/WorldScene.js
 
 ## Context
 
-The project is a real-time web MMORPG with an isometric Phaser client and a NestJS server. At the time this ADR is written, all world entities (characters, animals, resources, spawn points, respawn points) store numeric `x` and `y` values that are used directly as Phaser pixel coordinates. The server computes distances, speeds, and ranges against these values without knowing anything about pixels or screen projection.
+The project is a real-time web MMORPG with an isometric Phaser client and a NestJS server. At the time this ADR is written, all world entities (characters, creatures, resources, spawn points, respawn points) store numeric `x` and `y` values that are used directly as Phaser pixel coordinates. The server computes distances, speeds, and ranges against these values without knowing anything about pixels or screen projection.
 
 A terrain pipeline test is operational: a 64×64 isometric tile map (128×64 pixels per tile) is rendered in Phaser with a temporary visual offset (`TILEMAP_TEST_OFFSET_X = 936`). This offset is not connected to the server coordinate system. Sprites and tiles live in two separate, unaligned coordinate spaces.
 
@@ -278,7 +278,7 @@ Keeping `origin` per-map rather than as a global constant ensures the engine doe
 | Tiled pipeline | No format change; TMJ chunk files map directly to `localTileX`, `localTileY` grids |
 | Admin tool | Coordinate display and `/tp` command must use `worldX`, `worldY` |
 | Pathfinding (`MapLoader`, `Pathfinder`) | Grid tile size must match `CHUNK_SIZE`; grid coordinates become `localTileX`, `localTileY` |
-| Animal AI | Movement, aggro, fuite, and patrol logic must operate in WU; speed (WU/s) and radius (WU) constants must be recalibrated |
+| Creature AI | Movement, aggro, fuite, and patrol logic must operate in WU; speed (WU/s) and radius (WU) constants must be recalibrated |
 | Resources | Resource positions and interaction range must be expressed in WU |
 | NPCs (future) | Must use `mapId`, `worldX`, `worldY` from the start |
 | Players | `syncLocalPlayer` must emit `worldX`, `worldY`; `world_joined` must return `worldX`, `worldY` |
@@ -311,7 +311,7 @@ Code using the new coordinate system must be isolated from code using the old sy
 
 ## Validation
 
-- [x] Existing implementation analyzed (character, animal, resource, respawn point, creature spawn, WorldScene, AnimalsService, ResourcesGateway).
+- [x] Existing implementation analyzed (character, creature, resource, respawn point, creature spawn, WorldScene, CreaturesService, ResourcesGateway).
 - [x] Architecture proposal reviewed before this ADR.
 - [x] Related ADRs reviewed (ADR-0002, ADR-0003 — both use `worldX/worldY` naming).
 - [x] Security impact reviewed.
@@ -327,7 +327,7 @@ Code using the new coordinate system must be isolated from code using the old sy
 
 - **Tilemap origin offset**: RESOLVED — `WORLD_ORIGIN_X_PX = 1000` defined in `world-coordinates.ts`. Derived from `TILEMAP_TEST_OFFSET_X (936) + ISO_HALF_TILE_WIDTH_PX (64)` (north vertex of tile 0,0). `TILEMAP_TEST_OFFSET_X` remains in `WorldScene.js` as a Phaser visual offset; it is not part of the coordinate system.
 
-- **Speed and range constants in WU**: DEFERRED — `RESOURCE_INTERACT_RANGE = 100`, `MELEE_RANGE = 60`, animal `patrolRadius`, `speedMax` remain in pixel-equivalent units. Calibration in WU/s is scheduled for Phase 2 (migration `animals.service.ts`).
+- **Speed and range constants in WU**: DEFERRED — `RESOURCE_INTERACT_RANGE = 100`, `MELEE_RANGE = 60`, creature `patrolRadius`, `speedMax` remain in pixel-equivalent units. Calibration in WU/s is scheduled for Phase 2 (migration `creatures.service.ts`).
 
 - **Gameplay distance metric**: PARTIALLY RESOLVED — Chebyshev WU selected for respawn point proximity (`chebyshevDistanceWU` in `world-coordinates.ts:162`). Combat and gathering distance metric deferred to Phase 2 along with speed/range calibration.
 

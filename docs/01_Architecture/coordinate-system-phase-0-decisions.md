@@ -142,8 +142,8 @@ Trois systèmes utilisent une vérification de distance dans le code actuel :
 | Système | Fichier | Implémentation actuelle |
 |---|---|---|
 | Gathering | `resources.gateway.ts:248` | `Math.hypot(target.x − player.x, target.y − player.y) <= RESOURCE_INTERACT_RANGE` |
-| Combat mêlée | `animals.service.ts:259, 267` | `Math.hypot(dx, dy) <= MELEE_RANGE` |
-| Aggro | `animals.service.ts:172` | `findNearestPlayer → Math.hypot <= aggroRadius` |
+| Combat mêlée | `creatures.service.ts:259, 267` | `Math.hypot(dx, dy) <= MELEE_RANGE` |
+| Aggro | `creatures.service.ts:172` | `findNearestPlayer → Math.hypot <= aggroRadius` |
 
 Toutes utilisent `Math.hypot` sur des coordonnées pixel-équivalentes.
 Après migration WU, le choix de la métrique détermine la forme effective des
@@ -366,7 +366,7 @@ Aucun de ces cas ne s'applique à ce projet.
 **`INTEGER` (int32 signé) est la décision recommandée** pour `worldX` et `worldY`.
 
 Coût de stockage : 4 octets par colonne vs 8 octets pour `BIGINT` — économie de
-50 % sur les colonnes de position, avec un impact mesurable sur les tables `animals`
+50 % sur les colonnes de position, avec un impact mesurable sur les tables `creatures`
 et `character` qui sont lues et écrites à chaque tick et chaque mouvement.
 
 Cette décision peut être prise maintenant et n'impacte aucun calcul — seule
@@ -383,7 +383,7 @@ Toutes les entités qui portent une position n'ont actuellement pas de `mapId` :
 | Entité | Table | Colonnes position | mapId |
 |---|---|---|---|
 | `Character` | `character` | `positionX`, `positionY` | absent |
-| `Animal` | `animals` | `x`, `y` | absent |
+| `Creature` | `creatures` | `x`, `y` | absent |
 | `Resource` | `resources` | `x`, `y` | absent |
 | `CreatureSpawn` | `creature_spawn` | `spawnX`, `spawnY` | absent |
 | `RespawnPoint` | `respawn_point` | `x`, `y` | absent |
@@ -551,7 +551,7 @@ uniquement sur les indices de tiles).
 
 - Brancher `isWalkable` dans `WorldGateway.handlePlayerMove` pour rejeter les
   positions invalides.
-- Utiliser `isWalkable` dans `AnimalsService.doPatrolMovement` pour empêcher
+- Utiliser `isWalkable` dans `CreaturesService.doPatrolMovement` pour empêcher
   les animaux d'entrer dans des tuiles bloquées.
 
 Le chargement de la collision peut être développé en parallèle de la Phase 1
