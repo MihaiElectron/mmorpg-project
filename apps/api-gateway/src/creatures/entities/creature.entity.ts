@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { CreatureSpawn } from './creature-spawn.entity';
 
-@Entity('animals')
+@Entity('creatures')
 export class Creature {
   @PrimaryGeneratedColumn('uuid')
   id: string;
