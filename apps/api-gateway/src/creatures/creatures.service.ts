@@ -163,6 +163,17 @@ export class CreaturesService implements OnModuleInit {
     }
   }
 
+  private resolveEffectiveSpeed(creature: Creature, template: CreatureTemplate): number {
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+    return Math.max(derived.speed, 0);
+  }
+
   private toDto(creature: Creature): CreatureDto {
     const t = creature.spawn.template;
     let runtimeStats: CreatureRuntimeStats | undefined;
@@ -270,7 +281,8 @@ export class CreaturesService implements OnModuleInit {
       const angle = Math.random() * Math.PI * 2;
       state.dirX = Math.cos(angle);
       state.dirY = Math.sin(angle);
-      state.speed = rand(template.speedMin, template.speedMax);
+      const effectiveSpeedMax = this.resolveEffectiveSpeed(creature, template);
+      state.speed = rand(Math.min(template.speedMin, effectiveSpeedMax), effectiveSpeedMax);
       state.moveUntil = now + rand(PATROL_MOVE_MIN_MS, PATROL_MOVE_MAX_MS);
     }
 
@@ -342,7 +354,7 @@ export class CreaturesService implements OnModuleInit {
     // Avancer vers la cible
     if (dist > MELEE_RANGE_WU) {
       const dt = PATROL_TICK_MS / 1000;
-      const stepWU = legacyRadiusToWU(template.speedMax * dt);
+      const stepWU = legacyRadiusToWU(this.resolveEffectiveSpeed(creature, template) * dt);
       creature.worldX = Math.round(creature.worldX + (dx / dist) * stepWU);
       creature.worldY = Math.round(creature.worldY + (dy / dist) * stepWU);
       creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
@@ -399,7 +411,7 @@ export class CreaturesService implements OnModuleInit {
     if (dist === 0) return;
 
     const dt = PATROL_TICK_MS / 1000;
-    const stepWU = legacyRadiusToWU(template.speedMax * dt);
+    const stepWU = legacyRadiusToWU(this.resolveEffectiveSpeed(creature, template) * dt);
     const newWX = creature.worldX + (dx / dist) * stepWU;
     const newWY = creature.worldY + (dy / dist) * stepWU;
 

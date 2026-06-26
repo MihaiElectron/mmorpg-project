@@ -739,4 +739,100 @@ describe('CreaturesService', () => {
       expect(creature.worldX).toBeUndefined();
     });
   });
+
+  // -------------------------------------------------------------------------
+  describe('IA speed runtime (Phase 6)', () => {
+    // template: speedMax=60, dt=0.2s → stepWU = legacyRadiusToWU(60*0.2) = round(12*16) = 192
+    // creature WU(6880,11680), joueur WU(0,9600), dist>MELEE_RANGE_WU
+
+    function makePlayer(worldX: number, worldY: number) {
+      return {
+        characterId: 'char-1', socketId: 'sock-1',
+        x: 400, y: 300, worldX, worldY, mapId: 1,
+        name: 'Test', direction: 'down',
+      };
+    }
+
+    it('doFighting — non-régression : vitesse identique sans modifier (speedMax=60)', async () => {
+      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const player = makePlayer(0, 9600);
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+      const initialX = creature.worldX;
+
+      await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      // stepWU=192, dx/dist component moves creature toward player
+      const dx = 0 - 6880;
+      const dist = Math.hypot(dx, 9600 - 11680);
+      const expectedX = Math.round(6880 + (dx / dist) * 192);
+      expect(creature.worldX).toBe(expectedX);
+      expect(creature.worldX).toBeLessThan(initialX); // s'approche du joueur
+    });
+
+    it('doFighting — debug flat +60 augmente la vitesse de poursuite', async () => {
+      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const player = makePlayer(0, 9600);
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+
+      // 1. Baseline sans modifier
+      const state1 = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      await (service as any).doFighting(creature, state1, makeTemplate(), [player], Date.now(), mockServer);
+      const xBaseline = creature.worldX!;
+
+      // 2. Reset + modifier flat +60 → speed=120, step=384 > step=192 (baseline)
+      creature.worldX = 6880; creature.worldY = 11680;
+      debugRegistry.addModifier(creature.id, { targetStat: 'speed', operation: 'flat', value: 60 });
+
+      const state2 = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      await (service as any).doFighting(creature, state2, makeTemplate(), [player], Date.now(), mockServer);
+
+      expect(creature.worldX).toBeLessThan(xBaseline); // plus proche du joueur avec modifier
+    });
+
+    it('doFighting — speed ≤ 0 (flat -100) : pas de mouvement, pas de crash', async () => {
+      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const player = makePlayer(0, 9600);
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+      debugRegistry.addModifier(creature.id, { targetStat: 'speed', operation: 'flat', value: -100 });
+      const initialX = creature.worldX;
+
+      await expect(
+        (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer),
+      ).resolves.not.toThrow();
+      expect(creature.worldX).toBe(initialX); // stepWU=0 → pas de mouvement
+    });
+
+    it('doEscaping — debug flat +60 augmente la vitesse de fuite', async () => {
+      // creature WU(6080,12480) fuit joueur WU(5760,12160) — dans le patrolRadius
+      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const player = makePlayer(5760, 12160);
+
+      // 1. Baseline sans modifier
+      const state1 = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+      await (service as any).doEscaping(creature, state1, makeTemplate(), [player], Date.now());
+      const xBaseline = creature.worldX!;
+
+      // 2. Reset + modifier flat +60 → step plus grand → fuit plus loin
+      creature.worldX = 6080; creature.worldY = 12480;
+      debugRegistry.addModifier(creature.id, { targetStat: 'speed', operation: 'flat', value: 60 });
+
+      const state2 = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+      await (service as any).doEscaping(creature, state2, makeTemplate(), [player], Date.now());
+
+      expect(creature.worldX).toBeGreaterThan(xBaseline); // fuit plus loin avec modifier
+    });
+
+    it('doPatrolMovement — speed ≤ 0 (flat -100) : state.speed=0 à la nouvelle direction', () => {
+      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      // moveUntil=0 → déclenchement du bloc nouvelle-direction
+      const state = { dirX: 0, dirY: 0, speed: 50, moveUntil: 0, pauseUntil: 0 };
+      debugRegistry.addModifier(creature.id, { targetStat: 'speed', operation: 'flat', value: -100 });
+
+      (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
+
+      expect(state.speed).toBe(0); // rand(0, 0) = 0
+    });
+  });
 });
