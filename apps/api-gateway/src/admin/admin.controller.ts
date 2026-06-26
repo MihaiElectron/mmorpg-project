@@ -58,7 +58,7 @@ export class AdminController {
   getCreatureSpawnWorldObjects() { return this.adminService.getCreatureSpawnWorldObjects(); }
 
   @Patch('templates/:key')
-  async updateTemplate(@Param('key') key: string, @Body() fields: Record<string, number>) {
+  async updateTemplate(@Param('key') key: string, @Body() fields: Record<string, unknown>) {
     const updated = await this.adminService.updateTemplate(key, fields);
     if (!updated) throw new NotFoundException(`Template "${key}" introuvable.`);
     return updated;
@@ -87,7 +87,7 @@ export class AdminController {
   }
 
   @Patch('resource-templates/:type')
-  async updateResourceTemplate(@Param('type') type: string, @Body() fields: Record<string, number>) {
+  async updateResourceTemplate(@Param('type') type: string, @Body() fields: Record<string, unknown>) {
     const updated = await this.adminService.updateResourceTemplate(type, fields);
     if (!updated) throw new NotFoundException(`Template ressource "${type}" introuvable.`);
     return updated;

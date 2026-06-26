@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, MoreThan } from 'typeorm';
+import { Repository, Not, MoreThan, In } from 'typeorm';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
@@ -28,6 +28,13 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toCreatureWorldObject, CreatureWorldObject } from '../creatures/adapters/creature-world-object.adapter';
 import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../creatures/adapters/creature-spawn-world-object.adapter';
+
+interface LootPoolEntryPatch {
+  itemId: string;
+  minQty: number;
+  maxQty: number;
+  probability: number;
+}
 
 @Injectable()
 export class AdminService {
@@ -113,11 +120,15 @@ export class AdminService {
 
   async updateTemplate(
     key: string,
-    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'name' | 'textureKey'>>,
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'name' | 'textureKey'>> & { lootPool?: unknown },
   ): Promise<CreatureTemplate | null> {
     const template = await this.templateRepo.findOne({ where: { key } });
     if (!template) return null;
-    Object.assign(template, fields);
+    const { lootPool, ...scalarFields } = fields;
+    Object.assign(template, scalarFields);
+    if (lootPool !== undefined) {
+      template.lootPool = await this.validateLootPool(lootPool);
+    }
     return this.templateRepo.save(template);
   }
 
@@ -177,7 +188,7 @@ export class AdminService {
 
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'textureKey'>> & { skillKey?: string | null },
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'textureKey'>> & { skillKey?: string | null; lootPool?: unknown },
   ): Promise<ResourceTemplate | null> {
     if (fields.respawnDelayMs !== undefined) {
       const v = fields.respawnDelayMs;
@@ -222,8 +233,75 @@ export class AdminService {
     }
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     if (!tpl) return null;
-    Object.assign(tpl, fields);
+    const { lootPool, ...scalarFields } = fields;
+    Object.assign(tpl, scalarFields);
+    if (lootPool !== undefined) {
+      tpl.lootPool = await this.validateLootPool(lootPool);
+    }
     return this.resourceTemplateRepo.save(tpl);
+  }
+
+  private async validateLootPool(value: unknown): Promise<LootPoolEntryPatch[] | null> {
+    if (value === null) return null;
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('lootPool doit être un tableau ou null.');
+    }
+
+    const entries = value.map((entry, index) => this.normalizeLootPoolEntry(entry, index));
+    const refs = [...new Set(entries.map((entry) => entry.itemId))];
+    if (refs.length === 0) return entries;
+
+    const items = await this.itemRepo.find({
+      where: [{ id: In(refs) }, { category: In(refs) }],
+    });
+    const knownRefs = new Set(items.flatMap((item) => [item.id, item.category]));
+    const unknownRef = refs.find((ref) => !knownRefs.has(ref));
+    if (unknownRef) {
+      throw new BadRequestException(`Item "${unknownRef}" introuvable pour lootPool.`);
+    }
+
+    return entries;
+  }
+
+  private normalizeLootPoolEntry(entry: unknown, index: number): LootPoolEntryPatch {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new BadRequestException(`lootPool[${index}] doit être un objet.`);
+    }
+    const raw = entry as Record<string, unknown>;
+    const itemId = typeof raw.itemId === 'string' ? raw.itemId.trim() : '';
+    if (!itemId) {
+      throw new BadRequestException(`lootPool[${index}].itemId est requis.`);
+    }
+
+    const minQty = AdminService.readInteger(raw.minQty, `lootPool[${index}].minQty`);
+    const maxQty = AdminService.readInteger(raw.maxQty, `lootPool[${index}].maxQty`);
+    const probability = AdminService.readNumber(raw.probability, `lootPool[${index}].probability`);
+
+    if (minQty < 1) {
+      throw new BadRequestException(`lootPool[${index}].minQty doit être >= 1.`);
+    }
+    if (maxQty < minQty) {
+      throw new BadRequestException(`lootPool[${index}].maxQty doit être >= minQty.`);
+    }
+    if (probability <= 0 || probability > 1) {
+      throw new BadRequestException(`lootPool[${index}].probability doit être > 0 et <= 1.`);
+    }
+
+    return { itemId, minQty, maxQty, probability };
+  }
+
+  private static readInteger(value: unknown, label: string): number {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) {
+      throw new BadRequestException(`${label} doit être un entier.`);
+    }
+    return value as number;
+  }
+
+  private static readNumber(value: unknown, label: string): number {
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`${label} doit être un nombre fini.`);
+    }
+    return value as number;
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

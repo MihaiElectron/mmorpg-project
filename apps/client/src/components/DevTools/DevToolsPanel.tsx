@@ -1,6 +1,7 @@
 import AdminPanelWOM from "../AdminPanel/AdminPanelWOM";
 import { WorldModule } from "./modules/World";
 import { ItemsModule } from "./modules/Items";
+import { LootPoolModule } from "./modules/LootPools";
 import OverlayControls from "./OverlayControls";
 import {
   RuntimeStatsPanel,
@@ -20,6 +21,7 @@ export default function DevToolsPanel() {
       <RuntimeStatsPanel />
       <RuntimeInspectorPanel target={target} />
       <ItemsModule />
+      <LootPoolModule />
       <OverlayControls />
       <AdminPanelWOM />
     </>

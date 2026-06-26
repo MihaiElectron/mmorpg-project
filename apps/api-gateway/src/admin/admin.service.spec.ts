@@ -24,8 +24,10 @@ describe('AdminService resources', () => {
   let service: AdminService;
   let resourceRepo: Record<string, jest.Mock>;
   let resourceTemplateRepo: Record<string, jest.Mock>;
+  let creatureTemplateRepo: Record<string, jest.Mock>;
   let skillDefinitionRepo: Record<string, jest.Mock>;
   let playerSkillRepo: Record<string, jest.Mock>;
+  let itemRepo: Record<string, jest.Mock>;
   let worldService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -40,6 +42,12 @@ describe('AdminService resources', () => {
       find: jest.fn().mockResolvedValue([]),
       save: jest.fn().mockImplementation((tpl) => Promise.resolve(tpl)),
     };
+    creatureTemplateRepo = {
+      findOne: jest.fn().mockResolvedValue({ key: 'turkey', name: 'Turkey', lootPool: null }),
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn().mockImplementation((tpl) => Promise.resolve(tpl)),
+      create: jest.fn().mockImplementation((tpl) => tpl),
+    };
     skillDefinitionRepo = {
       findOne: jest.fn().mockResolvedValue({ key: 'woodcutting' }),
       find: jest.fn().mockResolvedValue([]),
@@ -50,6 +58,13 @@ describe('AdminService resources', () => {
       count: jest.fn().mockResolvedValue(0),
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn(),
+    };
+    itemRepo = {
+      ...BASE_EMPTY_REPO(),
+      find: jest.fn().mockResolvedValue([
+        { id: 'item-wooden-stick', category: 'wooden_stick' },
+        { id: 'item-iron-ore', category: 'iron_ore' },
+      ]),
     };
     worldService = {
       getConnectedCount: jest.fn().mockReturnValue(0),
@@ -72,7 +87,7 @@ describe('AdminService resources', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
-        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
@@ -85,7 +100,7 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: itemRepo },
         { provide: WorldService, useValue: worldService },
       ],
     }).compile();
@@ -262,6 +277,74 @@ describe('AdminService resources', () => {
     it("rejette skillKey chaîne vide", async () => {
       await expect(service.updateResourceTemplate('wood', { skillKey: '' as any }))
         .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('met à jour le lootPool ressource avec des entrées valides', async () => {
+      const lootPool = [
+        { itemId: 'wooden_stick', minQty: 1, maxQty: 3, probability: 0.75 },
+        { itemId: 'item-iron-ore', minQty: 2, maxQty: 2, probability: 1 },
+      ];
+
+      const updated = await service.updateResourceTemplate('wood', { lootPool });
+
+      expect(itemRepo.find).toHaveBeenCalled();
+      expect(resourceTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ lootPool }),
+      );
+      expect(updated?.lootPool).toEqual(lootPool);
+    });
+
+    it('rejette un lootPool ressource avec probabilité zéro', async () => {
+      await expect(
+        service.updateResourceTemplate('wood', {
+          lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 0 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(resourceTemplateRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('rejette un lootPool ressource dont maxQty est inférieur à minQty', async () => {
+      await expect(
+        service.updateResourceTemplate('wood', {
+          lootPool: [{ itemId: 'wooden_stick', minQty: 3, maxQty: 2, probability: 0.5 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(resourceTemplateRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('rejette un lootPool ressource avec item inconnu', async () => {
+      await expect(
+        service.updateResourceTemplate('wood', {
+          lootPool: [{ itemId: 'unknown_item', minQty: 1, maxQty: 1, probability: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(resourceTemplateRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateTemplate lootPool', () => {
+    it('met à jour le lootPool créature avec des entrées valides', async () => {
+      const lootPool = [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 0.4 }];
+
+      const updated = await service.updateTemplate('turkey', { lootPool });
+
+      expect(itemRepo.find).toHaveBeenCalled();
+      expect(creatureTemplateRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ lootPool }),
+      );
+      expect(updated?.lootPool).toEqual(lootPool);
+    });
+
+    it('retourne null si le template créature est introuvable', async () => {
+      creatureTemplateRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.updateTemplate('unknown', {
+        lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 1 }],
+      });
+
+      expect(result).toBeNull();
+      expect(itemRepo.find).not.toHaveBeenCalled();
+      expect(creatureTemplateRepo.save).not.toHaveBeenCalled();
     });
   });
 
