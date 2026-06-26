@@ -21,14 +21,9 @@ export type ConnectedPlayer = {
   characterId: string;
   name: string;
   sex?: string;
-  // ── Vérité serveur — coordonnées WU ──────────────────────────────────────
   worldX: number;
   worldY: number;
   mapId: number;
-  // ── Cache de rendu — pixels Phaser, destinés uniquement au frontend ───────
-  x: number;
-  y: number;
-  // ─────────────────────────────────────────────────────────────────────────
   direction?: string;
 };
 
@@ -176,8 +171,6 @@ export class WorldService implements OnModuleInit {
 
     await this.characterRepository.update(characterId, {
       health: newHealth,
-      positionX: newX,
-      positionY: newY,
       worldX: newWX,
       worldY: newWY,
       mapId: nearestWU.mapId,
@@ -186,8 +179,6 @@ export class WorldService implements OnModuleInit {
     // Mettre à jour la position en mémoire et notifier le joueur
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
-        player.x       = newX;
-        player.y       = newY;
         player.worldX  = newWX;
         player.worldY  = newWY;
         player.mapId   = nearestWU.mapId;
@@ -240,23 +231,14 @@ export class WorldService implements OnModuleInit {
     if (character.worldX == null || character.worldY == null || character.mapId == null) {
       return null; // guard explicite : impossible après P7-A
     }
-    const playerWX = character.worldX;
-    const playerWY = character.worldY;
-    const playerMapId = character.mapId;
-    // Conversion WU → pixels Phaser pour alimenter le cache de rendu uniquement.
-    const playerX = Math.round(wuToIsoScreenX(playerWX, playerWY));
-    const playerY = Math.round(wuToIsoScreenY(playerWX, playerWY));
-
     const player: ConnectedPlayer = {
       socketId: client.id,
       characterId: payload.characterId,
       name: character.name,
       sex: character.sex,
-      worldX: playerWX,
-      worldY: playerWY,
-      mapId: playerMapId,
-      x: playerX,
-      y: playerY,
+      worldX: character.worldX,
+      worldY: character.worldY,
+      mapId: character.mapId,
       direction: payload.direction ?? 'down',
     };
 
@@ -272,8 +254,6 @@ export class WorldService implements OnModuleInit {
       worldX: player.worldX,
       worldY: player.worldY,
       mapId: player.mapId,
-      x: player.x,
-      y: player.y,
       direction: player.direction,
     };
 
@@ -314,9 +294,6 @@ export class WorldService implements OnModuleInit {
       player.worldX = payload.worldX;
       player.worldY = payload.worldY;
       player.mapId  = payload.mapId;
-      // Cache pixel dérivé des WU, utilisé par persistPlayerPosition et le broadcast
-      player.x = Math.round(wuToIsoScreenX(payload.worldX, payload.worldY));
-      player.y = Math.round(wuToIsoScreenY(payload.worldX, payload.worldY));
     }
 
     this.observeMovementDelta(client.id, player, {
@@ -335,8 +312,6 @@ export class WorldService implements OnModuleInit {
       worldX: player.worldX,
       worldY: player.worldY,
       mapId: player.mapId,
-      x: player.x,
-      y: player.y,
       direction: player.direction,
     };
 
@@ -351,30 +326,11 @@ export class WorldService implements OnModuleInit {
   }
 
   async persistPlayerPosition(player: ConnectedPlayer): Promise<void> {
-    // Résolution des coordonnées WU à persister
-    let wuX    = player.worldX;
-    let wuY    = player.worldY;
-    let wuMap  = player.mapId;
+    const wuX   = Number.isFinite(player.worldX) ? player.worldX : 0;
+    const wuY   = Number.isFinite(player.worldY) ? player.worldY : 0;
+    const wuMap = Number.isFinite(player.mapId)   ? player.mapId  : DEFAULT_MAP_ID;
 
-    // Fallback défensif : si worldX/Y sont NaN/Infinity (ne devrait pas arriver),
-    // recalculer depuis les pixels du cache de rendu
-    if (!Number.isFinite(wuX) || !Number.isFinite(wuY)) {
-      try {
-        const wu = isoScreenToWorldWU(player.x, player.y);
-        wuX   = wu.worldX;
-        wuY   = wu.worldY;
-      } catch {
-        wuX   = 0;
-        wuY   = 0;
-      }
-      wuMap = DEFAULT_MAP_ID;
-    }
-
-    // Double-écriture : pixels legacy + WU.
-    // Les colonnes pixel (positionX/Y) restent jusqu'à suppression explicite des colonnes legacy.
     await this.characterRepository.update(player.characterId, {
-      positionX: Math.round(player.x),
-      positionY: Math.round(player.y),
       worldX: wuX,
       worldY: wuY,
       mapId: wuMap,
@@ -451,20 +407,14 @@ export class WorldService implements OnModuleInit {
     if (!Number.isFinite(worldX) || !Number.isFinite(worldY)) return null;
     const targetWorldX = Math.round(worldX);
     const targetWorldY = Math.round(worldY);
-    const targetX = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
-    const targetY = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
 
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
         player.worldX = targetWorldX;
         player.worldY = targetWorldY;
-        player.x = targetX;
-        player.y = targetY;
         const teleportMapId = player.mapId;
 
         await this.characterRepository.update(characterId, {
-          positionX: targetX,
-          positionY: targetY,
           worldX: targetWorldX,
           worldY: targetWorldY,
           mapId: teleportMapId,

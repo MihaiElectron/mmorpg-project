@@ -95,32 +95,6 @@ describe('toResourceWorldObject — position WU', () => {
   });
 });
 
-// ─── Metadata legacy ──────────────────────────────────────────────────────────
-
-describe('toResourceWorldObject — metadata.legacy', () => {
-  it('legacy inclus dans metadata si x et y sont des entiers finis', () => {
-    const wo = toResourceWorldObject(makeResource({ x: 400, y: 300 }));
-    expect(wo.metadata.legacy).toEqual({ x: 400, y: 300 });
-  });
-
-  it('legacy présent même quand WU est disponible', () => {
-    const wo = toResourceWorldObject(
-      makeResource({ x: 400, y: 300, worldX: 1024, worldY: 2048, mapId: 1 }),
-    );
-    expect(wo.metadata.legacy).toEqual({ x: 400, y: 300 });
-    expect(wo.position).toEqual({ worldX: 1024, worldY: 2048 });
-  });
-
-  it('legacy null si x est NaN', () => {
-    const wo = toResourceWorldObject(makeResource({ x: NaN, y: 300 }));
-    expect(wo.metadata.legacy).toBeNull();
-  });
-
-  it('legacy null si y est Infinity', () => {
-    const wo = toResourceWorldObject(makeResource({ x: 400, y: Infinity }));
-    expect(wo.metadata.legacy).toBeNull();
-  });
-});
 
 // ─── Capabilities ─────────────────────────────────────────────────────────────
 
@@ -299,8 +273,6 @@ describe('toResourceWorldObject — cas nominaux', () => {
     const resource = makeResource({
       id: 'r-alive-wu',
       type: 'dead_tree',
-      x: 936,
-      y: 1000,
       worldX: 512,
       worldY: 1024,
       mapId: 1,
@@ -320,16 +292,13 @@ describe('toResourceWorldObject — cas nominaux', () => {
       state: 'alive',
       remainingLoots: 3,
     });
-    expect(wo.metadata.legacy).toEqual({ x: 936, y: 1000 });
     expect(wo.capabilities).toHaveLength(5);
   });
 
-  it('resource dead sans coordonnées WU (legacy only)', () => {
+  it('resource dead sans coordonnées WU', () => {
     const resource = makeResource({
-      id: 'r-dead-legacy',
+      id: 'r-dead-no-wu',
       type: 'ore',
-      x: 600,
-      y: 400,
       worldX: null,
       worldY: null,
       mapId: null,
@@ -343,7 +312,6 @@ describe('toResourceWorldObject — cas nominaux', () => {
     expect(wo.remainingLoots).toBe(0);
     expect(wo.position).toBeNull();
     expect(wo.mapId).toBeNull();
-    expect(wo.metadata.legacy).toEqual({ x: 600, y: 400 });
   });
 });
 

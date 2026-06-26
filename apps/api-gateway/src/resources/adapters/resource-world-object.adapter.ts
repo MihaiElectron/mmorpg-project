@@ -18,7 +18,7 @@ import { ResourceTemplate } from '../entities/resource-template.entity';
  * Reflect strictly what exists — no respawn, no node_member, no maturity.
  */
 export type ResourceCapability =
-  | 'transform'    // position dans le monde (WU ou legacy pixels)
+  | 'transform'    // position dans le monde (WU)
   | 'harvestable'  // récolte avec charges restantes
   | 'loot'         // produit un loot lors d'une récolte (LootService)
   | 'persistence'  // état persisté en base de données
@@ -30,8 +30,6 @@ export interface ResourcePosition {
 }
 
 export interface ResourceMetadata {
-  /** Coordonnées pixel legacy si présentes dans l'entité source. */
-  readonly legacy: { readonly x: number; readonly y: number } | null;
   /** Délai de respawn en ms depuis le ResourceTemplate. Null si template absent. */
   readonly respawnDelayMs: number | null;
   /** Override de délai par instance (null = hérite du template). */
@@ -108,8 +106,7 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  *
  * Règles :
  * - position WU si worldX/worldY/mapId sont tous non-null → position renseignée.
- * - position null si worldX ou worldY est absent (legacy-only ou données manquantes).
- * - x/y legacy toujours inclus dans metadata.legacy si les valeurs sont finies.
+ * - position null si worldX ou worldY est absent.
  * - capabilities : ensemble fixe des 5 capacités actuellement implémentées.
  * - respawnDelayMs exposé dans metadata si template fourni, null sinon.
  * - lootPoolCount/lootPoolItems extraits des entrées valides du template, null sinon.
@@ -128,13 +125,6 @@ export function toResourceWorldObject(
     ? { worldX: resource.worldX!, worldY: resource.worldY! }
     : null;
 
-  const hasFiniteLegacy =
-    Number.isFinite(resource.x) && Number.isFinite(resource.y);
-
-  const legacy: ResourceMetadata['legacy'] = hasFiniteLegacy
-    ? { x: resource.x, y: resource.y }
-    : null;
-
   return Object.freeze({
     kind: 'entity',
     category: 'resource',
@@ -146,7 +136,6 @@ export function toResourceWorldObject(
     remainingLoots: resource.remainingLoots,
     capabilities: RESOURCE_CAPABILITIES,
     metadata: Object.freeze({
-      legacy,
       respawnDelayMs: template?.respawnDelayMs ?? null,
       instanceRespawnDelayMs: resource.respawnDelayMs ?? null,
       defaultRemainingLoots: template?.defaultRemainingLoots ?? null,

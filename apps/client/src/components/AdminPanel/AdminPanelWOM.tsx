@@ -254,8 +254,6 @@ function wosToCreatureInstances(wos: WorldObject[]): any[] {
     state: wo.state,
     health: wo.health ?? 0,
     maxHealth: wo.maxHealth ?? 0,
-    x: (wo.metadata.legacy as any)?.x ?? 0,
-    y: (wo.metadata.legacy as any)?.y ?? 0,
     worldX:          wo.position?.worldX ?? null,
     worldY:          wo.position?.worldY ?? null,
     mapId:           wo.mapId ?? null,
@@ -288,8 +286,6 @@ function wosToResourceInstances(wos: WorldObject[]): any[] {
     type: wo.type,
     state: wo.state,
     remainingLoots: wo.remainingLoots ?? 0,
-    x: (wo.metadata.legacy as any)?.x ?? 0,
-    y: (wo.metadata.legacy as any)?.y ?? 0,
     worldX:         wo.position?.worldX ?? null,
     worldY:         wo.position?.worldY ?? null,
     mapId:          wo.mapId ?? null,
@@ -485,7 +481,7 @@ export default function AdminPanelWOM() {
           const next = [...list]; next[idx] = { ...next[idx], ...data };
           return { ...prev, resources: next };
         }
-        if (!data.x || data.state === 'dead') return prev;
+        if (data.worldX == null || data.state === 'dead') return prev;
         return { ...prev, resources: [...list, data] };
       });
     }

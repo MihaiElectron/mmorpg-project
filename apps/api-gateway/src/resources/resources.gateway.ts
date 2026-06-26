@@ -31,15 +31,15 @@ const RESOURCE_INTERACT_RANGE_WU = 1600;
 // Intervalle entre deux loots d'un cycle de récolte continue.
 const GATHER_INTERVAL_MS = 3000;
 
-// Tolérance de déplacement (px) avant de considérer que le joueur a bougé.
-const MOVE_TOLERANCE = 4;
-
+// Tolérance de déplacement (WU) avant de considérer que le joueur a bougé.
+// ≈ 128 WU = ~4 pixels isométriques (1 tile = 1024 WU, 1 nav cell = 128 WU).
+const MOVE_TOLERANCE_WU = 128;
 
 type GatherSession = {
   targetId: string;
   timer: NodeJS.Timeout;
-  lastX: number;
-  lastY: number;
+  lastWorldX: number;
+  lastWorldY: number;
 };
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
@@ -133,18 +133,18 @@ export class ResourcesGateway
       return;
     }
 
-    this.startGatherCycle(client, targetId, player.x, player.y);
+    this.startGatherCycle(client, targetId, player.worldX, player.worldY);
   }
 
   /**
    * Démarre (ou relance) un cycle de récolte : émet un tick pour le feedback
-   * visuel cliant, puis arme le prochain loot dans GATHER_INTERVAL_MS.
+   * visuel client, puis arme le prochain loot dans GATHER_INTERVAL_MS.
    */
   private startGatherCycle(
     client: WorldSocket,
     targetId: string,
-    x: number,
-    y: number,
+    worldX: number,
+    worldY: number,
   ) {
     client.emit('gather_tick', { targetId, duration: GATHER_INTERVAL_MS });
 
@@ -152,7 +152,7 @@ export class ResourcesGateway
       void this.runGatherCycle(client, targetId);
     }, GATHER_INTERVAL_MS);
 
-    this.gatherSessions.set(client.id, { targetId, timer, lastX: x, lastY: y });
+    this.gatherSessions.set(client.id, { targetId, timer, lastWorldX: worldX, lastWorldY: worldY });
   }
 
   /**
@@ -175,8 +175,8 @@ export class ResourcesGateway
     }
 
     const moved =
-      Math.abs(player.x - session.lastX) > MOVE_TOLERANCE ||
-      Math.abs(player.y - session.lastY) > MOVE_TOLERANCE;
+      Math.abs(player.worldX - session.lastWorldX) > MOVE_TOLERANCE_WU ||
+      Math.abs(player.worldY - session.lastWorldY) > MOVE_TOLERANCE_WU;
     if (moved) {
       this.cancelGathering(client, targetId, 'moved');
       return;
@@ -259,7 +259,7 @@ export class ResourcesGateway
       return;
     }
 
-    this.startGatherCycle(client, targetId, player.x, player.y);
+    this.startGatherCycle(client, targetId, player.worldX, player.worldY);
   }
 
   private isInRange(

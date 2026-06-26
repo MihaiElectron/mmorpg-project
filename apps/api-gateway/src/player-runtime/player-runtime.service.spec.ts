@@ -67,8 +67,6 @@ function makeConnectedPlayer(overrides: Partial<ConnectedPlayer> = {}): Connecte
     worldX: 5000,
     worldY: 6000,
     mapId: 1,
-    x: 100,
-    y: 200,
     ...overrides,
   };
 }

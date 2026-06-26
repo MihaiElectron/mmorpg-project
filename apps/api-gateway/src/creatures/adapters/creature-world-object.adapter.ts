@@ -1,7 +1,7 @@
 import { Creature } from '../entities/creature.entity';
 
 export type CreatureCapability =
-  | 'transform'   // position dans le monde (WU ou legacy pixels)
+  | 'transform'   // position dans le monde (WU)
   | 'combat'      // peut être attaqué
   | 'health'      // barre de vie
   | 'persistence' // état persisté en base de données
@@ -20,7 +20,6 @@ export interface CreatureWorldObject {
   readonly maxHealth: number | null;
   readonly capabilities: readonly CreatureCapability[];
   readonly metadata: {
-    readonly legacy: { readonly x: number; readonly y: number } | null;
     readonly respawnAt: Date | null;
     /** Override de délai par instance (null = hérite du spawn/template). */
     readonly instanceRespawnDelayMs: number | null;
@@ -39,11 +38,6 @@ export function toCreatureWorldObject(creature: Creature): CreatureWorldObject {
     ? { worldX: creature.worldX!, worldY: creature.worldY! }
     : null;
 
-  const legacy =
-    Number.isFinite(creature.x) && Number.isFinite(creature.y)
-      ? { x: creature.x, y: creature.y }
-      : null;
-
   return Object.freeze({
     kind: 'entity',
     category: 'creature',
@@ -56,7 +50,6 @@ export function toCreatureWorldObject(creature: Creature): CreatureWorldObject {
     maxHealth: creature.spawn?.template?.baseHealth ?? null,
     capabilities: CREATURE_CAPABILITIES,
     metadata: Object.freeze({
-      legacy,
       respawnAt: creature.respawnAt ?? null,
       instanceRespawnDelayMs: creature.respawnDelayMs ?? null,
     }),
