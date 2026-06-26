@@ -28,7 +28,7 @@ admin.service.spec.ts  — Tests unitaires de conversion de coordonnées
 ### 1.2 Frontend (`apps/client/src/`)
 
 ```
-store/admin.store.ts                          — Zustand singleton (console active, historique, dernière pos)
+store/devtools.store.ts                       — Zustand singleton (console active, historique, dernière pos, outil actif, objet sélectionné)
 components/AdminPanel/AdminPanel.tsx          — UI principale (959 lignes)
 components/CharacterLayout/CharacterLayout.jsx — Onglet Admin conditionnel (rôle JWT côté client)
 components/ActionPanel/ActionPanel.tsx        — Console secondaire sur cible sélectionnée
@@ -346,7 +346,7 @@ admin-map.service.ts      (nouveau — edition tilemap, décor)
 - Chaque module doit avoir son propre fichier de spec NestJS ou son propre
   test de rendu React.
 - Les overlays Phaser doivent être toggleables indépendamment (chacun son
-  flag dans un store dédié ou dans `admin.store.ts`).
+  flag dans un store dédié ou dans `devtools.store.ts`).
 - Les données de debug (états IA, chemins pathfinder) ne doivent pas être
   envoyées en broadcast à tous les clients : réserver à un canal admin distinct
   ou à une émission ciblée (`socket.emit` plutôt que `server.emit`).

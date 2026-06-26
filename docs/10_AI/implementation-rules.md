@@ -192,7 +192,7 @@ Utiliser les stores existants avant d'en créer un nouveau :
 |---|---|
 | `character.store.js` | Personnage, inventaire, équipement |
 | `actionPanel.store.ts` | Cible sélectionnée, actions contextuelles |
-| `admin.store.ts` | Console admin, historique, position clic |
+| `devtools.store.ts` | Console DevTools, historique, position clic (px/WU/tile/chunk), outil actif, objet sélectionné |
 
 Les stores critiques partagés entre Phaser et React utilisent le pattern
 singleton `window.__GLOBAL_*_STORE__`. Respecter ce pattern pour tout nouveau

@@ -107,7 +107,7 @@ React 19 + Vite
 ├── store/
 │   ├── character.store.js   — Singleton (personnage, inventaire, équipement)
 │   ├── actionPanel.store.ts — Singleton (cible, actions)
-│   ├── admin.store.ts       — Singleton (console, historique)
+│   ├── devtools.store.ts    — Singleton (console, historique, outil actif, objet sélectionné)
 │   └── items.store.ts       — Store jamais utilisé [CONFIRMÉ]
 └── api/
     └── auth.js              — login/register HTTP
@@ -689,7 +689,7 @@ L'outil admin est une couche transversale backend + frontend. Voir
 métier).
 
 **Frontend :** `AdminPanel.tsx` (959 lignes), `commandRegistry.ts` (7 commandes),
-`commandParser.ts`, `admin.actions.ts`, `admin.store.ts`.
+`commandParser.ts`, `admin.actions.ts`, `devtools.store.ts`.
 
 ### Composants existants
 

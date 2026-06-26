@@ -35,10 +35,10 @@ Observed stores:
 
 - `character.store.js`
 - `actionPanel.store.ts`
-- `admin.store.ts`
+- `devtools.store.ts`
 - `items.store.ts`
 
-`character.store.js`, `actionPanel.store.ts`, and `admin.store.ts` use browser-window singleton keys so React components and Phaser code can access the same store instance. `items.store.ts` uses a direct Zustand `create` call and is not observed in the active imports searched for this batch.
+`character.store.js`, `actionPanel.store.ts`, and `devtools.store.ts` use browser-window singleton keys so React components and Phaser code can access the same store instance. `items.store.ts` uses a direct Zustand `create` call and is not observed in the active imports searched for this batch.
 
 ## Store inventory
 
@@ -46,7 +46,7 @@ Observed stores:
 |---|---|---|---|---|
 | `useCharacterStore` / `getCharacterStore` | `store/character.store.js` | Current character, panel open flag, inventory display list, equipment map | Fetches current character; equip and unequip reload character data; socket loot and damage events update local cache | Implemented |
 | `useActionPanelStore` / `getActionPanelStore` | `store/actionPanel.store.ts` | Panel open flag, selected target, available actions, overlapping targets | Updated by Phaser world click handling and creature health events | Implemented |
-| `useAdminStore` / `getAdminStore` | `store/admin.store.ts` | Admin console focus flag, last clicked position, command history, history index | Updated by React admin inputs and Phaser world clicks | Implemented |
+| `useDevToolsStore` / `getDevToolsStore` | `store/devtools.store.ts` | DevTools panel state, active tool, last clicked world position (px/WU/tile/chunk), command history, history index, selected world object | Updated by React DevTools inputs and Phaser world clicks | Implemented |
 | `useItemsStore` | `store/items.store.ts` | Local inventory list and equipment map | No server fetch observed in this store | Implemented / Not verified |
 
 ## State ownership
@@ -59,9 +59,11 @@ Observed stores:
 | Inventory display | Yes, in character store and item store | Server responses and server events | Yes, local cache can be mutated | Implemented / Not verified |
 | Equipment display | Yes, in character store and item store | Server responses | Yes, local cache can be mutated | Implemented / Not verified |
 | Action panel target | Yes, in action panel store | Client selection from rendered world state | Yes | Implemented |
-| Admin console focus | Yes, in admin store | Client UI state | Yes | Implemented |
-| Admin command history | Yes, in admin store | Client UI state | Yes | Implemented |
-| Last clicked admin position | Yes, in admin store | Client world click position | Yes | Implemented |
+| DevTools panel open | Yes, in devtools store | Client UI state | Yes | Implemented |
+| Active tool | Yes, in devtools store | Client UI state | Yes | Implemented |
+| Admin command history | Yes, in devtools store | Client UI state | Yes | Implemented |
+| Last clicked world position | Yes, in devtools store | Client world click position (px/WU/tile/chunk) | Yes | Implemented |
+| Selected world object | Yes, in devtools store | Client selection from DevTools overlays | Yes | Implemented |
 | Player position | Not directly stored as primary Zustand state in inspected store; character position may be present in loaded character object | Server accepted state should be authoritative | Yes, local display can move independently | Implemented / Not verified |
 
 ## Server synchronization
@@ -124,22 +126,25 @@ The active inventory UI imports `useCharacterStore` and displays `inventory` fro
 
 Inventory stored in Zustand is only a display cache. It is modifiable by the user and must not be treated as proof of item ownership or equipment state.
 
-## Admin state
+## DevTools state
 
-`admin.store.ts` holds local admin console UI state:
+`devtools.store.ts` holds local DevTools and admin console UI state:
 
-- whether the admin console is focused;
-- the last clicked world position;
-- command history;
-- current history index.
+- whether the DevTools panel is open;
+- the active tool (`activeTool`);
+- the last clicked world position in all coordinate spaces (px, WU, tile, chunk);
+- command history and current history index;
+- the selected world object (from DevTools overlays).
 
-`ActionPanel` and `AdminPanel` use this store to coordinate command input and keyboard focus. Phaser uses the focus flag to avoid moving the player while the admin console is active.
+`ActionPanel`, `AdminPanelWOM`, and related DevTools components use this store to coordinate command input, keyboard focus, and overlay selection. Phaser uses the console-active flag to avoid moving the player while the admin console is active.
 
-The admin store does not prove admin permission. Browser-decoded role display and local command history are not authorization.
+`devtools.store.ts` exposes `useDevToolsStore` (React) and `getDevToolsStore` (Phaser/non-React). The store is a browser-window singleton keyed at `window.__GLOBAL_DEVTOOLS_STORE__`.
+
+The devtools store does not prove admin permission. Browser-decoded role display and local command history are not authorization.
 
 ## Phaser interaction
 
-Phaser code imports `getCharacterStore`, `getActionPanelStore`, and `getAdminStore`.
+Phaser code imports `getCharacterStore`, `getActionPanelStore`, and `getDevToolsStore`.
 
 Observed interactions:
 
@@ -147,8 +152,8 @@ Observed interactions:
 - `WorldScene` updates inventory display after loot-related events.
 - `WorldScene` updates health display after damage or respawn events.
 - `WorldScene` opens and closes the action panel after pointer selection.
-- `WorldScene` stores the last clicked world position for admin commands.
-- `PlayerController` reads admin console focus to disable movement input while typing.
+- `WorldScene` stores the last clicked world position (all coordinate spaces) for DevTools.
+- `PlayerController` reads DevTools console-active flag to disable movement input while typing.
 
 These interactions coordinate display and input. They do not make Zustand state authoritative.
 
@@ -195,7 +200,7 @@ Potential performance risks include frequent health, inventory, target, and comm
 - Zustand is installed in the client package.
 - `character.store.js` defines a browser-window singleton store.
 - `actionPanel.store.ts` defines a browser-window singleton store.
-- `admin.store.ts` defines a browser-window singleton store.
+- `devtools.store.ts` defines a browser-window singleton store.
 - `items.store.ts` defines a local Zustand store.
 - Character load fetches `/characters/me` with a bearer token.
 - Equip and unequip actions send HTTP requests and reload character data on success.
@@ -274,7 +279,7 @@ Review high-frequency updates before adding new store writes from animation loop
 ## TODO
 
 - [ ] Add or verify tests for character store actions.
-- [ ] Add or verify tests for action panel and admin store behavior.
+- [ ] Add or verify tests for action panel and devtools store behavior.
 - [ ] Review stale-state handling after reconnect.
 - [ ] Review whether token access should be centralized.
 - [ ] Review active need for `items.store.ts`.

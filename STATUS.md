@@ -155,9 +155,9 @@ autoritaire.
   supprime le fallback mouvement direct. Modules : `walkabilityGrid.ts`, `pathfinding.js`.
 - Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
   ownership — voir `docs/02_Security/client-server-trust.md`.
-- Les actions admin doivent être autorisées côté serveur. Les événements admin observés
-  vérifient `client.data.role`, mais l'authentification indépendante de `AdminGateway`
-  et la provenance garantie de `client.data.role` restent à auditer — voir
+- Les actions admin doivent être autorisées côté serveur. `AdminGateway` implémente
+  `OnGatewayConnection` et valide le JWT indépendamment via `WsAuthService`. Le rôle
+  `client.data.role` vient exclusivement du JWT signé côté serveur — voir
   `docs/02_Security/admin-permissions.md`.
 - `WorldService.checkInteraction` est la barrière anti-cheat de distance ; toute
   nouvelle interaction doit la réutiliser — voir `docs/01_Architecture/client-server-boundaries.md`.
@@ -167,8 +167,6 @@ autoritaire.
   nécessitent `{ default: x }` — voir `docs/04_Server/typeorm.md`.
 - Le socket Socket.IO est un singleton créé dans `WorldPage.jsx`, partagé via
   `window.game.socket`. Les stores Zustand sont des singletons `window.__GLOBAL_*_STORE__`.
-- `admin.store.ts` est un alias de compatibilité vers `devtools.store.ts`. Ne pas y
-  ajouter de nouvelle logique. Supprimer quand tous les imports sont migrés.
 - **Studio SDK — ActionRegistry** : les providers d'actions sont déclenchés par
   capabilities WOM. Un provider peut partager une capability avec un autre (ex.
   `PositionActionProvider` et `WorldObjectActionProvider` utilisent tous deux `transform`).
@@ -212,9 +210,6 @@ autoritaire.
 - **[IMPORTANT] Templates IA en pixels** : `aggroRadius`, `patrolRadius`, `speedMin/Max`
   dans `CreatureTemplate` sont encore exprimés en pixels. `legacyRadiusToWU()` convertit
   ces valeurs à la volée. Migration vers colonnes WU native : future dette explicite.
-- **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
-  `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
-  `devtools.store` fichier par fichier.
 - **[IMPORTANT] `mapId` hardcodé à `1` dans DevToolsStore/WorldScene** : le contexte
   de clic alimente `mapId: 1` statique. À rendre dynamique quand le multi-cartes arrive.
 - **[IMPORTANT] DevTools HUD — rôle admin côté client uniquement pour l'affichage** :
@@ -253,7 +248,7 @@ autoritaire.
 - [x] `respawnAt` exposé dans les Resource WorldObjects
 - [x] Coordonnées WU et respawnAt affichés sur les instances resource
 - [x] Bouton "Reset template" sur les instances resource
-- [ ] Étape 7 — migrer les imports `admin.store` → `devtools.store` dans les 4 consommateurs
+- [x] Étape 7 — migration `admin.store` → `devtools.store` entièrement soldée (commit 137fb10)
 - [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
 - [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
 
@@ -464,7 +459,7 @@ Quand une mise à jour est demandée :
   branché sur `DevToolsShell`. Onglet "Admin" → "DevTools". `AdminPanel` inchangé.
 - **devtools.store.ts** : store Zustand singleton `__GLOBAL_DEVTOOLS_STORE__` avec
   `isConsoleActive`, `lastClickedPos`, `commandHistory`, `historyIndex`. `admin.store.ts`
-  transformé en alias de compatibilité (re-export).
+  (alias de compatibilité, depuis supprimé — commit 137fb10).
 - **DevToolsStore enrichi** : `activeTool` (défaut `"legacy-admin"`), types
   `DevToolsScreenPoint / WorldPoint / TilePoint / ChunkPoint`, setters individuels +
   `setLastClickedContext` composite + `clearLastClickedContext`.

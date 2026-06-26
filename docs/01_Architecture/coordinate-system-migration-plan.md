@@ -87,7 +87,7 @@ dehors des phases définies ci-dessous et sans validation humaine préalable.
 - `src/phaser/core/PreloadScene.js`
 - `src/store/character.store.js`
 - `src/store/actionPanel.store.ts`
-- `src/store/admin.store.ts`
+- `src/store/devtools.store.ts`
 - `src/store/items.store.ts`
 
 ---
