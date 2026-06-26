@@ -1,8 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
-import { ItemService, LOOT_ITEM_SEEDS } from './item.service';
+import {
+  CANONICAL_WOODEN_STICK,
+  ItemService,
+  LEGACY_WOODEN_STICK_MATCH,
+  LOOT_ITEM_SEEDS,
+} from './item.service';
 import { Item } from './entities/item.entity';
+import { Inventory } from '../inventory/entities/inventory.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +32,19 @@ function makeItem(overrides: Partial<Item> = {}): Item {
   } as unknown as Item;
 }
 
+function makeInventory(overrides: Partial<Inventory> = {}): Inventory {
+  return {
+    id: 'inv-1',
+    character: { id: 'char-1' } as any,
+    item: makeItem(),
+    quantity: 1,
+    equipped: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  } as Inventory;
+}
+
 // ── Setup ──────────────────────────────────────────────────────────────────────
 
 describe('ItemService', () => {
@@ -35,6 +55,16 @@ describe('ItemService', () => {
     save: jest.Mock;
     create: jest.Mock;
     remove: jest.Mock;
+  };
+  let inventoryRepo: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+    count: jest.Mock;
+  };
+  let equipmentRepo: {
+    count: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -47,11 +77,26 @@ describe('ItemService', () => {
       create: jest.fn().mockImplementation((e) => e),
       remove: jest.fn().mockResolvedValue(undefined),
     };
+    inventoryRepo = {
+      findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
+      remove: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    equipmentRepo = {
+      count: jest.fn().mockResolvedValue(0),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ItemService,
         { provide: getRepositoryToken(Item), useValue: repo },
+        { provide: getRepositoryToken(Inventory), useValue: inventoryRepo },
+        {
+          provide: getRepositoryToken(CharacterEquipment),
+          useValue: equipmentRepo,
+        },
       ],
     }).compile();
 
@@ -89,6 +134,14 @@ describe('ItemService', () => {
       );
       expect(seed).toMatchObject({
         name: 'Bâton de bois',
+        category: 'wooden_stick',
+        type: 'material',
+        image: '/assets/images/items/wooden_stick.png',
+      });
+    });
+
+    it('expose la définition canonique wooden_stick', () => {
+      expect(CANONICAL_WOODEN_STICK).toEqual({
         category: 'wooden_stick',
         type: 'material',
         image: '/assets/images/items/wooden_stick.png',
@@ -155,6 +208,122 @@ describe('ItemService', () => {
           where: expect.objectContaining({ type: 'material' }),
         }),
       );
+    });
+  });
+
+  // ── mergeLegacyWoodenStickItems ─────────────────────────────────────────────
+
+  describe('mergeLegacyWoodenStickItems', () => {
+    it('fusionne les quantités inventory du doublon legacy vers le canonique', async () => {
+      const canonical = makeItem({
+        id: 'canonical-wood',
+        ...CANONICAL_WOODEN_STICK,
+        name: 'Bâton de bois',
+      });
+      const legacy = makeItem({
+        id: 'legacy-wood',
+        ...LEGACY_WOODEN_STICK_MATCH,
+        name: 'Bâton en bois',
+      });
+      const canonicalRow = makeInventory({
+        id: 'inv-canonical',
+        character: { id: 'char-1' } as any,
+        item: canonical,
+        quantity: 57,
+      });
+      const legacyRow = makeInventory({
+        id: 'inv-legacy',
+        character: { id: 'char-1' } as any,
+        item: legacy,
+        quantity: 7,
+      });
+
+      repo.findOne.mockResolvedValue(canonical);
+      repo.find.mockResolvedValue([legacy]);
+      inventoryRepo.find.mockResolvedValue([legacyRow]);
+      inventoryRepo.findOne.mockResolvedValue(canonicalRow);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(0);
+
+      await (service as any).mergeLegacyWoodenStickItems();
+
+      expect(repo.find).toHaveBeenCalledWith({
+        where: LEGACY_WOODEN_STICK_MATCH,
+      });
+      expect(inventoryRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'inv-canonical',
+          quantity: 64,
+          item: expect.objectContaining({
+            category: 'wooden_stick',
+            type: 'material',
+            image: '/assets/images/items/wooden_stick.png',
+          }),
+        }),
+      );
+      expect(inventoryRepo.remove).toHaveBeenCalledWith(legacyRow);
+      expect(repo.remove).toHaveBeenCalledWith(legacy);
+    });
+
+    it("réassigne la ligne legacy vers l'item canonique si le personnage n'a pas encore de ligne canonique", async () => {
+      const canonical = makeItem({
+        id: 'canonical-wood',
+        ...CANONICAL_WOODEN_STICK,
+      });
+      const legacy = makeItem({
+        id: 'legacy-wood',
+        ...LEGACY_WOODEN_STICK_MATCH,
+        name: 'Bâton en bois',
+      });
+      const legacyRow = makeInventory({
+        id: 'inv-legacy',
+        character: { id: 'char-2' } as any,
+        item: legacy,
+        quantity: 3,
+      });
+
+      repo.findOne.mockResolvedValue(canonical);
+      repo.find.mockResolvedValue([legacy]);
+      inventoryRepo.find.mockResolvedValue([legacyRow]);
+      inventoryRepo.findOne.mockResolvedValue(null);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(0);
+
+      await (service as any).mergeLegacyWoodenStickItems();
+
+      expect(inventoryRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'inv-legacy',
+          quantity: 3,
+          item: expect.objectContaining({
+            id: 'canonical-wood',
+            image: '/assets/images/items/wooden_stick.png',
+          }),
+        }),
+      );
+      expect(inventoryRepo.remove).not.toHaveBeenCalled();
+      expect(repo.remove).toHaveBeenCalledWith(legacy);
+    });
+
+    it("conserve l'ancien item si une référence équipement reste présente", async () => {
+      const canonical = makeItem({
+        id: 'canonical-wood',
+        ...CANONICAL_WOODEN_STICK,
+      });
+      const legacy = makeItem({
+        id: 'legacy-wood',
+        ...LEGACY_WOODEN_STICK_MATCH,
+      });
+
+      repo.findOne.mockResolvedValue(canonical);
+      repo.find.mockResolvedValue([legacy]);
+      inventoryRepo.find.mockResolvedValue([]);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(1);
+
+      await (service as any).mergeLegacyWoodenStickItems();
+
+      expect(repo.remove).not.toHaveBeenCalled();
     });
   });
 

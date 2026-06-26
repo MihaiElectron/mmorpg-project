@@ -6,7 +6,14 @@ import { Character } from '../characters/entities/character.entity';
 import { Item } from '../items/entities/item.entity';
 
 function makeItem(overrides: Partial<Item> = {}): Item {
-  return { id: 'item-1', name: 'Bâton de bois', type: 'material', category: 'wooden_stick', ...overrides } as Item;
+  return {
+    id: 'item-1',
+    name: 'Bâton de bois',
+    type: 'material',
+    category: 'wooden_stick',
+    image: '/assets/images/items/wooden_stick.png',
+    ...overrides,
+  } as Item;
 }
 
 describe('InventoryService — findItemForLoot', () => {
@@ -25,8 +32,19 @@ describe('InventoryService — findItemForLoot', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
-        { provide: getRepositoryToken(Inventory), useValue: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), save: jest.fn(), create: jest.fn((x) => x) } },
-        { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(Inventory),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn().mockResolvedValue([]),
+            save: jest.fn(),
+            create: jest.fn((x) => x),
+          },
+        },
+        {
+          provide: getRepositoryToken(Character),
+          useValue: { findOne: jest.fn() },
+        },
         { provide: getRepositoryToken(Item), useValue: itemRepo },
       ],
     }).compile();
@@ -35,7 +53,10 @@ describe('InventoryService — findItemForLoot', () => {
   });
 
   it('retourne le material si category et type correspondent', async () => {
-    const materialItem = makeItem({ type: 'material', category: 'wooden_stick' });
+    const materialItem = makeItem({
+      type: 'material',
+      category: 'wooden_stick',
+    });
     // Première findOne (material) : trouvé
     itemRepo.findOne.mockResolvedValueOnce(materialItem);
 
@@ -48,8 +69,11 @@ describe('InventoryService — findItemForLoot', () => {
     });
   });
 
-  it("ne retourne pas un item non-material pour le même category si un material existe", async () => {
-    const materialItem = makeItem({ type: 'material', category: 'wooden_stick' });
+  it('ne retourne pas un item non-material pour le même category si un material existe', async () => {
+    const materialItem = makeItem({
+      type: 'material',
+      category: 'wooden_stick',
+    });
     // Première findOne (material) : trouvé → ne doit pas aller plus loin
     itemRepo.findOne.mockResolvedValueOnce(materialItem);
 
@@ -58,6 +82,28 @@ describe('InventoryService — findItemForLoot', () => {
     expect(result?.type).toBe('material');
     // findOne appelé une seule fois — le fallback générique n'est pas consulté
     expect(itemRepo.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("retourne l'item canonique affichable plutôt que le doublon legacy type=wooden_stick", async () => {
+    const canonical = makeItem({
+      id: 'canonical-wood',
+      type: 'material',
+      category: 'wooden_stick',
+      image: '/assets/images/items/wooden_stick.png',
+    });
+    itemRepo.findOne.mockResolvedValueOnce(canonical);
+
+    const result = await (service as any).findItemForLoot('wooden_stick');
+
+    expect(result).toMatchObject({
+      id: 'canonical-wood',
+      type: 'material',
+      category: 'wooden_stick',
+      image: '/assets/images/items/wooden_stick.png',
+    });
+    expect(itemRepo.findOne).toHaveBeenCalledWith({
+      where: { category: 'wooden_stick', type: 'material' },
+    });
   });
 
   it('plusieurs earring/accessory avec même category ne cassent pas la recherche', async () => {
