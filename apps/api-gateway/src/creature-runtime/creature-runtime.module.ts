@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Creature } from '../creatures/entities/creature.entity';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureRuntimeService } from './creature-runtime.service';
+import { CreatureRuntimeController } from './creature-runtime.controller';
 
 /**
  * Module Creature Runtime.
@@ -20,6 +21,7 @@ import { CreatureRuntimeService } from './creature-runtime.service';
 @Module({
   imports: [TypeOrmModule.forFeature([Creature])],
   providers: [CreatureRuntimeService, RuntimeDebugRegistry],
+  controllers: [CreatureRuntimeController],
   exports: [CreatureRuntimeService, RuntimeDebugRegistry],
 })
 export class CreatureRuntimeModule {}

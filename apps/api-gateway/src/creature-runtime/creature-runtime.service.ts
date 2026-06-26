@@ -7,6 +7,7 @@ import { Creature } from '../creatures/entities/creature.entity';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { DebugRuntimeSource, RuntimeSource } from '../player-runtime/runtime-source';
 import { RuntimeModifier } from '../player-runtime/player-runtime.types';
+import { DebugModifierInput } from '../player-runtime/debug-modifier.registry';
 import { EntityRuntimeService } from '../player-runtime/entity-runtime.types';
 import { CreatureRuntimeCalculator } from './creature-runtime.calculator';
 import { CreatureRuntimeSnapshot } from './creature-runtime.types';
@@ -76,6 +77,20 @@ export class CreatureRuntimeService implements EntityRuntimeService<CreatureRunt
       creatureState: creature.state,
       templateKey: template.key,
     };
+  }
+
+  // ─── Debug (admin / Studio SDK uniquement) ───────────────────────────────────
+
+  addDebugModifier(creatureId: string, input: DebugModifierInput): RuntimeModifier {
+    return this.debugRegistry.addModifier(creatureId, input);
+  }
+
+  clearDebugModifiers(creatureId: string): void {
+    this.debugRegistry.clearModifiers(creatureId);
+  }
+
+  listDebugModifiers(creatureId: string): RuntimeModifier[] {
+    return this.debugRegistry.listModifiers(creatureId);
   }
 
   // ─── Méthodes privées ────────────────────────────────────────────────────────

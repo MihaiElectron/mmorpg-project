@@ -12,7 +12,14 @@ import {
   type RuntimeModifier,
   type StatKey,
 } from "./player-runtime.types";
-import { fetchSnapshot, addDebugModifier, clearDebugModifiers } from "./runtimeApi";
+import {
+  fetchSnapshot,
+  addDebugModifier,
+  clearDebugModifiers,
+  fetchCreatureSnapshot,
+  addCreatureDebugModifier,
+  clearCreatureDebugModifiers,
+} from "./runtimeApi";
 import { getDebugModifiers, getEquipmentModifiers, validateModifierValue, formatModifierCount } from "./modifierForm";
 import "./RuntimeInspector.scss";
 
@@ -234,15 +241,28 @@ function ModifierForm({
 // ─── Panneau principal ────────────────────────────────────────────────────────
 
 /**
- * Runtime Inspector — inspecte et manipule les RuntimeModifier d'un personnage.
+ * Cible d'inspection : player courant (absent) ou creature par entityId.
+ * Détermine les endpoints appelés — la UI est identique dans les deux modes.
+ */
+export interface InspectorTarget {
+  entityId: string;
+  entityKind: "creature";
+}
+
+/**
+ * Runtime Inspector — inspecte et manipule les RuntimeModifier d'une entité.
  *
  * Lecture : sources, modifiers actifs (snapshot).
  * Manipulation : ajout debug, clear debug, refresh.
  *
+ * Modes :
+ *   - sans prop target : inspecte le player courant (/player-runtime/me/snapshot)
+ *   - target.entityKind === 'creature' : inspecte une créature par entityId
+ *
  * Les endpoints debug sont admin-only côté serveur.
  * Le panneau ne vérifie pas le rôle — la UI est déjà dans un HUD admin-only.
  */
-export default function RuntimeInspectorPanel() {
+export default function RuntimeInspectorPanel({ target }: { target?: InspectorTarget } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<RuntimeInspectableSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -254,13 +274,17 @@ export default function RuntimeInspectorPanel() {
     setLoading(true);
     setError(null);
     try {
-      setSnapshot(await fetchSnapshot());
+      if (target?.entityKind === "creature") {
+        setSnapshot(await fetchCreatureSnapshot(target.entityId));
+      } else {
+        setSnapshot(await fetchSnapshot());
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [target]);
 
   const handleToggle = () => {
     const next = !isOpen;
@@ -279,7 +303,11 @@ export default function RuntimeInspectorPanel() {
       setSubmitting(true);
       setFormError(null);
       try {
-        await addDebugModifier(snapshot.entityId, input);
+        if (target?.entityKind === "creature") {
+          await addCreatureDebugModifier(snapshot.entityId, input);
+        } else {
+          await addDebugModifier(snapshot.entityId, input);
+        }
         await load();
       } catch (e: unknown) {
         setFormError(e instanceof Error ? e.message : "Erreur");
@@ -287,19 +315,23 @@ export default function RuntimeInspectorPanel() {
         setSubmitting(false);
       }
     },
-    [snapshot, load],
+    [snapshot, load, target],
   );
 
   const handleClear = useCallback(async () => {
     if (!snapshot) return;
     setError(null);
     try {
-      await clearDebugModifiers(snapshot.entityId);
+      if (target?.entityKind === "creature") {
+        await clearCreatureDebugModifiers(snapshot.entityId);
+      } else {
+        await clearDebugModifiers(snapshot.entityId);
+      }
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur");
     }
-  }, [snapshot, load]);
+  }, [snapshot, load, target]);
 
   const equipmentModifiers = snapshot ? getEquipmentModifiers(snapshot) : [];
   const debugModifiers = snapshot ? getDebugModifiers(snapshot) : [];

@@ -6,6 +6,9 @@ import {
   addDebugModifier,
   clearDebugModifiers,
   listDebugModifiers,
+  fetchCreatureSnapshot,
+  addCreatureDebugModifier,
+  clearCreatureDebugModifiers,
 } from "./runtimeApi";
 import type { PlayerRuntimeSnapshot, RuntimeModifier, ModifierFormInput } from "./player-runtime.types";
 
@@ -278,5 +281,125 @@ describe("listDebugModifiers", () => {
     mockFetch.mockResolvedValue(errorResponse(403));
 
     await expect(listDebugModifiers("char-1")).rejects.toThrow("HTTP 403");
+  });
+});
+
+// ─── fetchCreatureSnapshot ────────────────────────────────────────────────────
+
+describe("fetchCreatureSnapshot", () => {
+  it("appelle le bon endpoint avec le creatureId", async () => {
+    mockFetch.mockResolvedValue(okJson({ entityId: "creature-1", sources: [] }));
+
+    await fetchCreatureSnapshot("creature-1");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain("/creature-runtime/creature-1/snapshot");
+  });
+
+  it("envoie le header Authorization", async () => {
+    mockFetch.mockResolvedValue(okJson({ entityId: "creature-1", sources: [] }));
+
+    await fetchCreatureSnapshot("creature-1");
+
+    const [, options] = mockFetch.mock.calls[0];
+    const headers = options?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer test-token");
+  });
+
+  it("retourne le snapshot parsé (entityId + sources)", async () => {
+    const snap = { entityId: "creature-42", sources: [{ kind: "debug", modifiers: [] }] };
+    mockFetch.mockResolvedValue(okJson(snap));
+
+    const result = await fetchCreatureSnapshot("creature-42");
+
+    expect(result.entityId).toBe("creature-42");
+    expect(result.sources).toHaveLength(1);
+  });
+
+  it("lève une erreur sur réponse non-ok", async () => {
+    mockFetch.mockResolvedValue(errorResponse(404));
+
+    await expect(fetchCreatureSnapshot("unknown")).rejects.toThrow("HTTP 404");
+  });
+});
+
+// ─── addCreatureDebugModifier ─────────────────────────────────────────────────
+
+describe("addCreatureDebugModifier", () => {
+  it("envoie une requête POST vers creature-runtime/debug/modifiers", async () => {
+    mockFetch.mockResolvedValue(okJson({ added: makeModifier() }));
+
+    await addCreatureDebugModifier("creature-1", makeFormInput());
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain("/creature-runtime/debug/modifiers");
+    expect(options?.method).toBe("POST");
+  });
+
+  it("inclut creatureId (pas characterId) et input dans le body", async () => {
+    mockFetch.mockResolvedValue(okJson({ added: makeModifier() }));
+    const input = makeFormInput({ targetStat: "defenseTotal", operation: "flat", value: 5 });
+
+    await addCreatureDebugModifier("creature-42", input);
+
+    const [, options] = mockFetch.mock.calls[0];
+    const body = JSON.parse(options?.body as string);
+    expect(body.creatureId).toBe("creature-42");
+    expect(body.characterId).toBeUndefined();
+    expect(body.targetStat).toBe("defenseTotal");
+    expect(body.value).toBe(5);
+  });
+
+  it("retourne le modifier créé (data.added)", async () => {
+    const mod = makeModifier({ value: 15 });
+    mockFetch.mockResolvedValue(okJson({ added: mod }));
+
+    const result = await addCreatureDebugModifier("creature-1", makeFormInput());
+
+    expect(result.value).toBe(15);
+  });
+
+  it("lève une erreur sur réponse non-ok", async () => {
+    mockFetch.mockResolvedValue(errorResponse(403));
+
+    await expect(addCreatureDebugModifier("creature-1", makeFormInput())).rejects.toThrow("HTTP 403");
+  });
+});
+
+// ─── clearCreatureDebugModifiers ──────────────────────────────────────────────
+
+describe("clearCreatureDebugModifiers", () => {
+  it("envoie une requête DELETE avec le creatureId", async () => {
+    mockFetch.mockResolvedValue(okJson({ cleared: true }));
+
+    await clearCreatureDebugModifiers("creature-42");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain("/creature-runtime/debug/modifiers/creature-42");
+    expect(options?.method).toBe("DELETE");
+  });
+
+  it("envoie le header Authorization", async () => {
+    mockFetch.mockResolvedValue(okJson({ cleared: true }));
+
+    await clearCreatureDebugModifiers("creature-1");
+
+    const [, options] = mockFetch.mock.calls[0];
+    const headers = options?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer test-token");
+  });
+
+  it("ne retourne rien (void)", async () => {
+    mockFetch.mockResolvedValue(okJson({ cleared: true }));
+
+    const result = await clearCreatureDebugModifiers("creature-1");
+
+    expect(result).toBeUndefined();
+  });
+
+  it("lève une erreur sur réponse non-ok", async () => {
+    mockFetch.mockResolvedValue(errorResponse(403));
+
+    await expect(clearCreatureDebugModifiers("creature-1")).rejects.toThrow("HTTP 403");
   });
 });
