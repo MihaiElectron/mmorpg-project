@@ -2,7 +2,7 @@
 // Fonctions pures pour la validation et le formatage des modifiers.
 // Sans état, sans effets de bord — testables en isolation.
 
-import type { PlayerRuntimeSnapshot, RuntimeModifier } from "./player-runtime.types";
+import type { RuntimeInspectableSnapshot, RuntimeModifier } from "./player-runtime.types";
 import { OP_LABELS, STAT_LABELS } from "./player-runtime.types";
 
 /**
@@ -16,26 +16,27 @@ export function validateModifierValue(raw: string): number | null {
 }
 
 /**
- * Extrait les modifiers d'une source par kind depuis un snapshot.
+ * Extrait les modifiers d'une source par kind depuis tout snapshot inspectable.
  * Retourne [] si la source est absente.
  */
-function getSourceModifiers(snapshot: PlayerRuntimeSnapshot, kind: string): RuntimeModifier[] {
+function getSourceModifiers(snapshot: RuntimeInspectableSnapshot, kind: string): RuntimeModifier[] {
   return snapshot.sources.find((s) => s.kind === kind)?.modifiers ?? [];
 }
 
 /**
- * Extrait les modifiers de la source "equipment" d'un snapshot.
- * Retourne [] si aucune pièce d'équipement ne génère de modifier.
+ * Extrait les modifiers de la source "equipment" d'un snapshot inspectable.
+ * Retourne [] si aucune pièce d'équipement ne génère de modifier (ou si l'entité
+ * n'a pas de source equipment — ex. une créature).
  */
-export function getEquipmentModifiers(snapshot: PlayerRuntimeSnapshot): RuntimeModifier[] {
+export function getEquipmentModifiers(snapshot: RuntimeInspectableSnapshot): RuntimeModifier[] {
   return getSourceModifiers(snapshot, "equipment");
 }
 
 /**
- * Extrait les modifiers de la source "debug" d'un snapshot.
+ * Extrait les modifiers de la source "debug" d'un snapshot inspectable.
  * Retourne [] si aucune source debug n'est présente.
  */
-export function getDebugModifiers(snapshot: PlayerRuntimeSnapshot): RuntimeModifier[] {
+export function getDebugModifiers(snapshot: RuntimeInspectableSnapshot): RuntimeModifier[] {
   return getSourceModifiers(snapshot, "debug");
 }
 

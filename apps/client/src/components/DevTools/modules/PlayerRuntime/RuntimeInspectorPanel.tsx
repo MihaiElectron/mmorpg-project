@@ -8,7 +8,7 @@ import {
   OP_DISPLAY,
   type ModifierFormInput,
   type ModifierOperation,
-  type PlayerRuntimeSnapshot,
+  type RuntimeInspectableSnapshot,
   type RuntimeModifier,
   type StatKey,
 } from "./player-runtime.types";
@@ -244,7 +244,7 @@ function ModifierForm({
  */
 export default function RuntimeInspectorPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<PlayerRuntimeSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<RuntimeInspectableSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);

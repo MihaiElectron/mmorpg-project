@@ -16,7 +16,11 @@ export interface DebugModifierInput {
 }
 
 /**
- * Registre en mémoire des RuntimeModifier[] de debug, par characterId.
+ * Registre en mémoire des RuntimeModifier[] de debug, indexé par entityId.
+ *
+ * Générique — fonctionne pour tout EntityRuntimeKind (player, creature, npc…).
+ * Chaque module NestJS (PlayerRuntimeModule, CreatureRuntimeModule…) instancie
+ * son propre registre : les modifiers debug de types différents restent isolés.
  *
  * Règles :
  * - Aucune persistance — les modifiers sont perdus au redémarrage.
@@ -25,25 +29,25 @@ export interface DebugModifierInput {
  * - Les IDs sont uniques et séquentiels au sein d'une instance de service.
  */
 @Injectable()
-export class DebugModifierRegistry {
+export class RuntimeDebugRegistry {
   private readonly store = new Map<string, RuntimeModifier[]>();
   private counter = 0;
 
   /**
-   * Retourne les modifiers debug actifs pour un personnage.
-   * Retourne [] si aucun modifier n'a été ajouté pour ce characterId.
+   * Retourne les modifiers debug actifs pour une entité.
+   * Retourne [] si aucun modifier n'a été ajouté pour cet entityId.
    */
-  getModifiers(characterId: string): RuntimeModifier[] {
-    return this.store.get(characterId) ?? [];
+  getModifiers(entityId: string): RuntimeModifier[] {
+    return this.store.get(entityId) ?? [];
   }
 
   /**
-   * Ajoute un modifier debug pour un personnage.
+   * Ajoute un modifier debug pour une entité.
    * Retourne le RuntimeModifier créé avec son id généré.
    */
-  addModifier(characterId: string, input: DebugModifierInput): RuntimeModifier {
+  addModifier(entityId: string, input: DebugModifierInput): RuntimeModifier {
     const modifier: RuntimeModifier = {
-      id: `debug:${characterId}:${++this.counter}`,
+      id: `debug:${entityId}:${++this.counter}`,
       sourceType: 'debug',
       sourceId: 'debug-registry',
       sourceLabel: input.sourceLabel ?? 'Debug',
@@ -55,23 +59,23 @@ export class DebugModifierRegistry {
       reason: input.reason,
     };
 
-    const existing = this.store.get(characterId) ?? [];
-    this.store.set(characterId, [...existing, modifier]);
+    const existing = this.store.get(entityId) ?? [];
+    this.store.set(entityId, [...existing, modifier]);
     return modifier;
   }
 
   /**
-   * Supprime tous les modifiers debug d'un personnage.
+   * Supprime tous les modifiers debug d'une entité.
    */
-  clearModifiers(characterId: string): void {
-    this.store.delete(characterId);
+  clearModifiers(entityId: string): void {
+    this.store.delete(entityId);
   }
 
   /**
-   * Liste les modifiers debug d'un personnage (même résultat que getModifiers).
+   * Liste les modifiers debug d'une entité (même résultat que getModifiers).
    * Méthode explicite pour le controller de debug.
    */
-  listModifiers(characterId: string): RuntimeModifier[] {
-    return this.getModifiers(characterId);
+  listModifiers(entityId: string): RuntimeModifier[] {
+    return this.getModifiers(entityId);
   }
 }

@@ -226,7 +226,7 @@ Identifier explicitement où vivent les données qui alimentent la `RuntimeSourc
 | Source de vérité | Exemples |
 |---|---|
 | DB PostgreSQL | Équipement équipé, stats de base Character |
-| Mémoire serveur | Effets actifs en mémoire (`PlayerRuntimeEffect[]`), modifiers debug (`DebugModifierRegistry`) |
+| Mémoire serveur | Effets actifs en mémoire (`PlayerRuntimeEffect[]`), modifiers debug (`RuntimeDebugRegistry`) |
 | WOM (World Object Model) | Position d'une crafting station, état d'une ressource |
 | Événement réseau | Aura reçue d'une créature proche, zone de terrain spéciale |
 
@@ -432,7 +432,7 @@ Le pipeline Runtime est entièrement côté serveur. Le client ne reçoit que le
 `snapshot` final — lecture seule. Il ne peut pas :
 - soumettre un `RuntimeModifier` directement ;
 - modifier une `DerivedStats` ;
-- connaître l'état des sources internes (DebugModifierRegistry, EffectSource).
+- connaître l'état des sources internes (RuntimeDebugRegistry, EffectSource).
 
 Les endpoints debug (`addDebugModifier`, `clearDebugModifiers`) sont protégés
 par `@Roles(UserRole.ADMIN)`. Un joueur non-admin ne peut pas injecter de modifier.

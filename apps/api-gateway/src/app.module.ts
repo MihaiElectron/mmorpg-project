@@ -27,6 +27,7 @@ import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
 import { CraftingModule } from './crafting/crafting.module';
 import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
+import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
     SkillsModule,
     CraftingModule,
     PlayerRuntimeModule,
+    CreatureRuntimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

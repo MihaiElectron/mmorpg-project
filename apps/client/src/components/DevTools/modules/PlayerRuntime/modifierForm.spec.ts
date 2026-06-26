@@ -8,13 +8,13 @@ import {
   formatModifierSummary,
   formatModifierCount,
 } from "./modifierForm";
-import type { PlayerRuntimeSnapshot, RuntimeModifier } from "./player-runtime.types";
+import type { RuntimeInspectableSnapshot, RuntimeModifier } from "./player-runtime.types";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 function makeModifier(overrides: Partial<RuntimeModifier> = {}): RuntimeModifier {
   return {
-    id: "debug:char-1:1",
+    id: "debug:entity-1:1",
     sourceType: "debug",
     sourceLabel: "Debug",
     targetStat: "attackPower",
@@ -26,19 +26,11 @@ function makeModifier(overrides: Partial<RuntimeModifier> = {}): RuntimeModifier
   };
 }
 
+// Fixture minimale — seuls entityId et sources sont nécessaires aux fonctions testées.
 function makeSnapshot(
   sources: { kind: string; modifiers: RuntimeModifier[] }[],
-): PlayerRuntimeSnapshot {
-  return {
-    characterId: "char-1",
-    name: "Hero",
-    baseStats: { level: 1, health: 100, maxHealth: 100, attack: 10, defense: 5, experience: 0 },
-    derivedStats: { maxHp: 100, attackPower: 10, defenseTotal: 5, speed: 0, gatheringRange: 0, attackRange: 0 },
-    sources,
-    modifiers: sources.flatMap((s) => s.modifiers),
-    trace: { stats: {}, modifierCount: 0, computedAt: "2026-01-01T00:00:00Z" },
-    computedAt: "2026-01-01T00:00:00Z",
-  };
+): RuntimeInspectableSnapshot {
+  return { entityId: "entity-1", sources };
 }
 
 // ─── validateModifierValue ────────────────────────────────────────────────────

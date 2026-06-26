@@ -83,7 +83,7 @@ Convertit `PlayerRuntimeEffect[]` en `RuntimeModifier[]`.
 Injecte des `RuntimeModifier[]` arbitraires en mémoire — usage dev/admin uniquement.
 
 - Kind : `debug`
-- Alimentée par `DebugModifierRegistry` (singleton injectable, `Map<characterId, RuntimeModifier[]>`).
+- Alimentée par `RuntimeDebugRegistry` (injectable, `Map<entityId, RuntimeModifier[]>` — générique, une instance par module Runtime).
 - Par défaut : retourne `[]` si aucun modifier n'a été ajouté.
 - Les modifiers sont perdus au redémarrage du serveur — aucune persistance.
 - `sourceType` des modifiers : `debug` — clairement identifiable dans la trace.

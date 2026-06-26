@@ -9,6 +9,7 @@ import {
 } from './entity-runtime.types';
 import type { PlayerRuntimeSnapshot } from './runtime-source';
 import type { BaseStats, DerivedStats } from './player-runtime.types';
+import type { CreatureRuntimeSnapshot, CreatureBaseStats, CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 
 // ─── Helpers de test ──────────────────────────────────────────────────────────
 
@@ -208,5 +209,46 @@ describe('EntityRuntimeKind — discrimination', () => {
     for (const kind of knownKinds) {
       expect(ENTITY_RUNTIME_KINDS).toContain(kind);
     }
+  });
+});
+
+// ─── CreatureRuntimeSnapshot — compatibilité EntityRuntimeSnapshot ─────────────
+
+/**
+ * Vérification de compatibilité structurelle (compile-time).
+ *
+ * Si ce type s'assigne sans erreur TypeScript, CreatureRuntimeSnapshot
+ * satisfait EntityRuntimeSnapshot<CreatureBaseStats, CreatureDerivedStats>.
+ */
+type AssertCreatureSnapshotCompatible = CreatureRuntimeSnapshot extends
+  EntityRuntimeSnapshot<CreatureBaseStats, CreatureDerivedStats>
+  ? true
+  : false;
+
+describe('EntityRuntimeSnapshot — compatibilité Creature', () => {
+  it('CreatureRuntimeSnapshot satisfait EntityRuntimeSnapshot<CreatureBaseStats, CreatureDerivedStats>', () => {
+    const _check: AssertCreatureSnapshotCompatible = true;
+    expect(_check).toBe(true);
+  });
+
+  it("CreatureRuntimeSnapshot a entityKind littéral 'creature'", () => {
+    // Vérification que le type discriminant est correct
+    type IsCreatureKind = CreatureRuntimeSnapshot['entityKind'] extends 'creature' ? true : false;
+    const _check: IsCreatureKind = true;
+    expect(_check).toBe(true);
+  });
+
+  it('discrimination Player vs Creature est possible sur entityKind', () => {
+    type SnapUnion = PlayerRuntimeSnapshot | CreatureRuntimeSnapshot;
+    // Si ce bloc compile, la discrimination est exhaustive
+    function handle(snap: SnapUnion): string {
+      if (snap.entityKind === 'player') return 'player:' + snap.characterId;
+      if (snap.entityKind === 'creature') return 'creature:' + snap.templateKey;
+      // TypeScript saurait ici que snap est `never` si l'union était exhaustive
+      return 'unknown';
+    }
+    // Test runtime : vérifie que les deux chemins sont distincts
+    expect(handle({ entityKind: 'creature', templateKey: 'turkey' } as CreatureRuntimeSnapshot)).toBe('creature:turkey');
+    expect(handle({ entityKind: 'player', characterId: 'char-1' } as PlayerRuntimeSnapshot)).toBe('player:char-1');
   });
 });

@@ -6,7 +6,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { Item } from '../items/entities/item.entity';
 import { ConnectedPlayer } from '../world/world.service';
 import { PlayerRuntimeEffect } from './player-runtime.types';
-import { DebugModifierRegistry } from './debug-modifier.registry';
+import { RuntimeDebugRegistry } from './debug-modifier.registry';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ function makeConnectedPlayer(overrides: Partial<ConnectedPlayer> = {}): Connecte
 function makeService(
   character: Character | null,
   connected: ConnectedPlayer | null = null,
-  debugRegistry?: DebugModifierRegistry,
+  debugRegistry?: RuntimeDebugRegistry,
 ): PlayerRuntimeService {
   const characterRepo = {
     findOne: jest.fn().mockResolvedValue(character),
@@ -84,7 +84,7 @@ function makeService(
   const worldService = {
     getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(connected),
   } as any;
-  return new PlayerRuntimeService(characterRepo, worldService, debugRegistry ?? new DebugModifierRegistry());
+  return new PlayerRuntimeService(characterRepo, worldService, debugRegistry ?? new RuntimeDebugRegistry());
 }
 
 function makeEffect(overrides: Partial<PlayerRuntimeEffect> = {}): PlayerRuntimeEffect {
@@ -447,7 +447,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('modifier debug ajouté apparaît dans snapshot.modifiers', async () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
       registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 25 });
 
@@ -458,7 +458,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('modifier debug inclus dans le calcul derivedStats', async () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
       registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 30 });
 
@@ -467,7 +467,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('modifier debug apparaît dans la trace', async () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
       registry.addModifier('char-1', {
         targetStat: 'attackPower',
@@ -484,7 +484,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('clearDebugModifiers vide la source debug', async () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const svc = makeService(makeCharacter({ attack: 10 }), null, registry);
       registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 20 });
       svc.clearDebugModifiers('char-1');
@@ -495,7 +495,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('listDebugModifiers retourne les modifiers actifs', () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const svc = makeService(makeCharacter(), null, registry);
       registry.addModifier('char-1', { targetStat: 'maxHp', operation: 'flat', value: 50 });
 
@@ -510,7 +510,7 @@ describe('PlayerRuntimeService', () => {
     });
 
     it('debug + équipement — les deux sources contribuent', async () => {
-      const registry = new DebugModifierRegistry();
+      const registry = new RuntimeDebugRegistry();
       const sword = makeItem({ attack: 5, defense: 0 });
       const svc = makeService(makeCharacter({ attack: 10 }, [makeEquip(sword)]), null, registry);
       registry.addModifier('char-1', { targetStat: 'attackPower', operation: 'flat', value: 3 });

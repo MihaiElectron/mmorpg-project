@@ -20,7 +20,7 @@ import {
   RuntimeStatsResult,
   RuntimeTrace,
 } from './player-runtime.types';
-import { DebugModifierInput, DebugModifierRegistry } from './debug-modifier.registry';
+import { DebugModifierInput, RuntimeDebugRegistry } from './debug-modifier.registry';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 
 const EQUIPMENT_RELATIONS: string[] = ['equipment', 'equipment.item'];
@@ -31,7 +31,7 @@ export class PlayerRuntimeService {
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
-    private readonly debugRegistry: DebugModifierRegistry,
+    private readonly debugRegistry: RuntimeDebugRegistry,
   ) {}
 
   /**

@@ -82,7 +82,7 @@ export class EffectSource implements RuntimeSource {
  *
  * Règles :
  * - Dev/admin uniquement — jamais activée en production hors outillage explicite.
- * - Désactivée par défaut : DebugModifierRegistry retourne [] si aucun modifier ajouté.
+ * - Désactivée par défaut : RuntimeDebugRegistry retourne [] si aucun modifier ajouté.
  * - Aucune persistance — les modifiers sont perdus au redémarrage.
  * - Aucun gameplay réel — sourceType = 'debug', clairement identifiable dans la trace.
  * - Visible dans snapshot.sources[kind='debug'] et RuntimeTrace.

@@ -96,6 +96,17 @@ export interface PlayerRuntimeSnapshot {
   computedAt: string;
 }
 
+/**
+ * Interface minimale requise par le Runtime Inspector et les helpers modifierForm.
+ *
+ * Satisfaite par PlayerRuntimeSnapshot et CreatureRuntimeSnapshot (à venir).
+ * L'Inspector n'a pas besoin de connaître le type concret de l'entité inspectée.
+ */
+export interface RuntimeInspectableSnapshot {
+  readonly entityId: string;
+  readonly sources: RuntimeSourceEntry[];
+}
+
 export interface ModifierFormInput {
   targetStat: StatKey;
   operation: ModifierOperation;
