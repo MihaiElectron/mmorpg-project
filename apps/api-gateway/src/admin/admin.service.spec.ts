@@ -712,6 +712,12 @@ describe('AdminService — addIngredient / addResult', () => {
     expect(ing.requiredQuantity).toBe(3);
   });
 
+  it('addIngredient rejette un doublon item dans la même recette', async () => {
+    ingredientRepo.findOne.mockResolvedValue({ id: 'ing-existing', itemId: 'item-1' });
+    await expect(service.addIngredient('rec-1', 'item-1', 3))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('addIngredient rejette item inexistant', async () => {
     itemRepo.findOne.mockResolvedValue(null);
     await expect(service.addIngredient('rec-1', 'bad-item', 1))
@@ -727,6 +733,12 @@ describe('AdminService — addIngredient / addResult', () => {
     const res = await service.addResult('rec-1', 'item-1', 1, 0.8);
     expect(resultRepo.save).toHaveBeenCalled();
     expect(res.chance).toBe(0.8);
+  });
+
+  it('addResult rejette un doublon item dans la même recette', async () => {
+    resultRepo.findOne.mockResolvedValue({ id: 'res-existing', itemId: 'item-1' });
+    await expect(service.addResult('rec-1', 'item-1', 1, 1.0))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('addResult rejette item inexistant', async () => {
@@ -751,6 +763,86 @@ describe('AdminService — addIngredient / addResult', () => {
     const removed = await service.removeIngredient('ing-1');
     expect(ingredientRepo.delete).toHaveBeenCalledWith('ing-1');
     expect(removed).toEqual(existing);
+  });
+
+  it('replaceCraftingIngredients remplace la liste avec quantités valides', async () => {
+    recipeRepo.findOne
+      .mockResolvedValueOnce({ id: 'rec-1', key: 'r', ingredients: [], results: [] })
+      .mockResolvedValueOnce({
+        id: 'rec-1',
+        key: 'r',
+        ingredients: [{ recipeId: 'rec-1', itemId: 'item-1', requiredQuantity: 4 }],
+        results: [],
+      });
+    itemRepo.find.mockResolvedValue([{ id: 'item-1' }]);
+
+    const updated = await service.replaceCraftingIngredients('rec-1', [
+      { itemId: 'item-1', requiredQuantity: 4 },
+    ]);
+
+    expect(ingredientRepo.delete).toHaveBeenCalledWith({ recipeId: 'rec-1' });
+    expect(ingredientRepo.save).toHaveBeenCalledWith([
+      { recipeId: 'rec-1', itemId: 'item-1', requiredQuantity: 4 },
+    ]);
+    expect(updated?.ingredients).toEqual([
+      { recipeId: 'rec-1', itemId: 'item-1', requiredQuantity: 4 },
+    ]);
+  });
+
+  it('replaceCraftingIngredients rejette les doublons item', async () => {
+    await expect(
+      service.replaceCraftingIngredients('rec-1', [
+        { itemId: 'item-1', requiredQuantity: 1 },
+        { itemId: 'item-1', requiredQuantity: 2 },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(ingredientRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('replaceCraftingIngredients rejette une liste vide', async () => {
+    await expect(service.replaceCraftingIngredients('rec-1', []))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(ingredientRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('replaceCraftingResults remplace la liste et impose au moins un résultat', async () => {
+    recipeRepo.findOne
+      .mockResolvedValueOnce({ id: 'rec-1', key: 'r', ingredients: [], results: [] })
+      .mockResolvedValueOnce({
+        id: 'rec-1',
+        key: 'r',
+        ingredients: [],
+        results: [{ recipeId: 'rec-1', itemId: 'item-1', producedQuantity: 1, chance: 0.5 }],
+      });
+    itemRepo.find.mockResolvedValue([{ id: 'item-1' }]);
+
+    const updated = await service.replaceCraftingResults('rec-1', [
+      { itemId: 'item-1', producedQuantity: 1, chance: 0.5 },
+    ]);
+
+    expect(resultRepo.delete).toHaveBeenCalledWith({ recipeId: 'rec-1' });
+    expect(resultRepo.save).toHaveBeenCalledWith([
+      { recipeId: 'rec-1', itemId: 'item-1', producedQuantity: 1, chance: 0.5 },
+    ]);
+    expect(updated?.results).toEqual([
+      { recipeId: 'rec-1', itemId: 'item-1', producedQuantity: 1, chance: 0.5 },
+    ]);
+  });
+
+  it('replaceCraftingResults rejette une liste vide', async () => {
+    await expect(service.replaceCraftingResults('rec-1', []))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(resultRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('replaceCraftingResults rejette un item inexistant', async () => {
+    itemRepo.find.mockResolvedValue([]);
+    await expect(
+      service.replaceCraftingResults('rec-1', [
+        { itemId: 'missing-item', producedQuantity: 1, chance: 1 },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(resultRepo.delete).not.toHaveBeenCalled();
   });
 });
 

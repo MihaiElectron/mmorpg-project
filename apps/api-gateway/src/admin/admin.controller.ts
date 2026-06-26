@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Patch, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Put, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreaturesService } from '../creatures/creatures.service';
 import { ResourcesService } from '../resources/resources.service';
@@ -141,6 +141,34 @@ export class AdminController {
 
   @Get('crafting-recipes/world-objects')
   getCraftingRecipeWorldObjects() { return this.adminService.getCraftingRecipeWorldObjects(); }
+
+  @Get('crafting-recipes/:id')
+  async getCraftingRecipe(@Param('id') id: string) {
+    const recipe = await this.adminService.getCraftingRecipe(id);
+    if (!recipe) throw new NotFoundException(`Recette "${id}" introuvable.`);
+    return recipe;
+  }
+
+  @Patch('crafting-recipes/:id')
+  async updateCraftingRecipe(@Param('id') id: string, @Body() fields: Record<string, unknown>) {
+    const updated = await this.adminService.updateCraftingRecipe(id, fields as any);
+    if (!updated) throw new NotFoundException(`Recette "${id}" introuvable.`);
+    return updated;
+  }
+
+  @Put('crafting-recipes/:id/ingredients')
+  async replaceCraftingIngredients(@Param('id') id: string, @Body() body: { ingredients?: unknown }) {
+    const updated = await this.adminService.replaceCraftingIngredients(id, body?.ingredients);
+    if (!updated) throw new NotFoundException(`Recette "${id}" introuvable.`);
+    return updated;
+  }
+
+  @Put('crafting-recipes/:id/results')
+  async replaceCraftingResults(@Param('id') id: string, @Body() body: { results?: unknown }) {
+    const updated = await this.adminService.replaceCraftingResults(id, body?.results);
+    if (!updated) throw new NotFoundException(`Recette "${id}" introuvable.`);
+    return updated;
+  }
 
   @Get('crafting-recipes/:id/validate')
   validateCraftingRecipe(@Param('id') id: string) { return this.adminService.validateCraftingRecipe(id); }

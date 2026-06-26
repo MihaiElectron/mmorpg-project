@@ -36,6 +36,17 @@ interface LootPoolEntryPatch {
   probability: number;
 }
 
+interface RecipeIngredientPatch {
+  itemId: string;
+  requiredQuantity: number;
+}
+
+interface RecipeResultPatch {
+  itemId: string;
+  producedQuantity: number;
+  chance: number;
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -566,6 +577,13 @@ export class AdminService {
     });
   }
 
+  getCraftingRecipe(id: string): Promise<CraftingRecipe | null> {
+    return this.recipeRepo.findOne({
+      where: { id },
+      relations: ['ingredients', 'results'],
+    });
+  }
+
   async getCraftingRecipeWorldObjects(): Promise<CraftingRecipeWorldObject[]> {
     const recipes = await this.listCraftingRecipes();
     return recipes.map(toCraftingRecipeWorldObject);
@@ -717,6 +735,9 @@ export class AdminService {
     const item = await this.itemRepo.findOne({ where: { id: itemId } });
     if (!item) throw new BadRequestException(`Item "${itemId}" introuvable.`);
 
+    const existing = await this.ingredientRepo.findOne({ where: { recipeId, itemId } });
+    if (existing) throw new BadRequestException(`Ingrédient "${itemId}" déjà présent dans cette recette.`);
+
     if (!Number.isFinite(requiredQuantity) || !Number.isInteger(requiredQuantity) || requiredQuantity < 1) {
       throw new BadRequestException('requiredQuantity doit être un entier >= 1.');
     }
@@ -738,6 +759,9 @@ export class AdminService {
     const item = await this.itemRepo.findOne({ where: { id: itemId } });
     if (!item) throw new BadRequestException(`Item "${itemId}" introuvable.`);
 
+    const existing = await this.craftingResultRepo.findOne({ where: { recipeId, itemId } });
+    if (existing) throw new BadRequestException(`Résultat "${itemId}" déjà présent dans cette recette.`);
+
     if (!Number.isFinite(producedQuantity) || !Number.isInteger(producedQuantity) || producedQuantity < 1) {
       throw new BadRequestException('producedQuantity doit être un entier >= 1.');
     }
@@ -751,6 +775,111 @@ export class AdminService {
     if (!res) return null;
     await this.craftingResultRepo.delete(resultId);
     return res;
+  }
+
+  async replaceCraftingIngredients(recipeId: string, entries: unknown): Promise<CraftingRecipe | null> {
+    const recipe = await this.getCraftingRecipe(recipeId);
+    if (!recipe) return null;
+
+    const normalized = await this.validateRecipeIngredients(entries);
+    await this.ingredientRepo.delete({ recipeId } as any);
+    if (normalized.length > 0) {
+      const toSave = normalized.map((entry) => this.ingredientRepo.create({ recipeId, ...entry }));
+      await this.ingredientRepo.save(toSave as any);
+    }
+
+    return this.getCraftingRecipe(recipeId);
+  }
+
+  async replaceCraftingResults(recipeId: string, entries: unknown): Promise<CraftingRecipe | null> {
+    const recipe = await this.getCraftingRecipe(recipeId);
+    if (!recipe) return null;
+
+    const normalized = await this.validateRecipeResults(entries);
+    await this.craftingResultRepo.delete({ recipeId } as any);
+    const toSave = normalized.map((entry) => this.craftingResultRepo.create({ recipeId, ...entry }));
+    await this.craftingResultRepo.save(toSave as any);
+
+    return this.getCraftingRecipe(recipeId);
+  }
+
+  private async validateRecipeIngredients(value: unknown): Promise<RecipeIngredientPatch[]> {
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('ingredients doit être un tableau.');
+    }
+    if (value.length === 0) {
+      throw new BadRequestException('Une recette doit avoir au moins un ingrédient.');
+    }
+
+    const entries = value.map((entry, index) => this.normalizeRecipeIngredient(entry, index));
+    await this.ensureUniqueRecipeItems(entries, 'ingredients');
+    await this.ensureItemsExist(entries.map((entry) => entry.itemId), 'ingredients');
+    return entries;
+  }
+
+  private async validateRecipeResults(value: unknown): Promise<RecipeResultPatch[]> {
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('results doit être un tableau.');
+    }
+    if (value.length === 0) {
+      throw new BadRequestException('Une recette doit avoir au moins un résultat.');
+    }
+
+    const entries = value.map((entry, index) => this.normalizeRecipeResult(entry, index));
+    await this.ensureUniqueRecipeItems(entries, 'results');
+    await this.ensureItemsExist(entries.map((entry) => entry.itemId), 'results');
+    return entries;
+  }
+
+  private normalizeRecipeIngredient(entry: unknown, index: number): RecipeIngredientPatch {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new BadRequestException(`ingredients[${index}] doit être un objet.`);
+    }
+    const raw = entry as Record<string, unknown>;
+    const itemId = typeof raw.itemId === 'string' ? raw.itemId.trim() : '';
+    if (!itemId) throw new BadRequestException(`ingredients[${index}].itemId est requis.`);
+    const requiredQuantity = AdminService.readInteger(raw.requiredQuantity, `ingredients[${index}].requiredQuantity`);
+    if (requiredQuantity < 1) {
+      throw new BadRequestException(`ingredients[${index}].requiredQuantity doit être >= 1.`);
+    }
+    return { itemId, requiredQuantity };
+  }
+
+  private normalizeRecipeResult(entry: unknown, index: number): RecipeResultPatch {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new BadRequestException(`results[${index}] doit être un objet.`);
+    }
+    const raw = entry as Record<string, unknown>;
+    const itemId = typeof raw.itemId === 'string' ? raw.itemId.trim() : '';
+    if (!itemId) throw new BadRequestException(`results[${index}].itemId est requis.`);
+    const producedQuantity = AdminService.readInteger(raw.producedQuantity, `results[${index}].producedQuantity`);
+    if (producedQuantity < 1) {
+      throw new BadRequestException(`results[${index}].producedQuantity doit être >= 1.`);
+    }
+    const chance = AdminService.readNumber(raw.chance, `results[${index}].chance`);
+    AdminService.validateSuccessRate(chance, `results[${index}].chance`);
+    return { itemId, producedQuantity, chance };
+  }
+
+  private async ensureUniqueRecipeItems(entries: Array<{ itemId: string }>, label: string): Promise<void> {
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      if (seen.has(entry.itemId)) {
+        throw new BadRequestException(`${label} contient un doublon pour item "${entry.itemId}".`);
+      }
+      seen.add(entry.itemId);
+    }
+  }
+
+  private async ensureItemsExist(itemIds: string[], label: string): Promise<void> {
+    const uniqueIds = [...new Set(itemIds)];
+    if (uniqueIds.length === 0) return;
+    const items = await this.itemRepo.find({ where: { id: In(uniqueIds) } });
+    const known = new Set(items.map((item) => item.id));
+    const missing = uniqueIds.find((id) => !known.has(id));
+    if (missing) {
+      throw new BadRequestException(`${label} référence l'item "${missing}" introuvable.`);
+    }
   }
 
   async validateCraftingRecipe(recipeId: string): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
