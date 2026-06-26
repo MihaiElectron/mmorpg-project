@@ -11,7 +11,7 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
-import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
+import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
@@ -149,8 +149,6 @@ export class CreaturesService implements OnModuleInit {
           // Timer expiré ou absent — respawn immédiat
           a.state = 'alive';
           a.health = a.spawn.template.baseHealth;
-          a.x = a.spawn.spawnX;
-          a.y = a.spawn.spawnY;
           a.respawnAt = null;
           if (a.spawn.worldX == null || a.spawn.worldY == null || a.spawn.mapId == null) continue;
           a.worldX = a.spawn.worldX;
@@ -310,8 +308,6 @@ export class CreaturesService implements OnModuleInit {
       creature.worldY = Math.round(newWY);
     }
     creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
-    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
-    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
   }
 
   private async doFighting(
@@ -356,8 +352,6 @@ export class CreaturesService implements OnModuleInit {
       creature.worldX = Math.round(creature.worldX + (dx / dist) * stepWU);
       creature.worldY = Math.round(creature.worldY + (dy / dist) * stepWU);
       creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
-      creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
-      creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
     }
 
     // Auto-attaque
@@ -425,8 +419,6 @@ export class CreaturesService implements OnModuleInit {
       creature.worldY = Math.round(newWY);
     }
     creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
-    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
-    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
   }
 
   private pixelToWUSafe(
@@ -453,8 +445,6 @@ export class CreaturesService implements OnModuleInit {
     const { template } = creature.spawn;
     creature.state = 'alive';
     creature.health = template.baseHealth;
-    creature.x = creature.spawn.spawnX;
-    creature.y = creature.spawn.spawnY;
     creature.respawnAt = null;
     if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) return;
     creature.worldX = creature.spawn.worldX;
@@ -464,8 +454,6 @@ export class CreaturesService implements OnModuleInit {
     await this.creatureRepository.update(id, {
       state: 'alive',
       health: template.baseHealth,
-      x: creature.spawn.spawnX,
-      y: creature.spawn.spawnY,
       respawnAt: null,
       worldX: creature.worldX,
       worldY: creature.worldY,
@@ -635,16 +623,12 @@ export class CreaturesService implements OnModuleInit {
 
     const targetWorldX = Math.round(worldX);
     const targetWorldY = Math.round(worldY);
-    const px = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
-    const py = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
 
     const spawnKey = `admin-${templateKey}-${Date.now()}`;
     const spawn = await this.spawnRepository.save(
       this.spawnRepository.create({
         key: spawnKey,
         template,
-        spawnX: px,
-        spawnY: py,
         worldX: targetWorldX,
         worldY: targetWorldY,
         mapId: DEFAULT_MAP_ID,
@@ -655,8 +639,6 @@ export class CreaturesService implements OnModuleInit {
     const rawCreature = await this.creatureRepository.save(
       this.creatureRepository.create({
         spawn,
-        x: px,
-        y: py,
         worldX: targetWorldX,
         worldY: targetWorldY,
         mapId: DEFAULT_MAP_ID,
@@ -732,8 +714,6 @@ export class CreaturesService implements OnModuleInit {
       if (fields.worldX !== undefined) creature.worldX = Math.round(fields.worldX);
       if (fields.worldY !== undefined) creature.worldY = Math.round(fields.worldY);
       creature.mapId = DEFAULT_MAP_ID;
-      creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
-      creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
     }
 
     // 0 → null (hérite du spawn/template)
@@ -755,11 +735,9 @@ export class CreaturesService implements OnModuleInit {
     creature.worldX = Math.round(worldX);
     creature.worldY = Math.round(worldY);
     creature.mapId = DEFAULT_MAP_ID;
-    creature.x = Math.round(wuToIsoScreenX(creature.worldX, creature.worldY));
-    creature.y = Math.round(wuToIsoScreenY(creature.worldX, creature.worldY));
     this.patrolStates.delete(creatureId);
 
-    await this.creatureRepository.update(creatureId, { x: creature.x, y: creature.y, worldX: creature.worldX, worldY: creature.worldY, mapId: creature.mapId });
+    await this.creatureRepository.update(creatureId, { worldX: creature.worldX, worldY: creature.worldY, mapId: creature.mapId });
 
     if (this.server) {
       this.server.emit('creature_update', this.toDto(creature));
@@ -775,8 +753,6 @@ export class CreaturesService implements OnModuleInit {
       const { template } = creature.spawn;
       creature.state = 'alive';
       creature.health = template.baseHealth;
-      creature.x = creature.spawn.spawnX;
-      creature.y = creature.spawn.spawnY;
       if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) continue;
       creature.worldX = creature.spawn.worldX;
       creature.worldY = creature.spawn.worldY;
@@ -788,8 +764,6 @@ export class CreaturesService implements OnModuleInit {
       await this.creatureRepository.update(creature.id, {
         state: 'alive',
         health: template.baseHealth,
-        x: creature.spawn.spawnX,
-        y: creature.spawn.spawnY,
         worldX: creature.worldX,
         worldY: creature.worldY,
         mapId: creature.mapId,
@@ -820,8 +794,6 @@ export class CreaturesService implements OnModuleInit {
       this.spawnRepository.create({
         key: 'turkey_spawn_1',
         template,
-        spawnX: 600,
-        spawnY: 580,
         respawnDelayMs: 20000,
         ...(turkeySpawnWU ?? {}),
       }),
@@ -841,8 +813,6 @@ export class CreaturesService implements OnModuleInit {
       await this.creatureRepository.save(
         this.creatureRepository.create({
           spawn,
-          x: spawn.spawnX,
-          y: spawn.spawnY,
           worldX: spawn.worldX,
           worldY: spawn.worldY,
           mapId: spawn.mapId,

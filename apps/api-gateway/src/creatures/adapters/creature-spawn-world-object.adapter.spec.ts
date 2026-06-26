@@ -174,32 +174,6 @@ describe('toCreatureSpawnWorldObject — metadata', () => {
   });
 });
 
-// ─── Metadata legacy ──────────────────────────────────────────────────────────
-
-describe('toCreatureSpawnWorldObject — metadata.legacy', () => {
-  it('legacy inclus si spawnX et spawnY sont des entiers finis', () => {
-    const wo = toCreatureSpawnWorldObject(makeSpawn({ spawnX: 600, spawnY: 580 }));
-    expect(wo.metadata.legacy).toEqual({ spawnX: 600, spawnY: 580 });
-  });
-
-  it('legacy présent même quand WU est disponible', () => {
-    const wo = toCreatureSpawnWorldObject(
-      makeSpawn({ spawnX: 600, spawnY: 580, worldX: 1024, worldY: 2048, mapId: 1 }),
-    );
-    expect(wo.metadata.legacy).toEqual({ spawnX: 600, spawnY: 580 });
-    expect(wo.position).toEqual({ worldX: 1024, worldY: 2048 });
-  });
-
-  it('legacy null si spawnX est NaN', () => {
-    const wo = toCreatureSpawnWorldObject(makeSpawn({ spawnX: NaN, spawnY: 580 }));
-    expect(wo.metadata.legacy).toBeNull();
-  });
-
-  it('legacy null si spawnY est Infinity', () => {
-    const wo = toCreatureSpawnWorldObject(makeSpawn({ spawnX: 600, spawnY: Infinity }));
-    expect(wo.metadata.legacy).toBeNull();
-  });
-});
 
 // ─── Capabilities ─────────────────────────────────────────────────────────────
 
@@ -295,7 +269,6 @@ describe('toCreatureSpawnWorldObject — cas nominaux', () => {
     expect(wo.metadata.templateName).toBe('Turkey');
     expect(wo.metadata.patrolRadius).toBe(200);
     expect(wo.metadata.respawnDelayMs).toBe(20000);
-    expect(wo.metadata.legacy).toEqual({ spawnX: 600, spawnY: 580 });
     expect(wo.capabilities).toHaveLength(6);
   });
 
@@ -320,7 +293,6 @@ describe('toCreatureSpawnWorldObject — cas nominaux', () => {
     expect(wo.metadata.templateKey).toBeNull();
     expect(wo.metadata.templateName).toBeNull();
     expect(wo.metadata.patrolRadius).toBeNull();
-    expect(wo.metadata.legacy).toEqual({ spawnX: 800, spawnY: 400 });
     expect(wo.metadata.respawnDelayMs).toBe(30000);
   });
 });

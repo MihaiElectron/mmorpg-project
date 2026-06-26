@@ -9,7 +9,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
-import { wuToIsoScreenX, wuToIsoScreenY, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 
 // ---------------------------------------------------------------------------
@@ -505,11 +505,9 @@ describe('CreaturesService', () => {
 
       expect(creature.state).toBe('alive');
       expect(creature.health).toBe(30);
-      expect(creature.x).toBe(600);
-      expect(creature.y).toBe(580);
       expect(creatureRepository.update).toHaveBeenCalledWith(
         creature.id,
-        expect.objectContaining({ state: 'alive', health: 30, x: 600, y: 580 }),
+        expect.objectContaining({ state: 'alive', health: 30 }),
       );
       expect(mockServer.emit).toHaveBeenCalledWith(
         'creature_update',
@@ -683,26 +681,24 @@ describe('CreaturesService', () => {
 
   // -------------------------------------------------------------------------
   describe('moteur de déplacement WU (A4)', () => {
-    it('doPatrolMovement — worldX/worldY sont la vérité, x/y dérivés par projection', () => {
+    it('doPatrolMovement — worldX/worldY mis à jour après déplacement', () => {
       // creature WU(6080,12480), dirX=1 dirY=0, speed=60, dt=0.2s
       // stepWU=192 → newWX=6272, newWY=12480 < patrolRadius(3200WU) → else
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
 
       (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
 
       expect(creature.worldX).toBe(6272);
       expect(creature.worldY).toBe(12480);
-      expect(creature.x).toBe(Math.round(wuToIsoScreenX(creature.worldX!, creature.worldY!)));
-      expect(creature.y).toBe(Math.round(wuToIsoScreenY(creature.worldX!, creature.worldY!)));
     });
 
-    it('doFighting — x/y dérivés de worldX/worldY après poursuite', async () => {
+    it('doFighting — worldX/worldY mis à jour après poursuite', async () => {
       // creature WU(6880,11680), joueur WU(0,9600) — dist>MELEE_RANGE_WU → mouvement
-      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const creature = makeCreature({ worldX: 6880, worldY: 11680, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
-        x: 400, y: 300, worldX: 0, worldY: 9600, mapId: 1,
+        worldX: 0, worldY: 9600, mapId: 1,
         name: 'Test', direction: 'down',
       };
       const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
@@ -711,16 +707,14 @@ describe('CreaturesService', () => {
       await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer);
 
       expect(Number.isFinite(creature.worldX)).toBe(true);
-      expect(creature.x).toBe(Math.round(wuToIsoScreenX(creature.worldX!, creature.worldY!)));
-      expect(creature.y).toBe(Math.round(wuToIsoScreenY(creature.worldX!, creature.worldY!)));
     });
 
-    it('doEscaping — x/y dérivés de worldX/worldY lors de la fuite', async () => {
+    it('doEscaping — worldX/worldY mis à jour lors de la fuite', async () => {
       // creature WU(6080,12480), joueur WU(5760,12160) — dist(320WU) < patrolRadius(3200WU)
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
-        x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1,
+        worldX: 5760, worldY: 12160, mapId: 1,
         name: 'Test', direction: 'down',
       };
       const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
@@ -728,18 +722,14 @@ describe('CreaturesService', () => {
       await (service as any).doEscaping(creature, state, makeTemplate(), [player], Date.now());
 
       expect(Number.isFinite(creature.worldX)).toBe(true);
-      expect(creature.x).toBe(Math.round(wuToIsoScreenX(creature.worldX!, creature.worldY!)));
-      expect(creature.y).toBe(Math.round(wuToIsoScreenY(creature.worldX!, creature.worldY!)));
     });
 
     it('doPatrolMovement — guard : retourne sans modifier si worldX est null', () => {
-      const creature = makeCreature({ x: 600, y: 580 });
+      const creature = makeCreature({});
       const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
-      const prevX = creature.x;
 
       (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
 
-      expect(creature.x).toBe(prevX);
       expect(creature.worldX).toBeUndefined();
     });
   });

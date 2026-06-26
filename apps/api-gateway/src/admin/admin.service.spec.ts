@@ -265,32 +265,26 @@ describe('AdminService resources', () => {
     });
   });
 
-  it('createResource WU-only : calcule pixel cache et écrit worldX/worldY/mapId', async () => {
-    // worldX=1600, worldY=8000 → screenX=600, screenY=300
+  it('createResource WU-only : écrit worldX/worldY/mapId sans cache pixel', async () => {
     const resource = await service.createResource('wood', 1600, 8000);
 
     expect(resourceRepo.create).toHaveBeenCalledWith({
       type: 'wood',
-      x: 600,
-      y: 300,
       worldX: 1600,
       worldY: 8000,
       mapId: 1,
       remainingLoots: 7,
     });
-    expect(resource).toMatchObject({ x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1 });
+    expect(resource).toMatchObject({ worldX: 1600, worldY: 8000, mapId: 1 });
   });
 
-  it('updateResource recalcule x/y pixel cache depuis worldX/worldY', async () => {
-    const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'dead', remainingLoots: 0 } as Resource;
+  it('updateResource met à jour worldX/worldY/mapId sans cache pixel', async () => {
+    const resource = { id: 'resource-1', type: 'wood', worldX: 1600, worldY: 8000, mapId: 1, state: 'dead', remainingLoots: 0 } as Resource;
     resourceRepo.findOne.mockResolvedValue(resource);
 
-    // worldX=2400, worldY=7200 → screenX=700, screenY=300
     const updated = await service.updateResource('resource-1', { worldX: 2400, worldY: 7200 });
 
     expect(resourceRepo.save).toHaveBeenCalledWith(expect.objectContaining({
-      x: 700,
-      y: 300,
       worldX: 2400,
       worldY: 7200,
       mapId: 1,

@@ -24,7 +24,7 @@ import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../skills/adapters/skill-definition-world-object.adapter';
 import { type MovementMetrics, WorldService } from '../world/world.service';
-import { DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
+import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toCreatureWorldObject, CreatureWorldObject } from '../creatures/adapters/creature-world-object.adapter';
 import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../creatures/adapters/creature-spawn-world-object.adapter';
@@ -75,14 +75,8 @@ export class AdminService {
 
   // ── Créatures ─────────────────────────────────────────────────────────────
 
-  async getTemplates(): Promise<(CreatureTemplate & { spawnX?: number; spawnY?: number })[]> {
-    const templates = await this.templateRepo.find({ order: { name: 'ASC' } });
-    const spawns    = await this.spawnRepo.find({ relations: ['template'] });
-
-    return templates.map((t) => {
-      const spawn = spawns.find((s) => s.template?.id === t.id);
-      return Object.assign(t, { spawnX: spawn?.spawnX, spawnY: spawn?.spawnY });
-    });
+  async getTemplates(): Promise<CreatureTemplate[]> {
+    return this.templateRepo.find({ order: { name: 'ASC' } });
   }
 
   async createCreatureTemplate(
@@ -285,8 +279,6 @@ export class AdminService {
       }
       resource.worldX = targetWorldX;
       resource.worldY = targetWorldY;
-      resource.x = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
-      resource.y = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
       resource.mapId = DEFAULT_MAP_ID;
     }
     if ('remainingLoots' in fields) resource.remainingLoots = fields.remainingLoots!;
@@ -301,12 +293,10 @@ export class AdminService {
     if (!Number.isFinite(targetWorldX) || !Number.isFinite(targetWorldY)) {
       throw new BadRequestException('Coordonnées ressource invalides : worldX et worldY doivent être finis.');
     }
-    const px = Math.round(wuToIsoScreenX(targetWorldX, targetWorldY));
-    const py = Math.round(wuToIsoScreenY(targetWorldX, targetWorldY));
     const tpl = await this.resourceTemplateRepo.findOne({ where: { type } });
     const remainingLoots = tpl?.defaultRemainingLoots ?? 9999;
     return this.resourceRepo.save(
-      this.resourceRepo.create({ type, x: px, y: py, worldX: targetWorldX, worldY: targetWorldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
+      this.resourceRepo.create({ type, worldX: targetWorldX, worldY: targetWorldY, mapId: DEFAULT_MAP_ID, remainingLoots }),
     );
   }
 

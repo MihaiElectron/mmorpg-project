@@ -13,7 +13,7 @@ import { CreatureSpawn } from '../entities/creature-spawn.entity';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CreatureSpawnCapability =
-  | 'transform'    // position dans le monde (WU ou legacy pixels)
+  | 'transform'    // position dans le monde (WU)
   | 'spawn'        // génère une instance d'Creature au démarrage ou via admin
   | 'respawn'      // timer configurable — anime le cycle mort/résurrection
   | 'patrol'       // rayon de patrouille défini par le template
@@ -32,8 +32,6 @@ export interface CreatureSpawnMetadata {
   readonly templateKey: string | null;
   /** Nom lisible du template (ex: "Turkey"). null si template non chargé. */
   readonly templateName: string | null;
-  /** Coordonnées pixel legacy si présentes et finies dans l'entité source. */
-  readonly legacy: { readonly spawnX: number; readonly spawnY: number } | null;
   /** Rayon de patrouille en pixels (source : CreatureTemplate.patrolRadius). null si template absent. */
   readonly patrolRadius: number | null;
   /** Délai de respawn en millisecondes (source : CreatureSpawn.respawnDelayMs). */
@@ -83,8 +81,7 @@ const CREATURE_SPAWN_CAPABILITIES: readonly CreatureSpawnCapability[] = Object.f
  *
  * Règles :
  * - position WU si worldX/worldY/mapId sont tous non-null.
- * - position null si l'un des trois est absent (legacy-only ou pas encore backfillé).
- * - spawnX/spawnY legacy inclus dans metadata.legacy si les deux valeurs sont finies.
+ * - position null si l'un des trois est absent.
  * - type = template.key si le template est chargé, sinon spawn.key.
  * - state est toujours "active" — les spawns supprimés ne sont pas exposés.
  * - patrolRadius : transmis tel quel en pixels depuis le template (unité legacy — voir ADR-0001).
@@ -97,13 +94,6 @@ export function toCreatureSpawnWorldObject(spawn: CreatureSpawn): CreatureSpawnW
 
   const position: CreatureSpawnPosition | null = hasWU
     ? { worldX: spawn.worldX!, worldY: spawn.worldY! }
-    : null;
-
-  const hasFiniteLegacy =
-    Number.isFinite(spawn.spawnX) && Number.isFinite(spawn.spawnY);
-
-  const legacy: CreatureSpawnMetadata['legacy'] = hasFiniteLegacy
-    ? { spawnX: spawn.spawnX, spawnY: spawn.spawnY }
     : null;
 
   return Object.freeze({
@@ -119,7 +109,6 @@ export function toCreatureSpawnWorldObject(spawn: CreatureSpawn): CreatureSpawnW
       key:          spawn.key,
       templateKey:  spawn.template?.key  ?? null,
       templateName: spawn.template?.name ?? null,
-      legacy,
       patrolRadius:   spawn.template?.patrolRadius  ?? null,
       respawnDelayMs: spawn.respawnDelayMs,
     }),
