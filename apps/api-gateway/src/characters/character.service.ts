@@ -12,6 +12,12 @@ import { Item } from '../items/entities/item.entity';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto, EquipmentSlot } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
+import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+
+// Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
+// WU calculés une fois : worldX=0, worldY=9600.
+const DEFAULT_SPAWN_PX = { x: 400, y: 300 } as const;
+const DEFAULT_SPAWN_WU = isoScreenToWorldWU(DEFAULT_SPAWN_PX.x, DEFAULT_SPAWN_PX.y);
 
 @Injectable()
 export class CharacterService {
@@ -35,6 +41,9 @@ export class CharacterService {
       name: dto.name,
       sex: dto.sex,
       userId,
+      worldX: DEFAULT_SPAWN_WU.worldX,
+      worldY: DEFAULT_SPAWN_WU.worldY,
+      mapId: DEFAULT_MAP_ID,
     });
     return this.characterRepository.save(character);
   }

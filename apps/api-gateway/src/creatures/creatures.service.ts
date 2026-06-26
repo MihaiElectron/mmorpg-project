@@ -152,7 +152,10 @@ export class CreaturesService implements OnModuleInit {
           a.x = a.spawn.spawnX;
           a.y = a.spawn.spawnY;
           a.respawnAt = null;
-          const wu = this.pixelToWUSafe(a.x, a.y);
+          const wu =
+            (a.spawn.worldX != null && a.spawn.worldY != null)
+              ? { worldX: a.spawn.worldX, worldY: a.spawn.worldY, mapId: a.spawn.mapId ?? DEFAULT_MAP_ID }
+              : this.pixelToWUSafe(a.x, a.y);
           if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
           await this.creatureRepository.save(a);
           this.liveCreatures.set(a.id, a);
@@ -459,7 +462,10 @@ export class CreaturesService implements OnModuleInit {
     creature.x = creature.spawn.spawnX;
     creature.y = creature.spawn.spawnY;
     creature.respawnAt = null;
-    const respawnWU = this.pixelToWUSafe(creature.x, creature.y);
+    const respawnWU =
+      (creature.spawn.worldX != null && creature.spawn.worldY != null)
+        ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY, mapId: creature.spawn.mapId ?? DEFAULT_MAP_ID }
+        : this.pixelToWUSafe(creature.x, creature.y);
     if (respawnWU) { creature.worldX = respawnWU.worldX; creature.worldY = respawnWU.worldY; creature.mapId = respawnWU.mapId; }
 
     await this.creatureRepository.update(id, {
@@ -646,6 +652,7 @@ export class CreaturesService implements OnModuleInit {
         spawnY: py,
         worldX: targetWorldX,
         worldY: targetWorldY,
+        mapId: DEFAULT_MAP_ID,
         respawnDelayMs: 30000,
       }),
     );
@@ -809,6 +816,7 @@ export class CreaturesService implements OnModuleInit {
       return;
     }
 
+    const turkeySpawnWU = this.pixelToWUSafe(600, 580);
     await this.spawnRepository.save(
       this.spawnRepository.create({
         key: 'turkey_spawn_1',
@@ -816,6 +824,7 @@ export class CreaturesService implements OnModuleInit {
         spawnX: 600,
         spawnY: 580,
         respawnDelayMs: 20000,
+        ...(turkeySpawnWU ?? {}),
       }),
     );
   }
@@ -829,7 +838,10 @@ export class CreaturesService implements OnModuleInit {
       });
       if (existing) continue;
 
-      const seedWU = this.pixelToWUSafe(spawn.spawnX, spawn.spawnY);
+      const seedWU =
+        (spawn.worldX != null && spawn.worldY != null)
+          ? { worldX: spawn.worldX, worldY: spawn.worldY, mapId: spawn.mapId ?? DEFAULT_MAP_ID }
+          : this.pixelToWUSafe(spawn.spawnX, spawn.spawnY);
       await this.creatureRepository.save(
         this.creatureRepository.create({
           spawn,

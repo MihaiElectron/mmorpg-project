@@ -107,8 +107,14 @@ export class WorldService implements OnModuleInit {
 
     const count = await this.respawnPointRepository.count();
     if (count === 0) {
+      const rpWU = isoScreenToWorldWU(600, 300);
       await this.respawnPointRepository.save(
-        this.respawnPointRepository.create({ x: 600, y: 300, radius: 20 }),
+        this.respawnPointRepository.create({
+          x: 600, y: 300, radius: 20,
+          worldX: rpWU.worldX,
+          worldY: rpWU.worldY,
+          mapId: DEFAULT_MAP_ID,
+        }),
       );
     }
   }

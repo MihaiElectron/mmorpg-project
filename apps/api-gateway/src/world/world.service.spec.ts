@@ -1,6 +1,6 @@
 import { ConnectedPlayer, MAX_REASONABLE_POSITION, WorldService } from './world.service';
 import { WorldSocket } from '../types/world-socket';
-import { wuToChunkIndex } from '../common/world-coordinates';
+import { wuToChunkIndex, DEFAULT_MAP_ID } from '../common/world-coordinates';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -615,5 +615,55 @@ describe('WorldService.respawnCharacter', () => {
     const { server, emitted } = makeRespawnServer();
     await svc.respawnCharacter('char-1', server);
     expect(emitted).toHaveLength(0);
+  });
+});
+
+// ─── onModuleInit — seed RespawnPoint WU (P7-A) ──────────────────────────────
+
+describe('WorldService.onModuleInit — seed RespawnPoint (P7-A)', () => {
+  function makeInitService() {
+    const charRepo = { find: jest.fn().mockResolvedValue([]), update: jest.fn() };
+    const created: Record<string, unknown>[] = [];
+    const respawnRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn().mockImplementation((a) => { created.push(a); return a; }),
+      save: jest.fn().mockResolvedValue({}),
+    };
+    const svc = new WorldService(charRepo as any, respawnRepo as any);
+    return { svc, respawnRepo, created };
+  }
+
+  it('crée le RespawnPoint avec worldX défini quand count=0', async () => {
+    const { svc, created } = makeInitService();
+    await svc.onModuleInit();
+    expect(created[0]).toHaveProperty('worldX');
+    expect(typeof created[0].worldX).toBe('number');
+  });
+
+  it('crée le RespawnPoint avec worldY défini quand count=0', async () => {
+    const { svc, created } = makeInitService();
+    await svc.onModuleInit();
+    expect(created[0]).toHaveProperty('worldY');
+    expect(typeof created[0].worldY).toBe('number');
+  });
+
+  it('crée le RespawnPoint avec mapId=DEFAULT_MAP_ID quand count=0', async () => {
+    const { svc, created } = makeInitService();
+    await svc.onModuleInit();
+    expect(created[0]).toHaveProperty('mapId', DEFAULT_MAP_ID);
+  });
+
+  it('worldX=1600, worldY=8000 pour le spawn par défaut (600, 300) — ADR-0001', async () => {
+    const { svc, created } = makeInitService();
+    await svc.onModuleInit();
+    expect(created[0].worldX).toBe(1600);
+    expect(created[0].worldY).toBe(8000);
+  });
+
+  it('ne crée pas de RespawnPoint quand count > 0', async () => {
+    const { svc, respawnRepo, created } = makeInitService();
+    respawnRepo.count.mockResolvedValue(1);
+    await svc.onModuleInit();
+    expect(created).toHaveLength(0);
   });
 });
