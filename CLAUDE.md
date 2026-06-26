@@ -150,6 +150,109 @@ Infrastructure, depuis la racine:
 - Quand une meilleure solution ou une legere modification utile apparait,
   la proposer avant de l'appliquer si elle depasse la demande initiale.
 - Toujours proteger les changements existants de l'utilisateur.
+- Privilegier la suppression des duplications architecturales avant l'ajout de
+  nouvelles fonctionnalites.
+- Une nouvelle abstraction ne doit etre creee que si elle est destinee a etre
+  reutilisee par au moins deux domaines du projet.
+
+## Principes D'Architecture
+
+Les decisions d'architecture sont documentees dans
+`docs/01_Architecture/adr/`.
+
+Avant d'introduire une nouvelle mecanique metier (combat, skills, IA,
+economie, quetes, batiments, etc.), consulter les ADR concernees et respecter
+les decisions deja etablies.
+
+En particulier, l'ADR Runtime-Driven Architecture constitue la reference pour
+toute mecanique produisant des statistiques, effets ou etats runtime.
+
+Ne jamais contourner une architecture existante en introduisant un systeme
+parallele lorsqu'une solution coherente peut etre construite sur les fondations
+deja presentes.
+
+La documentation technique (`docs/`) est la source de verite pour
+l'architecture. `STATUS.md` decrit uniquement l'etat courant du projet.
+
+## Architecture Runtime
+
+Le Runtime constitue l'une des fondations principales du projet.
+
+Toute mecanique modifiant l'etat d'une entite doit s'integrer a l'architecture
+Runtime existante avant d'introduire un nouveau systeme.
+
+Avant toute nouvelle mecanique gameplay ou nouveau domaine,
+verifier si elle doit s'integrer a :
+
+- EntityRuntime
+- RuntimeSource
+- RuntimeModifier
+- RuntimeTrace
+- RuntimeSnapshot
+- RuntimeInspector
+
+Ne jamais dupliquer une logique deja presente dans le Runtime.
+
+Le Runtime calcule.
+
+Le Studio SDK observe, explique et manipule de maniere controlee.
+
+Le frontend ne recalcule jamais les valeurs metier.
+
+Toute nouvelle RuntimeEntity doit reutiliser les contrats generiques avant
+d'introduire des extensions specifiques.
+
+## Evolution De L'Architecture
+
+Avant d'introduire une nouvelle abstraction ou un nouveau domaine :
+
+1. Verifier si une architecture equivalente existe deja.
+2. Privilegier son extension plutot que la creation d'un systeme parallele.
+3. Si une nouvelle abstraction est necessaire, justifier son existence.
+4. Verifier qu'elle pourra etre reutilisee par au moins deux domaines.
+5. Documenter la decision si elle modifie durablement l'architecture.
+
+Avant de creer un nouveau domaine, verifier si une extension coherente de
+l'architecture existante est possible.
+
+La creation d'un nouveau sous-systeme doit rester exceptionnelle et etre
+justifiee par une ADR lorsqu'elle impacte durablement l'architecture.
+
+Le projet privilegie une architecture evolutive, coherente et observable plutot
+qu'une accumulation de mecaniques independantes.
+
+## Documentation
+
+La documentation fait partie integrante du projet.
+
+Toute fonctionnalite importante doit etre accompagnee de la mise a jour de la
+documentation concernee avant le commit.
+
+Selon le scope, mettre a jour si necessaire :
+
+- STATUS.md
+- docs/README.md
+- ADR
+- documentation d'architecture
+- documentation Gameplay
+- documentation Studio SDK
+- documentation Runtime
+
+Ne jamais documenter une fonctionnalite comme implementee si elle est seulement
+planifiee.
+
+Utiliser explicitement les statuts :
+
+- Implemented
+- Planned
+- Deprecated
+- Removed
+- Not verified
+
+La documentation doit toujours refleter l'etat reel du code.
+
+Toute documentation doit etre mise a jour dans le meme commit que le code
+qu'elle decrit.
 
 ## Securite Et Robustesse
 
