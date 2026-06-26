@@ -1,6 +1,7 @@
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -11,6 +12,7 @@ import { CreaturesService } from '../creatures/creatures.service';
 import { WorldService } from '../world/world.service';
 import { AdminService } from './admin.service';
 import { ResourcesService } from '../resources/resources.service';
+import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
@@ -27,7 +29,7 @@ type CraftingStationTemplateUpdatePayload = { id: string; fields: Record<string,
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
-export class AdminGateway {
+export class AdminGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
@@ -36,7 +38,18 @@ export class AdminGateway {
     private readonly worldService: WorldService,
     private readonly adminService: AdminService,
     private readonly resourcesService: ResourcesService,
+    private readonly wsAuthService: WsAuthService,
   ) {}
+
+  async handleConnection(client: WorldSocket) {
+    const auth = await this.wsAuthService.authenticate(client);
+    if (!auth) {
+      client.disconnect(true);
+      return;
+    }
+    client.data.userId = auth.userId;
+    client.data.role = auth.role;
+  }
 
   @SubscribeMessage('admin:spawn')
   async onSpawn(
