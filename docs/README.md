@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-17
+- Last updated: 2026-06-26
 - Depends on: README.md, CLAUDE.md, STATUS.md
 - Used by: Developers, ChatGPT, Codex, documentation tooling
 
@@ -87,6 +87,11 @@ If a contradiction is found:
 - [ADR-0002 — Entity positioning](01_Architecture/adr/ADR-0002-entity-positioning.md) - Decision status: Proposed - Stockage et transmission des positions d'entités.
 - [ADR-0003 — Movement authority](01_Architecture/adr/ADR-0003-movement-authority.md) - Decision status: Proposed - Autorité de mouvement client/serveur.
 - [ADR-0004 — Runtime-Driven Architecture](01_Architecture/adr/ADR-0004-runtime-driven-architecture.md) - Decision status: Proposed - Pipeline RuntimeSource→Modifier→DerivedStats+Trace comme patron obligatoire pour toute nouvelle mécanique.
+- [ADR-0005 — Settlement system boundaries](01_Architecture/adr/ADR-0005-settlement-system-boundaries.md) - Decision status: Proposed - Frontières conceptuelles Settlement / Economy / Crafting / Market / Studio.
+- [ADR-0006 — Economy transaction model](01_Architecture/adr/ADR-0006-economy-transaction-model.md) - Decision status: Proposed - Modèle transactionnel candidat pour comptes économiques, ledger, escrow et idempotence.
+- [ADR-0007 — Auction house authority](01_Architecture/adr/ADR-0007-auction-house-authority.md) - Decision status: Proposed - Autorité serveur candidate pour ventes fixes, enchères, buyout et expiration.
+- [ADR-0008 — City treasury and tax flow](01_Architecture/adr/ADR-0008-city-treasury-tax-flow.md) - Decision status: Proposed - Flux candidat de taxes, trésor de ville, ledger et audit.
+- [ADR-0009 — Craft order lifecycle](01_Architecture/adr/ADR-0009-craft-order-lifecycle.md) - Decision status: Proposed - Cycle de vie candidat des commandes de craft différées.
 
 ### 02_Security
 
@@ -144,6 +149,11 @@ If a contradiction is found:
 - [Runtime Trace](08_Gameplay/runtime/runtime-trace.md) - Status: Draft - RuntimeTrace, StatTrace, ModifierApplication — audit complet du calcul.
 - [Runtime Snapshot](08_Gameplay/runtime/runtime-snapshot.md) - Status: Draft - EntityRuntimeSnapshot générique, PlayerRuntimeSnapshot, cohérence interne, règles Studio SDK.
 - [Runtime Inspector](08_Gameplay/runtime/runtime-inspector.md) - Status: Draft - RuntimeInspectorPanel, runtimeApi, modifierForm, règles Studio, flux debug.
+- [Settlement / Economy Architecture Draft](08_Gameplay/settlement-economy-architecture.md) - Status: Draft - Architecture fonctionnelle candidate du système de ville et d'économie ; non implémenté.
+- [Settlement / Economy RFC Review](08_Gameplay/settlement-economy-review.md) - Status: Draft - Revue critique de la RFC Settlement v1, risques, corrections prioritaires et roadmap révisée.
+- [Settlement Gameplay Loops](08_Gameplay/settlement-gameplay-loops.md) - Status: Draft - Boucles économiques, métiers, bâtiments, ressources, chaînes de production et audit gameplay.
+- [Settlement Functional Specifications](08_Gameplay/settlement-specifications.md) - Status: Draft - Cycles de vie, state machines, permissions, événements métier, invariants et cas limites.
+- [Settlement MVP Slicing](08_Gameplay/settlement-mvp-slicing.md) - Status: Draft - Découpage MVP 0 à MVP 7, dépendances, critères de fin et checklists.
 
 ### 09_Workflow
 

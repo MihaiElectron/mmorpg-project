@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-24
+- Last updated: 2026-06-26
 - Depends on: docs/README.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -51,7 +51,15 @@ crafting-runtime.md ← runtime crafting through placed stations
 ↓
 runtime/README.md   ← entity runtime architecture (stat calculation pipeline)
 ↓
-(future documents, one per domain when development begins)
+settlement-economy-architecture.md ← Settlement / Economy RFC architecture draft
+↓
+settlement-economy-review.md       ← RFC review and risks
+↓
+settlement-gameplay-loops.md       ← gameplay loops, professions, buildings
+↓
+settlement-specifications.md       ← functional specifications and state machines
+↓
+settlement-mvp-slicing.md          ← implementation slicing, still documentation only
 ```
 
 ## Related files
@@ -60,6 +68,11 @@ runtime/README.md   ← entity runtime architecture (stat calculation pipeline)
 - [World Model](world-model.md)
 - [Entity Model](entity-model.md)
 - [Crafting Runtime](crafting-runtime.md)
+- [Settlement / Economy Architecture Draft](settlement-economy-architecture.md)
+- [Settlement / Economy RFC Review](settlement-economy-review.md)
+- [Settlement Gameplay Loops](settlement-gameplay-loops.md)
+- [Settlement Functional Specifications](settlement-specifications.md)
+- [Settlement MVP Slicing](settlement-mvp-slicing.md)
 - [Runtime — Index](runtime/README.md)
 - [Architecture Overview](../01_Architecture/overview.md)
 - [ROADMAP](../ROADMAP.md)

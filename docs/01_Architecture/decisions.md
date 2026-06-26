@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-18
+- Last updated: 2026-06-26
 - Depends on: docs/README.md, docs/01_Architecture/adr/README.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -63,17 +63,32 @@ docs/01_Architecture/adr/README.md
 
 | ADR | Title | Decision status | Date | Supersedes | Superseded by |
 |---|---|---|---|---|---|
-| None | No real ADR has been created yet. | N/A | N/A | N/A | N/A |
+| [ADR-0001](adr/ADR-0001-world-coordinate-system.md) | World coordinate system | Accepted | 2026-06-22 | None | None |
+| [ADR-0002](adr/ADR-0002-entity-positioning.md) | Entity positioning | Proposed | 2026-06-21 | None | None |
+| [ADR-0003](adr/ADR-0003-movement-authority.md) | Movement authority | Proposed | 2026-06-21 | None | None |
+| [ADR-0004](adr/ADR-0004-runtime-driven-architecture.md) | Runtime-Driven Architecture | Proposed | 2026-06-26 | None | None |
+| [ADR-0005](adr/ADR-0005-settlement-system-boundaries.md) | Settlement system boundaries | Proposed | 2026-06-26 | None | None |
+| [ADR-0006](adr/ADR-0006-economy-transaction-model.md) | Economy transaction model | Proposed | 2026-06-26 | None | None |
+| [ADR-0007](adr/ADR-0007-auction-house-authority.md) | Auction house authority | Proposed | 2026-06-26 | None | None |
+| [ADR-0008](adr/ADR-0008-city-treasury-tax-flow.md) | City treasury and tax flow | Proposed | 2026-06-26 | None | None |
+| [ADR-0009](adr/ADR-0009-craft-order-lifecycle.md) | Craft order lifecycle | Proposed | 2026-06-26 | None | None |
 
 ## Registry by status
 
 ### Proposed
 
-None.
+- [ADR-0002 — Entity positioning](adr/ADR-0002-entity-positioning.md)
+- [ADR-0003 — Movement authority](adr/ADR-0003-movement-authority.md)
+- [ADR-0004 — Runtime-Driven Architecture](adr/ADR-0004-runtime-driven-architecture.md)
+- [ADR-0005 — Settlement system boundaries](adr/ADR-0005-settlement-system-boundaries.md)
+- [ADR-0006 — Economy transaction model](adr/ADR-0006-economy-transaction-model.md)
+- [ADR-0007 — Auction house authority](adr/ADR-0007-auction-house-authority.md)
+- [ADR-0008 — City treasury and tax flow](adr/ADR-0008-city-treasury-tax-flow.md)
+- [ADR-0009 — Craft order lifecycle](adr/ADR-0009-craft-order-lifecycle.md)
 
 ### Accepted
 
-None.
+- [ADR-0001 — World coordinate system](adr/ADR-0001-world-coordinate-system.md)
 
 ### Superseded
 
@@ -89,7 +104,7 @@ None.
 
 ## Next ADR number
 
-Next available ADR number: ADR-001
+Next available ADR number: ADR-010
 
 This value must be rechecked immediately before creating a new ADR.
 
@@ -182,11 +197,11 @@ ADR files.
 - Who officially assigns the next ADR number?
 - Who maintains this index?
 - Should consistency checks between this index and ADR files be automated later?
-- When should the first real ADR be created?
+- Which Proposed ADRs should be reviewed first for acceptance?
 
 ## TODO
 
 - [ ] Validate this index with a human reviewer.
-- [ ] Create the first ADR only when a real decision needs to be recorded.
+- [x] Create the first ADR only when a real decision needs to be recorded.
 - [ ] Define future automated consistency checks.
 - [ ] Move this document to `Review` when ready.

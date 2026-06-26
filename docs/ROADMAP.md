@@ -4,7 +4,7 @@
 
 - Status: Living document
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-06-26
 - Depends on: STATUS.md, docs/01_Architecture/adr/, docs/README.md
 - Used by: Project owner, developers, conversational assistants
 
@@ -206,6 +206,7 @@ Idées retenues mais non prioritaires. Elles n'ont pas de date ni de rang dans l
 - Saisons
 - Montures
 - Housing (construction de maisons)
+- Settlement / Economy (documentation Draft et ADR candidats Proposed, non implémenté)
 - Guildes
 - Quêtes dynamiques
 - Artisanat avancé

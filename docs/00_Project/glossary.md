@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-24
+- Last updated: 2026-06-26
 - Depends on: docs/README.md, docs/ROADMAP.md, docs/08_Gameplay/README.md, docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md, docs/01_Architecture/adr/ADR-0002-entity-positioning.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 
@@ -126,6 +126,13 @@ All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22
 - **Creature**: a gameplay entity controlled by server-side AI. Has states (`alive`, `fighting`, `escaping`, `dead`), patrol behavior, aggro radius, and a respawn cycle. Implemented.
 - **NPC**: Non-Player Character. A gameplay entity with a defined role (vendor, quest giver, guard). Not controlled by a player. Planned concept.
 - **Building**: a static or player-constructed gameplay entity. Has state (intact, damaged, destroyed). Planned concept.
+- **Settlement**: Planned concept. A city or village-scale economic actor that groups buildings, services, tax policy, treasury, and future governance. Documented in `docs/08_Gameplay/settlement-economy-architecture.md`; not implemented.
+- **Workshop**: Planned concept in the Settlement System. A settlement service or building capability that receives delayed craft orders for one or more professions. Distinct from the currently implemented `CraftingStation`, which supports immediate runtime crafting.
+- **Craft Order**: Planned concept. A durable, server-authoritative production request attached to a workshop, with ingredient reservation, production state, cancellation/expiration rules, and claimable output. Not implemented.
+- **Auction House**: Planned concept. A settlement market service for fixed-price listings and future timed auctions, backed by server-side item and currency escrow. Not implemented.
+- **Treasury**: Planned concept. Settlement-owned economic account used to collect taxes/fees and fund future maintenance, construction, or upgrades. Not implemented.
+- **Tax Rule**: Planned concept. Settlement policy defining bounded taxes or fees for economic actions such as sales, auctions, deposits, or workshop services. Not implemented.
+- **Building Upgrade**: Planned concept. A settlement project that spends treasury resources to improve a building's service level, capacity, availability, or unlocks. Not implemented.
 - **Effect**: a temporary gameplay entity representing an area effect, buff zone, or environmental hazard. Has a limited lifetime. Planned concept.
 - **Interaction**: a gameplay action between a player entity and another entity or tile (resource gathering, combat, dialogue). Range is validated server-side by `WorldService.checkInteraction`. Implemented for resources and creatures.
 - **Aggro**: the state in which an creature entity has detected a nearby player and switched from patrol to pursuit behavior. Triggers the `fighting` state. Implemented.

@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-24
+- Last updated: 2026-06-26
 - Depends on: docs/README.md, docs/ROADMAP.md, docs/10_AI/project-philosophy.md, docs/00_Project/glossary.md
 - Used by: Project owner, developers, Claude Code, Claude, ChatGPT, Codex, tout agent IA travaillant sur ce projet
 
@@ -188,6 +188,9 @@ dans le monde.
 - Skills métiers : définitions de skills, XP et niveaux joueur.
 - Crafting : recettes, stations de craft, validation serveur, consommation et
   production d'items.
+- Settlement / Economy : système de ville, ateliers, commandes différées,
+  marchés, taxes, trésor et upgrades. **Planned concept** documenté, non
+  implémenté.
 - Inventaire : stockage, équipement, limites, transferts.
 - Comportements IA : patrouille, aggro, fuite, leash.
 
@@ -211,12 +214,18 @@ dans le monde.
 - `docs/08_Gameplay/movement-model.md`
 - `docs/08_Gameplay/movement-authority-audit.md`
 - `docs/08_Gameplay/crafting-runtime.md`
+- `docs/08_Gameplay/settlement-economy-architecture.md`
+- `docs/08_Gameplay/settlement-economy-review.md`
+- `docs/08_Gameplay/settlement-gameplay-loops.md`
+- `docs/08_Gameplay/settlement-specifications.md`
+- `docs/08_Gameplay/settlement-mvp-slicing.md`
 - `docs/01_Architecture/client-server-boundaries.md`
 - `docs/02_Security/client-server-trust.md`
 
 ### ADR concernés
 
 - ADR-0003 (Proposed) — Movement Authority
+- ADR-0005 à ADR-0009 (Proposed) — Settlement boundaries, Economy transaction model, Auction authority, Treasury/tax flow, Craft order lifecycle
 
 ### État actuel
 
@@ -232,6 +241,7 @@ dans le monde.
 | Métiers / skills | **Implémenté** pour SkillDefinition + PlayerSkill XP/niveaux |
 | Crafting | **Implémenté** pour recettes, stations, ActionPanel runtime et validation serveur WU |
 | Stations de craft | **Implémenté** — templates, instances WU, AdminPanel/WOM, rendu debug |
+| Settlement / Economy | **Futur** — documentation Draft + ADR candidats Proposed, aucune implémentation |
 | Calcul de stats d'équipement | **Futur** (stub existant) |
 | Quêtes | **Futur** |
 
@@ -632,7 +642,7 @@ Chaque système futur s'intègre naturellement dans les domaines existants.
 | Quêtes | Gameplay | Nouveau type de mécanique, entité QuestDefinition en Persistence |
 | Métiers / skills | Gameplay | Progression étendue, conditions sur les interactions |
 | Crafting | Gameplay | Mécanique d'interaction, consommation d'inventaire |
-| Économie | Gameplay | Nouveau sous-domaine (marché, prix, échanges) |
+| Économie / Settlement | Gameplay + Persistence | Sous-domaines candidats documentés : marché, prix, échanges, taxes, trésor, bâtiments de ville |
 | Météo | World | État global de la carte, tick monde |
 | Guildes | Identity | Groupe de comptes avec rôles internes |
 | Housing | World + Entities | Entités bâtiment avec propriétaire, modification de carte |
