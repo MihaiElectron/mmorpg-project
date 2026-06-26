@@ -246,6 +246,31 @@ describe('CreaturesService', () => {
       expect(result[0].worldX).toBe(65536);
       expect(result[0].worldY).toBe(32768);
     });
+
+    it('DTO expose runtimeStats calculées depuis le template (sans modifiers)', () => {
+      // template: baseHealth=30, baseArmor=2, baseAttack=5, speedMax=60
+      const creature = makeCreature();
+      (service as any).liveCreatures.set(creature.id, creature);
+
+      const result = service.findAll();
+
+      expect(result[0].runtimeStats).toBeDefined();
+      expect(result[0].runtimeStats?.maxHp).toBe(30);
+      expect(result[0].runtimeStats?.defenseTotal).toBe(2);
+      expect(result[0].runtimeStats?.attackPower).toBe(5);
+    });
+
+    it('runtimeStats reflète un debug modifier appliqué', () => {
+      // baseArmor=2, debug +8 flat → defenseTotal=10
+      const creature = makeCreature();
+      (service as any).liveCreatures.set(creature.id, creature);
+      debugRegistry.addModifier(creature.id, { targetStat: 'defenseTotal', operation: 'flat', value: 8 });
+
+      const result = service.findAll();
+
+      expect(result[0].runtimeStats?.defenseTotal).toBe(10);
+      expect(result[0].armor).toBe(2);
+    });
   });
 
   // -------------------------------------------------------------------------

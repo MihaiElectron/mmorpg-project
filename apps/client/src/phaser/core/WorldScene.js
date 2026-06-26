@@ -445,7 +445,7 @@ export default class WorldScene extends Phaser.Scene {
             type: t.type,
             kind: t.kind,
             health: creatureData?.health ?? null,
-            maxHealth: creatureData?.maxHealth ?? null,
+            maxHealth: creatureData?.runtimeStats?.maxHp ?? creatureData?.maxHealth ?? null,
           };
         });
 
@@ -455,7 +455,7 @@ export default class WorldScene extends Phaser.Scene {
             type: first.type,
             kind: first.kind,
             health: firstCreature?.health ?? null,
-            maxHealth: firstCreature?.maxHealth ?? null,
+            maxHealth: firstCreature?.runtimeStats?.maxHp ?? firstCreature?.maxHealth ?? null,
           },
           first.actions,
           overlapping.length > 1 ? overlapping : [],
@@ -737,7 +737,7 @@ export default class WorldScene extends Phaser.Scene {
   updateCreatureHpBars() {
     for (const entry of this.creatureSprites.values()) {
       if (entry.hpBar) {
-        updateHpBar(entry.hpBar, entry.creature.health, entry.creature.maxHealth, entry.sprite.x, entry.sprite.y);
+        updateHpBar(entry.hpBar, entry.creature.health, entry.creature.runtimeStats?.maxHp ?? entry.creature.maxHealth, entry.sprite.x, entry.sprite.y);
       }
     }
   }
@@ -846,7 +846,7 @@ export default class WorldScene extends Phaser.Scene {
       const panelStore = getActionPanelStore();
       const panelState = panelStore.getState();
       if (panelState.target?.id === creature.id) {
-        panelState.updateTargetHealth(creature.health, creature.maxHealth);
+        panelState.updateTargetHealth(creature.health, creature.runtimeStats?.maxHp ?? creature.maxHealth);
       }
     });
 
@@ -1375,7 +1375,7 @@ export default class WorldScene extends Phaser.Scene {
 
     const inCombat = creature.state === "fighting" || creature.state === "escaping";
     const hpBar = inCombat ? createHpBar(this, x, y) : null;
-    if (hpBar) updateHpBar(hpBar, creature.health, creature.maxHealth, x, y);
+    if (hpBar) updateHpBar(hpBar, creature.health, creature.runtimeStats?.maxHp ?? creature.maxHealth, x, y);
 
     this.creatureSprites.set(creature.id, { sprite, creature, hpBar });
     this.interactionTargets.push({

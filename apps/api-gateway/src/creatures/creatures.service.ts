@@ -8,7 +8,7 @@ import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
-import { CreatureDto } from './dto/creature.dto';
+import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
@@ -54,27 +54,6 @@ function findNearestPlayer(
   return nearest ? { player: nearest, dist: minDist } : null;
 }
 
-function toDto(creature: Creature): CreatureDto {
-  const t = creature.spawn.template;
-  return {
-    id: creature.id,
-    templateKey: t.key,
-    type: t.textureKey,
-    textureKey: t.textureKey,
-    name: t.name,
-    worldX: creature.worldX ?? null,
-    worldY: creature.worldY ?? null,
-    mapId: creature.mapId ?? null,
-    x: creature.x,
-    y: creature.y,
-    health: creature.health,
-    maxHealth: t.baseHealth,
-    armor: t.baseArmor,
-    attack: t.baseAttack,
-    state: creature.state,
-    respawnAt: creature.respawnAt ?? null,
-  };
-}
 
 type PatrolState = {
   dirX: number;
@@ -184,8 +163,41 @@ export class CreaturesService implements OnModuleInit {
     }
   }
 
+  private toDto(creature: Creature): CreatureDto {
+    const t = creature.spawn.template;
+    let runtimeStats: CreatureRuntimeStats | undefined;
+    if (t) {
+      const base = CreatureRuntimeCalculator.calculateBaseStats(creature, t);
+      const debugMods = this.debugRegistry.getModifiers(creature.id);
+      runtimeStats = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+        CREATURE_STAT_KEYS,
+        (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+        debugMods,
+      );
+    }
+    return {
+      id: creature.id,
+      templateKey: t.key,
+      type: t.textureKey,
+      textureKey: t.textureKey,
+      name: t.name,
+      worldX: creature.worldX ?? null,
+      worldY: creature.worldY ?? null,
+      mapId: creature.mapId ?? null,
+      x: creature.x,
+      y: creature.y,
+      health: creature.health,
+      maxHealth: t.baseHealth,
+      armor: t.baseArmor,
+      attack: t.baseAttack,
+      state: creature.state,
+      respawnAt: creature.respawnAt ?? null,
+      runtimeStats,
+    };
+  }
+
   findAll(): CreatureDto[] {
-    return Array.from(this.liveCreatures.values()).map(toDto);
+    return Array.from(this.liveCreatures.values()).map((c) => this.toDto(c));
   }
 
   startPatrol(server: Server) {
@@ -242,7 +254,7 @@ export class CreaturesService implements OnModuleInit {
           break;
       }
 
-      server.emit('creature_update', toDto(creature));
+      server.emit('creature_update', this.toDto(creature));
     }
   }
 
@@ -448,7 +460,7 @@ export class CreaturesService implements OnModuleInit {
     });
 
     if (this.server) {
-      this.server.emit('creature_update', toDto(creature));
+      this.server.emit('creature_update', this.toDto(creature));
     }
   }
 
@@ -530,7 +542,7 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: toDto(creature), damage, attackerId: character.id, riposte };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte };
   }
 
   private resolveAttackRange(character: Character): number {
@@ -646,7 +658,7 @@ export class CreaturesService implements OnModuleInit {
     if (!creature) return null;
 
     this.liveCreatures.set(creature.id, creature);
-    return toDto(creature);
+    return this.toDto(creature);
   }
 
   refreshTemplateInMemory(key: string, fields: Partial<Record<string, number>>): void {
@@ -666,7 +678,7 @@ export class CreaturesService implements OnModuleInit {
     const creature = this.liveCreatures.get(id);
     if (!creature) return null;
 
-    const dto = toDto(creature);
+    const dto = this.toDto(creature);
     const spawnId = creature.spawn?.id;
     const spawnKey = creature.spawn?.key ?? '';
 
@@ -717,7 +729,7 @@ export class CreaturesService implements OnModuleInit {
 
     await this.creatureRepository.save(creature);
 
-    const dto = toDto(creature);
+    const dto = this.toDto(creature);
     if (this.server) this.server.emit('creature_update', dto);
     return dto;
   }
@@ -736,9 +748,9 @@ export class CreaturesService implements OnModuleInit {
     await this.creatureRepository.update(creatureId, { x: creature.x, y: creature.y, worldX: creature.worldX, worldY: creature.worldY, mapId: creature.mapId });
 
     if (this.server) {
-      this.server.emit('creature_update', toDto(creature));
+      this.server.emit('creature_update', this.toDto(creature));
     }
-    return toDto(creature);
+    return this.toDto(creature);
   }
 
   async forceRespawnAll(templateKey: string): Promise<number> {
@@ -766,7 +778,7 @@ export class CreaturesService implements OnModuleInit {
       });
 
       if (this.server) {
-        this.server.emit('creature_update', toDto(creature));
+        this.server.emit('creature_update', this.toDto(creature));
       }
       count++;
     }
