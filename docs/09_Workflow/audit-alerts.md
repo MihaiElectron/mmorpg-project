@@ -16,17 +16,63 @@ Sources consolidées :
 - `docs/02_Security/backend-websocket-security-audit.md`
 - `docs/02_Security/security-hardening-roadmap.md`
 
-Statut global : `Open` pour toutes les alertes.
+Status global : `OPEN` pour toutes les alertes.
 
-## 2. Top 5 immédiat
+Contrôle registre du 2026-06-26 : 23 alertes ouvertes, aucun doublon d'ID
+détecté.
 
-1. `SEC-BLOCKER-01` - Verrouiller l'ownership inventaire HTTP.
-2. `SEC-BLOCKER-02` - Rendre le mouvement serveur autoritatif.
-3. `SEC-BLOCKER-03` - Authentifier explicitement les gateways WebSocket
+## 2. Convention de nommage stable
+
+Format canonique :
+
+`DOMAIN-SEVERITY-NNN`
+
+Exemples :
+
+- `DB-BLOCKER-001`
+- `SEC-HIGH-004`
+- `TYPEORM-MEDIUM-003`
+- `RUNTIME-HIGH-002`
+
+Domaines autorisés :
+
+- `DB` : PostgreSQL, schéma, migrations, contraintes, index.
+- `TYPEORM` : relations, repositories, cascades, transactions ORM.
+- `SEC` : sécurité backend, WebSocket, auth, anti-triche, admin.
+- `RUNTIME` : comportements runtime serveur, temps réel, combat, mouvement.
+- `WF` : workflow, audit framework, CI, protocole de suivi.
+
+Règles :
+
+- L'ID est stable et ne change pas après création.
+- Le numéro `NNN` est incrémental dans le couple `DOMAIN-SEVERITY`.
+- Un ID fermé n'est jamais réutilisé.
+- Une alerte déplacée de sévérité conserve son ID et note la raison dans
+  `Notes`.
+- Les anciennes formes à deux chiffres sont interdites dans le registre
+  permanent.
+
+## 3. Cycle de vie
+
+Valeurs autorisées pour `Status` :
+
+- `OPEN` : alerte confirmée, aucune correction validée.
+- `IN_PROGRESS` : correction commencée ou PR en cours.
+- `FIXED` : correction mergée, vérification complète pas encore terminée.
+- `VERIFIED` : correction testée et impact non reproductible.
+- `CLOSED` : alerte archivée après vérification et trace de fermeture.
+- `WONT_FIX` : décision explicite de ne pas corriger, avec justification dans
+  `Notes`.
+
+## 4. Top 5 immédiat
+
+1. `SEC-BLOCKER-001` - Verrouiller l'ownership inventaire HTTP.
+2. `SEC-BLOCKER-002` - Rendre le mouvement serveur autoritatif.
+3. `SEC-BLOCKER-003` - Authentifier explicitement les gateways WebSocket
    sensibles.
-4. `DB-BLOCKER-01` - Stabiliser migrations et désactiver `synchronize` hors
+4. `DB-BLOCKER-001` - Stabiliser migrations et désactiver `synchronize` hors
    local strict.
-5. `DB-BLOCKER-03` - Transactionnaliser loot, inventaire, combat et XP hors
+5. `DB-BLOCKER-003` - Transactionnaliser loot, inventaire, combat et XP hors
    craft.
 
 Ordre de correction recommandé :
@@ -38,9 +84,9 @@ Ordre de correction recommandé :
 4. Ajouter transactions, locks et idempotence sur les écritures gameplay.
 5. Ajouter index, pagination et rooms/chunks avant croissance monde ou Studio.
 
-## 3. Alertes BLOCKER
+## 5. Alertes BLOCKER
 
-### SEC-BLOCKER-01 - Ownership inventaire HTTP insuffisant
+### SEC-BLOCKER-001 - Ownership inventaire HTTP insuffisant
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : `/inventory` accepte des `characterId` client sans ownership
@@ -54,9 +100,17 @@ Ordre de correction recommandé :
 - Tests/builds attendus : tests HTTP ownership cross-user, ajout item refusé,
   lecture inventaire tiers refusée, equip/unequip sur personnage tiers refusé,
   `npm test` API.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-BLOCKER-02 - Mouvement joueur trop client-driven
+### SEC-BLOCKER-002 - Mouvement joueur trop client-driven
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : `player_move` accepte des coordonnées WU client finies et les
@@ -69,9 +123,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/player-runtime/*`, client socket movement.
 - Tests/builds attendus : tests WS mouvement trop rapide refusé, map mismatch
   refusé, NaN/Infinity refusés, collision serveur couverte, tests gateway.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-BLOCKER-03 - Authentification WebSocket sensible non garantie
+### SEC-BLOCKER-003 - Authentification WebSocket sensible non garantie
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : `AdminGateway` et `CraftingGateway` ne montrent pas de
@@ -84,9 +146,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/common/ws-auth.service.ts`, modules gateway.
 - Tests/builds attendus : socket sans JWT rejeté sur admin/craft, rôle falsifié
   rejeté, token expiré rejeté, user non admin rejeté.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-BLOCKER-01 - `synchronize: true` et migrations non opérationnalisées
+### DB-BLOCKER-001 - `synchronize: true` et migrations non opérationnalisées
 
 - Source audit : `database-architecture-audit.md`, `typeorm-audit.md`,
   `database-evolution-roadmap.md`
@@ -100,9 +170,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/migrations/*`, `package.json`, config TypeORM.
 - Tests/builds attendus : build API, dry-run migration local, test rollback
   documenté, vérification config par environnement.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-BLOCKER-02 - Cascades `Item` vers possessions joueur
+### DB-BLOCKER-002 - Cascades `Item` vers possessions joueur
 
 - Source audit : `database-architecture-audit.md`, `typeorm-audit.md`
 - Constat court : suppression d'un item catalogue peut cascader vers
@@ -115,9 +193,17 @@ Ordre de correction recommandé :
   migrations futures.
 - Tests/builds attendus : suppression item avec inventaire refusée ou contrôlée,
   test non-régression équipements, migration testée.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-BLOCKER-03 - Écritures gameplay non transactionnelles hors craft
+### DB-BLOCKER-003 - Écritures gameplay non transactionnelles hors craft
 
 - Source audit : `database-performance-audit.md`, `typeorm-audit.md`,
   `typeorm-roadmap.md`, `backend-websocket-security-audit.md`
@@ -132,9 +218,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/skills/*`, `apps/api-gateway/src/admin/*`.
 - Tests/builds attendus : tests concurrence loot double submit, XP concurrente,
   combat kill simultané, inventory increment atomique.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-BLOCKER-04 - Absence de rate limiting auth/gameplay/admin
+### SEC-BLOCKER-004 - Absence de rate limiting auth/gameplay/admin
 
 - Source audit : `backend-websocket-security-audit.md`,
   `security-hardening-roadmap.md`
@@ -148,11 +242,19 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/**/*.gateway.ts`, middlewares/guards communs.
 - Tests/builds attendus : tests auth brute force, flood WS refusé, admin flood
   limité, métriques exposées ou loggées.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-## 4. Alertes HIGH
+## 6. Alertes HIGH
 
-### SEC-HIGH-01 - Payloads WebSocket/admin hétérogènes
+### SEC-HIGH-001 - Payloads WebSocket/admin hétérogènes
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : validation manuelle par event ; DTO WS et UUID/bornes
@@ -165,9 +267,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/**/*.dto.ts`, guards/pipes WS.
 - Tests/builds attendus : NaN/Infinity, UUID invalide, champ inconnu, payload
   vide, coordonnées hors bornes.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-HIGH-02 - Actions admin sans audit log durable
+### SEC-HIGH-002 - Actions admin sans audit log durable
 
 - Source audit : `backend-websocket-security-audit.md`,
   `database-evolution-roadmap.md`
@@ -180,9 +290,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/player-runtime/*`, migrations futures.
 - Tests/builds attendus : chaque mutation admin crée un log, échec loggé,
   suppression/altération directe impossible sans privilège DB.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-HIGH-03 - Replay et idempotence absents sur actions sensibles
+### SEC-HIGH-003 - Replay et idempotence absents sur actions sensibles
 
 - Source audit : `backend-websocket-security-audit.md`,
   `security-hardening-roadmap.md`, `typeorm-roadmap.md`
@@ -195,9 +313,17 @@ Ordre de correction recommandé :
   crafting, inventory, futures tables ledger.
 - Tests/builds attendus : même command id rejoué sans double effet, retry après
   timeout stable, double socket concurrent refusé ou fusionné.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-HIGH-01 - Index spatiaux et jobs temporels manquants
+### DB-HIGH-001 - Index spatiaux et jobs temporels manquants
 
 - Source audit : `database-performance-audit.md`,
   `database-evolution-roadmap.md`
@@ -210,9 +336,17 @@ Ordre de correction recommandé :
 - Fichiers probables : migrations futures, entities resources/creatures/stations.
 - Tests/builds attendus : migration testée, `EXPLAIN ANALYZE` sur données de
   volume, tests de requêtes par zone.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-HIGH-02 - Listes globales runtime/admin non paginées
+### DB-HIGH-002 - Listes globales runtime/admin non paginées
 
 - Source audit : `database-performance-audit.md`, `typeorm-audit.md`
 - Constat court : resources, creatures, stations, items, recipes et users/admin
@@ -226,9 +360,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/items/*`, `apps/api-gateway/src/users/*`.
 - Tests/builds attendus : tests pagination, limite max, filtres map/chunk,
   compatibilité client Studio.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-HIGH-03 - Relations métier par chaînes sans intégrité référentielle
+### DB-HIGH-003 - Relations métier par chaînes sans intégrité référentielle
 
 - Source audit : `database-architecture-audit.md`, `typeorm-audit.md`
 - Constat court : `resource.type`, `requiredSkillKey`, `stationType` et
@@ -240,9 +382,17 @@ Ordre de correction recommandé :
   migrations futures.
 - Tests/builds attendus : création/update admin avec clé absente refusée,
   seed idempotent, test lootPool item absent.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-HIGH-04 - Stockage token client et révocation non prouvés
+### SEC-HIGH-004 - Stockage token client et révocation non prouvés
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : JWT stocké en `localStorage`; refresh, révocation et
@@ -255,11 +405,19 @@ Ordre de correction recommandé :
   config sécurité HTTP.
 - Tests/builds attendus : token révoqué refusé HTTP/WS, rôle modifié pris en
   compte, headers sécurité vérifiés.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-## 5. Alertes MEDIUM
+## 7. Alertes MEDIUM
 
-### DB-MEDIUM-01 - Contraintes CHECK/enum DB absentes
+### DB-MEDIUM-001 - Contraintes CHECK/enum DB absentes
 
 - Source audit : `database-architecture-audit.md`
 - Constat court : quantités, health, XP, chances, delays, états et niveaux sont
@@ -269,9 +427,17 @@ Ordre de correction recommandé :
 - Correction attendue : CHECK/enum DB lors d'une phase migration contrôlée.
 - Fichiers probables : entities concernées, migrations futures.
 - Tests/builds attendus : migration, insertion invalide refusée, seeds compatibles.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-MEDIUM-02 - Coordonnées legacy pixel et WU en parallèle
+### DB-MEDIUM-002 - Coordonnées legacy pixel et WU en parallèle
 
 - Source audit : `database-architecture-audit.md`
 - Constat court : plusieurs tables gardent `x/y` ou `positionX/Y` avec
@@ -283,9 +449,17 @@ Ordre de correction recommandé :
   futures.
 - Tests/builds attendus : migration backfill, cohérence WU/pixel, requêtes ne
   dépendent plus d'un mix non documenté.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-MEDIUM-03 - Doublons crafting ingredients/results possibles
+### DB-MEDIUM-003 - Doublons crafting ingredients/results possibles
 
 - Source audit : `database-architecture-audit.md`
 - Constat court : pas d'unicité prouvée sur `(recipeId,itemId)` pour ingrédients
@@ -294,9 +468,17 @@ Ordre de correction recommandé :
 - Correction attendue : contrainte unique ou règle explicite si doublon voulu.
 - Fichiers probables : crafting entities, admin crafting service, migrations.
 - Tests/builds attendus : ajout doublon refusé ou comportement cumulatif testé.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-MEDIUM-04 - N+1 admin/seeds et relations chargées largement
+### DB-MEDIUM-004 - N+1 admin/seeds et relations chargées largement
 
 - Source audit : `database-performance-audit.md`, `typeorm-audit.md`
 - Constat court : validations item/skill/station en boucle et chargements
@@ -309,9 +491,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/crafting/*`, `apps/api-gateway/src/characters/*`.
 - Tests/builds attendus : tests de résultat identique, mesure requêtes ou mocks
   repository, pas de régression réponse API.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-MEDIUM-01 - Debug/runtime admin insuffisamment borné
+### SEC-MEDIUM-001 - Debug/runtime admin insuffisamment borné
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : endpoints debug admin ont des bodies ad hoc ; limites et
@@ -323,9 +513,17 @@ Ordre de correction recommandé :
   `apps/api-gateway/src/admin/*`.
 - Tests/builds attendus : valeurs extrêmes refusées, non-admin refusé,
   production gate testé.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-MEDIUM-02 - Broadcasts globaux et interest management absent
+### SEC-MEDIUM-002 - Broadcasts globaux et interest management absent
 
 - Source audit : `backend-websocket-security-audit.md`,
   `security-hardening-roadmap.md`
@@ -337,11 +535,19 @@ Ordre de correction recommandé :
 - Fichiers probables : gateways world/resources/creatures/admin, client socket.
 - Tests/builds attendus : seul le chunk concerné reçoit l'event, flood local
   limité, compatibilité client.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-## 6. Alertes LOW
+## 8. Alertes LOW
 
-### DB-LOW-01 - Timestamps et clés métier catalogue hétérogènes
+### DB-LOW-001 - Timestamps et clés métier catalogue hétérogènes
 
 - Source audit : `database-architecture-audit.md`
 - Constat court : certains templates anciens manquent de timestamps ou clé
@@ -351,9 +557,17 @@ Ordre de correction recommandé :
   futures.
 - Fichiers probables : templates resources/creatures/items/stations.
 - Tests/builds attendus : migration compatible seeds, unicité validée.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### DB-LOW-02 - Observabilité performance DB incomplète
+### DB-LOW-002 - Observabilité performance DB incomplète
 
 - Source audit : `database-performance-audit.md`, `typeorm-roadmap.md`
 - Constat court : slow query log, métriques pool et temps transactionnels ne
@@ -363,9 +577,17 @@ Ordre de correction recommandé :
   transactions et dashboards.
 - Fichiers probables : config TypeORM, logging/observability backend.
 - Tests/builds attendus : métriques émises en local/test, seuils documentés.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-### SEC-LOW-01 - Swagger et surfaces de découverte à borner par environnement
+### SEC-LOW-001 - Swagger et surfaces de découverte à borner par environnement
 
 - Source audit : `backend-websocket-security-audit.md`
 - Constat court : exposition de documentation API publique non bornée par
@@ -375,13 +597,47 @@ Ordre de correction recommandé :
   local selon politique.
 - Fichiers probables : `apps/api-gateway/src/main.ts`, config env.
 - Tests/builds attendus : Swagger disponible local, restreint selon env cible.
-- Statut : Open
+- Status : OPEN
+- Owner :
+- First detected : 2026-06-26
+- Last reviewed : 2026-06-26
+- Related commit :
+- Related ADR :
+- Related issue :
+- Verification : Not verified
+- Notes :
 
-## 7. Alertes fermées
+## 9. Alertes fermées
 
 Aucune alerte fermée. Ce fichier initialise le registre.
 
-## 8. Règles de mise à jour
+## 10. Comment fermer une alerte
+
+Une alerte ne peut pas passer directement de `OPEN` à `CLOSED`.
+
+Cycle attendu :
+
+1. Passer à `IN_PROGRESS` quand une correction est réellement commencée.
+2. Passer à `FIXED` quand le commit de correction est mergé.
+3. Passer à `VERIFIED` quand les tests attendus passent et que l'impact concret
+   n'est plus reproductible.
+4. Passer à `CLOSED` quand `Related commit`, `Verification`, `Last reviewed` et
+   `Notes` contiennent les preuves de fermeture.
+
+Champs requis pour fermer :
+
+- `Status : CLOSED`
+- `Owner :` personne ou équipe responsable.
+- `Last reviewed :` date de vérification.
+- `Related commit :` commit de correction.
+- `Verification :` commandes, tests ou preuve manuelle.
+- `Notes :` décision de fermeture et éventuelles limites restantes.
+
+`WONT_FIX` exige une justification explicite dans `Notes`, un owner, une date de
+revue et l'accord projet. Une alerte `WONT_FIX` reste visible dans la section de
+sa sévérité ou dans `Alertes fermées` selon la décision projet.
+
+## 11. Règles de mise à jour
 
 - Ne fermer une alerte qu'après correction mergée, tests attendus passés et
   vérification manuelle des fichiers probables.
@@ -391,6 +647,6 @@ Aucune alerte fermée. Ce fichier initialise le registre.
 - Si une alerte est divisée, garder l'alerte parente ouverte tant que tous les
   sous-risques bloquants ne sont pas traités.
 - Si un audit découvre un nouveau risque, créer un nouvel ID dans la sévérité
-  appropriée avec statut `Open`.
+  appropriée avec `Status : OPEN`.
 - Ne pas transformer une recommandation long terme vague en alerte sans fichier
   probable, impact concret et test attendu.
