@@ -1,4 +1,8 @@
-import type { ItemCatalogEntry, ItemEditorPatch } from "./itemEditor.types";
+import type {
+  ItemCatalogEntry,
+  ItemEditorPatch,
+  ItemUsageStats,
+} from "./itemEditor.types";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -35,4 +39,12 @@ export async function updateItem(
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<ItemCatalogEntry>;
+}
+
+export async function fetchItemUsageStats(id: string): Promise<ItemUsageStats> {
+  const res = await fetch(`${API}/item/${id}/stats`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ItemUsageStats>;
 }

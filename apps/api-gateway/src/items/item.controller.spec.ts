@@ -8,6 +8,7 @@ describe('ItemController', () => {
     findAll: jest.Mock;
     findOne: jest.Mock;
     update: jest.Mock;
+    getUsageStats: jest.Mock;
     remove: jest.Mock;
   };
 
@@ -17,6 +18,7 @@ describe('ItemController', () => {
       findAll: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
+      getUsageStats: jest.fn(),
       remove: jest.fn(),
     };
     controller = new ItemController(service as unknown as ItemService);
@@ -51,5 +53,22 @@ describe('ItemController', () => {
       ...dto,
     });
     expect(service.update).toHaveBeenCalledWith('item-1', dto);
+  });
+
+  it("retourne les statistiques d'usage d'un item", async () => {
+    const stats = {
+      itemId: 'item-1',
+      totalQuantityServer: 64,
+      inventoryEntries: 4,
+      uniqueCharacters: 4,
+      usedInResourceLootPools: [],
+      usedInCreatureLootPools: [],
+      usedInCraftRecipesOutput: [],
+      usedInCraftRecipesIngredient: [],
+    };
+    service.getUsageStats.mockResolvedValue(stats);
+
+    await expect(controller.getUsageStats('item-1')).resolves.toBe(stats);
+    expect(service.getUsageStats).toHaveBeenCalledWith('item-1');
   });
 });

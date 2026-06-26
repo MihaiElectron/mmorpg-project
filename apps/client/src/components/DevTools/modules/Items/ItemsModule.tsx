@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchItems, updateItem } from "./itemEditorApi";
+import { fetchItems, fetchItemUsageStats, updateItem } from "./itemEditorApi";
 import {
   ALL_FILTER,
   buildItemPatch,
@@ -8,7 +8,12 @@ import {
   isValidItemDraft,
   uniqueSorted,
 } from "./itemEditorFilters";
-import type { ItemCatalogEntry, ItemEditorDraft } from "./itemEditor.types";
+import type {
+  ItemCatalogEntry,
+  ItemEditorDraft,
+  ItemUsageRef,
+  ItemUsageStats,
+} from "./itemEditor.types";
 import "./ItemsModule.scss";
 
 function shortId(id: string): string {
@@ -17,6 +22,40 @@ function shortId(id: string): string {
 
 function emptyDraft(): ItemEditorDraft {
   return { name: "", type: "", category: "", image: "" };
+}
+
+function hasGameplayUsage(stats: ItemUsageStats | null): boolean {
+  if (!stats) return false;
+  return (
+    stats.totalQuantityServer > 0 ||
+    stats.usedInResourceLootPools.length > 0 ||
+    stats.usedInCreatureLootPools.length > 0 ||
+    stats.usedInCraftRecipesOutput.length > 0 ||
+    stats.usedInCraftRecipesIngredient.length > 0
+  );
+}
+
+function usageLabel(ref: ItemUsageRef): string {
+  if (ref.type) return ref.type;
+  if (ref.key && ref.name) return `${ref.name} (${ref.key})`;
+  if (ref.key) return ref.key;
+  if (ref.name) return ref.name;
+  return String(ref.id);
+}
+
+function UsageList({ items }: { items: ItemUsageRef[] }) {
+  if (items.length === 0) {
+    return <span className="item-editor__usage-empty">Aucun</span>;
+  }
+  return (
+    <div className="item-editor__usage-list">
+      {items.map((item) => (
+        <span key={String(item.id)} className="item-editor__usage-chip">
+          {usageLabel(item)}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default function ItemsModule() {
@@ -31,6 +70,10 @@ export default function ItemsModule() {
   );
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [usageStats, setUsageStats] = useState<ItemUsageStats | null>(null);
+  const [usageStatus, setUsageStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
 
   useEffect(() => {
     let mounted = true;
@@ -62,6 +105,32 @@ export default function ItemsModule() {
     setMessage(null);
   }, [selectedItem?.id]);
 
+  useEffect(() => {
+    if (!selectedItem) {
+      setUsageStats(null);
+      setUsageStatus("idle");
+      return;
+    }
+
+    let mounted = true;
+    setUsageStats(null);
+    setUsageStatus("loading");
+    fetchItemUsageStats(selectedItem.id)
+      .then((stats) => {
+        if (!mounted) return;
+        setUsageStats(stats);
+        setUsageStatus("loaded");
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setUsageStatus("error");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedItem?.id]);
+
   const typeOptions = useMemo(
     () => uniqueSorted(items.map((item) => item.type)),
     [items],
@@ -77,6 +146,7 @@ export default function ItemsModule() {
   const patch = selectedItem ? buildItemPatch(selectedItem, draft) : {};
   const dirty = Object.keys(patch).length > 0;
   const valid = isValidItemDraft(draft);
+  const used = hasGameplayUsage(usageStats);
 
   function updateDraft(key: keyof ItemEditorDraft, value: string) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -267,6 +337,90 @@ export default function ItemsModule() {
                     placeholder="/assets/images/items/wooden_stick.png"
                   />
                 </label>
+
+                <div className="item-editor__usage">
+                  <div className="item-editor__usage-header">
+                    <span className="item-editor__usage-title">
+                      Utilisation
+                    </span>
+                    <span
+                      className={
+                        "item-editor__usage-badge" +
+                        (used ? " item-editor__usage-badge--used" : "")
+                      }
+                    >
+                      {used ? "Utilisé" : "Non utilisé"}
+                    </span>
+                  </div>
+
+                  {usageStatus === "loading" && (
+                    <p className="item-editor__status">Chargement usages…</p>
+                  )}
+                  {usageStatus === "error" && (
+                    <p className="item-editor__status item-editor__status--error">
+                      Impossible de charger les usages.
+                    </p>
+                  )}
+                  {usageStatus === "loaded" && usageStats && (
+                    <>
+                      <div className="item-editor__usage-grid">
+                        <div className="item-editor__usage-metric">
+                          <span className="item-editor__usage-value">
+                            {usageStats.totalQuantityServer}
+                          </span>
+                          <span className="item-editor__usage-label">
+                            Quantité
+                          </span>
+                        </div>
+                        <div className="item-editor__usage-metric">
+                          <span className="item-editor__usage-value">
+                            {usageStats.inventoryEntries}
+                          </span>
+                          <span className="item-editor__usage-label">
+                            Piles
+                          </span>
+                        </div>
+                        <div className="item-editor__usage-metric">
+                          <span className="item-editor__usage-value">
+                            {usageStats.uniqueCharacters}
+                          </span>
+                          <span className="item-editor__usage-label">
+                            Joueurs
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="item-editor__usage-block">
+                        <span className="item-editor__usage-label">
+                          Ressources loot
+                        </span>
+                        <UsageList items={usageStats.usedInResourceLootPools} />
+                      </div>
+                      <div className="item-editor__usage-block">
+                        <span className="item-editor__usage-label">
+                          Créatures loot
+                        </span>
+                        <UsageList items={usageStats.usedInCreatureLootPools} />
+                      </div>
+                      <div className="item-editor__usage-block">
+                        <span className="item-editor__usage-label">
+                          Recettes output
+                        </span>
+                        <UsageList
+                          items={usageStats.usedInCraftRecipesOutput}
+                        />
+                      </div>
+                      <div className="item-editor__usage-block">
+                        <span className="item-editor__usage-label">
+                          Recettes ingrédient
+                        </span>
+                        <UsageList
+                          items={usageStats.usedInCraftRecipesIngredient}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 <div className="item-editor__actions">
                   {message && (

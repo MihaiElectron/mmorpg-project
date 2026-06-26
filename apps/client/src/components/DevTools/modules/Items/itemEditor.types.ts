@@ -14,3 +14,21 @@ export interface ItemEditorDraft {
 }
 
 export type ItemEditorPatch = Partial<ItemEditorDraft>;
+
+export interface ItemUsageRef {
+  id: string | number;
+  key?: string;
+  type?: string;
+  name?: string;
+}
+
+export interface ItemUsageStats {
+  itemId: string;
+  totalQuantityServer: number;
+  inventoryEntries: number;
+  uniqueCharacters: number;
+  usedInResourceLootPools: ItemUsageRef[];
+  usedInCreatureLootPools: ItemUsageRef[];
+  usedInCraftRecipesOutput: ItemUsageRef[];
+  usedInCraftRecipesIngredient: ItemUsageRef[];
+}

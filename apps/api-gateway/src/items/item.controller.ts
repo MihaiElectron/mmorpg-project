@@ -40,6 +40,13 @@ export class ItemController {
     return this.service.findAll();
   }
 
+  @Get(':id/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  getUsageStats(@Param('id') id: string) {
+    return this.service.getUsageStats(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

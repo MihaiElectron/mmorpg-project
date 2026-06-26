@@ -10,6 +10,10 @@ import {
 import { Item } from './entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
+import { ResourceTemplate } from '../resources/entities/resource-template.entity';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
+import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
+import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +49,21 @@ function makeInventory(overrides: Partial<Inventory> = {}): Inventory {
   } as Inventory;
 }
 
+function makeQueryBuilder(overrides: Record<string, jest.Mock> = {}) {
+  const qb: Record<string, jest.Mock> = {
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    getRawOne: jest.fn(),
+    getRawMany: jest.fn(),
+    getMany: jest.fn(),
+    ...overrides,
+  };
+  return qb;
+}
+
 // ── Setup ──────────────────────────────────────────────────────────────────────
 
 describe('ItemService', () => {
@@ -62,9 +81,22 @@ describe('ItemService', () => {
     save: jest.Mock;
     remove: jest.Mock;
     count: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let equipmentRepo: {
     count: jest.Mock;
+  };
+  let resourceTemplateRepo: {
+    createQueryBuilder: jest.Mock;
+  };
+  let creatureTemplateRepo: {
+    createQueryBuilder: jest.Mock;
+  };
+  let craftingIngredientRepo: {
+    createQueryBuilder: jest.Mock;
+  };
+  let craftingResultRepo: {
+    createQueryBuilder: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -83,9 +115,22 @@ describe('ItemService', () => {
       save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
       remove: jest.fn().mockResolvedValue(undefined),
       count: jest.fn().mockResolvedValue(0),
+      createQueryBuilder: jest.fn(),
     };
     equipmentRepo = {
       count: jest.fn().mockResolvedValue(0),
+    };
+    resourceTemplateRepo = {
+      createQueryBuilder: jest.fn(),
+    };
+    creatureTemplateRepo = {
+      createQueryBuilder: jest.fn(),
+    };
+    craftingIngredientRepo = {
+      createQueryBuilder: jest.fn(),
+    };
+    craftingResultRepo = {
+      createQueryBuilder: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -96,6 +141,22 @@ describe('ItemService', () => {
         {
           provide: getRepositoryToken(CharacterEquipment),
           useValue: equipmentRepo,
+        },
+        {
+          provide: getRepositoryToken(ResourceTemplate),
+          useValue: resourceTemplateRepo,
+        },
+        {
+          provide: getRepositoryToken(CreatureTemplate),
+          useValue: creatureTemplateRepo,
+        },
+        {
+          provide: getRepositoryToken(CraftingIngredient),
+          useValue: craftingIngredientRepo,
+        },
+        {
+          provide: getRepositoryToken(CraftingResult),
+          useValue: craftingResultRepo,
         },
       ],
     }).compile();
@@ -363,6 +424,95 @@ describe('ItemService', () => {
         expect.objectContaining({
           image: '/assets/images/items/wooden_stick.png',
         }),
+      );
+    });
+  });
+
+  // ── getUsageStats ───────────────────────────────────────────────────────────
+
+  describe('getUsageStats', () => {
+    it('retourne les usages inventory, lootPool et craft depuis des requêtes serveur', async () => {
+      const item = makeItem({
+        id: 'item-wood',
+        category: 'wooden_stick',
+        type: 'material',
+      });
+      repo.findOne.mockResolvedValue(item);
+
+      const inventoryQb = makeQueryBuilder({
+        getRawOne: jest.fn().mockResolvedValue({
+          totalQuantityServer: '64',
+          inventoryEntries: '4',
+          uniqueCharacters: '4',
+        }),
+      });
+      inventoryRepo.createQueryBuilder.mockReturnValue(inventoryQb);
+
+      const resourceQb = makeQueryBuilder({
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'res-tpl-1', type: 'dead_tree' }]),
+      });
+      resourceTemplateRepo.createQueryBuilder.mockReturnValue(resourceQb);
+
+      const creatureQb = makeQueryBuilder({
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, key: 'turkey', name: 'Turkey' }]),
+      });
+      creatureTemplateRepo.createQueryBuilder.mockReturnValue(creatureQb);
+
+      const outputQb = makeQueryBuilder({
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'recipe-1', key: 'basic_handle', name: 'Manche brut' },
+          ]),
+      });
+      craftingResultRepo.createQueryBuilder.mockReturnValue(outputQb);
+
+      const ingredientQb = makeQueryBuilder({
+        getRawMany: jest.fn().mockResolvedValue([
+          { id: 'recipe-2', key: 'basic_sword', name: 'Épée basique' },
+          { id: 'recipe-2', key: 'basic_sword', name: 'Épée basique' },
+        ]),
+      });
+      craftingIngredientRepo.createQueryBuilder.mockReturnValue(ingredientQb);
+
+      await expect(service.getUsageStats('item-wood')).resolves.toEqual({
+        itemId: 'item-wood',
+        totalQuantityServer: 64,
+        inventoryEntries: 4,
+        uniqueCharacters: 4,
+        usedInResourceLootPools: [{ id: 'res-tpl-1', type: 'dead_tree' }],
+        usedInCreatureLootPools: [{ id: 1, key: 'turkey', name: 'Turkey' }],
+        usedInCraftRecipesOutput: [
+          { id: 'recipe-1', key: 'basic_handle', name: 'Manche brut' },
+        ],
+        usedInCraftRecipesIngredient: [
+          { id: 'recipe-2', key: 'basic_sword', name: 'Épée basique' },
+        ],
+      });
+
+      expect(inventoryQb.where).toHaveBeenCalledWith(
+        'inventory."itemId" = :itemId',
+        { itemId: 'item-wood' },
+      );
+      expect(resourceQb.where).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'template.lootPool @> CAST(:lootRef0 AS jsonb)',
+        ),
+        expect.objectContaining({
+          lootRef0: JSON.stringify([{ itemId: 'wooden_stick' }]),
+          lootRef1: JSON.stringify([{ itemId: 'item-wood' }]),
+        }),
+      );
+      expect(outputQb.where).toHaveBeenCalledWith('result.itemId = :itemId', {
+        itemId: 'item-wood',
+      });
+      expect(ingredientQb.where).toHaveBeenCalledWith(
+        'ingredient.itemId = :itemId',
+        { itemId: 'item-wood' },
       );
     });
   });

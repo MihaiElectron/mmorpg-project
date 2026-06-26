@@ -216,6 +216,104 @@
     text-transform: uppercase;
   }
 
+  &__usage {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  &__usage-header {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  &__usage-title {
+    color: vars.$color-text-gold;
+    font-size: 0.78rem;
+    font-weight: bold;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+  }
+
+  &__usage-badge {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.66rem;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  &__usage-badge--used {
+    background: rgba(39, 174, 96, 0.2);
+    border-color: rgba(39, 174, 96, 0.45);
+    color: #7dffad;
+  }
+
+  &__usage-grid {
+    display: grid;
+    gap: 5px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  &__usage-metric {
+    background: vars.$panel-inner-bg;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 5px 6px;
+  }
+
+  &__usage-value {
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.82rem;
+    font-weight: bold;
+  }
+
+  &__usage-label,
+  &__usage-empty {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+  }
+
+  &__usage-block {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__usage-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__usage-chip {
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 2px 5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__actions {
     align-items: center;
     display: flex;
