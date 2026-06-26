@@ -38,8 +38,6 @@ function makeSpawn(template: CreatureTemplate, overrides: Partial<CreatureSpawn>
     id: 'spawn-1',
     key: 'turkey-spawn-1',
     template,
-    spawnX: 0,
-    spawnY: 0,
     worldX: 1024,
     worldY: 2048,
     mapId: 1,
@@ -52,8 +50,6 @@ function makeCreature(spawn: CreatureSpawn, overrides: Partial<Creature> = {}): 
   return {
     id: 'creature-1',
     spawn,
-    x: 100,
-    y: 200,
     worldX: 1024,
     worldY: 2048,
     mapId: 1,

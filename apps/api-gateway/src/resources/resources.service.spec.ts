@@ -10,8 +10,6 @@ function makeResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'res-1',
     type: 'dead_tree',
-    x: 100,
-    y: 100,
     worldX: null,
     worldY: null,
     mapId: null,
@@ -262,7 +260,6 @@ describe('ResourcesService', () => {
     it("le payload de respawn contient type et position pour le rendu client", async () => {
       const resource = makeResource({
         state: 'dead', remainingLoots: 0,
-        x: 400, y: 300,
         worldX: 6560768, worldY: 6529024, mapId: 1,
       });
       resourceRepo.findOne.mockResolvedValue(resource);
@@ -682,7 +679,7 @@ describe('ResourcesService', () => {
     it('le broadcast contient type et position pour le rendu client', async () => {
       const resource = makeResource({
         state: 'dead', remainingLoots: 0,
-        x: 500, y: 250, worldX: 5000, worldY: 3000, mapId: 1,
+        worldX: 5000, worldY: 3000, mapId: 1,
       });
       resourceRepo.findOne.mockResolvedValue(resource);
       templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4 }));

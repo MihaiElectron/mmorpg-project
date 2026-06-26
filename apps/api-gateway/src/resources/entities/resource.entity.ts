@@ -9,13 +9,7 @@ export class Resource {
   @Column()
   type: string; // ex: "dead_tree", "ore"
 
-  @Column('int')
-  x: number;
-
-  @Column('int')
-  y: number;
-
-  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })
   worldX: number | null;
 

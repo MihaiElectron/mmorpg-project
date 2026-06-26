@@ -16,13 +16,7 @@ export class Creature {
   @JoinColumn({ name: 'spawn_id' })
   spawn: CreatureSpawn;
 
-  @Column('int')
-  x: number;
-
-  @Column('int')
-  y: number;
-
-  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })
   worldX: number | null;
 

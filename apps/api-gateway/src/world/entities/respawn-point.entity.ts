@@ -5,16 +5,10 @@ export class RespawnPoint {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column('int')
-  x: number;
-
-  @Column('int')
-  y: number;
-
   @Column('int', { default: 20 })
   radius: number;
 
-  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })
   worldX: number | null;
 

@@ -45,13 +45,7 @@ export class Character {
   @Column({ default: 0 })
   defense: number; // Défense de base
 
-  @Column({ default: 400 })
-  positionX: number;
-
-  @Column({ default: 300 })
-  positionY: number;
-
-  // ── Coordonnées WU (migration Phase 2) — nullable jusqu'au backfill ──────
+  // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })
   worldX: number | null;
 

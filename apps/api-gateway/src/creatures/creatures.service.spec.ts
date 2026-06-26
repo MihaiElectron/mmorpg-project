@@ -41,8 +41,6 @@ function makeSpawn(template: CreatureTemplate, overrides: Partial<CreatureSpawn>
     id: 'spawn-1',
     key: 'turkey_spawn_1',
     template,
-    spawnX: 600,
-    spawnY: 580,
     respawnDelayMs: 20000,
     worldX: 6080,
     worldY: 12480,
@@ -57,8 +55,6 @@ function makeCreature(overrides: Partial<Creature> = {}): Creature {
   return {
     id: 'creature-1',
     spawn,
-    x: 600,
-    y: 580,
     health: 30,
     state: 'alive',
     ...overrides,
@@ -324,7 +320,7 @@ describe('CreaturesService', () => {
     });
 
     it('applique les dégâts et retourne un succès', async () => {
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
@@ -343,7 +339,7 @@ describe('CreaturesService', () => {
 
     it("tue l'creature, programme un respawn et efface l'état de patrouille", async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       (service as any).patrolStates.set(creature.id, {});
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
@@ -360,7 +356,7 @@ describe('CreaturesService', () => {
     });
 
     it('préserve l\'état fighting si l\'creature survit', async () => {
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 7, defense: 3 }));
 
@@ -383,7 +379,7 @@ describe('CreaturesService', () => {
 
     it('accorde XP two_handed au kill sans équipement', async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
 
@@ -395,7 +391,7 @@ describe('CreaturesService', () => {
 
     it('accorde XP bow pour une arme à distance (catégorie bow)', async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       const equipment = [makeRangedEquipment('bow')];
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
@@ -408,7 +404,7 @@ describe('CreaturesService', () => {
 
     it('accorde XP crossbow pour une arme catégorie crossbow', async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       const equipment = [makeRangedEquipment('crossbow')];
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
@@ -420,7 +416,7 @@ describe('CreaturesService', () => {
     });
 
     it("n'accorde pas XP si l'creature survit", async () => {
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
@@ -440,7 +436,7 @@ describe('CreaturesService', () => {
 
     it('utilise le characterId serveur (paramètre), pas une donnée client', async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 1 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
 
@@ -454,7 +450,7 @@ describe('CreaturesService', () => {
 
     it('sans debug modifiers : damage identique au comportement direct (non-régression)', async () => {
       // template.baseArmor=2, char.attack=10 → damage = max(max(10,5)-2, 1) = 8
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
@@ -467,7 +463,7 @@ describe('CreaturesService', () => {
     it('debug modifier flat sur defenseTotal réduit les dégâts infligés', async () => {
       // baseArmor=2, debug +10 flat → defenseTotal=12
       // char.attack=10 → damage = max(max(10,5)-12, 1) = max(-2,1) = 1
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       debugRegistry.addModifier(creature.id, { targetStat: 'defenseTotal', operation: 'flat', value: 10 });
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
@@ -481,7 +477,7 @@ describe('CreaturesService', () => {
     it('debug modifier flat sur attackPower augmente la riposte', async () => {
       // baseAttack=5, debug +10 flat → attackPower=15
       // char.defense=3 → riposteDamage = max(15-3, 1) = 12
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
       (service as any).liveCreatures.set(creature.id, creature);
       debugRegistry.addModifier(creature.id, { targetStat: 'attackPower', operation: 'flat', value: 10 });
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, health: 100 }));
@@ -496,7 +492,7 @@ describe('CreaturesService', () => {
   // -------------------------------------------------------------------------
   describe('respawnCreature', () => {
     it("remet l'creature en vie à son point de spawn avec vie pleine", async () => {
-      const creature = makeCreature({ state: 'dead', health: 0, x: 999, y: 999 });
+      const creature = makeCreature({ state: 'dead', health: 0 });
       (service as any).liveCreatures.set(creature.id, creature);
       const mockServer = { emit: jest.fn() };
       (service as any).server = mockServer;
@@ -540,7 +536,7 @@ describe('CreaturesService', () => {
 
     it('écrit worldX/worldY/mapId en DB lors du respawn', async () => {
       // spawn pixel(600, 580) → worldX=6080, worldY=12480
-      const creature = makeCreature({ state: 'dead', health: 0, x: 999, y: 999 });
+      const creature = makeCreature({ state: 'dead', health: 0 });
       (service as any).liveCreatures.set(creature.id, creature);
       (service as any).server = null;
 
@@ -560,7 +556,7 @@ describe('CreaturesService', () => {
   describe('double-écriture WU', () => {
     it('attack() conserve worldX/worldY/mapId lors du save', async () => {
       // creature WU(6080,12480) fourni dès le départ — plus besoin de conversion pixel→WU (A7)
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
@@ -579,7 +575,7 @@ describe('CreaturesService', () => {
   describe('synchronisation WU mémoire IA (A2→A4)', () => {
     it('doPatrolMovement synchronise worldX/worldY après déplacement', () => {
       // creature pixel(600,580) → WU(6080,12480), déplacement dirX=1 dirY=0
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Infinity, pauseUntil: 0 };
 
       (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
@@ -591,7 +587,7 @@ describe('CreaturesService', () => {
 
     it('doFighting synchronise worldX/worldY lors de la poursuite', async () => {
       // creature pixel(700,580) → WU(6880,11680), joueur WU(0,9600) — dist > MELEE_RANGE_WU
-      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const creature = makeCreature({ worldX: 6880, worldY: 11680, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
         x: 400, y: 300, worldX: 0, worldY: 9600, mapId: 1,
@@ -610,7 +606,7 @@ describe('CreaturesService', () => {
     it('doEscaping synchronise worldX/worldY lors de la fuite', async () => {
       // creature pixel(600,580) → WU(6080,12480), joueur pixel(600,560) → WU(5760,12160)
       // chebyshev=320 WU < patrolRadius(200px)=3200 WU → creature reste en fuite
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       const player = {
         characterId: 'char-1', socketId: 'sock-1',
         x: 600, y: 560, worldX: 5760, worldY: 12160, mapId: 1,
@@ -748,7 +744,7 @@ describe('CreaturesService', () => {
     }
 
     it('doFighting — non-régression : vitesse identique sans modifier (speedMax=60)', async () => {
-      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const creature = makeCreature({ worldX: 6880, worldY: 11680, mapId: 1 });
       const player = makePlayer(0, 9600);
       const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
       const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
@@ -765,7 +761,7 @@ describe('CreaturesService', () => {
     });
 
     it('doFighting — debug flat +60 augmente la vitesse de poursuite', async () => {
-      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const creature = makeCreature({ worldX: 6880, worldY: 11680, mapId: 1 });
       const player = makePlayer(0, 9600);
       const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
 
@@ -785,7 +781,7 @@ describe('CreaturesService', () => {
     });
 
     it('doFighting — speed ≤ 0 (flat -100) : pas de mouvement, pas de crash', async () => {
-      const creature = makeCreature({ x: 700, y: 580, worldX: 6880, worldY: 11680, mapId: 1 });
+      const creature = makeCreature({ worldX: 6880, worldY: 11680, mapId: 1 });
       const player = makePlayer(0, 9600);
       const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
       const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
@@ -800,7 +796,7 @@ describe('CreaturesService', () => {
 
     it('doEscaping — debug flat +60 augmente la vitesse de fuite', async () => {
       // creature WU(6080,12480) fuit joueur WU(5760,12160) — dans le patrolRadius
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       const player = makePlayer(5760, 12160);
 
       // 1. Baseline sans modifier
@@ -819,7 +815,7 @@ describe('CreaturesService', () => {
     });
 
     it('doPatrolMovement — speed ≤ 0 (flat -100) : state.speed=0 à la nouvelle direction', () => {
-      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1 });
       // moveUntil=0 → déclenchement du bloc nouvelle-direction
       const state = { dirX: 0, dirY: 0, speed: 50, moveUntil: 0, pauseUntil: 0 };
       debugRegistry.addModifier(creature.id, { targetStat: 'speed', operation: 'flat', value: -100 });

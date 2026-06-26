@@ -295,7 +295,7 @@ describe('AdminService resources', () => {
   });
 
   it('updateResource refuse une coordonnée non finie', async () => {
-    const resource = { id: 'resource-1', type: 'wood', x: 600, y: 300, worldX: 1600, worldY: 8000, mapId: 1, state: 'alive', remainingLoots: 5 } as Resource;
+    const resource = { id: 'resource-1', type: 'wood', worldX: 1600, worldY: 8000, mapId: 1, state: 'alive', remainingLoots: 5 } as Resource;
     resourceRepo.findOne.mockResolvedValue(resource);
 
     await expect(service.updateResource('resource-1', { worldX: Infinity })).rejects.toBeInstanceOf(BadRequestException);
@@ -304,8 +304,8 @@ describe('AdminService resources', () => {
 
   it('getResourceWorldObjects retourne les WorldObjects adaptés', async () => {
     const resources: Resource[] = [
-      { id: 'r-1', type: 'dead_tree', x: 400, y: 300, worldX: 1024, worldY: 2048, mapId: 1, state: 'alive', remainingLoots: 3 } as Resource,
-      { id: 'r-2', type: 'ore',       x: 600, y: 400, worldX: null, worldY: null, mapId: null, state: 'dead',  remainingLoots: 0 } as Resource,
+      { id: 'r-1', type: 'dead_tree', worldX: 1024, worldY: 2048, mapId: 1, state: 'alive', remainingLoots: 3 } as Resource,
+      { id: 'r-2', type: 'ore',       worldX: null, worldY: null, mapId: null, state: 'dead',  remainingLoots: 0 } as Resource,
     ];
     resourceRepo.find.mockResolvedValue(resources);
 
