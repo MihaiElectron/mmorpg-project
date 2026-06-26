@@ -30,3 +30,12 @@
   font-size: 10px;
   color: vars.$color-text-muted;
 }
+
+.inventory-item-name {
+  font-size: 8px;
+  text-align: center;
+  color: vars.$color-text-primary;
+  line-height: 1.2;
+  word-break: break-word;
+  padding: 2px;
+}

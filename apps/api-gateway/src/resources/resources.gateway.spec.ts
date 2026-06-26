@@ -70,7 +70,7 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
 
   function setupSession(client: any, targetId = 'res-1') {
     (gateway as any).gatherSessions.set(client.id, {
-      targetId, timer: null, lastX: client.data.player.x, lastY: client.data.player.y,
+      targetId, timer: null, lastWorldX: client.data.player.worldX, lastWorldY: client.data.player.worldY,
     });
   }
 

@@ -26,12 +26,16 @@ export default function Inventory() {
                 item ? `Double-clic pour équiper ${item.name}` : "Slot vide"
               }
             >
-              {item?.image ? (
-                <img
-                  src={item.image}
-                  alt={item.name || "item"}
-                  className="inventory-item-image"
-                />
+              {item ? (
+                item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.name || "item"}
+                    className="inventory-item-image"
+                  />
+                ) : (
+                  <span className="inventory-item-name">{item.name || "?"}</span>
+                )
               ) : (
                 <span className="empty-slot">Vide</span>
               )}

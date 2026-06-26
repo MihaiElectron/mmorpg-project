@@ -1165,7 +1165,7 @@ export default class WorldScene extends Phaser.Scene {
           id: resource.id,
           type: resource.type,
           kind: "resource",
-          actions: ["ramasser", "gathering"],
+          actions: ["ramasser"],
         });
       });
     this.redrawResourceOverlay();
@@ -1199,7 +1199,7 @@ export default class WorldScene extends Phaser.Scene {
       id: resource.id,
       type: resource.type,
       kind: "resource",
-      actions: ["ramasser", "gathering"],
+      actions: ["ramasser"],
     });
     this.redrawResourceOverlay();
   }
