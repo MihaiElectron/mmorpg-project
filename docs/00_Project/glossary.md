@@ -72,7 +72,7 @@ Definitions marked `Not verified` or `Planned concept` must not be treated as im
 
 ## Coordinate terms
 
-All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22). The active world/admin protocol uses WU for player movement and admin placement flows covered by the P0-P6 migration. Some legacy database columns remain as migration debt — see `docs/01_Architecture/wu-migration-audit.md`.
+All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22) and ADR-0002 (Accepted — 2026-06-26). The migration P0–P7 is complete: all entities use `worldX/worldY/mapId` as the sole DB and protocol truth. Legacy pixel columns have been removed. See `docs/01_Architecture/wu-migration-audit.md`.
 
 - **World Unit (WU)**: the official server-side position unit. `1 tile = 1024 WU = 2^10 WU`. Defined by ADR-0001, implemented in `world-coordinates.ts`. Stored as `worldX` (integer) and `worldY` (integer). Tile index = `worldX >> 10`; sub-tile offset = `worldX & 1023`.
 - **`worldX`**: the X component of the World Unit coordinate. Signed integer (int32). Defined by ADR-0001. Column type `INTEGER` in PostgreSQL. Implemented.
@@ -242,7 +242,7 @@ All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22
 - **Prediction**: client-side anticipation of gameplay outcomes before server confirmation. Used for local player movement. Not formally implemented as a reconciliation-backed system. Planned concept.
 - **Reconciliation**: the process of correcting client state when the server rejects or overrides a client prediction. Not yet implemented. Planned concept.
 - **Room** (Socket.IO): a named group of connected sockets that can receive targeted broadcasts. Not yet implemented for world events. Planned concept.
-- **Payload**: the data object carried by a Socket.IO event or HTTP request body. Current WU-migrated movement/admin position payloads use `{ mapId, worldX, worldY }`. Some legacy payloads may still exist outside the migrated paths and must be audited before reuse.
+- **Payload**: the data object carried by a Socket.IO event or HTTP request body. All position payloads use `{ mapId, worldX, worldY }` (migration P0–P7 complete). No legacy `{ x, y }` pixel payloads remain in the movement/admin flows.
 - **Namespace** (Socket.IO): a communication channel that allows multiplexing connections. All observed gateways use the default namespace. No custom namespace is currently in use.
 - **Gather tick**: a server-side timer that fires once per resource gathering cycle, re-validates gathering conditions, and grants loot if conditions are met. Implemented.
 
@@ -351,7 +351,7 @@ When a term changes meaning or is superseded, update its definition. Do not sile
 
 ## Known gaps
 
-- Coordinate terms (`worldX`, `worldY`, `mapId`, chunk coordinates) are fully defined (ADR-0001 Accepted) and implemented for player entities, creatures, and resources. `character_respawn` and `character_teleport` payloads still use pixel fallback on the client side — see `docs/01_Architecture/wu-migration-audit.md`.
+- Coordinate terms (`worldX`, `worldY`, `mapId`, chunk coordinates) are fully defined (ADR-0001 Accepted, ADR-0002 Accepted) and implemented for all entities. Migration P0–P7 complete. `character_respawn` and `character_teleport` payload pixel fallback removed (P4–P4.5). Remaining intentional pixel debt: `RespawnPoint.radius` and `CreatureTemplate` AI fields — see `docs/01_Architecture/wu-migration-audit.md`.
 - Production readiness is Not verified.
 - Complete test coverage is Not verified.
 - Complete migration workflow is Not verified.

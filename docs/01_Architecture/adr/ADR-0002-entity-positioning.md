@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Stable
+- Decision status: Accepted / Implemented
 - Owner: Project
-- Last updated: 2026-06-22
+- Last updated: 2026-06-26
 - Date proposed: 2026-06-21
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-26
+- Approved by: Project owner (migration P7-D complète, commit `1ea4c6e`)
+- Approval reference: STATUS.md — session 2026-06-26
 - Depends on: docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md, docs/01_Architecture/client-server-boundaries.md
 - Used by: Project owner, developers, conversational assistants, repository-aware coding agents
 - Supersedes: None
@@ -21,17 +21,17 @@
 
 ADR-0001 defines the official world coordinate system: all positions are expressed as `mapId`, `worldX`, and `worldY`. The official unit is the World Unit (WU), where `1 tile = 1024 WU`. `worldX` and `worldY` are signed integers. The architectural rationale is in `docs/08_Gameplay/world-units-study.md`. Screen coordinates are never persisted and the server is fully independent of Phaser.
 
-At the time this ADR is written, five entity types carry world positions:
+At the time this ADR was written (2026-06-21), five entity types carried world positions in legacy pixel columns. The migration described here is now complete (2026-06-26).
 
-| Entity | Current columns | Movement | Precision needed |
-|---|---|---|---|
-| `character` | `positionX INT`, `positionY INT` | Continuous, server-tracked in memory | Sub-tile |
-| `creature` | `x INT`, `y INT` | Continuous, server-driven AI | Sub-tile |
-| `resource` | `x INT`, `y INT` | Static | Tile-exact |
-| `creature_spawn` | `spawnX INT`, `spawnY INT` | Static | Tile-exact |
-| `respawn_point` | `x INT`, `y INT` | Static | Tile-exact |
+| Entity | Legacy columns (removed P7-D) | Current columns (sole truth) | Movement | Precision |
+|---|---|---|---|---|
+| `character` | ~~`positionX INT`, `positionY INT`~~ | `worldX`, `worldY`, `mapId` | Dynamic | Sub-tile |
+| `creature` | ~~`x INT`, `y INT`~~ | `worldX`, `worldY`, `mapId` | Dynamic | Sub-tile |
+| `resource` | ~~`x INT`, `y INT`~~ | `worldX`, `worldY`, `mapId` | Static | Tile-exact |
+| `creature_spawn` | ~~`spawnX INT`, `spawnY INT`~~ | `worldX`, `worldY`, `mapId` | Static | Tile-exact |
+| `respawn_point` | ~~`x INT`, `y INT`~~ | `worldX`, `worldY`, `mapId`, `radius` (pixels — intentional debt) | Static | Tile-exact |
 
-None of these entities carry a `mapId`. Column naming is inconsistent (`positionX`, `x`, `spawnX`). No entity references `worldX` or `worldY`.
+All legacy columns have been removed in P7-D (commit `1ea4c6e`). A TypeORM production migration `1782432000000-DropLegacyPixelColumns` was created.
 
 This ADR defines how each entity type stores and uses coordinates under ADR-0001.
 
@@ -155,21 +155,21 @@ Uniform naming with a signed integer column type (decided in ADR-0001) avoids in
 
 ### Impacted components
 
-| Component | Impact |
-|---|---|
-| `character` entity | Rename `positionX/Y` → `worldX/Y`; add `mapId` |
-| `creature` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
-| `resource` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
-| `creature_spawn` entity | Rename `spawnX/Y` → `worldX/Y`; add `mapId` |
-| `respawn_point` entity | Rename `x/y` → `worldX/Y`; add `mapId` |
-| `WorldService` | Update all position reads/writes; add `mapId` validation |
-| `CreaturesService` | Update AI movement; rename `x/y` fields; add `mapId` context |
-| `ResourcesGateway` | Update range check to use `worldX/Y`; validate `mapId` |
-| `WorldGateway` | Update `player_move` and join handlers; broadcast `mapId` |
-| WebSocket payloads | All position events: `x/y` → `worldX/Y`, add `mapId` |
-| Phaser client | All sprite positioning: use projection formula from ADR-0001 |
-| Admin tool | `/tp` and coordinate display: WU (`1 tile = 1024 WU`), `mapId` required |
-| Seeds | Hardcoded positions must be expressed in WU with `mapId` |
+| Component | Impact | Status |
+|---|---|---|
+| `character` entity | ~~Rename `positionX/Y` → `worldX/Y`; add `mapId`~~ | ✅ Done (P1–P7) |
+| `creature` entity | ~~Rename `x/y` → `worldX/Y`; add `mapId`~~ | ✅ Done |
+| `resource` entity | ~~Rename `x/y` → `worldX/Y`; add `mapId`~~ | ✅ Done |
+| `creature_spawn` entity | ~~Rename `spawnX/Y` → `worldX/Y`; add `mapId`~~ | ✅ Done |
+| `respawn_point` entity | ~~Rename `x/y` → `worldX/Y`; add `mapId`~~ | ✅ Done (`radius` intentionally in pixels) |
+| `WorldService` | ~~Update all position reads/writes; add `mapId` validation~~ | ✅ Done |
+| `CreaturesService` | ~~Update AI movement; rename `x/y` fields; add `mapId` context~~ | ✅ Done (session 3) |
+| `ResourcesGateway` | ~~Update range check to use `worldX/Y`; validate `mapId`~~ | ✅ Done (`MOVE_TOLERANCE_WU`) |
+| `WorldGateway` | ~~Update `player_move` and join handlers; broadcast `mapId`~~ | ✅ Done (P0–P5) |
+| WebSocket payloads | ~~All position events: `x/y` → `worldX/Y`, add `mapId`~~ | ✅ Done (P0–P6) |
+| Phaser client | ~~All sprite positioning: use projection formula from ADR-0001~~ | ✅ Done (`resolveScreen()`) |
+| Admin tool | ~~`/tp` and coordinate display: WU, `mapId` required~~ | ✅ Done (P6) |
+| Seeds | ~~Hardcoded positions must be expressed in WU with `mapId`~~ | ✅ Done (backfill + seeds) |
 
 ## Security impact
 
@@ -206,16 +206,21 @@ No mixed-state operation: during migration of a given entity type, all code path
 - [x] ADR-0001 reviewed.
 - [x] Security impact reviewed.
 - [x] Performance impact reviewed.
-- [ ] Human approval recorded.
-- [ ] Related documentation updated (deferred until this ADR is accepted).
+- [x] Human approval recorded (migration executed and committed — P1–P7, 2026-06-22 to 2026-06-26).
+- [x] Related documentation updated (STATUS.md, wu-migration-audit.md, websocket-wu-migration-study.md, ADR-0001, glossary).
 
-## Open questions
+## Open questions (resolved)
 
-- **`mapId` type and FK target**: should `mapId` be an integer FK to a future `map` entity, or a string identifier? The `map` entity does not yet exist.
-- **Migration order**: in what order should the five entity types be migrated? What handles the transition period where some code uses old columns and some uses new?
-- **Seed data**: how should existing hardcoded seed positions (e.g., respawn point at x=600, y=300) be converted to WU? This requires the final per-map origin offset (currently `TILEMAP_TEST_OFFSET_X = 936`, temporary) and the inverse projection formula from ADR-0001.
-- **`mapId` default value during migration**: what `mapId` value is assigned to all existing entities that have no map concept yet?
-- **Payload backward compatibility**: should a transition period with dual-format payloads be supported, or is a hard cutover required?
+- **`mapId` type and FK target** → resolved: `mapId INTEGER` nullable, default `1` for the single map. FK target deferred until a `map` entity is created.
+- **Migration order** → resolved: static entities first (resources, spawns, respawn points), then dynamic (creatures, characters). Backfill script (`wu-backfill-real.ts`) executed 2026-06-22 then deleted 2026-06-26.
+- **Seed data** → resolved: seeds rewritten to use WU values. Inverse projection formula from ADR-0001 used for conversion.
+- **`mapId` default value** → resolved: `DEFAULT_MAP_ID = 1` used for all existing entities.
+- **Payload backward compatibility** → resolved: dual-format (P1–P4) then hard cutover (P5–P7). No backward compatibility needed post-P7.
+
+## Remaining intentional debt
+
+- `RespawnPoint.radius` : stored in pixels. `legacyRadiusToWU()` available. Faible criticité.
+- `CreatureTemplate` AI fields (`aggroRadius`, `patrolRadius`, `speedMin/Max`) : stored in pixels. `legacyRadiusToWU()` converts at runtime. Future migration needed if per-unit calibration is required.
 
 ## Non-goals
 
@@ -257,12 +262,12 @@ Position columns are read and written on every movement event and every AI tick.
 
 ## TODO
 
-- [ ] Obtain human approval and record it in `Approved by` and `Approval reference`.
-- [ ] Set `Decision status` to `Accepted` after human validation.
-- [ ] Set `Date accepted` after human validation.
-- [ ] Confirm DB column type (`INTEGER` vs `BIGINT`) before implementation.
-- [ ] Define `mapId` type and FK target (requires a `map` entity ADR or decision).
-- [ ] Define migration order and transition strategy.
-- [ ] Update `docs/04_Server/websockets.md` to document the new payload format.
-- [ ] Update `docs/06_Database/schema.md` after the migration is implemented.
-- [ ] Update seed files to use WU values once per-map origins are finalized.
+- [x] Obtain human approval — recorded via migration execution (P1–P7, 2026-06-22/26).
+- [x] Set `Decision status` to `Accepted`.
+- [x] Set `Date accepted` to 2026-06-26.
+- [x] Confirm DB column type — `INTEGER` (int32) confirmed; world size does not require `BIGINT`.
+- [x] Define `mapId` — integer, nullable, default `1`; FK deferred.
+- [x] Define migration order and transition strategy — executed and complete.
+- [ ] Update `docs/04_Server/websockets.md` to document the final payload format.
+- [ ] Update `docs/06_Database/schema.md` to reflect removed legacy columns.
+- [x] Update seed files — seeds use WU values.

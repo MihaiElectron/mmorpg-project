@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-24_
-_Session : 2026-06-24 (sessions 14–18 — Crafting Stations, runtime craft joueur, overlays debug)_
+_Dernière mise à jour : 2026-06-26_
+_Session : 2026-06-26 (clôture WU P7 — suppression colonnes legacy DB, documentation)_
 _Branche : main_
 _État : développement local_
 
@@ -15,13 +15,21 @@ commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers
 map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
 personnages enregistrés, animaux actifs, templates, spawns).
 
-Migration WU P0–P6 terminée : protocole WebSocket entièrement WU. `player_move`
-WU-only (plus de `x/y` dans le payload). Tous les événements admin (`admin:spawn`,
-`admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`,
-`admin:update_resource`) acceptent `worldX/worldY` exclusivement. Pixel cache dérivé
-côté serveur via `wuToIsoScreenX/Y`. Drag-to-map et boutons Tp du panneau admin
-passent en WU via `screenToWorldWU`. Infrastructure DevTools complète : shell, panel,
-store centralisé, bridge React ↔ Phaser, module World, HUD admin-only.
+**Migration WU P0–P7 entièrement terminée (2026-06-26).** Protocole WebSocket WU pur
+(P0–P6 soldés). Colonnes legacy DB supprimées (P7-A à P7-D) : `character.positionX/Y`,
+`creature.x/y`, `resource.x/y`, `creature_spawn.spawnX/Y`, `respawn_point.x/y`.
+Migration TypeORM `1782432000000-DropLegacyPixelColumns` créée pour la production.
+Scripts de backfill supprimés. `world-position.adapter.ts` réduit à `WUPositionRecord`.
+
+Source de vérité unique pour toutes les entités : `worldX / worldY / mapId`.
+Pixel cache (`x/y`) conservé uniquement dans `ConnectedPlayer` (rendu frontend)
+et dérivé côté serveur via `wuToIsoScreenX/Y`. `legacyRadiusToWU()` conservé
+dans `legacy-pixel-position.adapter.ts` pour les valeurs de template IA
+(`aggroRadius`, `patrolRadius`, `speed`) encore exprimées en pixels en DB.
+
+Drag-to-map et boutons Tp du panneau admin passent en WU via `screenToWorldWU`.
+Infrastructure DevTools complète : shell, panel, store centralisé, bridge React ↔
+Phaser, module World, HUD admin-only.
 
 **AdminPanelWOM** opérationnel avec Skills et CraftingRecipes : création/édition
 de `SkillDefinition`, sélects dynamiques pour categories/stations, `requiredSkillKey`
@@ -120,7 +128,7 @@ autoritaire.
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
 | Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé craft : `npm --workspace api-gateway run test -- crafting`, client complet : `npm --workspace client run test` |
-| Migration WU | **P0–P6 soldés.** Protocole WebSocket entièrement WU. `player_move` WU-only, tous les événements admin en `worldX/worldY`. `resolveScreen()` WU-first côté client. Reste : P7 drop colonnes legacy DB (`positionX/Y`, `creature.x/y`). |
+| Migration WU | **P0–P7 entièrement soldés (2026-06-26).** Protocole WebSocket WU pur. Colonnes legacy DB supprimées. Source de vérité unique : `worldX/worldY/mapId`. Voir `docs/01_Architecture/wu-migration-audit.md`. |
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
 | Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
 
@@ -128,12 +136,14 @@ autoritaire.
 
 ## Décisions et règles à ne pas oublier
 
-- **Système de coordonnées WU (ADR-0001 Accepted)** : `1 tile = 1024 WU`, `CHUNK_SIZE=64`,
-  `CHUNK_SIZE_WU=65536`, `DEFAULT_MAP_ID=1`. Projection isométrique :
-  `screenX = 1000 + (worldX − worldY) / 16`, `screenY = (worldX + worldY) / 32`.
-  Inverse : `worldX = 8*(sx−1000) + 16*sy`, `worldY = −8*(sx−1000) + 16*sy`.
-  Helper TS partagé : `src/phaser/utils/wuProjection.ts` (`wuToScreen`).
-  P0–P6 soldés : protocole WebSocket WU pur, pixel cache dérivé côté serveur.
+- **Système de coordonnées WU (ADR-0001 Accepted, ADR-0002 Accepted)** : migration P0–P7
+  entièrement soldée. `1 tile = 1024 WU`, `CHUNK_SIZE=64`, `CHUNK_SIZE_WU=65536`,
+  `DEFAULT_MAP_ID=1`. Source de vérité unique : `worldX / worldY / mapId` (toutes entités).
+  Projection isométrique (client uniquement) : `screenX = 1000 + (worldX − worldY) / 16`,
+  `screenY = (worldX + worldY) / 32`. Helper TS partagé : `src/phaser/utils/wuProjection.ts`.
+  Les trois couches : **Runtime/DB** (`worldX/worldY/mapId`), **Projection écran** (dérivée
+  côté serveur pour `ConnectedPlayer.x/y`, côté client pour les sprites Phaser),
+  **Phaser** (`sprite.x/y` — rendu local uniquement, jamais persisté).
   Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
   `docs/01_Architecture/wu-migration-audit.md`.
 - **Navigation client — NavGrid / Pathfinder** : `NAV_CELL_SIZE_WU = 128` (8×8 nav
@@ -167,8 +177,9 @@ autoritaire.
   les timers legacy après un `forceRespawn`. Tout nouveau timer doit capturer son
   token au moment de `armRespawnTimer` et le vérifier dans `doRespawn`.
 - **`buildResourceBroadcast`** : tout broadcast `resource_update` depuis le service
-  doit utiliser ce helper pour inclure `type`/`x`/`y`/`worldX`/`worldY`/`mapId`.
+  doit utiliser ce helper pour inclure `type`/`worldX`/`worldY`/`mapId`.
   Sans ces champs, le client ne peut pas recréer le sprite après un état `dead`.
+  (`x`/`y` pixels ne sont plus stockés en entité — supprimés en P7-D.)
 - **`lootPool` non éditable via socket** : `admin:update_resource_template` n'accepte
   que `defaultRemainingLoots` et `respawnDelayMs`. `lootPool` est affiché en lecture
   seule dans AdminPanelWOM.
@@ -187,15 +198,20 @@ autoritaire.
 - ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**.
 - ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**.
 - ~~**[IMPORTANT] Cycle respawn resource invisible après dead**~~ — **SOLDÉ** (`buildResourceBroadcast`).
+- ~~**[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels**~~ — **SOLDÉ** (P7-C2 : `MOVE_TOLERANCE_WU = 128`, `GatherSession.lastWorldX/Y`).
+- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P4.5).
+- ~~**[IMPORTANT] `player_move` — x/y fallback à supprimer**~~ — **SOLDÉ** (P5).
+- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6).
+- ~~**[IMPORTANT] Colonnes legacy DB (`positionX/Y`, `creature.x/y`, etc.)**~~ — **SOLDÉ** (P7-A à P7-D : backfill, double-write supprimé, colonnes supprimées des entités, migration `1782432000000-DropLegacyPixelColumns` créée).
 - **[IMPORTANT] `auth.controller.spec.ts` en échec** : 1 test pré-existant échoue
   (dépendance `AuthService` manquante dans le module de test). Non bloquant en dev,
   à corriger avant CI/prod.
-- **[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels** : détection de mouvement pendant la récolte encore basée sur `player.x/y` (4 px). Faible criticité (anti-exploit seulement).
-- **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn en pixels ;
-  `legacyRadiusToWU()` disponible dans `legacy-pixel-position.adapter.ts`.
-- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P4.5 : WU + chunkX/Y, x/y supprimés).
-- ~~**[IMPORTANT] `player_move` — x/y fallback à supprimer**~~ — **SOLDÉ** (P5 : payload WU-only, fallback pixel supprimé, pixel cache dérivé côté serveur).
-- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6 : `admin:spawn`, `admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature/resource` en `worldX/worldY`).
+- **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn encore calculé
+  avec `nearest.radius` en pixels. `legacyRadiusToWU()` disponible pour convertir.
+  Ne concerne que le drift aléatoire de respawn, faible criticité gameplay.
+- **[IMPORTANT] Templates IA en pixels** : `aggroRadius`, `patrolRadius`, `speedMin/Max`
+  dans `CreatureTemplate` sont encore exprimés en pixels. `legacyRadiusToWU()` convertit
+  ces valeurs à la volée. Migration vers colonnes WU native : future dette explicite.
 - **[IMPORTANT] `admin.store.ts` alias legacy** : `WorldScene.js`, `PlayerController.js`,
   `AdminPanel.tsx`, `ActionPanel.tsx` importent encore `admin.store`. À migrer vers
   `devtools.store` fichier par fichier.
@@ -241,16 +257,16 @@ autoritaire.
 - [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
 - [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
 
-### Migration WU — Phase 3 (protocole WebSocket)
-- [x] P0 — `join_world` : supprimer fallback `payload.x/y`
-- [x] P1 — `player_move` additif : backend WU-first, fallback x/y conservé
-- [x] P2 — Frontend joueurs : `resolveScreen()` WU-first
-- [x] P3 — Frontend animaux + ressources : `resolveScreen()` WU-first
-- [x] P4 — `character_respawn` et `character_teleport` : `worldX/worldY/chunkX/chunkY/characterId`, frontend WU-first via `resolveScreen()`
-- [x] P4.5 — supprimer `x/y` legacy de `character_respawn` et `character_teleport`
-- [x] P5 — `player_move` : supprimer fallback `x/y` dans payload client + `updatePlayer` serveur
-- [x] P6 — Admin protocol : `admin:spawn`, `admin:teleport`, `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`, `admin:update_resource` en WU
-- [ ] P7 — Drop colonnes legacy DB (`positionX/Y`, `creature.x/y` en cache pur)
+### Migration WU — **ENTIÈREMENT SOLDÉE (2026-06-26)**
+
+- [x] P0–P6 — Protocole WebSocket WU pur (soldés en sessions précédentes)
+- [x] P7-A à P7-D — Colonnes legacy DB supprimées, migration TypeORM créée, backfill scripts supprimés
+
+Dettes restantes **intentionnelles** post-migration :
+- `RespawnPoint.radius` encore en pixels (faible criticité, `legacyRadiusToWU()` disponible)
+- Templates IA (`aggroRadius`, `patrolRadius`, `speedMin/Max`) encore en pixels en DB
+
+Voir `docs/01_Architecture/wu-migration-audit.md` pour l'audit complet.
 
 ### Gameplay / contenu
 - [ ] Système de loot sur les animaux tués
@@ -270,7 +286,10 @@ autoritaire.
 - [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, admin protocol WU, drag-to-map WU, Tp WU
 - [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
 - [ ] `docs/05_World/maps-and-collisions.md` — NavGrid 8×8, `NAV_CELL_SIZE_WU=128`, pathfinding WU
-- [ ] `docs/01_Architecture/websocket-wu-migration-study.md` — marquer P0–P6 soldés (fait dans cette session)
+- [x] `docs/01_Architecture/websocket-wu-migration-study.md` — P0–P7 soldés marqués
+- [x] `docs/01_Architecture/wu-migration-audit.md` — P7 soldé, audit complet à 100%
+- [x] `docs/01_Architecture/adr/ADR-0002-entity-positioning.md` — promu Accepted
+- [x] `docs/00_Project/glossary.md` — "Known gaps" WU mis à jour
 
 ---
 
@@ -290,6 +309,20 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-26 (clôture migration WU — P7-D + documentation)
+
+- **P7-D — Suppression colonnes legacy DB** : `character.positionX/Y`, `creature.x/y`,
+  `resource.x/y`, `creature_spawn.spawnX/Y`, `respawn_point.x/y` supprimés des entités
+  TypeORM. `world-position.adapter.ts` réduit à l'interface `WUPositionRecord`.
+  `world-position.adapter.spec.ts` supprimé. Scripts `wu-backfill-dry-run.ts` et
+  `wu-backfill-real.ts` supprimés. Commandes npm `wu:dry-run` et `wu:backfill` retirées.
+  Migration TypeORM `1782432000000-DropLegacyPixelColumns` créée (5 tables, 10 colonnes,
+  `IF EXISTS`, `down()` restauratrice). 6 fichiers de specs mis à jour pour retirer
+  les fixtures `x/y/spawnX/Y`. Build propre. 861/862 tests (1 pre-existing auth failure).
+- **Documentation WU** : `wu-migration-audit.md` clos à 100%. `websocket-wu-migration-study.md`
+  P7 soldé. ADR-0002 promu Accepted/Implemented. ADR-0001 TODOs finaux marqués résolus.
+  Glossaire : "Known gaps" coordonnées mis à jour. STATUS.md.
 
 ### 2026-06-24 (sessions 16–18 — Crafting Stations et runtime craft joueur)
 

@@ -323,7 +323,7 @@ Code using the new coordinate system must be isolated from code using the old sy
 
 - **Storage column type**: RESOLVED — `INTEGER` (int32) chosen. All WU columns use `@Column({ type: 'int', nullable: true })` in TypeORM entities. int32 supports maps up to ~2 M tiles per axis (int32 max / TILE_SIZE_WU), sufficient for the current project scope.
 
-- **Migration strategy**: RESOLVED — additive columns (`worldX`, `worldY`, `mapId` nullable) + `readWorldPosition()` fallback chain + idempotent backfill script (`npm run wu:backfill`). Executed successfully: 0 anomalies / 0 entities remaining. See `tools/scripts/wu-backfill-real.ts`.
+- **Migration strategy**: RESOLVED — additive columns (`worldX`, `worldY`, `mapId` nullable) + backfill script (executed 2026-06-22, 0 anomalies). Legacy columns removed in P7-D (2026-06-26). TypeORM migration `1782432000000-DropLegacyPixelColumns` created. Backfill scripts deleted (one-time task complete).
 
 - **Tilemap origin offset**: RESOLVED — `WORLD_ORIGIN_X_PX = 1000` defined in `world-coordinates.ts`. Derived from `TILEMAP_TEST_OFFSET_X (936) + ISO_HALF_TILE_WIDTH_PX (64)` (north vertex of tile 0,0). `TILEMAP_TEST_OFFSET_X` remains in `WorldScene.js` as a Phaser visual offset; it is not part of the coordinate system.
 
@@ -378,6 +378,6 @@ Chunk-scoped Socket.IO rooms are a future consequence of this system. Their desi
 - [ ] Update `docs/05_World/maps-and-collisions.md` to reference this ADR for coordinate authority.
 - [ ] Update `docs/03_Client/phaser-world.md` to document the projection formula as the official conversion.
 - [x] Update `docs/04_Server/websockets.md` to document that payloads carry `mapId`, `worldX`, `worldY`. *(P0–P6 soldés — protocole WebSocket entièrement WU)*
-- [ ] Update `docs/06_Database/schema.md` — column type `INTEGER` confirmed; update after legacy columns are removed.
+- [ ] Update `docs/06_Database/schema.md` — column type `INTEGER` confirmed; legacy columns removed P7-D (update the schema doc to reflect final state).
 - [ ] Calibrate speed and range constants in WU/s (Phase 2 prerequisite for ADR-0003 distance gate).
 - [ ] Finalize gameplay distance metric for combat and gathering (Chebyshev vs Euclidean WU).

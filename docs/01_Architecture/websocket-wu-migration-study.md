@@ -1,13 +1,13 @@
 # Étude — Migration WebSocket vers WU
 
 _Date : 2026-06-22_
-_Mise à jour : 2026-06-24 — P0–P6 soldés_
+_Mise à jour : 2026-06-24 — P0–P6 soldés. Mise à jour : 2026-06-26 — **P7 soldé, migration entièrement terminée**._
 _Branche : main_
-_Portée : protocole WebSocket_
+_Portée : protocole WebSocket + colonnes DB_
 
 ---
 
-## État de la migration (2026-06-24)
+## État de la migration (2026-06-26 — FINALE)
 
 | Phase | Description | État |
 |---|---|---|
@@ -19,7 +19,7 @@ _Portée : protocole WebSocket_
 | P4.5 | Supprimer `x/y` legacy de `character_respawn` + `character_teleport` | **SOLDÉ** |
 | P5 | `player_move` WU-only — supprimer fallback `x/y` | **SOLDÉ** |
 | P6 | Protocole admin WU — 6 événements admin en `worldX/worldY` | **SOLDÉ** |
-| P7 | Drop colonnes legacy DB (`positionX/Y`, `creature.x/y`) | À faire |
+| P7 | Drop colonnes legacy DB (`positionX/Y`, `creature.x/y`, etc.) + migration TypeORM | **SOLDÉ** |
 
 ---
 
@@ -103,22 +103,22 @@ playerY = character.positionY ?? payload.y ?? 300;
 
 ---
 
-## 3. `ConnectedPlayer` — état actuel des champs
+## 3. `ConnectedPlayer` — état final des champs (P7 soldé)
 
 ```typescript
-// world.service.ts:19
+// world.service.ts — état post P7
 export type ConnectedPlayer = {
   socketId: string;
   characterId: string;
   name: string;
   sex?: string;
 
-  // ── Vérité serveur ──────────────────────────────────────────────────────────
-  worldX: number;   // WU — calculé depuis DB (worldX/Y) ou isoScreenToWorldWU(x,y)
+  // ── Vérité serveur (seule source de vérité pour la logique métier) ─────────
+  worldX: number;   // WU — source : DB worldX colonne
   worldY: number;
   mapId: number;
 
-  // ── Cache de rendu pixels — destinés uniquement au frontend ────────────────
+  // ── Cache de rendu pixels (mémoire uniquement, jamais persisté) ───────────
   x: number;        // pixels Phaser — dérivé de wuToIsoScreenX(worldX, worldY)
   y: number;
 
@@ -130,22 +130,20 @@ export type ConnectedPlayer = {
 
 | Champ | Rôle | Utilisé par logique métier | Utilisé par frontend |
 |---|---|---|---|
-| `worldX` | Vérité WU — portée, respawn, animaux | ✅ `attack()`, `isInRange()`, `CreaturesGateway`, `ResourcesGateway` | ✅ présent dans payload mais ignoré |
-| `worldY` | idem | ✅ | ✅ présent mais ignoré |
-| `mapId` | Filtre de map | ✅ `findNearestPlayer`, `respawnCharacter`, etc. | ✅ présent mais ignoré |
-| `x` | Cache pixels | ⚠️ `resources.gateway.ts` MOVE_TOLERANCE uniquement | ✅ `upsertRemotePlayer`, `world_joined` |
-| `y` | Cache pixels | ⚠️ `resources.gateway.ts` MOVE_TOLERANCE uniquement | ✅ idem |
-
-**`x/y` ne sont plus utilisés pour la logique métier** (la seule exception est `MOVE_TOLERANCE` dans `resources.gateway.ts`, ligne 170). Ils existent uniquement pour satisfaire le frontend.
+| `worldX` | Vérité WU — portée, respawn, animaux | ✅ `attack()`, `isInRange()`, `CreaturesGateway`, `ResourcesGateway` | ✅ présent dans payload, lu par `resolveScreen()` |
+| `worldY` | idem | ✅ | ✅ WU-first |
+| `mapId` | Filtre de map | ✅ `findNearestPlayer`, `respawnCharacter`, etc. | ✅ |
+| `x` | Cache pixels | ❌ non utilisé pour la logique métier (MOVE_TOLERANCE migré en WU — P7-C2) | ✅ `upsertRemotePlayer`, `world_joined` |
+| `y` | Cache pixels | ❌ non utilisé pour la logique métier | ✅ idem |
 
 ### Écriture de `x/y` côté serveur
 
 | Fonction | Écrit `x/y` depuis | État |
 |---|---|---|
-| `joinPlayer` | `wuToIsoScreenX/Y(worldX, worldY)` ou fallback DB | Actif (cache pour frontend) |
-| `updatePlayer` | `wuToIsoScreenX/Y(payload.worldX, payload.worldY)` | **P5 SOLDÉ** — plus de pixels du client |
+| `joinPlayer` | `wuToIsoScreenX/Y(worldX, worldY)` | Actif (cache pour frontend) |
+| `updatePlayer` | `wuToIsoScreenX/Y(payload.worldX, payload.worldY)` | **P5 SOLDÉ** |
 | `respawnCharacter` | `wuToIsoScreenX/Y(newWX, newWY)` | Actif (cache pour frontend) |
-| `teleportCharacter` | `wuToIsoScreenX/Y(worldX, worldY)` | **P6 SOLDÉ** — plus de pixels admin |
+| `teleportCharacter` | `wuToIsoScreenX/Y(worldX, worldY)` | **P6 SOLDÉ** |
 
 ---
 
@@ -369,12 +367,13 @@ Peut rester en pixels indéfiniment tant que le panneau admin est usage interne 
 
 ---
 
-### P7 — Drop colonnes legacy DB (post-migration complète)
+### P7 — Drop colonnes legacy DB — **SOLDÉ (2026-06-26)**
 
-Après P1-P5 stables :
-- `character.positionX/Y` : schéma migration TypeORM, supprimer double-write
-- `creature.x/y` : supprimer des colonnes DB (calculés à la volée dans `toDto`)
-- `resource.x/y` : idem
+- `character.positionX/Y` : supprimées de l'entité TypeORM. Migration `1782432000000-DropLegacyPixelColumns`.
+- `creature.x/y` : idem.
+- `resource.x/y` : idem.
+- `creature_spawn.spawnX/Y` : idem.
+- `respawn_point.x/y` : idem.
 
 ---
 
