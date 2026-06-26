@@ -14,6 +14,10 @@ export class UpdateItemDto {
   category?: string;
 
   @IsOptional()
+  @IsString()
+  image?: string;
+
+  @IsOptional()
   @IsNumber()
   attack?: number;
 

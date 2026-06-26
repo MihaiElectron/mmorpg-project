@@ -10,6 +10,10 @@ export class CreateItemDto {
   @IsString()
   category: string;
 
+  @IsString()
+  @IsOptional()
+  image?: string;
+
   @IsNumber()
   @IsOptional()
   attack: number;

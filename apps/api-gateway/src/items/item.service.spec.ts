@@ -343,4 +343,27 @@ describe('ItemService', () => {
       );
     });
   });
+
+  // ── update ───────────────────────────────────────────────────────────────────
+
+  describe('update', () => {
+    it("met à jour l'image d'un item existant", async () => {
+      const item = makeItem({ image: null });
+      repo.findOne.mockResolvedValue(item);
+
+      await expect(
+        service.update('item-uuid-1', {
+          image: '/assets/images/items/wooden_stick.png',
+        }),
+      ).resolves.toMatchObject({
+        image: '/assets/images/items/wooden_stick.png',
+      });
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          image: '/assets/images/items/wooden_stick.png',
+        }),
+      );
+    });
+  });
 });

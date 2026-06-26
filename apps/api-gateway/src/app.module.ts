@@ -28,6 +28,7 @@ import { SkillsModule } from './skills/skills.module';
 import { CraftingModule } from './crafting/crafting.module';
 import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
 import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.module';
+import { ItemModule } from './items/item.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.modul
     WorldModule,
     CreaturesModule,
     AdminModule,
+    ItemModule,
     SkillsModule,
     CraftingModule,
     PlayerRuntimeModule,

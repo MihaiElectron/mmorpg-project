@@ -1,0 +1,250 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+.item-editor {
+  @include m.panel-section;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__header {
+    align-items: center;
+    border-bottom: 1px solid vars.$panel-border;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding-bottom: 6px;
+  }
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.85rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  &__count,
+  &__status,
+  &__message {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+  }
+
+  &__status {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    padding: 6px 8px;
+  }
+
+  &__status--error,
+  &__message--error {
+    color: #e74c3c;
+  }
+
+  &__toolbar {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(92px, 0.8fr) minmax(
+        118px,
+        1fr
+      );
+  }
+
+  &__search,
+  &__filter,
+  &__input {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.75rem;
+    min-width: 0;
+    padding: 5px 7px;
+
+    &:focus {
+      border-color: vars.$color-magic-amber;
+      outline: none;
+    }
+  }
+
+  &__body {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(190px, 1fr) minmax(220px, 1fr);
+    min-height: 0;
+  }
+
+  &__list,
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  &__list {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  &__row {
+    align-items: center;
+    background: vars.$panel-header-bg;
+    border: 1px solid transparent;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+    display: grid;
+    gap: 7px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    padding: 5px 7px;
+    text-align: left;
+
+    &:hover {
+      border-color: vars.$panel-border;
+    }
+
+    &:focus-visible {
+      outline: 1px solid vars.$color-text-gold;
+      outline-offset: 1px;
+    }
+  }
+
+  &__row--selected {
+    background: vars.$panel-inner-bg;
+    border-color: vars.$color-text-gold;
+  }
+
+  &__row-icon,
+  &__preview-icon {
+    align-items: center;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  &__row-icon {
+    height: 28px;
+    width: 28px;
+  }
+
+  &__row-img,
+  &__preview-img {
+    display: block;
+    height: 100%;
+    object-fit: contain;
+    width: 100%;
+  }
+
+  &__row-empty {
+    background: vars.$panel-border-subtle;
+    border-radius: 50%;
+    display: block;
+    height: 10px;
+    width: 10px;
+  }
+
+  &__row-main,
+  &__preview-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__row-name,
+  &__preview-name {
+    color: vars.$color-text-primary;
+    font-size: 0.76rem;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__row-meta,
+  &__row-id,
+  &__preview-id {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__preview {
+    align-items: center;
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding: 7px;
+  }
+
+  &__preview-icon {
+    height: 42px;
+    width: 42px;
+  }
+
+  &__preview-empty {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.85rem;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    min-height: 28px;
+  }
+
+  &__message {
+    margin-right: auto;
+  }
+
+  &__save {
+    background: rgba(39, 174, 96, 0.22);
+    border: 1px solid rgba(39, 174, 96, 0.45);
+    border-radius: vars.$panel-radius-sm;
+    color: #7dffad;
+    cursor: pointer;
+    font-family: vars.$coords-font-family;
+    font-size: 0.75rem;
+    padding: 4px 12px;
+
+    &:hover:not(:disabled) {
+      background: rgba(39, 174, 96, 0.36);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.4;
+    }
+  }
+}
