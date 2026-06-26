@@ -1,6 +1,6 @@
 // apps/client/src/components/DevTools/modules/PlayerRuntime/RuntimeInspectorPanel.tsx
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   STAT_KEYS,
   STAT_LABELS,
@@ -286,6 +286,18 @@ export default function RuntimeInspectorPanel({ target }: { target?: InspectorTa
     }
   }, [target]);
 
+  // Effacer le snapshot stale quand la cible change (creature ↔ joueur).
+  useEffect(() => {
+    setSnapshot(null);
+    setError(null);
+  }, [target?.entityId]);
+
+  // Auto-charger dès que le panneau est ouvert et le snapshot absent.
+  // Couvre : ouverture initiale + changement de cible panneau déjà ouvert.
+  useEffect(() => {
+    if (isOpen && !snapshot && !loading) void load();
+  }, [isOpen, snapshot, loading, load]);
+
   const handleToggle = () => {
     const next = !isOpen;
     setIsOpen(next);
@@ -343,7 +355,7 @@ export default function RuntimeInspectorPanel({ target }: { target?: InspectorTa
         onClick={handleToggle}
       >
         <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        Runtime Inspector
+        Runtime Inspector — {target?.entityKind === "creature" ? "Créature" : "Joueur"}
         <button
           className="devtools-world__refresh-btn"
           onClick={handleRefresh}
