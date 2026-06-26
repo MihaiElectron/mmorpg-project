@@ -41,7 +41,9 @@ describe('ItemService', () => {
     repo = {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
-      save: jest.fn().mockImplementation((e) => Promise.resolve({ ...e, id: 'new-uuid' })),
+      save: jest
+        .fn()
+        .mockImplementation((e) => Promise.resolve({ ...e, id: 'new-uuid' })),
       create: jest.fn().mockImplementation((e) => e),
       remove: jest.fn().mockResolvedValue(undefined),
     };
@@ -63,6 +65,8 @@ describe('ItemService', () => {
       const seed = LOOT_ITEM_SEEDS.find((s) => s.category === 'wooden_stick');
       expect(seed).toBeDefined();
       expect(seed!.type).toBe('material');
+      expect(seed!.name).toBe('Bâton de bois');
+      expect(seed!.image).toBe('/assets/images/items/wooden_stick.png');
     });
 
     it('contient iron_ore', () => {
@@ -78,6 +82,18 @@ describe('ItemService', () => {
         expect(s.category.length).toBeGreaterThan(0);
       }
     });
+
+    it('le seed canonique dead_tree → wooden_stick est complet pour l’inventaire', () => {
+      const seed = LOOT_ITEM_SEEDS.find(
+        (s) => s.category === 'wooden_stick' && s.type === 'material',
+      );
+      expect(seed).toMatchObject({
+        name: 'Bâton de bois',
+        category: 'wooden_stick',
+        type: 'material',
+        image: '/assets/images/items/wooden_stick.png',
+      });
+    });
   });
 
   // ── onModuleInit / seedLootItems ─────────────────────────────────────────────
@@ -90,16 +106,40 @@ describe('ItemService', () => {
     });
 
     it('ne duplique pas les items déjà présents', async () => {
-      repo.findOne.mockResolvedValue(makeItem()); // material déjà présents
+      repo.findOne.mockResolvedValue(
+        makeItem({ image: '/assets/images/items/wooden_stick.png' }),
+      ); // material déjà présents
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
     });
 
+    it("complète l'image de l'item canonique existant sans créer de doublon", async () => {
+      const existingWoodenStick = makeItem({ image: null });
+      repo.findOne
+        .mockResolvedValueOnce(existingWoodenStick)
+        .mockResolvedValue(makeItem({ image: null }));
+
+      await service.onModuleInit();
+
+      expect(repo.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'wooden_stick' }),
+      );
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: existingWoodenStick.id,
+          category: 'wooden_stick',
+          image: '/assets/images/items/wooden_stick.png',
+        }),
+      );
+    });
+
     it('insère uniquement les items manquants (un absent parmi plusieurs présents)', async () => {
       repo.findOne
-        .mockResolvedValueOnce(makeItem()) // wooden_stick présent
-        .mockResolvedValueOnce(null)       // iron_ore absent → insert
-        .mockResolvedValue(makeItem());    // iron_bar, basic_handle, rough_blade, basic_sword présents
+        .mockResolvedValueOnce(
+          makeItem({ image: '/assets/images/items/wooden_stick.png' }),
+        ) // wooden_stick présent
+        .mockResolvedValueOnce(null) // iron_ore absent → insert
+        .mockResolvedValue(makeItem({ image: null })); // iron_bar, basic_handle, rough_blade, basic_sword présents
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
     });
@@ -111,7 +151,9 @@ describe('ItemService', () => {
       await service.onModuleInit();
       // Vérifie que la recherche inclut type dans le where
       expect(repo.findOne).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ type: 'material' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ type: 'material' }),
+        }),
       );
     });
   });
@@ -127,7 +169,9 @@ describe('ItemService', () => {
 
     it('lève NotFoundException si absent', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne('inexistant')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('inexistant')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

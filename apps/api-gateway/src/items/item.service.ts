@@ -6,15 +6,48 @@ import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
 /** Items de loot et de craft garantis présents en DB au démarrage. */
-export const LOOT_ITEM_SEEDS: Pick<Item, 'name' | 'type' | 'category'>[] = [
+export const LOOT_ITEM_SEEDS: Pick<
+  Item,
+  'name' | 'type' | 'category' | 'image'
+>[] = [
   // ── Loot resources ───────────────────────────────────────────────────────
-  { name: 'Bâton de bois',  type: 'material', category: 'wooden_stick' },
-  { name: 'Minerai de fer', type: 'material', category: 'iron_ore' },
+  {
+    name: 'Bâton de bois',
+    type: 'material',
+    category: 'wooden_stick',
+    image: '/assets/images/items/wooden_stick.png',
+  },
+  {
+    name: 'Minerai de fer',
+    type: 'material',
+    category: 'iron_ore',
+    image: null,
+  },
   // ── Craft outputs (Phase 1) ───────────────────────────────────────────────
-  { name: 'Lingot de fer',  type: 'material', category: 'iron_bar' },
-  { name: 'Manche brut',    type: 'material', category: 'basic_handle' },
-  { name: 'Lame brute',     type: 'material', category: 'rough_blade' },
-  { name: 'Épée basique',   type: 'weapon',   category: 'basic_sword' },
+  {
+    name: 'Lingot de fer',
+    type: 'material',
+    category: 'iron_bar',
+    image: null,
+  },
+  {
+    name: 'Manche brut',
+    type: 'material',
+    category: 'basic_handle',
+    image: null,
+  },
+  {
+    name: 'Lame brute',
+    type: 'material',
+    category: 'rough_blade',
+    image: null,
+  },
+  {
+    name: 'Épée basique',
+    type: 'weapon',
+    category: 'basic_sword',
+    image: null,
+  },
 ];
 
 @Injectable()
@@ -36,6 +69,9 @@ export class ItemService implements OnModuleInit {
       });
       if (!exists) {
         await this.repo.save(this.repo.create(seed));
+      } else if (!exists.image && seed.image) {
+        exists.image = seed.image;
+        await this.repo.save(exists);
       }
     }
   }

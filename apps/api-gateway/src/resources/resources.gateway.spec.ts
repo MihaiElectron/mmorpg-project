@@ -27,13 +27,24 @@ function makeTemplate(
   skillKey: string | null,
   gatheringXpReward: number,
 ): Partial<ResourceTemplate> {
-  return { type, skillKey, gatheringXpReward, lootPool: null, defaultRemainingLoots: 3, respawnDelayMs: 30_000 };
+  return {
+    type,
+    skillKey,
+    gatheringXpReward,
+    lootPool: null,
+    defaultRemainingLoots: 3,
+    respawnDelayMs: 30_000,
+  };
 }
 
 function makeInventoryEntry() {
   return {
     quantity: 1,
-    item: { id: 'item-uuid', name: 'Wooden Stick', image: null },
+    item: {
+      id: 'item-uuid',
+      name: 'Bâton de bois',
+      image: '/assets/images/items/wooden_stick.png',
+    },
   };
 }
 
@@ -66,13 +77,19 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
       skillsMock as unknown as SkillsService,
     );
     const serverEmit = jest.fn();
-    const serverMock = { to: jest.fn().mockReturnValue({ emit: serverEmit }), emit: serverEmit };
+    const serverMock = {
+      to: jest.fn().mockReturnValue({ emit: serverEmit }),
+      emit: serverEmit,
+    };
     (gateway as any).server = serverMock;
   }
 
   function setupSession(client: any, targetId = 'res-1') {
     (gateway as any).gatherSessions.set(client.id, {
-      targetId, timer: null, lastWorldX: client.data.player.worldX, lastWorldY: client.data.player.worldY,
+      targetId,
+      timer: null,
+      lastWorldX: client.data.player.worldX,
+      lastWorldY: client.data.player.worldY,
     });
   }
 
@@ -86,7 +103,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
       setServer: jest.fn(),
     };
     lootMock = {
-      generateLoot: jest.fn().mockReturnValue({ itemId: 'wooden_stick', quantity: 1 }),
+      generateLoot: jest
+        .fn()
+        .mockReturnValue({ itemId: 'wooden_stick', quantity: 1 }),
     };
     inventoryMock = {
       addItem: jest.fn().mockResolvedValue(makeInventoryEntry()),
@@ -102,7 +121,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
 
     const client = makeClient('char-1');
     setupSession(client);
@@ -116,7 +137,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 5 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('ore', 'mining', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('ore', 'mining', 5),
+    );
 
     const client = makeClient('char-2');
     setupSession(client);
@@ -130,7 +153,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', null, 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', null, 5),
+    );
 
     const client = makeClient();
     setupSession(client);
@@ -144,7 +169,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 0));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 0),
+    );
 
     const client = makeClient();
     setupSession(client);
@@ -168,10 +195,15 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
   });
 
   it("n'accorde pas XP si loot.quantity === 0", async () => {
-    lootMock.generateLoot.mockReturnValue({ itemId: 'wooden_stick', quantity: 0 });
+    lootMock.generateLoot.mockReturnValue({
+      itemId: 'wooden_stick',
+      quantity: 0,
+    });
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
 
     const client = makeClient();
     setupSession(client);
@@ -184,7 +216,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     inventoryMock.addItem.mockRejectedValue(new Error('DB error'));
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
 
     const client = makeClient();
     setupSession(client);
@@ -199,15 +233,22 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
 
     const client = makeClient();
     setupSession(client);
 
     // Ne doit pas lever d'exception
-    await expect((gateway as any).runGatherCycle(client, 'res-1')).resolves.not.toThrow();
+    await expect(
+      (gateway as any).runGatherCycle(client, 'res-1'),
+    ).resolves.not.toThrow();
     // Le cycle suivant est relancé malgré l'erreur XP
-    expect(client.emit).toHaveBeenCalledWith('resource_loot', expect.any(Object));
+    expect(client.emit).toHaveBeenCalledWith(
+      'resource_loot',
+      expect.any(Object),
+    );
   });
 
   it('utilise le characterId serveur (client.data.player.characterId), pas un champ client', async () => {
@@ -215,13 +256,19 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'woodcutting', 5));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
 
     const client = makeClient('server-resolved-char');
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).toHaveBeenCalledWith('server-resolved-char', expect.any(String), expect.any(Number));
+    expect(skillsMock.addXp).toHaveBeenCalledWith(
+      'server-resolved-char',
+      expect.any(String),
+      expect.any(Number),
+    );
   });
 
   it('utilise le skillKey et xpReward du template, pas des constantes hardcodées', async () => {
@@ -230,12 +277,49 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLoot.mockResolvedValue(updated);
     // Template personnalisé — différent des valeurs seed
-    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 'custom_skill', 42));
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'custom_skill', 42),
+    );
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).toHaveBeenCalledWith(expect.any(String), 'custom_skill', 42);
+    expect(skillsMock.addXp).toHaveBeenCalledWith(
+      expect.any(String),
+      'custom_skill',
+      42,
+    );
+  });
+
+  it("émet l'image de l'item canonique pour affichage inventaire", async () => {
+    const resource = makeResource('dead_tree');
+    const updated = { ...resource, remainingLoots: 2 };
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLoot.mockResolvedValue(updated);
+    resourcesMock.getTemplate.mockResolvedValue(
+      makeTemplate('dead_tree', 'woodcutting', 5),
+    );
+
+    const client = makeClient();
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(lootMock.generateLoot).toHaveBeenCalledWith('dead_tree', null);
+    expect(inventoryMock.addItem).toHaveBeenCalledWith({
+      characterId: 'char-1',
+      itemId: 'wooden_stick',
+      quantity: 1,
+    });
+    expect(client.emit).toHaveBeenCalledWith(
+      'resource_loot',
+      expect.objectContaining({
+        lootItemId: 'wooden_stick',
+        item: expect.objectContaining({
+          name: 'Bâton de bois',
+          image: '/assets/images/items/wooden_stick.png',
+        }),
+      }),
+    );
   });
 });
