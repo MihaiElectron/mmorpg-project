@@ -247,15 +247,16 @@ describe('ResourcesService', () => {
       await jest.runAllTimersAsync();
 
       // Deuxième emit : resource restaurée après le timer
+      const restorePayload = mockServer.emit.mock.calls[1][1];
       expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
         type: 'dead_tree',
         state: 'alive',
         remainingLoots: 5,
         respawnAt: null,
-        x: 100,
-        y: 100,
       }));
+      expect(restorePayload.x).toBeUndefined();
+      expect(restorePayload.y).toBeUndefined();
     });
 
     it("le payload de respawn contient type et position pour le rendu client", async () => {
@@ -277,11 +278,11 @@ describe('ResourcesService', () => {
       const [event, payload] = mockServer.emit.mock.calls[0];
       expect(event).toBe('resource_update');
       expect(payload.type).toBe('dead_tree');
-      expect(payload.x).toBe(400);
-      expect(payload.y).toBe(300);
       expect(payload.worldX).toBe(6560768);
       expect(payload.worldY).toBe(6529024);
       expect(payload.mapId).toBe(1);
+      expect(payload.x).toBeUndefined();
+      expect(payload.y).toBeUndefined();
     });
 
     it("n'arme qu'un seul timer si scheduleRespawn est appelé deux fois pour le même ID", async () => {
@@ -344,15 +345,16 @@ describe('ResourcesService', () => {
 
       await service.forceRespawn('res-1');
 
+      const broadcastPayload = mockServer.emit.mock.calls[0][1];
       expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
         type: 'dead_tree',
         state: 'alive',
         remainingLoots: 5,
         respawnAt: null,
-        x: 100,
-        y: 100,
       }));
+      expect(broadcastPayload.x).toBeUndefined();
+      expect(broadcastPayload.y).toBeUndefined();
     });
 
     it("ne crash pas si server socket absent", async () => {
@@ -691,17 +693,18 @@ describe('ResourcesService', () => {
 
       await service.resetInstanceFromTemplate('res-1');
 
+      const resetPayload = mockServer.emit.mock.calls[0][1];
       expect(mockServer.emit).toHaveBeenCalledWith('resource_update', expect.objectContaining({
         id: 'res-1',
         type: 'dead_tree',
         state: 'alive',
         remainingLoots: 4,
-        x: 500,
-        y: 250,
         worldX: 5000,
         worldY: 3000,
         mapId: 1,
       }));
+      expect(resetPayload.x).toBeUndefined();
+      expect(resetPayload.y).toBeUndefined();
     });
   });
 });

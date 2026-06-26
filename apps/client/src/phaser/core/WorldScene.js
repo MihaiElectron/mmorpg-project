@@ -95,10 +95,7 @@ function creatureToWorldObject(creature) {
     maxHealth: creature.maxHealth ?? null,
     capabilities: CREATURE_WO_CAPABILITIES,
     metadata: {
-      legacy:
-        creature.x != null && creature.y != null
-          ? { x: creature.x, y: creature.y }
-          : null,
+      legacy: null,
     },
   };
 }
@@ -117,10 +114,7 @@ function resourceToWorldObject(resource) {
     remainingLoots: resource.remainingLoots ?? 0,
     capabilities: RESOURCE_WO_CAPABILITIES,
     metadata: {
-      legacy:
-        resource.x != null && resource.y != null
-          ? { x: resource.x, y: resource.y }
-          : null,
+      legacy: null,
     },
   };
 }
@@ -231,12 +225,8 @@ function destroyHpBar(hpBar) {
 }
 
 // Convertit des coordonnées WU en pixels Phaser (joueurs, animaux, ressources).
-// Fallback sur les champs x/y legacy si worldX/worldY absents ou invalides.
 function resolveScreen(entity) {
-  if (Number.isFinite(entity.worldX) && Number.isFinite(entity.worldY)) {
-    return worldWUToScreen(entity.worldX, entity.worldY);
-  }
-  return { x: Math.round(entity.x), y: Math.round(entity.y) };
+  return worldWUToScreen(entity.worldX, entity.worldY);
 }
 
 
@@ -308,14 +298,15 @@ export default class WorldScene extends Phaser.Scene {
       const entry = this.creatureSprites.get(targetId);
       if (!entry) return;
 
+      const creatureScreen = worldWUToScreen(entry.creature.worldX, entry.creature.worldY);
       const dist = Math.hypot(
-        entry.creature.x - this.player.x,
-        entry.creature.y - this.player.y,
+        creatureScreen.x - this.player.x,
+        creatureScreen.y - this.player.y,
       );
 
-      // Poursuite continue : replanifier vers la position actuelle de l'creature
+      // Poursuite continue : replanifier vers la position actuelle de la créature
       if (dist > 60 && this.controller) {
-        this.controller.moveTo(entry.creature.x, entry.creature.y);
+        this.controller.moveTo(creatureScreen.x, creatureScreen.y);
       }
 
       // Attaque toutes les 750 ms (le serveur vérifie aussi le cooldown)
@@ -815,7 +806,7 @@ export default class WorldScene extends Phaser.Scene {
         this.removeResource(data.id);
         return;
       }
-      if (data.x !== undefined && data.y !== undefined) {
+      if (data.worldX != null && data.worldY != null) {
         this.upsertResource(data);
       }
     });

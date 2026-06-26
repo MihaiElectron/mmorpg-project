@@ -477,7 +477,16 @@ export class WorldService implements OnModuleInit {
           chunkY: wuToChunkIndex(targetWorldY),
           mapId: teleportMapId,
         });
-        server.except(player.socketId).emit('player_moved', player);
+        server.except(player.socketId).emit('player_moved', {
+          socketId:    player.socketId,
+          characterId: player.characterId,
+          name:        player.name,
+          sex:         player.sex,
+          worldX:      player.worldX,
+          worldY:      player.worldY,
+          mapId:       player.mapId,
+          direction:   player.direction,
+        });
         return player;
       }
     }

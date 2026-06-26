@@ -11,9 +11,22 @@ import {
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
-import { WorldService } from './world.service';
+import { WorldService, ConnectedPlayer } from './world.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
+
+function playerBroadcast(p: ConnectedPlayer) {
+  return {
+    socketId:    p.socketId,
+    characterId: p.characterId,
+    name:        p.name,
+    sex:         p.sex,
+    worldX:      p.worldX,
+    worldY:      p.worldY,
+    mapId:       p.mapId,
+    direction:   p.direction,
+  };
+}
 
 type JoinWorldPayload = {
   characterId: string;
@@ -93,10 +106,10 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     client.emit(
       'current_players',
-      this.worldService.getPlayersExcept(client.id),
+      this.worldService.getPlayersExcept(client.id).map(playerBroadcast),
     );
-    client.emit('world_joined', player);
-    client.broadcast.emit('player_joined', player);
+    client.emit('world_joined', playerBroadcast(player));
+    client.broadcast.emit('player_joined', playerBroadcast(player));
   }
 
   /**
@@ -120,7 +133,7 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const player = this.worldService.updatePlayer(client, payload);
     if (!player) return;
 
-    client.broadcast.emit('player_moved', player);
+    client.broadcast.emit('player_moved', playerBroadcast(player));
   }
 
   async handleDisconnect(client: WorldSocket) {

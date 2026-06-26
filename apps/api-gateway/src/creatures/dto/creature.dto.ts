@@ -15,13 +15,10 @@ export type CreatureDto = {
    *  utile quand type et textureKey divergeront. */
   textureKey: string;
   name: string;
-  /** Coordonnées WU — source de vérité. Null si non encore initialisées au premier tick. */
+  /** Coordonnées WU — source de vérité. */
   worldX: number | null;
   worldY: number | null;
   mapId: number | null;
-  /** Cache pixel isométrique dérivé de worldX/worldY. Conservé pour fallback legacy. */
-  x: number;
-  y: number;
   health: number;
   /** Valeur brute du template — conservée pour compatibilité. Préférer runtimeStats.maxHp si présent. */
   maxHealth: number;

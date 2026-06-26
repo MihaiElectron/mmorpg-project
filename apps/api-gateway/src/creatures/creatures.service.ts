@@ -197,8 +197,6 @@ export class CreaturesService implements OnModuleInit {
       worldX: creature.worldX ?? null,
       worldY: creature.worldY ?? null,
       mapId: creature.mapId ?? null,
-      x: creature.x,
-      y: creature.y,
       health: creature.health,
       maxHealth: t.baseHealth,
       armor: t.baseArmor,

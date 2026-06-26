@@ -239,16 +239,16 @@ describe('CreaturesService', () => {
       expect(result[0].mapId).toBeNull();
     });
 
-    it('DTO conserve x/y pixel legacy aux côtés des WU', () => {
-      const creature = makeCreature({ x: 600, y: 580, worldX: 65536, worldY: 32768, mapId: 1 } as any);
+    it('DTO expose worldX/worldY WU (P7-C : x/y pixel retirés du DTO)', () => {
+      const creature = makeCreature({ worldX: 65536, worldY: 32768, mapId: 1 });
       (service as any).liveCreatures.set(creature.id, creature);
 
       const result = service.findAll();
 
-      expect(result[0].x).toBe(600);
-      expect(result[0].y).toBe(580);
       expect(result[0].worldX).toBe(65536);
       expect(result[0].worldY).toBe(32768);
+      expect((result[0] as any).x).toBeUndefined();
+      expect((result[0] as any).y).toBeUndefined();
     });
 
     it('DTO expose runtimeStats calculées depuis le template (sans modifiers)', () => {

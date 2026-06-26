@@ -283,8 +283,8 @@ export class ResourcesService implements OnModuleInit {
 
   /**
    * Construit le payload resource_update complet pour le client.
-   * Inclut type et coordonnées (legacy + WU) nécessaires au rendu Phaser.
-   * Sans type/position, upsertResource ne peut pas recréer le sprite après un dead.
+   * Inclut type et coordonnées WU nécessaires au rendu Phaser.
+   * Sans type/position WU, upsertResource ne peut pas recréer le sprite après un dead.
    */
   buildResourceBroadcast(resource: Resource, textureKey?: string | null): Record<string, unknown> {
     return {
@@ -295,8 +295,6 @@ export class ResourcesService implements OnModuleInit {
       remainingLoots: resource.remainingLoots,
       respawnAt:      resource.respawnAt      ?? null,
       respawnDelayMs: resource.respawnDelayMs ?? null,
-      x:              resource.x,
-      y:              resource.y,
       worldX:         resource.worldX  ?? null,
       worldY:         resource.worldY  ?? null,
       mapId:          resource.mapId   ?? null,

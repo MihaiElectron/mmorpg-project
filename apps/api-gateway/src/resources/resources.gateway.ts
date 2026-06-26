@@ -18,7 +18,7 @@ import { Inventory } from '../inventory/entities/inventory.entity';
 import { SkillsService } from '../skills/skills.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
-import { readWorldPosition, WUPositionRecord } from '../common/world-position.adapter';
+import { WUPositionRecord } from '../common/world-position.adapter';
 import { chebyshevDistanceWU } from '../common/world-coordinates';
 
 interface InteractResourcePayload {
@@ -264,15 +264,14 @@ export class ResourcesGateway
 
   private isInRange(
     player: { worldX: number; worldY: number; mapId: number },
-    target: WUPositionRecord & { x: number; y: number },
+    target: WUPositionRecord,
   ): boolean {
-    let targetWU: { worldX: number; worldY: number; mapId: number };
-    try {
-      targetWU = readWorldPosition(target, () => ({ x: target.x, y: target.y }));
-    } catch {
-      return false;
-    }
-    return chebyshevDistanceWU(player, targetWU) <= RESOURCE_INTERACT_RANGE_WU;
+    if (target.worldX == null || target.worldY == null || target.mapId == null) return false;
+    if (target.mapId !== player.mapId) return false;
+    return chebyshevDistanceWU(
+      { worldX: player.worldX, worldY: player.worldY },
+      { worldX: target.worldX, worldY: target.worldY },
+    ) <= RESOURCE_INTERACT_RANGE_WU;
   }
 
   private cancelGathering(
