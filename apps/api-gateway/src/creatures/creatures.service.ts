@@ -152,11 +152,10 @@ export class CreaturesService implements OnModuleInit {
           a.x = a.spawn.spawnX;
           a.y = a.spawn.spawnY;
           a.respawnAt = null;
-          const wu =
-            (a.spawn.worldX != null && a.spawn.worldY != null)
-              ? { worldX: a.spawn.worldX, worldY: a.spawn.worldY, mapId: a.spawn.mapId ?? DEFAULT_MAP_ID }
-              : this.pixelToWUSafe(a.x, a.y);
-          if (wu) { a.worldX = wu.worldX; a.worldY = wu.worldY; a.mapId = wu.mapId; }
+          if (a.spawn.worldX == null || a.spawn.worldY == null || a.spawn.mapId == null) continue;
+          a.worldX = a.spawn.worldX;
+          a.worldY = a.spawn.worldY;
+          a.mapId = a.spawn.mapId;
           await this.creatureRepository.save(a);
           this.liveCreatures.set(a.id, a);
         }
@@ -290,10 +289,9 @@ export class CreaturesService implements OnModuleInit {
     }
 
     if (creature.worldX == null || creature.worldY == null) return;
+    if (creature.spawn.worldX == null || creature.spawn.worldY == null) return;
 
-    const spawnWU = creature.spawn.worldX != null
-      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
-      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY };
 
     const dt = PATROL_TICK_MS / 1000;
     const stepWU = legacyRadiusToWU(state.speed * dt);
@@ -338,10 +336,9 @@ export class CreaturesService implements OnModuleInit {
     }
 
     if (creature.worldX == null || creature.worldY == null) return;
+    if (creature.spawn.worldX == null || creature.spawn.worldY == null) return;
 
-    const spawnWU = creature.spawn.worldX != null
-      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
-      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY };
 
     const dx = target.worldX - creature.worldX;
     const dy = target.worldY - creature.worldY;
@@ -403,10 +400,9 @@ export class CreaturesService implements OnModuleInit {
     }
 
     if (creature.worldX == null || creature.worldY == null) return;
+    if (creature.spawn.worldX == null || creature.spawn.worldY == null) return;
 
-    const spawnWU = creature.spawn.worldX != null
-      ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY as number }
-      : this.pixelToWUSafe(creature.spawn.spawnX, creature.spawn.spawnY) ?? { worldX: 0, worldY: 0 };
+    const spawnWU = { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY };
 
     const dx = creature.worldX - nearest.player.worldX;
     const dy = creature.worldY - nearest.player.worldY;
@@ -462,11 +458,10 @@ export class CreaturesService implements OnModuleInit {
     creature.x = creature.spawn.spawnX;
     creature.y = creature.spawn.spawnY;
     creature.respawnAt = null;
-    const respawnWU =
-      (creature.spawn.worldX != null && creature.spawn.worldY != null)
-        ? { worldX: creature.spawn.worldX, worldY: creature.spawn.worldY, mapId: creature.spawn.mapId ?? DEFAULT_MAP_ID }
-        : this.pixelToWUSafe(creature.x, creature.y);
-    if (respawnWU) { creature.worldX = respawnWU.worldX; creature.worldY = respawnWU.worldY; creature.mapId = respawnWU.mapId; }
+    if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) return;
+    creature.worldX = creature.spawn.worldX;
+    creature.worldY = creature.spawn.worldY;
+    creature.mapId = creature.spawn.mapId;
 
     await this.creatureRepository.update(id, {
       state: 'alive',
@@ -474,7 +469,9 @@ export class CreaturesService implements OnModuleInit {
       x: creature.spawn.spawnX,
       y: creature.spawn.spawnY,
       respawnAt: null,
-      ...(respawnWU ?? {}),
+      worldX: creature.worldX,
+      worldY: creature.worldY,
+      mapId: creature.mapId,
     });
 
     if (this.server) {
@@ -782,8 +779,10 @@ export class CreaturesService implements OnModuleInit {
       creature.health = template.baseHealth;
       creature.x = creature.spawn.spawnX;
       creature.y = creature.spawn.spawnY;
-      const forceWU = this.pixelToWUSafe(creature.x, creature.y);
-      if (forceWU) { creature.worldX = forceWU.worldX; creature.worldY = forceWU.worldY; creature.mapId = forceWU.mapId; }
+      if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) continue;
+      creature.worldX = creature.spawn.worldX;
+      creature.worldY = creature.spawn.worldY;
+      creature.mapId = creature.spawn.mapId;
 
       this.patrolStates.delete(creature.id);
       this.lastCreatureAutoAttackAt.delete(creature.id);
@@ -793,7 +792,9 @@ export class CreaturesService implements OnModuleInit {
         health: template.baseHealth,
         x: creature.spawn.spawnX,
         y: creature.spawn.spawnY,
-        ...(forceWU ?? {}),
+        worldX: creature.worldX,
+        worldY: creature.worldY,
+        mapId: creature.mapId,
       });
 
       if (this.server) {
@@ -838,16 +839,15 @@ export class CreaturesService implements OnModuleInit {
       });
       if (existing) continue;
 
-      const seedWU =
-        (spawn.worldX != null && spawn.worldY != null)
-          ? { worldX: spawn.worldX, worldY: spawn.worldY, mapId: spawn.mapId ?? DEFAULT_MAP_ID }
-          : this.pixelToWUSafe(spawn.spawnX, spawn.spawnY);
+      if (spawn.worldX == null || spawn.worldY == null || spawn.mapId == null) continue;
       await this.creatureRepository.save(
         this.creatureRepository.create({
           spawn,
           x: spawn.spawnX,
           y: spawn.spawnY,
-          ...(seedWU ?? {}),
+          worldX: spawn.worldX,
+          worldY: spawn.worldY,
+          mapId: spawn.mapId,
           health: spawn.template.baseHealth,
           state: 'alive',
         }),

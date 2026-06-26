@@ -954,18 +954,16 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
       expect(creatureCreated[0]).toHaveProperty('worldY', 8888);
     });
 
-    it('utilise pixelToWUSafe si spawn.worldX est null (fallback legacy)', async () => {
+    it('ne crée pas de créature si spawn.worldX est null (guard P7-B)', async () => {
       const template = makeTemplate();
-      const spawn = makeSpawn(template, { worldX: null as any, worldY: null as any });
+      const spawn = makeSpawn(template, { worldX: null as any, worldY: null as any, mapId: null as any });
       spawnRepository.find.mockResolvedValue([spawn]);
       const creatureCreated: Record<string, unknown>[] = [];
       creatureRepository.create.mockImplementation((a) => { creatureCreated.push(a); return a; });
 
       await (service as any).seedInstances();
 
-      // pixelToWUSafe(600, 580) donne worldX=6080, worldY=12480
-      expect(creatureCreated[0]).toHaveProperty('worldX', 6080);
-      expect(creatureCreated[0]).toHaveProperty('worldY', 12480);
+      expect(creatureCreated).toHaveLength(0);
     });
 
     it('ne crée pas de créature si une instance existe déjà pour ce spawn', async () => {
@@ -982,15 +980,9 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
     });
   });
 
-  describe('respawnCreature — préfère spawn.worldX/Y quand défini', () => {
-    it('utilise spawn.worldX/Y si non-null (non-régression WU au respawn)', async () => {
-      const creature = makeCreature({
-        id: 'c-1',
-        state: 'dead',
-        worldX: 0,
-        worldY: 0,
-        mapId: 1,
-      });
+  describe('respawnCreature — utilise spawn.worldX/Y (P7-B)', () => {
+    it('utilise spawn.worldX/Y (non-régression WU au respawn)', async () => {
+      const creature = makeCreature({ id: 'c-1', state: 'dead', worldX: 0, worldY: 0, mapId: 1 });
       creature.spawn = makeSpawn(makeTemplate(), { worldX: 7777, worldY: 6666, mapId: DEFAULT_MAP_ID });
       (service as any).liveCreatures.set('c-1', creature);
 
@@ -1000,16 +992,110 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
       expect(creature.worldY).toBe(6666);
     });
 
-    it('utilise pixelToWUSafe(spawnX, spawnY) si spawn.worldX est null (fallback legacy)', async () => {
-      const creature = makeCreature({ id: 'c-2', state: 'dead', worldX: 0, worldY: 0 });
-      creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any });
+    it('retourne tôt si spawn.worldX est null (guard P7-B)', async () => {
+      const creature = makeCreature({ id: 'c-2', state: 'dead', worldX: 99, worldY: 99 });
+      creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any, mapId: null as any });
       (service as any).liveCreatures.set('c-2', creature);
 
       await (service as any).respawnCreature('c-2');
 
-      // pixelToWUSafe(600, 580) → worldX=6080, worldY=12480
-      expect(creature.worldX).toBe(6080);
-      expect(creature.worldY).toBe(12480);
+      expect(creature.worldX).toBe(99);
+      expect(creature.worldY).toBe(99);
     });
+  });
+});
+
+// ─── P7-B : guards spawn WU dans l'IA ────────────────────────────────────────
+
+describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
+  let service: CreaturesService;
+  let creatureRepository: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    creatureRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn().mockImplementation((a) => Promise.resolve(a)),
+      update: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockImplementation((a) => a),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        delete: jest.fn().mockReturnThis(), update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({}),
+      }),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        CreaturesService,
+        { provide: getRepositoryToken(Creature), useValue: creatureRepository },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: { findOne: jest.fn().mockResolvedValue(null), upsert: jest.fn() } },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: { findOne: jest.fn().mockResolvedValue(null), find: jest.fn().mockResolvedValue([]), save: jest.fn(), update: jest.fn(), create: jest.fn().mockImplementation((a) => a) } },
+        { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
+        { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
+        { provide: SkillsService, useValue: { addXp: jest.fn() } },
+        RuntimeDebugRegistry,
+      ],
+    }).compile();
+    service = module.get<CreaturesService>(CreaturesService);
+  });
+
+  it('doPatrolMovement — retourne sans modifier worldX si spawn.worldX est null', () => {
+    const creature = makeCreature({ worldX: 5000, worldY: 5000, mapId: 1 });
+    creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any });
+    const state = { dirX: 1, dirY: 0, speed: 60, moveUntil: Date.now() + 10000, pauseUntil: 0 };
+
+    (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
+
+    expect(creature.worldX).toBe(5000);
+    expect(creature.worldY).toBe(5000);
+  });
+
+  it('doFighting — retourne sans modifier worldX si spawn.worldX est null', async () => {
+    const creature = makeCreature({ worldX: 5000, worldY: 5000, mapId: 1 });
+    creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any });
+    const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: 'char-1' };
+    const player = { characterId: 'char-1', socketId: 's-1', name: 'P', worldX: 4800, worldY: 5000, mapId: 1, x: 0, y: 0 };
+    const server = { to: jest.fn().mockReturnValue({ emit: jest.fn() }), emit: jest.fn() } as any;
+
+    await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), server);
+
+    expect(creature.worldX).toBe(5000);
+  });
+
+  it('doEscaping — retourne sans modifier worldX si spawn.worldX est null', async () => {
+    const creature = makeCreature({ worldX: 5000, worldY: 5000, mapId: 1 });
+    creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any });
+    const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0 };
+    const player = { characterId: 'char-1', socketId: 's-1', name: 'P', worldX: 5100, worldY: 5000, mapId: 1, x: 0, y: 0 };
+
+    await (service as any).doEscaping(creature, state, makeTemplate(), [player], Date.now());
+
+    expect(creature.worldX).toBe(5000);
+  });
+
+  it('forceRespawnAll — ignore les créatures sans spawn.worldX (guard P7-B)', async () => {
+    const creature = makeCreature({ id: 'c-1', state: 'alive', worldX: 1000, worldY: 2000 });
+    creature.spawn = makeSpawn(makeTemplate(), { worldX: null as any, worldY: null as any, mapId: null as any });
+    (service as any).liveCreatures.set('c-1', creature);
+
+    await service.forceRespawnAll('turkey');
+
+    expect(creature.worldX).toBe(1000);
+    expect(creatureRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('forceRespawnAll — utilise spawn.worldX/Y pour reset position', async () => {
+    const creature = makeCreature({ id: 'c-2', state: 'alive', worldX: 1000, worldY: 2000, mapId: 1 });
+    creature.spawn = makeSpawn(makeTemplate(), { worldX: 9000, worldY: 8000, mapId: DEFAULT_MAP_ID });
+    (service as any).liveCreatures.set('c-2', creature);
+
+    await service.forceRespawnAll('turkey');
+
+    expect(creature.worldX).toBe(9000);
+    expect(creature.worldY).toBe(8000);
+    expect(creatureRepository.update).toHaveBeenCalledWith(
+      'c-2',
+      expect.objectContaining({ worldX: 9000, worldY: 8000, mapId: DEFAULT_MAP_ID }),
+    );
   });
 });

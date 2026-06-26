@@ -7,7 +7,6 @@ import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { RespawnPoint } from './entities/respawn-point.entity';
-import { readWorldPosition } from '../common/world-position.adapter';
 import {
   wuToIsoScreenX,
   wuToIsoScreenY,
@@ -126,16 +125,11 @@ export class WorldService implements OnModuleInit {
     const points = await this.respawnPointRepository.find();
     if (points.length === 0) return;
 
-    // Position WU du personnage (fallback vers les pixels legacy si non backfillé)
-    let charWU: { worldX: number; worldY: number; mapId: number };
-    try {
-      charWU = readWorldPosition(character, (c) => ({
-        x: (c as unknown as Character).positionX,
-        y: (c as unknown as Character).positionY,
-      }));
-    } catch {
-      charWU = { worldX: 0, worldY: 0, mapId: DEFAULT_MAP_ID };
+    // Position WU requise — garantie par P7-A.
+    if (character.worldX == null || character.worldY == null || character.mapId == null) {
+      return; // guard explicite : impossible après P7-A
     }
+    const charWU = { worldX: character.worldX, worldY: character.worldY, mapId: character.mapId };
 
     // Trouver le respawn point le plus proche sur la même map, en distance Chebyshev WU
     let nearest = points[0];
@@ -143,13 +137,8 @@ export class WorldService implements OnModuleInit {
     let minDist = Infinity;
 
     for (const p of points) {
-      let pWU: { worldX: number; worldY: number; mapId: number };
-      try {
-        pWU = readWorldPosition(p, (rp) => ({
-          x: (rp as unknown as RespawnPoint).x,
-          y: (rp as unknown as RespawnPoint).y,
-        }));
-      } catch { continue; }
+      if (p.worldX == null || p.worldY == null || p.mapId == null) continue;
+      const pWU = { worldX: p.worldX, worldY: p.worldY, mapId: p.mapId };
       if (pWU.mapId !== charWU.mapId) continue;
       const d = chebyshevDistanceWU(charWU, pWU);
       if (d < minDist) { minDist = d; nearest = p; nearestWU = pWU; }
@@ -158,14 +147,10 @@ export class WorldService implements OnModuleInit {
     // Fallback : aucun point sur la même map → premier point valide disponible
     if (nearestWU === null) {
       for (const p of points) {
-        try {
-          nearestWU = readWorldPosition(p, (rp) => ({
-            x: (rp as unknown as RespawnPoint).x,
-            y: (rp as unknown as RespawnPoint).y,
-          }));
-          nearest = p;
-          break;
-        } catch { continue; }
+        if (p.worldX == null || p.worldY == null || p.mapId == null) continue;
+        nearestWU = { worldX: p.worldX, worldY: p.worldY, mapId: p.mapId };
+        nearest = p;
+        break;
       }
     }
     if (nearestWU === null) return;
@@ -251,28 +236,16 @@ export class WorldService implements OnModuleInit {
     // Le personnage doit appartenir à l'utilisateur authentifié sur ce socket.
     if (character.userId !== client.data.userId) return null;
 
-    // Lire la position officielle WU (priorité) ou fallback legacy pixels.
-    // Conversion WU → pixels Phaser pour alimenter le cache de rendu uniquement.
-    let playerWX = 0;
-    let playerWY = 0;
-    let playerMapId = DEFAULT_MAP_ID;
-    let playerX: number;
-    let playerY: number;
-    try {
-      const wuPos = readWorldPosition(character, (c) => ({
-        x: (c as unknown as Character).positionX,
-        y: (c as unknown as Character).positionY,
-      }));
-      playerWX    = wuPos.worldX;
-      playerWY    = wuPos.worldY;
-      playerMapId = wuPos.mapId;
-      playerX = Math.round(wuToIsoScreenX(playerWX, playerWY));
-      playerY = Math.round(wuToIsoScreenY(playerWX, playerWY));
-    } catch {
-      // Entité sans coordonnées WU valides : fallback serveur contrôlé, worldX/Y restent à zéro
-      playerX = character.positionX ?? 400;
-      playerY = character.positionY ?? 300;
+    // Position WU requise — garantie par P7-A (character.create initialise toujours worldX/Y/mapId).
+    if (character.worldX == null || character.worldY == null || character.mapId == null) {
+      return null; // guard explicite : impossible après P7-A
     }
+    const playerWX = character.worldX;
+    const playerWY = character.worldY;
+    const playerMapId = character.mapId;
+    // Conversion WU → pixels Phaser pour alimenter le cache de rendu uniquement.
+    const playerX = Math.round(wuToIsoScreenX(playerWX, playerWY));
+    const playerY = Math.round(wuToIsoScreenY(playerWX, playerWY));
 
     const player: ConnectedPlayer = {
       socketId: client.id,

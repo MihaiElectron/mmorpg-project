@@ -618,6 +618,73 @@ describe('WorldService.respawnCharacter', () => {
   });
 });
 
+// ─── P7-B : guards WU explicites ─────────────────────────────────────────────
+
+describe('WorldService — P7-B : guards WU explicites', () => {
+  function makeServer() {
+    return { to: jest.fn().mockReturnValue({ emit: jest.fn() }), except: jest.fn().mockReturnValue({ emit: jest.fn() }) } as unknown as any;
+  }
+
+  describe('joinPlayer — retourne null si worldX/Y/mapId absent', () => {
+    it('retourne null quand worldX est null', async () => {
+      const charRepo = {
+        find: jest.fn(), findOne: jest.fn().mockResolvedValue({ id: 'c-1', userId: 'u-1', worldX: null, worldY: 8000, mapId: 1, sex: 'male', name: 'Hero' }),
+        update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const respawnRepo = { count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
+      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      expect(result).toBeNull();
+    });
+
+    it('retourne null quand mapId est null', async () => {
+      const charRepo = {
+        find: jest.fn(), findOne: jest.fn().mockResolvedValue({ id: 'c-1', userId: 'u-1', worldX: 1600, worldY: 8000, mapId: null, sex: 'male', name: 'Hero' }),
+        update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const respawnRepo = { count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
+      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('respawnCharacter — retourne tôt si worldX/Y/mapId absent', () => {
+    it('ne fait rien si character.worldX est null', async () => {
+      const charRepo = {
+        find: jest.fn(), findOne: jest.fn().mockResolvedValue({ id: 'c-1', maxHealth: 100, worldX: null, worldY: 8000, mapId: 1 }),
+        update: jest.fn().mockResolvedValue(undefined), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const respawnRepo = {
+        find: jest.fn().mockResolvedValue([{ worldX: 0, worldY: 0, mapId: 1, radius: 0 }]),
+        count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const server = makeServer();
+      await svc.respawnCharacter('c-1', server);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('ignore un respawn point dont worldX est null', async () => {
+      const charRepo = {
+        find: jest.fn(), findOne: jest.fn().mockResolvedValue({ id: 'c-1', maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 1 }),
+        update: jest.fn().mockResolvedValue(undefined), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const respawnRepo = {
+        find: jest.fn().mockResolvedValue([{ worldX: null, worldY: 0, mapId: 1, radius: 0 }]),
+        count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const server = makeServer();
+      await svc.respawnCharacter('c-1', server);
+      // Aucun point valide → nearestWU reste null → retour sans update
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+  });
+});
+
 // ─── onModuleInit — seed RespawnPoint WU (P7-A) ──────────────────────────────
 
 describe('WorldService.onModuleInit — seed RespawnPoint (P7-A)', () => {
