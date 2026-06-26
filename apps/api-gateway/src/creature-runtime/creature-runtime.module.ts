@@ -20,6 +20,6 @@ import { CreatureRuntimeService } from './creature-runtime.service';
 @Module({
   imports: [TypeOrmModule.forFeature([Creature])],
   providers: [CreatureRuntimeService, RuntimeDebugRegistry],
-  exports: [CreatureRuntimeService],
+  exports: [CreatureRuntimeService, RuntimeDebugRegistry],
 })
 export class CreatureRuntimeModule {}

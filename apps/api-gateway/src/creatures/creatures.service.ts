@@ -13,6 +13,10 @@ import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID, wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
+import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
+import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
+import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
+import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 
 const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
 // Portée mêlée pour attack() en WU — temporaire (legacyRadiusToWU(60) = 960)
@@ -131,6 +135,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
     private readonly skills: SkillsService,
+    private readonly debugRegistry: RuntimeDebugRegistry,
   ) {}
 
   async onModuleInit() {
@@ -479,8 +484,19 @@ export class CreaturesService implements OnModuleInit {
     this.lastAttackAt.set(characterId, now);
 
     const { template } = creature.spawn;
+
+    // Calcul runtime synchrone depuis la mémoire — aucun appel DB, aucun async.
+    // debugMods=[] par défaut (pas de registre debug creature en production).
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+
     const attack = Math.max(character.attack, 5);
-    const damage = Math.max(attack - template.baseArmor, 1);
+    const damage = Math.max(attack - derived.defenseTotal, 1);
 
     creature.health = Math.max(creature.health - damage, 0);
     if (creature.health === 0) {
@@ -505,7 +521,7 @@ export class CreaturesService implements OnModuleInit {
 
     let riposte: { damage: number; characterHealth: number } | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
-      const riposteDamage = Math.max(template.baseAttack - character.defense, 1);
+      const riposteDamage = Math.max(derived.attackPower - character.defense, 1);
       const characterHealth = Math.max(character.health - riposteDamage, 0);
       await this.characterRepository.update(characterId, { health: characterHealth });
       riposte = { damage: riposteDamage, characterHealth };

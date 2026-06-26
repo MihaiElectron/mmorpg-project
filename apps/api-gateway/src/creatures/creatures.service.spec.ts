@@ -10,6 +10,7 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
 import { wuToIsoScreenX, wuToIsoScreenY } from '../common/world-coordinates';
+import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,6 +112,7 @@ describe('resolveCombatSkill', () => {
 
 describe('CreaturesService', () => {
   let service: CreaturesService;
+  let debugRegistry: RuntimeDebugRegistry;
   let creatureRepository: Record<string, jest.Mock>;
   let characterRepository: Record<string, jest.Mock>;
   let templateRepository: Record<string, jest.Mock>;
@@ -159,10 +161,12 @@ describe('CreaturesService', () => {
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: SkillsService, useValue: skillsService },
+        RuntimeDebugRegistry,
       ],
     }).compile();
 
     service = module.get<CreaturesService>(CreaturesService);
+    debugRegistry = module.get<RuntimeDebugRegistry>(RuntimeDebugRegistry);
   });
 
   // -------------------------------------------------------------------------
@@ -415,6 +419,48 @@ describe('CreaturesService', () => {
 
       expect(skillsService.addXp).toHaveBeenCalledWith('server-resolved-char-id', expect.any(String), expect.any(Number));
       jest.useRealTimers();
+    });
+
+    // ── Runtime compute — non-régression et debug modifiers ─────────────────
+
+    it('sans debug modifiers : damage identique au comportement direct (non-régression)', async () => {
+      // template.baseArmor=2, char.attack=10 → damage = max(max(10,5)-2, 1) = 8
+      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.damage).toBe(8);
+    });
+
+    it('debug modifier flat sur defenseTotal réduit les dégâts infligés', async () => {
+      // baseArmor=2, debug +10 flat → defenseTotal=12
+      // char.attack=10 → damage = max(max(10,5)-12, 1) = max(-2,1) = 1
+      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      debugRegistry.addModifier(creature.id, { targetStat: 'defenseTotal', operation: 'flat', value: 10 });
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.damage).toBe(1);
+    });
+
+    it('debug modifier flat sur attackPower augmente la riposte', async () => {
+      // baseAttack=5, debug +10 flat → attackPower=15
+      // char.defense=3 → riposteDamage = max(15-3, 1) = 12
+      const creature = makeCreature({ x: 600, y: 580, worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
+      (service as any).liveCreatures.set(creature.id, creature);
+      debugRegistry.addModifier(creature.id, { targetStat: 'attackPower', operation: 'flat', value: 10 });
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, health: 100 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.riposte?.damage).toBe(12);
     });
   });
 

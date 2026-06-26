@@ -9,6 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CommonModule } from '../common/common.module';
 import { WorldModule } from '../world/world.module';
 import { SkillsModule } from '../skills/skills.module';
+import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SkillsModule } from '../skills/skills.module';
     CommonModule,
     WorldModule,
     SkillsModule,
+    CreatureRuntimeModule,
   ],
   providers: [CreaturesGateway, CreaturesService],
   exports: [CreaturesService],
