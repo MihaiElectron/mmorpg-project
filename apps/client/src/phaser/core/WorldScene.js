@@ -785,6 +785,16 @@ export default class WorldScene extends Phaser.Scene {
       });
     });
 
+    this.socket.on("creature_loot", (data) => {
+      const store = getCharacterStore();
+      store.getState().updateInventoryItem({
+        id: data.itemId,
+        quantity: data.total ?? data.quantity,
+        name: (data.lootItemId || data.itemId).replace("_", " "),
+        image: `/assets/images/items/${data.lootItemId || data.itemId}.png`,
+      });
+    });
+
     this.socket.on("resource_loot", (data) => {
       const item = data.item || {};
       const itemId = item.id || data.itemId;
@@ -1659,6 +1669,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("resources");
       this.socket.off("creatures");
       this.socket.off("inventory_update");
+      this.socket.off("creature_loot");
       this.socket.off("resource_loot");
       this.socket.off("resource_update");
       this.socket.off("gather_tick");

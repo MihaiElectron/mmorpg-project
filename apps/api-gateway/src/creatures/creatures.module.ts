@@ -10,6 +10,8 @@ import { CommonModule } from '../common/common.module';
 import { WorldModule } from '../world/world.module';
 import { SkillsModule } from '../skills/skills.module';
 import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.module';
+import { LootService } from '../world/loot.service';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
   imports: [
@@ -18,8 +20,9 @@ import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.modu
     WorldModule,
     SkillsModule,
     CreatureRuntimeModule,
+    InventoryModule,
   ],
-  providers: [CreaturesGateway, CreaturesService],
+  providers: [CreaturesGateway, CreaturesService, LootService],
   exports: [CreaturesService],
 })
 export class CreaturesModule {}

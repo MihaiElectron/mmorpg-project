@@ -13,6 +13,7 @@ import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
+import { LootService } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
@@ -70,6 +71,7 @@ export type AttackSuccess = {
   damage: number;
   attackerId: string;
   riposte?: { damage: number; characterHealth: number };
+  loot?: { itemId: string; quantity: number };
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -115,6 +117,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly worldService: WorldService,
     private readonly skills: SkillsService,
     private readonly debugRegistry: RuntimeDebugRegistry,
+    private readonly loot: LootService,
   ) {}
 
   async onModuleInit() {
@@ -523,6 +526,7 @@ export class CreaturesService implements OnModuleInit {
 
     // XP de combat accordée uniquement au kill confirmé serveur.
     // characterId provient du paramètre, jamais du client.
+    let loot: { itemId: string; quantity: number } | undefined;
     if (creature.health === 0) {
       const skillKey = resolveCombatSkill(character.equipment ?? []);
       try {
@@ -530,6 +534,9 @@ export class CreaturesService implements OnModuleInit {
       } catch (err) {
         console.warn(`[CreaturesService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
       }
+
+      const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
+      if (generated.quantity > 0) loot = generated;
     }
 
     let riposte: { damage: number; characterHealth: number } | undefined;
@@ -543,7 +550,7 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot };
   }
 
   private resolveAttackRange(character: Character): number {
@@ -568,6 +575,11 @@ export class CreaturesService implements OnModuleInit {
   // -------------------------------------------------------------------------
   // Seed — données initiales (exécuté une seule fois par entrée absente)
   // -------------------------------------------------------------------------
+
+  private readonly TEMPLATE_LOOT_POOLS: Record<string, any[]> = {
+    turkey: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 0.8 }],
+    goblin: [{ itemId: 'iron_ore', minQty: 1, maxQty: 1, probability: 0.5 }],
+  };
 
   private async seedTemplates() {
     await this.templateRepository
@@ -609,6 +621,18 @@ export class CreaturesService implements OnModuleInit {
       ])
       .orIgnore()
       .execute();
+
+    // Backfill lootPool pour les templates déjà existants (null après ajout de colonne).
+    const templates = await this.templateRepository.find({
+      where: [{ key: 'turkey' }, { key: 'goblin' }],
+    });
+    for (const t of templates) {
+      if (t.lootPool === null && this.TEMPLATE_LOOT_POOLS[t.key]) {
+        await this.templateRepository.update(t.id, {
+          lootPool: this.TEMPLATE_LOOT_POOLS[t.key],
+        });
+      }
+    }
   }
 
   async createAdminSpawn(

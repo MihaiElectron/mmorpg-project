@@ -29,6 +29,7 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     aggroRadius: 2000,
     fleeThresholdPct: 25,
     respawnDelayMs: 20000,
+    lootPool: null,
     ...overrides,
   };
 }

@@ -9,6 +9,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
+import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 
@@ -32,6 +33,7 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     pauseMaxMs: 12000,
     aggroRadius: 50,
     fleeThresholdPct: 75,
+    lootPool: null,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -162,6 +164,7 @@ describe('CreaturesService', () => {
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: SkillsService, useValue: skillsService },
         RuntimeDebugRegistry,
+        LootService,
       ],
     }).compile();
 
@@ -432,6 +435,66 @@ describe('CreaturesService', () => {
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(skillsService.addXp).not.toHaveBeenCalled();
+    });
+
+    // ── Loot ──────────────────────────────────────────────────────────────────
+
+    it('génère un loot au kill si lootPool défini (probability=1, qty fixe)', async () => {
+      jest.useFakeTimers();
+      const template = makeTemplate({
+        lootPool: [{ itemId: 'wooden_stick', minQty: 2, maxQty: 2, probability: 1.0 }],
+      });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.loot).toEqual({ itemId: 'wooden_stick', quantity: 2 });
+      jest.useRealTimers();
+    });
+
+    it("ne génère pas de loot si l'creature survit", async () => {
+      const template = makeTemplate({
+        lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 1, probability: 1.0 }],
+      });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 7, defense: 0 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.loot).toBeUndefined();
+    });
+
+    it('ne génère pas de loot si lootPool est null et le type ne correspond à aucun fallback', async () => {
+      jest.useFakeTimers();
+      const template = makeTemplate({ lootPool: null });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.loot).toBeUndefined();
+      jest.useRealTimers();
+    });
+
+    it('ne génère pas de loot si lootPool est vide', async () => {
+      jest.useFakeTimers();
+      const template = makeTemplate({ lootPool: [] });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, defense: 0 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.loot).toBeUndefined();
+      jest.useRealTimers();
     });
 
     it('utilise le characterId serveur (paramètre), pas une donnée client', async () => {
@@ -874,6 +937,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: SkillsService, useValue: { addXp: jest.fn() } },
         RuntimeDebugRegistry,
+        LootService,
       ],
     }).compile();
 
@@ -1020,6 +1084,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: SkillsService, useValue: { addXp: jest.fn() } },
         RuntimeDebugRegistry,
+        LootService,
       ],
     }).compile();
     service = module.get<CreaturesService>(CreaturesService);

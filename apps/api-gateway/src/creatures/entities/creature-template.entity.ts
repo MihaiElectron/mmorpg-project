@@ -46,4 +46,7 @@ export class CreatureTemplate {
 
   @Column('int', { default: 20000 })
   respawnDelayMs: number;
+
+  @Column({ type: 'jsonb', nullable: true, name: 'loot_pool', default: null })
+  lootPool: any[] | null;
 }
