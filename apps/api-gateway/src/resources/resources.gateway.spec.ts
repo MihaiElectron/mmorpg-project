@@ -65,7 +65,9 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
       {} as unknown as WsAuthService,
       skillsMock as unknown as SkillsService,
     );
-    (gateway as any).server = { emit: jest.fn() };
+    const serverEmit = jest.fn();
+    const serverMock = { to: jest.fn().mockReturnValue({ emit: serverEmit }), emit: serverEmit };
+    (gateway as any).server = serverMock;
   }
 
   function setupSession(client: any, targetId = 'res-1') {

@@ -5,6 +5,8 @@ import { In, Not, IsNull, Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Resource } from './entities/resource.entity';
 import { ResourceTemplate } from './entities/resource-template.entity';
+import { DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 
 export const RESOURCE_TEMPLATES: Pick<
   ResourceTemplate,
@@ -157,7 +159,7 @@ export class ResourcesService implements OnModuleInit {
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', this.buildResourceBroadcast(updated, template?.textureKey));
+      this.server.to(getMapRoomId(updated.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.buildResourceBroadcast(updated, template?.textureKey));
     }
 
     return updated;
@@ -187,7 +189,7 @@ export class ResourcesService implements OnModuleInit {
     const updated: Resource = { ...resource, state: 'alive', remainingLoots, respawnAt: null };
 
     if (this.server) {
-      this.server.emit('resource_update', this.buildResourceBroadcast(updated, template.textureKey));
+      this.server.to(getMapRoomId(updated.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.buildResourceBroadcast(updated, template.textureKey));
     }
 
     return updated;
@@ -222,7 +224,7 @@ export class ResourcesService implements OnModuleInit {
     const resource = await this.findOne(id);
     if (resource && this.server) {
       const template = await this.getTemplate(resource.type);
-      this.server.emit('resource_update', this.buildResourceBroadcast({ ...resource, respawnAt }, template?.textureKey));
+      this.server.to(getMapRoomId(resource.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.buildResourceBroadcast({ ...resource, respawnAt }, template?.textureKey));
     }
 
     this.armRespawnTimer(id, resolvedDelay, token);
@@ -329,7 +331,7 @@ export class ResourcesService implements OnModuleInit {
       const respawned = await this.doRespawn(id, token);
       if (respawned && this.server) {
         const template = await this.getTemplate(respawned.type);
-        this.server.emit('resource_update', this.buildResourceBroadcast(respawned, template?.textureKey));
+        this.server.to(getMapRoomId(respawned.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.buildResourceBroadcast(respawned, template?.textureKey));
       }
     }, delayMs);
   }

@@ -12,6 +12,7 @@ import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 import { LootService } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
@@ -266,7 +267,8 @@ export class CreaturesService implements OnModuleInit {
           break;
       }
 
-      server.emit('creature_update', this.toDto(creature));
+      const dto = this.toDto(creature);
+      server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', dto);
     }
   }
 
@@ -464,7 +466,7 @@ export class CreaturesService implements OnModuleInit {
     });
 
     if (this.server) {
-      this.server.emit('creature_update', this.toDto(creature));
+      this.server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', this.toDto(creature));
     }
   }
 
@@ -748,7 +750,7 @@ export class CreaturesService implements OnModuleInit {
     await this.creatureRepository.save(creature);
 
     const dto = this.toDto(creature);
-    if (this.server) this.server.emit('creature_update', dto);
+    if (this.server) this.server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', dto);
     return dto;
   }
 
@@ -764,7 +766,7 @@ export class CreaturesService implements OnModuleInit {
     await this.creatureRepository.update(creatureId, { worldX: creature.worldX, worldY: creature.worldY, mapId: creature.mapId });
 
     if (this.server) {
-      this.server.emit('creature_update', this.toDto(creature));
+      this.server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', this.toDto(creature));
     }
     return this.toDto(creature);
   }
@@ -794,7 +796,7 @@ export class CreaturesService implements OnModuleInit {
       });
 
       if (this.server) {
-        this.server.emit('creature_update', this.toDto(creature));
+        this.server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', this.toDto(creature));
       }
       count++;
     }

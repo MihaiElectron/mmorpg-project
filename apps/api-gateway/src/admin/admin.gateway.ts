@@ -14,6 +14,8 @@ import { AdminService } from './admin.service';
 import { ResourcesService } from '../resources/resources.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
+import { DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
 type TeleportPayload = { characterId: string; worldX: number; worldY: number };
@@ -70,7 +72,7 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: `Template "${templateKey}" introuvable.` };
     }
 
-    this.server.emit('creature_update', dto);
+    this.server.to(getMapRoomId(dto.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', dto);
     return {
       success: true,
       message: `"${dto.name}" spawné en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${dto.id}`,
@@ -335,7 +337,7 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: 'Payload invalide : type, worldX, worldY requis.' };
 
     const resource = await this.adminService.createResource(type, worldX, worldY);
-    this.server.emit('resource_update', this.resourcesService.buildResourceBroadcast(resource));
+    this.server.to(getMapRoomId(resource.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.resourcesService.buildResourceBroadcast(resource));
     return {
       success: true,
       message: `Ressource "${type}" créée en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${resource.id}`,
@@ -355,7 +357,7 @@ export class AdminGateway implements OnGatewayConnection {
     const dto = await this.creaturesService.adminDeleteCreature(id);
     if (!dto) return { success: false, message: `Creature "${id}" introuvable en mémoire.` };
 
-    this.server.emit('creature_update', { ...dto, state: 'dead' });
+    this.server.to(getMapRoomId(dto.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', { ...dto, state: 'dead' });
     return { success: true, message: `"${dto.name}" (${dto.id}) supprimé.` };
   }
 
@@ -372,7 +374,7 @@ export class AdminGateway implements OnGatewayConnection {
     const deleted = await this.adminService.deleteResource(id);
     if (!deleted) return { success: false, message: `Ressource "${id}" introuvable.` };
 
-    this.server.emit('resource_update', { id: deleted.id, state: 'dead', deleted: true });
+    this.server.to(getMapRoomId(deleted.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', { id: deleted.id, state: 'dead', deleted: true });
     return { success: true, message: `Ressource "${deleted.type}" (${deleted.id}) supprimée.` };
   }
 
@@ -566,7 +568,7 @@ export class AdminGateway implements OnGatewayConnection {
     const updated = await this.adminService.updateResource(id, safe as any);
     if (!updated) return { success: false, message: `Ressource "${id}" introuvable.` };
 
-    this.server.emit('resource_update', this.resourcesService.buildResourceBroadcast(updated));
+    this.server.to(getMapRoomId(updated.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.resourcesService.buildResourceBroadcast(updated));
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `Ressource "${updated.type}" mis à jour : ${changes}.`, data: updated };

@@ -14,6 +14,7 @@ import type { WorldSocket } from '../types/world-socket';
 import { WorldService, ConnectedPlayer } from './world.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
+import { getMapRoomId } from '../common/socket-rooms';
 
 function playerBroadcast(p: ConnectedPlayer) {
   return {
@@ -96,9 +97,12 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const { player, previousSocketId } = joined;
+    const mapRoom = getMapRoomId(player.mapId);
+
+    client.join(mapRoom);
 
     if (previousSocketId) {
-      this.server.emit('player_left', {
+      this.server.to(mapRoom).emit('player_left', {
         socketId: previousSocketId,
         characterId: player.characterId,
       });
@@ -106,10 +110,10 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     client.emit(
       'current_players',
-      this.worldService.getPlayersExcept(client.id).map(playerBroadcast),
+      this.worldService.getPlayersExcept(client.id, player.mapId).map(playerBroadcast),
     );
     client.emit('world_joined', playerBroadcast(player));
-    client.broadcast.emit('player_joined', playerBroadcast(player));
+    client.broadcast.to(mapRoom).emit('player_joined', playerBroadcast(player));
   }
 
   /**
@@ -130,17 +134,23 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    const previousMapId = client.data.player?.mapId;
     const player = this.worldService.updatePlayer(client, payload);
     if (!player) return;
 
-    client.broadcast.emit('player_moved', playerBroadcast(player));
+    if (previousMapId !== player.mapId) {
+      if (previousMapId != null) client.leave(getMapRoomId(previousMapId));
+      client.join(getMapRoomId(player.mapId));
+    }
+
+    client.broadcast.to(getMapRoomId(player.mapId)).emit('player_moved', playerBroadcast(player));
   }
 
   async handleDisconnect(client: WorldSocket) {
     const player = this.worldService.removePlayer(client);
     if (player) {
       await this.worldService.persistPlayerPosition(player);
-      client.broadcast.emit('player_left', {
+      client.broadcast.to(getMapRoomId(player.mapId)).emit('player_left', {
         socketId: player.socketId,
         characterId: player.characterId,
       });

@@ -13,6 +13,8 @@ import { CreaturesService, isAttackFailure } from './creatures.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
+import { DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
@@ -70,7 +72,7 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
     }
 
     client.emit('creature_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
-    this.server.emit('creature_update', result.dto);
+    this.server.to(getMapRoomId(result.dto.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', result.dto);
 
     if (result.riposte) {
       client.emit('character_damaged', {

@@ -31,7 +31,9 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
 }
 
 function makeMockServer() {
-  return { emit: jest.fn() };
+  const mock = { to: jest.fn(), emit: jest.fn() };
+  mock.to.mockReturnValue(mock);
+  return mock;
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -753,7 +755,7 @@ describe('buildResourceBroadcast — textureKey', () => {
     templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4, textureKey: 'fire_camp' } as any));
     resourceRepo.update.mockResolvedValue(undefined);
 
-    const mockServer = { emit: jest.fn() };
+    const mockServer = makeMockServer();
     service.setServer(mockServer as any);
 
     await service.forceRespawn('res-1');
@@ -767,7 +769,7 @@ describe('buildResourceBroadcast — textureKey', () => {
     templateRepo.findOne.mockResolvedValue(null);
     resourceRepo.update.mockResolvedValue(undefined);
 
-    const mockServer = { emit: jest.fn() };
+    const mockServer = makeMockServer();
     service.setServer(mockServer as any);
 
     await service.forceRespawn('res-1');
@@ -781,7 +783,7 @@ describe('buildResourceBroadcast — textureKey', () => {
     templateRepo.findOne.mockResolvedValue(makeTemplate({ defaultRemainingLoots: 4, textureKey: 'dead_tree' } as any));
     resourceRepo.update.mockResolvedValue(undefined);
 
-    const mockServer = { emit: jest.fn() };
+    const mockServer = makeMockServer();
     service.setServer(mockServer as any);
 
     await service.resetInstanceFromTemplate('res-1');

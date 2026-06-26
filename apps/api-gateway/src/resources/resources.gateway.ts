@@ -19,7 +19,8 @@ import { SkillsService } from '../skills/skills.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { WUPositionRecord } from '../common/world-position.adapter';
-import { chebyshevDistanceWU } from '../common/world-coordinates';
+import { chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 
 interface InteractResourcePayload {
   targetId: string;
@@ -237,8 +238,9 @@ export class ResourcesGateway
       },
     });
 
-    // 🔄 Mise à jour visuelle pour tous (payload complet pour le rendu et l'admin panel)
-    this.server.emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any, template?.textureKey));
+    // 🔄 Mise à jour visuelle pour les joueurs de la même map
+    const mapId = (updatedResource as any).mapId ?? DEFAULT_MAP_ID;
+    this.server.to(getMapRoomId(mapId)).emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any, template?.textureKey));
 
     // XP de récolte data-driven depuis ResourceTemplate.skillKey / gatheringXpReward.
     // characterId vient du serveur (client.data.player), jamais du client.

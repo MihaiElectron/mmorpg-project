@@ -361,12 +361,14 @@ export class WorldService implements OnModuleInit {
     return this.getMovementMetrics();
   }
 
-  getPlayersExcept(socketId: string): ConnectedPlayer[] {
+  getPlayersExcept(socketId: string, mapId?: number): ConnectedPlayer[] {
     const playersByCharacter = new Map<string, ConnectedPlayer>();
 
     for (const player of this.connectedPlayers.values()) {
       if (player.socketId !== socketId) {
-        playersByCharacter.set(player.characterId, player);
+        if (mapId == null || player.mapId === mapId) {
+          playersByCharacter.set(player.characterId, player);
+        }
       }
     }
 

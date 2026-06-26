@@ -557,7 +557,8 @@ describe('CreaturesService', () => {
     it("remet l'creature en vie à son point de spawn avec vie pleine", async () => {
       const creature = makeCreature({ state: 'dead', health: 0 });
       (service as any).liveCreatures.set(creature.id, creature);
-      const mockServer = { emit: jest.fn() };
+      const emitFn = jest.fn();
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: emitFn }), emit: emitFn };
       (service as any).server = mockServer;
 
       await (service as any).respawnCreature(creature.id);
