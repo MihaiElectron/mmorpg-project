@@ -1,5 +1,15 @@
 import { useState } from "react";
 import { StatField, kbHandlers, ackPromise, getSocket, type FieldDef } from "./adminPanel.shared";
+import { ItemCatalog, ItemIcon } from "../DevTools/shared/ItemCatalog";
+import {
+  replaceRecipeIngredients,
+  replaceRecipeResults,
+} from "../DevTools/modules/Recipes/recipeEditorApi";
+import {
+  validateRecipeIngredients,
+  validateRecipeResults,
+} from "../DevTools/modules/Recipes/recipeEditorHelpers";
+import type { ItemCatalogEntry } from "../DevTools/modules/Items/itemEditor.types";
 
 // ── Types locaux ─────────────────────────────────────────────────────────────
 
@@ -26,7 +36,7 @@ type Recipe = {
   results: RecipeResult[];
 };
 
-type ItemOption = { id: string; name: string; category: string };
+type ItemOption = ItemCatalogEntry;
 type SkillDef   = { key: string; name: string };
 
 type Props = {
@@ -86,8 +96,10 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
   const [newRecipe, setNewRecipe] = useState({ ...NEW_RECIPE_DEFAULT });
   const [creating, setCreating] = useState(false);
-  const [newIng, setNewIng] = useState<Record<string, typeof NEW_ING_DEFAULT>>({});
-  const [newRes, setNewRes] = useState<Record<string, typeof NEW_RES_DEFAULT>>({});
+  const [ingredientDrafts, setIngredientDrafts] = useState<Record<string, Ingredient[]>>({});
+  const [resultDrafts, setResultDrafts] = useState<Record<string, RecipeResult[]>>({});
+  const [ingredientQueries, setIngredientQueries] = useState<Record<string, string>>({});
+  const [resultQueries, setResultQueries] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
 
   const skillKeyOptions = ["", ...skillDefinitions.map((sd) => sd.key)];
@@ -134,50 +146,110 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
     }
   }
 
-  async function addIngredient(recipeId: string) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const { itemId, requiredQuantity } = newIng[recipeId] ?? NEW_ING_DEFAULT;
-    if (!itemId) { onResult("Sélectionner un item.", false); return; }
-    setPending((p) => ({ ...p, [`ing-${recipeId}`]: true }));
-    const r = await ackPromise(socket, "admin:add_ingredient", { recipeId, itemId, requiredQuantity });
-    setPending((p) => ({ ...p, [`ing-${recipeId}`]: false }));
-    onResult(r.message, r.success);
-    if (r.success && r.data) {
-      onIngredientAdded(recipeId, r.data as Ingredient);
-      setNewIng((prev) => ({ ...prev, [recipeId]: { ...NEW_ING_DEFAULT } }));
+  function ingredientDraft(recipe: Recipe): Ingredient[] {
+    return ingredientDrafts[recipe.id] ?? recipe.ingredients;
+  }
+
+  function resultDraft(recipe: Recipe): RecipeResult[] {
+    return resultDrafts[recipe.id] ?? recipe.results;
+  }
+
+  function addIngredientDraft(recipe: Recipe, item: ItemOption) {
+    const draft = ingredientDraft(recipe);
+    if (draft.some((ing) => ing.itemId === item.id)) return;
+    setIngredientDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: [...draft, { id: `draft-${item.id}`, itemId: item.id, requiredQuantity: 1 }],
+    }));
+  }
+
+  function updateIngredientDraft(recipe: Recipe, index: number, requiredQuantity: number) {
+    setIngredientDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: ingredientDraft(recipe).map((ing, idx) =>
+        idx === index ? { ...ing, requiredQuantity } : ing,
+      ),
+    }));
+  }
+
+  function removeIngredientDraft(recipe: Recipe, index: number) {
+    setIngredientDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: ingredientDraft(recipe).filter((_, idx) => idx !== index),
+    }));
+  }
+
+  function addResultDraft(recipe: Recipe, item: ItemOption) {
+    const draft = resultDraft(recipe);
+    if (draft.some((res) => res.itemId === item.id)) return;
+    setResultDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: [...draft, { id: `draft-${item.id}`, itemId: item.id, producedQuantity: 1, chance: 1 }],
+    }));
+  }
+
+  function updateResultDraft(recipe: Recipe, index: number, patch: Partial<RecipeResult>) {
+    setResultDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: resultDraft(recipe).map((res, idx) =>
+        idx === index ? { ...res, ...patch } : res,
+      ),
+    }));
+  }
+
+  function removeResultDraft(recipe: Recipe, index: number) {
+    setResultDrafts((prev) => ({
+      ...prev,
+      [recipe.id]: resultDraft(recipe).filter((_, idx) => idx !== index),
+    }));
+  }
+
+  async function saveIngredientDraft(recipe: Recipe) {
+    const draft = ingredientDraft(recipe);
+    const validation = validateRecipeIngredients(draft, items);
+    if (!validation.valid) {
+      onResult(validation.errors.join(" · "), false);
+      return;
+    }
+    setPending((p) => ({ ...p, [`ing-save-${recipe.id}`]: true }));
+    try {
+      const updated = await replaceRecipeIngredients(recipe.id, draft);
+      onRecipeUpdated(updated as Recipe);
+      setIngredientDrafts((prev) => {
+        const next = { ...prev };
+        delete next[recipe.id];
+        return next;
+      });
+      onResult("Ingrédients sauvegardés.", true);
+    } catch (err) {
+      onResult(err instanceof Error ? err.message : "Erreur ingrédients.", false);
+    } finally {
+      setPending((p) => ({ ...p, [`ing-save-${recipe.id}`]: false }));
     }
   }
 
-  async function removeIngredient(recipeId: string, ingId: string) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const r = await ackPromise(socket, "admin:remove_ingredient", { ingredientId: ingId });
-    onResult(r.message, r.success);
-    if (r.success) onIngredientRemoved(recipeId, ingId);
-  }
-
-  async function addResult(recipeId: string) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const { itemId, producedQuantity, chance } = newRes[recipeId] ?? NEW_RES_DEFAULT;
-    if (!itemId) { onResult("Sélectionner un item.", false); return; }
-    setPending((p) => ({ ...p, [`res-${recipeId}`]: true }));
-    const r = await ackPromise(socket, "admin:add_result", { recipeId, itemId, producedQuantity, chance });
-    setPending((p) => ({ ...p, [`res-${recipeId}`]: false }));
-    onResult(r.message, r.success);
-    if (r.success && r.data) {
-      onResultAdded(recipeId, r.data as RecipeResult);
-      setNewRes((prev) => ({ ...prev, [recipeId]: { ...NEW_RES_DEFAULT } }));
+  async function saveResultDraft(recipe: Recipe) {
+    const draft = resultDraft(recipe);
+    const validation = validateRecipeResults(draft, items);
+    if (!validation.valid) {
+      onResult(validation.errors.join(" · "), false);
+      return;
     }
-  }
-
-  async function removeResult(recipeId: string, resId: string) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const r = await ackPromise(socket, "admin:remove_result", { resultId: resId });
-    onResult(r.message, r.success);
-    if (r.success) onResultRemoved(recipeId, resId);
+    setPending((p) => ({ ...p, [`res-save-${recipe.id}`]: true }));
+    try {
+      const updated = await replaceRecipeResults(recipe.id, draft);
+      onRecipeUpdated(updated as Recipe);
+      setResultDrafts((prev) => {
+        const next = { ...prev };
+        delete next[recipe.id];
+        return next;
+      });
+      onResult("Résultats sauvegardés.", true);
+    } catch (err) {
+      onResult(err instanceof Error ? err.message : "Erreur résultats.", false);
+    } finally {
+      setPending((p) => ({ ...p, [`res-save-${recipe.id}`]: false }));
+    }
   }
 
   async function validateRecipe(recipeId: string) {
@@ -208,8 +280,12 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
       <div className="admin-panel__template-list">
         {recipes.map((recipe) => {
           const expanded = expandedId === recipe.id;
-          const ingNew = newIng[recipe.id] ?? NEW_ING_DEFAULT;
-          const resNew = newRes[recipe.id] ?? NEW_RES_DEFAULT;
+          const ingredients = ingredientDraft(recipe);
+          const results = resultDraft(recipe);
+          const ingredientValidation = validateRecipeIngredients(ingredients, items);
+          const resultValidation = validateRecipeResults(results, items);
+          const ingredientItemIds = new Set(ingredients.map((ing) => ing.itemId));
+          const resultItemIds = new Set(results.map((res) => res.itemId));
 
           return (
             <div key={recipe.id} className="admin-panel__template-group">
@@ -262,81 +338,115 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                   </div>
 
                   <div className="admin-panel__info-line">
-                    <strong>Ingrédients ({recipe.ingredients.length})</strong>
+                    <strong>Ingrédients ({ingredients.length})</strong>
                   </div>
-                  {recipe.ingredients.map((ing) => {
+                  <div className="admin-panel__recipe-lines">
+                  {ingredients.map((ing, index) => {
                     const item = items.find((i) => i.id === ing.itemId);
                     return (
-                      <div key={ing.id} className="admin-panel__instance-row">
-                        <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : ing.itemId}</span>
-                        <span className="admin-panel__instance-badge">×{ing.requiredQuantity}</span>
-                        <button className="admin-panel__delete-btn" onClick={() => removeIngredient(recipe.id, ing.id)}>✕</button>
+                      <div key={ing.id ?? ing.itemId} className="admin-panel__recipe-line">
+                        <ItemIcon item={item ?? null} />
+                        <span className="admin-panel__recipe-line-copy">
+                          <span className="admin-panel__recipe-line-name">
+                            {item ? item.name : ing.itemId}
+                          </span>
+                          <span className="admin-panel__recipe-line-meta">
+                            {item ? `${item.type} / ${item.category}` : "Item inconnu"}
+                          </span>
+                        </span>
+                        <label className="admin-panel__recipe-line-field">
+                          <span>Qté</span>
+                          <input className="admin-panel__template-stat-input" type="number" min={1}
+                            value={ing.requiredQuantity}
+                            onChange={(e) => updateIngredientDraft(recipe, index, Number(e.target.value))}
+                            {...kbHandlers} />
+                        </label>
+                        <button className="admin-panel__delete-btn" onClick={() => removeIngredientDraft(recipe, index)}>✕</button>
                       </div>
                     );
                   })}
-                  <div className="admin-panel__template-stats">
-                    <label className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">Item</span>
-                      <select className="admin-panel__template-stat-input"
-                        value={ingNew.itemId}
-                        onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), itemId: e.target.value } }))}
-                        {...kbHandlers}>
-                        <option value="">—</option>
-                        {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
-                      </select>
-                    </label>
-                    <label className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">Qté</span>
-                      <input className="admin-panel__template-stat-input" type="number" min={1}
-                        value={ingNew.requiredQuantity}
-                        onChange={(e) => setNewIng((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_ING_DEFAULT), requiredQuantity: Number(e.target.value) } }))}
-                        {...kbHandlers} />
-                    </label>
-                    <button className="admin-panel__apply-btn" disabled={pending[`ing-${recipe.id}`]} onClick={() => addIngredient(recipe.id)}>
-                      {pending[`ing-${recipe.id}`] ? "…" : "+ Ingrédient"}
+                  </div>
+                  {!ingredientValidation.valid && (
+                    <p className="admin-panel__recipe-validation">
+                      {ingredientValidation.errors.join(" · ")}
+                    </p>
+                  )}
+                  <ItemCatalog
+                    items={items}
+                    query={ingredientQueries[recipe.id] ?? ""}
+                    onQueryChange={(query) => setIngredientQueries((prev) => ({ ...prev, [recipe.id]: query }))}
+                    onAdd={(item) => addIngredientDraft(recipe, item)}
+                    disabledItemIds={ingredientItemIds}
+                    addLabel="+ Ing."
+                    searchInputHandlers={kbHandlers}
+                  />
+                  <div className="admin-panel__template-actions">
+                    <button
+                      className="admin-panel__apply-btn"
+                      disabled={!ingredientValidation.valid || pending[`ing-save-${recipe.id}`]}
+                      onClick={() => saveIngredientDraft(recipe)}
+                    >
+                      {pending[`ing-save-${recipe.id}`] ? "…" : "Sauver ingrédients"}
                     </button>
                   </div>
 
                   <div className="admin-panel__info-line">
-                    <strong>Résultats ({recipe.results.length})</strong>
+                    <strong>Résultats ({results.length})</strong>
                   </div>
-                  {recipe.results.map((res) => {
+                  <div className="admin-panel__recipe-lines">
+                  {results.map((res, index) => {
                     const item = items.find((i) => i.id === res.itemId);
                     return (
-                      <div key={res.id} className="admin-panel__instance-row">
-                        <span className="admin-panel__instance-name">{item ? `${item.name} (${item.category})` : res.itemId}</span>
-                        <span className="admin-panel__instance-badge">×{res.producedQuantity} @ {Math.round(res.chance * 100)}%</span>
-                        <button className="admin-panel__delete-btn" onClick={() => removeResult(recipe.id, res.id)}>✕</button>
+                      <div key={res.id ?? res.itemId} className="admin-panel__recipe-line admin-panel__recipe-line--result">
+                        <ItemIcon item={item ?? null} />
+                        <span className="admin-panel__recipe-line-copy">
+                          <span className="admin-panel__recipe-line-name">
+                            {item ? item.name : res.itemId}
+                          </span>
+                          <span className="admin-panel__recipe-line-meta">
+                            {item ? `${item.type} / ${item.category}` : "Item inconnu"}
+                          </span>
+                        </span>
+                        <label className="admin-panel__recipe-line-field">
+                          <span>Qté</span>
+                          <input className="admin-panel__template-stat-input" type="number" min={1}
+                            value={res.producedQuantity}
+                            onChange={(e) => updateResultDraft(recipe, index, { producedQuantity: Number(e.target.value) })}
+                            {...kbHandlers} />
+                        </label>
+                        <label className="admin-panel__recipe-line-field">
+                          <span>Chance</span>
+                          <input className="admin-panel__template-stat-input" type="number" min={0} max={1} step={0.05}
+                            value={res.chance}
+                            onChange={(e) => updateResultDraft(recipe, index, { chance: Number(e.target.value) })}
+                            {...kbHandlers} />
+                        </label>
+                        <button className="admin-panel__delete-btn" onClick={() => removeResultDraft(recipe, index)}>✕</button>
                       </div>
                     );
                   })}
-                  <div className="admin-panel__template-stats">
-                    <label className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">Item</span>
-                      <select className="admin-panel__template-stat-input"
-                        value={resNew.itemId}
-                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), itemId: e.target.value } }))}
-                        {...kbHandlers}>
-                        <option value="">—</option>
-                        {items.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.category})</option>)}
-                      </select>
-                    </label>
-                    <label className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">Qté</span>
-                      <input className="admin-panel__template-stat-input" type="number" min={1}
-                        value={resNew.producedQuantity}
-                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), producedQuantity: Number(e.target.value) } }))}
-                        {...kbHandlers} />
-                    </label>
-                    <label className="admin-panel__template-stat">
-                      <span className="admin-panel__template-stat-label">Chance</span>
-                      <input className="admin-panel__template-stat-input" type="number" min={0} max={1} step={0.05}
-                        value={resNew.chance}
-                        onChange={(e) => setNewRes((prev) => ({ ...prev, [recipe.id]: { ...(prev[recipe.id] ?? NEW_RES_DEFAULT), chance: Number(e.target.value) } }))}
-                        {...kbHandlers} />
-                    </label>
-                    <button className="admin-panel__apply-btn" disabled={pending[`res-${recipe.id}`]} onClick={() => addResult(recipe.id)}>
-                      {pending[`res-${recipe.id}`] ? "…" : "+ Résultat"}
+                  </div>
+                  {!resultValidation.valid && (
+                    <p className="admin-panel__recipe-validation">
+                      {resultValidation.errors.join(" · ")}
+                    </p>
+                  )}
+                  <ItemCatalog
+                    items={items}
+                    query={resultQueries[recipe.id] ?? ""}
+                    onQueryChange={(query) => setResultQueries((prev) => ({ ...prev, [recipe.id]: query }))}
+                    onAdd={(item) => addResultDraft(recipe, item)}
+                    disabledItemIds={resultItemIds}
+                    addLabel="+ Rés."
+                    searchInputHandlers={kbHandlers}
+                  />
+                  <div className="admin-panel__template-actions">
+                    <button
+                      className="admin-panel__apply-btn"
+                      disabled={!resultValidation.valid || pending[`res-save-${recipe.id}`]}
+                      onClick={() => saveResultDraft(recipe)}
+                    >
+                      {pending[`res-save-${recipe.id}`] ? "…" : "Sauver résultats"}
                     </button>
                   </div>
                 </div>

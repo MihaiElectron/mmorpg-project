@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ItemIcon } from "../../shared/ItemCatalog";
 import { fetchItemUsageStats } from "../Items/itemEditorApi";
 import type {
   ItemCatalogEntry,
@@ -52,6 +53,7 @@ function emptyEntry(item: ItemCatalogEntry): LootPoolEntry {
 }
 
 export default function LootPoolModule() {
+  const [open, setOpen] = useState(true);
   const [items, setItems] = useState<ItemCatalogEntry[]>([]);
   const [sources, setSources] = useState<LootPoolSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -215,13 +217,23 @@ export default function LootPoolModule() {
 
   return (
     <section className="loot-pool-editor" aria-label="LootPool Editor">
-      <div className="loot-pool-editor__header">
-        <h3 className="loot-pool-editor__title">LootPool Editor</h3>
+      <div
+        className="loot-pool-editor__header"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <h3 className="loot-pool-editor__title">
+          <span className="loot-pool-editor__chevron">
+            {open ? "▼" : "▶"}
+          </span>
+          LootPool Editor
+        </h3>
         <span className="loot-pool-editor__count">
           {sources.length} source{sources.length > 1 ? "s" : ""}
         </span>
       </div>
 
+      {open && (
+        <>
       {status === "loading" && (
         <p className="loot-pool-editor__status">Chargement...</p>
       )}
@@ -317,20 +329,7 @@ export default function LootPoolModule() {
                       }
                     >
                       <div className="loot-pool-editor__entry-item">
-                        <span className="loot-pool-editor__item-icon">
-                          {item?.image ? (
-                            <img
-                              src={item.image}
-                              alt={item.name}
-                              className="loot-pool-editor__item-img"
-                            />
-                          ) : (
-                            <span
-                              className="loot-pool-editor__item-empty"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </span>
+                        <ItemIcon item={item} />
                         <span className="loot-pool-editor__item-copy">
                           <span className="loot-pool-editor__item-name">
                             {item?.name ?? entry.itemId}
@@ -452,20 +451,7 @@ export default function LootPoolModule() {
                     }
                   }}
                 >
-                  <span className="loot-pool-editor__item-icon">
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="loot-pool-editor__item-img"
-                      />
-                    ) : (
-                      <span
-                        className="loot-pool-editor__item-empty"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </span>
+                  <ItemIcon item={item} />
                   <span className="loot-pool-editor__item-copy">
                     <span className="loot-pool-editor__item-name">
                       {item.name}
@@ -533,6 +519,8 @@ export default function LootPoolModule() {
             </div>
           </aside>
         </div>
+      )}
+        </>
       )}
     </section>
   );

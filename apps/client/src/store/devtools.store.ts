@@ -43,6 +43,7 @@ export type DevToolsMapInfo = {
 };
 
 export type DevToolsPanelPosition = { x: number; y: number };
+export type DevToolsPanelSize = { width: number; height: number } | null;
 
 const DEFAULT_PANEL_POSITION: DevToolsPanelPosition = { x: 0, y: 0 };
 
@@ -87,6 +88,7 @@ const storeLogic = (set, get) => ({
   isDevToolsOpen: false,
   isEditMode: false,
   panelPosition: DEFAULT_PANEL_POSITION,
+  panelSize: null as DevToolsPanelSize,
 
   setDevToolsOpen: (open: boolean) =>
     set({
@@ -106,6 +108,9 @@ const storeLogic = (set, get) => ({
 
   setPanelPosition: (position: DevToolsPanelPosition) =>
     set({ panelPosition: position }),
+
+  setPanelSize: (size: DevToolsPanelSize) =>
+    set({ panelSize: size }),
 
   resetPanelPosition: () => set({ panelPosition: DEFAULT_PANEL_POSITION }),
 

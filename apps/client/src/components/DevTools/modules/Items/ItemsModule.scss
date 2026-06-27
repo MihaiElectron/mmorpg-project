@@ -11,18 +11,29 @@
   &__header {
     align-items: center;
     border-bottom: 1px solid vars.$panel-border;
+    cursor: pointer;
     display: flex;
     gap: 8px;
     justify-content: space-between;
     padding-bottom: 6px;
+    user-select: none;
   }
 
   &__title {
+    align-items: center;
     color: vars.$color-text-gold;
+    display: flex;
     font-size: 0.85rem;
     font-weight: bold;
+    gap: 6px;
     letter-spacing: 1px;
     text-transform: uppercase;
+  }
+
+  &__chevron {
+    color: vars.$color-text-muted;
+    font-size: 0.65rem;
+    letter-spacing: 0;
   }
 
   &__count,
@@ -51,6 +62,40 @@
         118px,
         1fr
       );
+  }
+
+  &__create-head {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  &__create-toggle {
+    align-items: center;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-gold;
+    cursor: pointer;
+    display: flex;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+    gap: 5px;
+    padding: 4px 8px;
+  }
+
+  &__create-form {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 7px;
+
+    .item-editor__save {
+      align-self: end;
+      justify-self: end;
+    }
   }
 
   &__search,

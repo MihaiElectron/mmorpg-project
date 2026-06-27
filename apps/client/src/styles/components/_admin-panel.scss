@@ -542,6 +542,72 @@
     font-size: 0.8rem;
   }
 
+  &__recipe-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__recipe-line {
+    align-items: center;
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 26px minmax(0, 1fr) 58px auto;
+    min-width: 0;
+    padding: 5px 6px;
+
+    &--result {
+      grid-template-columns: 26px minmax(0, 1fr) 58px 70px auto;
+    }
+  }
+
+  &__recipe-line-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  &__recipe-line-name {
+    color: vars.$color-text-primary;
+    font-size: 0.78rem;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__recipe-line-meta,
+  &__recipe-line-field span {
+    color: vars.$color-text-muted;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.66rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__recipe-line-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__recipe-validation {
+    background: rgba(207, 126, 126, 0.08);
+    border: 1px solid rgba(207, 126, 126, 0.22);
+    border-radius: vars.$panel-radius-sm;
+    color: #cf7e7e;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    margin: 0;
+    padding: 5px 7px;
+  }
+
   &__delete-btn {
     flex-shrink: 0;
     background: transparent;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_FILTER,
+  buildItemCreateInput,
   buildItemPatch,
   draftFromItem,
   filterItems,
@@ -67,5 +68,21 @@ describe("item editor filters", () => {
     expect(
       isValidItemDraft({ ...draftFromItem(ITEMS[0]), category: " " }),
     ).toBe(false);
+  });
+
+  it("construit un payload de création item", () => {
+    expect(
+      buildItemCreateInput({
+        name: "  Bois  ",
+        type: " material ",
+        category: " wooden_stick ",
+        image: " /assets/images/items/wooden_stick.png ",
+      }),
+    ).toEqual({
+      name: "Bois",
+      type: "material",
+      category: "wooden_stick",
+      image: "/assets/images/items/wooden_stick.png",
+    });
   });
 });

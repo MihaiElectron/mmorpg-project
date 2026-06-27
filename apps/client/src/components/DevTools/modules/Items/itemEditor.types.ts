@@ -15,6 +15,8 @@ export interface ItemEditorDraft {
 
 export type ItemEditorPatch = Partial<ItemEditorDraft>;
 
+export type ItemCreateInput = ItemEditorDraft;
+
 export interface ItemUsageRef {
   id: string | number;
   key?: string;

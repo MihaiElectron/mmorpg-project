@@ -1,4 +1,5 @@
 import type {
+  ItemCreateInput,
   ItemCatalogEntry,
   ItemEditorDraft,
   ItemEditorPatch,
@@ -66,4 +67,15 @@ export function isValidItemDraft(draft: ItemEditorDraft): boolean {
   return Boolean(
     draft.name.trim() && draft.type.trim() && draft.category.trim(),
   );
+}
+
+export function buildItemCreateInput(
+  draft: ItemEditorDraft,
+): ItemCreateInput {
+  return {
+    name: draft.name.trim(),
+    type: draft.type.trim(),
+    category: draft.category.trim(),
+    image: draft.image.trim(),
+  };
 }

@@ -48,12 +48,15 @@
 .devtools-floating-panel {
   --devtools-panel-x: 0px;
   --devtools-panel-y: 0px;
+  --devtools-panel-width: min(430px, calc(100vw - 32px));
+  --devtools-panel-height: auto;
 
   position: fixed;
   top: 112px;
   right: 16px;
   z-index: 1190;
-  width: min(430px, calc(100vw - 32px));
+  width: var(--devtools-panel-width);
+  height: var(--devtools-panel-height);
   min-width: 280px;
   min-height: 160px;
   max-height: calc(100vh - 132px);
@@ -64,12 +67,43 @@
   gap: 8px;
   padding: 8px;
   overflow: auto;
-  resize: both;
   background: vars.$panel-bg;
   border: 1px solid vars.$panel-border;
   border-radius: vars.$panel-radius-card;
   box-shadow: vars.$panel-shadow-float;
   color: vars.$color-text-primary;
+
+  &__resize {
+    display: block;
+    height: 14px;
+    position: absolute;
+    width: 14px;
+    z-index: 2;
+  }
+
+  &__resize--top-left {
+    cursor: nwse-resize;
+    left: -4px;
+    top: -4px;
+  }
+
+  &__resize--top-right {
+    cursor: nesw-resize;
+    right: -4px;
+    top: -4px;
+  }
+
+  &__resize--bottom-left {
+    bottom: -4px;
+    cursor: nesw-resize;
+    left: -4px;
+  }
+
+  &__resize--bottom-right {
+    bottom: -4px;
+    cursor: nwse-resize;
+    right: -4px;
+  }
 
   &__header {
     @include m.panel-header;

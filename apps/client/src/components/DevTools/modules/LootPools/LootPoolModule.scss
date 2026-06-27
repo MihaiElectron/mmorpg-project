@@ -11,18 +11,29 @@
   &__header {
     align-items: center;
     border-bottom: 1px solid vars.$panel-border;
+    cursor: pointer;
     display: flex;
     gap: 8px;
     justify-content: space-between;
     padding-bottom: 6px;
+    user-select: none;
   }
 
   &__title {
+    align-items: center;
     color: vars.$color-text-gold;
+    display: flex;
     font-size: 0.85rem;
     font-weight: bold;
+    gap: 6px;
     letter-spacing: 1px;
     text-transform: uppercase;
+  }
+
+  &__chevron {
+    color: vars.$color-text-muted;
+    font-size: 0.65rem;
+    letter-spacing: 0;
   }
 
   &__count,

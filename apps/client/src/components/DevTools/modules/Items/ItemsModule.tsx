@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchItems, fetchItemUsageStats, updateItem } from "./itemEditorApi";
+import { createItem, fetchItems, fetchItemUsageStats, updateItem } from "./itemEditorApi";
 import {
   ALL_FILTER,
+  buildItemCreateInput,
   buildItemPatch,
   draftFromItem,
   filterItems,
@@ -59,9 +60,12 @@ function UsageList({ items }: { items: ItemUsageRef[] }) {
 }
 
 export default function ItemsModule() {
+  const [open, setOpen] = useState(true);
   const [items, setItems] = useState<ItemCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItemEditorDraft>(emptyDraft);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState<ItemEditorDraft>(emptyDraft);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL_FILTER);
   const [categoryFilter, setCategoryFilter] = useState(ALL_FILTER);
@@ -70,6 +74,7 @@ export default function ItemsModule() {
   );
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [usageStats, setUsageStats] = useState<ItemUsageStats | null>(null);
   const [usageStatus, setUsageStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
@@ -146,10 +151,34 @@ export default function ItemsModule() {
   const patch = selectedItem ? buildItemPatch(selectedItem, draft) : {};
   const dirty = Object.keys(patch).length > 0;
   const valid = isValidItemDraft(draft);
+  const createValid = isValidItemDraft(createDraft);
   const used = hasGameplayUsage(usageStats);
 
   function updateDraft(key: keyof ItemEditorDraft, value: string) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateCreateDraft(key: keyof ItemEditorDraft, value: string) {
+    setCreateDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handleCreate() {
+    if (!createValid) return;
+    setCreating(true);
+    setMessage(null);
+    try {
+      const created = await createItem(buildItemCreateInput(createDraft));
+      const refreshed = await fetchItems();
+      setItems(refreshed);
+      setSelectedId(created.id);
+      setCreateDraft(emptyDraft());
+      setCreateOpen(false);
+      setMessage("Item créé.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Erreur création.");
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function handleSave() {
@@ -173,12 +202,80 @@ export default function ItemsModule() {
 
   return (
     <section className="item-editor" aria-label="Item Editor DevTools module">
-      <div className="item-editor__header">
-        <h3 className="item-editor__title">Item Editor</h3>
+      <div
+        className="item-editor__header"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <h3 className="item-editor__title">
+          <span className="item-editor__chevron">{open ? "▼" : "▶"}</span>
+          Item Editor
+        </h3>
         <span className="item-editor__count">
           {items.length} item{items.length > 1 ? "s" : ""}
         </span>
       </div>
+
+      {open && (
+        <>
+      <div className="item-editor__create-head">
+        <button
+          className="item-editor__create-toggle"
+          type="button"
+          onClick={() => setCreateOpen((current) => !current)}
+        >
+          <span className="item-editor__chevron">{createOpen ? "▼" : "▶"}</span>
+          Créer item
+        </button>
+      </div>
+
+      {createOpen && (
+        <form
+          className="item-editor__create-form"
+          onSubmit={(e) => e.preventDefault()}
+        >
+          <label className="item-editor__field">
+            <span className="item-editor__label">Name</span>
+            <input
+              className="item-editor__input"
+              value={createDraft.name}
+              onChange={(e) => updateCreateDraft("name", e.target.value)}
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Type</span>
+            <input
+              className="item-editor__input"
+              value={createDraft.type}
+              onChange={(e) => updateCreateDraft("type", e.target.value)}
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Category</span>
+            <input
+              className="item-editor__input"
+              value={createDraft.category}
+              onChange={(e) => updateCreateDraft("category", e.target.value)}
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Image</span>
+            <input
+              className="item-editor__input"
+              value={createDraft.image}
+              onChange={(e) => updateCreateDraft("image", e.target.value)}
+              placeholder="/assets/images/items/new_item.png"
+            />
+          </label>
+          <button
+            className="item-editor__save"
+            type="button"
+            onClick={handleCreate}
+            disabled={!createValid || creating}
+          >
+            {creating ? "…" : "Créer"}
+          </button>
+        </form>
+      )}
 
       <div className="item-editor__toolbar">
         <input
@@ -450,6 +547,8 @@ export default function ItemsModule() {
             )}
           </form>
         </div>
+      )}
+        </>
       )}
     </section>
   );

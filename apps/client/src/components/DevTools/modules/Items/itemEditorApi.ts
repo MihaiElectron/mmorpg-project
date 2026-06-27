@@ -1,6 +1,7 @@
 import type {
   ItemCatalogEntry,
   ItemEditorPatch,
+  ItemCreateInput,
   ItemUsageStats,
 } from "./itemEditor.types";
 
@@ -23,6 +24,21 @@ export async function fetchItems(): Promise<ItemCatalogEntry[]> {
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<ItemCatalogEntry[]>;
+}
+
+export async function createItem(
+  input: ItemCreateInput,
+): Promise<ItemCatalogEntry> {
+  const res = await fetch(`${API}/item`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ItemCatalogEntry>;
 }
 
 export async function updateItem(
