@@ -252,6 +252,9 @@ export class AdminService {
     return this.resourceTemplateRepo.save(tpl);
   }
 
+  private static readonly UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
   private async validateLootPool(value: unknown): Promise<LootPoolEntryPatch[] | null> {
     if (value === null) return null;
     if (!Array.isArray(value)) {
@@ -262,9 +265,17 @@ export class AdminService {
     const refs = [...new Set(entries.map((entry) => entry.itemId))];
     if (refs.length === 0) return entries;
 
-    const items = await this.itemRepo.find({
-      where: [{ id: In(refs) }, { category: In(refs) }],
-    });
+    const uuidRefs = refs.filter((r) => AdminService.UUID_RE.test(r));
+    const categoryRefs = refs.filter((r) => !AdminService.UUID_RE.test(r));
+
+    const whereClause: object[] = [];
+    if (uuidRefs.length > 0) whereClause.push({ id: In(uuidRefs) });
+    if (categoryRefs.length > 0) whereClause.push({ category: In(categoryRefs) });
+
+    const items = whereClause.length > 0
+      ? await this.itemRepo.find({ where: whereClause })
+      : [];
+
     const knownRefs = new Set(items.flatMap((item) => [item.id, item.category]));
     const unknownRef = refs.find((ref) => !knownRefs.has(ref));
     if (unknownRef) {
