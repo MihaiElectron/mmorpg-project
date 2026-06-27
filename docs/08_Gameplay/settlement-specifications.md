@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-26
+- Last updated: 2026-06-27
 - Depends on: docs/08_Gameplay/settlement-economy-architecture.md, docs/08_Gameplay/settlement-economy-review.md, docs/08_Gameplay/settlement-gameplay-loops.md
 - Used by: Project owner, game design, developers, conversational assistants, repository-aware coding agents
 
@@ -16,6 +16,11 @@ It turns the gameplay loops into explicit lifecycle rules, state machines,
 permissions, business events, invariants, edge cases, and integration points.
 It does not define database tables, API routes, Runtime services, migrations,
 controllers, gateways, Studio panels, or implementation code.
+
+Current implementation priority is Auction House. The next recommended gameplay
+MVP is fixed-price Auction House only. CraftOrder, Buildings, Workshops,
+Treasury, and advanced tax behavior remain documented here for compatibility,
+but are not the focus of the next implementation slice.
 
 All future implementation must preserve the server-authoritative rule: the
 client displays information and sends intentions only. Ownership, inventory,
@@ -43,6 +48,10 @@ A workshop is a settlement service that transforms inputs into goods through a
 profession. It can process immediate future NPC work, queued craft orders, and
 later player or guild contracts.
 
+The project already has Crafting Stations integrated in DevTools. Any future
+CraftOrder implementation must reuse that concept where possible and avoid
+creating a duplicate Workshop abstraction without a dedicated ADR.
+
 ### Craft Order
 
 A craft order is a request for production. It can be private, public, or future
@@ -58,6 +67,34 @@ timed bidding, or timed bidding with optional buyout.
 
 The treasury is the settlement-owned economic account. It receives taxes and
 fees, and funds maintenance, construction, upgrades, and future policies.
+
+### Currency model
+
+The official economic unit is bronze.
+
+Denominations:
+
+- `1 silver = 100 bronze`;
+- `1 gold = 100 silver = 10 000 bronze`;
+- bronze is indivisible.
+
+All server and database monetary values are bronze-only integer amounts. Future
+fields should use names such as `amountBronze`, `balanceBronze`,
+`priceBronze`, `currentBidBronze`, `buyoutPriceBronze`, `taxAmountBronze`, and
+`treasuryBalanceBronze`.
+
+Do not model business tables with split denomination fields such as
+`priceGold`, `priceSilver`, and `priceBronze` together. Gold and silver are UI
+display denominations only. The server, persistence, transactions, sorting,
+comparisons, tax rules, bids, buyouts, refunds, treasury, and craft payments
+operate on bronze.
+
+Monetary persistence should use a 64-bit integer such as PostgreSQL `BIGINT`.
+TypeScript implementation must explicitly account for safe integer limits when
+future balances become large.
+
+No economic action may write a negative balance. Insufficient available balance
+rejects the operation before any player-visible effect.
 
 ## 2. Craft Order lifecycle
 
@@ -298,6 +335,61 @@ Draft
                     └── Archived
 ```
 
+### 3.1.1 Authority and transaction rules
+
+The Auction House is server-authoritative. The client sends intentions and
+renders results only.
+
+The client never decides:
+
+- final price in bronze;
+- winner;
+- bid validity;
+- item transfer;
+- currency transfer;
+- expiration;
+- refund;
+- closure.
+
+Every mutating auction action must be transactional. A bid, buyout,
+cancellation, return, refund, or expiration settlement must lock the affected
+records before changing state:
+
+- auction;
+- listed item;
+- seller inventory;
+- buyer inventory when a buyer is involved;
+- buyer currency when a buyer is involved;
+- seller currency when seller payout is involved;
+- refund holds when previous bidders are involved;
+- associated economy transaction or ledger/audit row.
+
+Listed items leave the seller's active inventory while listed. A listed item
+is reserved or locked and cannot be equipped, sold elsewhere, destroyed, used
+for craft, traded, or otherwise consumed. It becomes available again only after
+valid seller cancellation, unsold expiration return, or finalized sale.
+
+Committed bid currency is also unavailable elsewhere. The implementation may
+choose reservation or debit-to-escrow, but the chosen model must prevent the
+current winning bidder from spending the same currency in another action. When
+a new bid becomes the current winner, the previous winning bidder is refunded
+or released in the same transaction.
+
+Expiration is persisted, not memory-timer based. After restart, the server must
+be able to recover auction truth from persisted state, at minimum:
+
+- `status`;
+- `startsAt`;
+- `endsAt`;
+- `currentBidBronze`;
+- `buyoutPriceBronze` if the listing supports buyout;
+- `winnerId` if any;
+- `sellerId`;
+- `itemId`.
+
+Double clicks and replayed requests must be idempotent or rejected cleanly once
+the persisted state has changed.
+
 ### 3.2 Deposit
 
 Deposit begins when the seller selects an item or item stack for sale.
@@ -310,7 +402,7 @@ Deposit rules:
   pending another transfer;
 - quantity must be positive and available;
 - listing fee and duration must be known;
-- item is reserved before publication.
+- item is removed from active inventory and reserved before publication.
 
 ### 3.3 Validation
 
@@ -321,7 +413,7 @@ Validation checks:
 - item tradability;
 - settlement market availability;
 - listing type validity;
-- price bounds;
+- `priceBronze` or `buyoutPriceBronze` bounds;
 - duration bounds;
 - tax and fee visibility;
 - player listing limits;
@@ -338,8 +430,8 @@ Publication rules:
 - published listing has item escrow;
 - seller cannot consume or retrieve the item except through allowed cancel or
   expiration paths;
-- price and duration are immutable after publication unless the auction type
-  explicitly allows edit before first bid;
+- `priceBronze`, `buyoutPriceBronze`, and duration are immutable after
+  publication unless the auction type explicitly allows edit before first bid;
 - tax rule snapshot is recorded for settlement.
 
 ### 3.5 Bidding
@@ -349,15 +441,17 @@ Bidding applies only to timed auctions.
 Bid rules:
 
 - bidder must not be seller unless explicitly allowed by future policy;
-- bid must meet minimum price and increment;
-- bid currency is reserved;
-- previous active bidder is refunded or marked for refund;
+- bid must meet minimum `currentBidBronze` and increment rules;
+- bid currency is reserved or debited into escrow according to the selected
+  Economy model;
+- previous active bidder is refunded or released in the same accepted-bid
+  transaction;
 - highest valid bid is the current winning bid;
 - each accepted bid emits a business event.
 
 Bid visibility:
 
-- public views may show current price and time remaining;
+- public views may show current price converted from bronze and time remaining;
 - seller identity, bidder identity, or bid history visibility depends on
   market policy.
 
@@ -430,7 +524,7 @@ Archived auctions remain auditable:
 
 - seller;
 - winner if any;
-- final price;
+- final price in bronze;
 - tax;
 - settlement;
 - timestamps;
@@ -713,9 +807,9 @@ Tie-breakers:
 
 Taxable basis:
 
-- direct sale: final sale price;
-- auction: final winning price or buyout price;
-- deposit: listing duration and declared price if deposit exists;
+- direct sale: final `priceBronze`;
+- auction: final `currentBidBronze` or `buyoutPriceBronze`;
+- deposit: listing duration and declared `priceBronze` if deposit exists;
 - workshop order: service fee or reward if policy says so.
 
 Tax rules:
@@ -880,6 +974,28 @@ Expected behavior:
 - seller is paid once;
 - tax is credited once;
 - item is delivered or remains in claimable pending state.
+
+### Auction replay and concurrency
+
+Expected behavior:
+
+- double buyout creates one sale result; the losing request returns the already
+  settled or no-longer-available state;
+- double bid creates at most one accepted current bid per persisted state
+  transition;
+- bid after expiration is rejected even if the client still displays time
+  remaining;
+- seller withdrawal during an active bid is denied unless a future explicit
+  penalty policy allows it;
+- buyer withdrawal after an already processed refund is idempotent or rejected
+  without issuing currency twice;
+- restart during an active auction preserves item escrow and active bid hold;
+- restart after expiration but before closure resumes expiration settlement
+  once;
+- deleted or banned sellers cannot receive duplicate payout or reclaim sold
+  items; resolution follows account policy with audit;
+- deleted or banned buyers cannot bypass bid, buyout, claim, refund, or
+  moderation policy; all asset outcomes remain auditable.
 
 ## 10. Future integrations
 
@@ -1117,4 +1233,3 @@ This specification does not define:
 - final tax rates;
 - final auction durations;
 - accepted governance rules.
-

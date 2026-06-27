@@ -5,7 +5,7 @@
 - Status: Draft
 - Decision status: Proposed
 - Owner: Project
-- Last updated: 2026-06-26
+- Last updated: 2026-06-27
 - Date proposed: 2026-06-26
 - Date accepted: N/A
 - Approved by: TBD
@@ -24,26 +24,72 @@ Auction flows are concurrency-sensitive: simultaneous bids, buyout racing with
 expiration, seller cancellation, outbid refunds, and restart recovery can all
 duplicate items or currency if authority is unclear.
 
+Current implementation priority is Auction House. CraftOrder, Buildings,
+Workshops, full Treasury, and advanced taxes remain out of scope for the next
+Auction MVPs except where minimal economy primitives are required for escrow,
+currency movement, and audit.
+
 ## Decision
 
 The server is the sole authority for auction state.
+
+The client never decides:
+
+- final price in bronze;
+- winner;
+- bid validity;
+- item transfer;
+- currency transfer;
+- expiration;
+- refund;
+- closure.
 
 Auction House rules:
 
 - a published listing must have item escrow;
 - fixed-price purchase settles through Economy in one authoritative operation;
+- all auction monetary values follow ADR-0006 and are stored, compared, sorted,
+  reserved, refunded, and settled in bronze-only fields such as `priceBronze`,
+  `currentBidBronze`, and `buyoutPriceBronze`;
 - timed bids lock bidder funds through Economy;
 - only one current winning bid exists at a time;
 - buyout, bid, cancellation, and expiration compete through server-side state
   transitions;
 - expiration is processed by restart-safe server jobs;
 - clients receive query results and narrow invalidation hints, never authority.
+- all mutating auction actions are transactional and must lock every affected
+  auction, item, inventory, currency, refund, and economy transaction row;
+- listed items leave the seller's active inventory and cannot be equipped,
+  sold elsewhere, destroyed, crafted, or traded until a valid cancellation,
+  expiration return, or final sale releases them;
+- committed bid funds are reserved or debited according to the selected Economy
+  model and cannot be reused elsewhere while they are the active winning hold;
+- outbid refunds are resolved in the same transaction as the new accepted bid;
+- double clicks and request replays are idempotent or rejected against the
+  current persisted state.
+
+Expiration must never depend on an in-memory timer. It must be recoverable after
+server restart from persisted auction data, at minimum:
+
+- `status`;
+- `startsAt`;
+- `endsAt`;
+- `currentBidBronze`;
+- `buyoutPriceBronze` if the listing supports buyout;
+- `winnerId` if any;
+- `sellerId`;
+- `itemId`.
 
 MVP order:
 
-1. fixed-price listings;
-2. timed bids and expiration;
-3. tax integration if not already present.
+1. Auction MVP 1 - fixed-price listings only: create listing, lock item, buyout,
+   transactional item/currency transfer, seller cancellation if no purchase,
+   persisted expiration, and seller recovery after expiration.
+2. Auction MVP 2 - timed ascending auctions: bid, outbid, previous bidder
+   refund, winner closure, optional reserve price only if already documented,
+   and anti double validation.
+3. Auction MVP 3 - taxes and Treasury: deposit fees, sale tax, Treasury credit,
+   and `TaxRule` integration.
 
 ## Consequences
 
@@ -55,8 +101,10 @@ Positive:
 
 Negative:
 
-- Requires Economy Core before Auction House.
-- Requires durable expiration handling before timed auctions.
+- Requires minimal Economy Core primitives before fixed-price Auction House.
+- Requires durable expiration handling before both fixed-price returns and timed
+  auctions.
+- Defers city Treasury value until the fixed-price transfer proof exists.
 
 Risks:
 
@@ -69,6 +117,18 @@ This decision touches server authority, concurrent auctions, ownership, and
 replay. A buyer cannot obtain an item twice. A seller cannot reclaim a sold
 item. Losing bids must be refunded once. Seller self-bidding is denied unless a
 future policy explicitly permits it.
+
+Mandatory abuse and recovery cases:
+
+- double buyout;
+- double bid;
+- bid after expiration;
+- seller withdrawal during an active bid;
+- buyer withdrawal after already being refunded;
+- server restart during an active auction;
+- server restart after expiration but before closure;
+- deleted or banned seller;
+- deleted or banned buyer.
 
 ## Performance notes
 
@@ -90,6 +150,8 @@ Expiration jobs must process bounded batches.
 - Is anti-sniping extension in scope later?
 - Are seller identities and bid histories public, private, or policy-driven?
 - Can sellers cancel auctions after the first bid, and with what penalty?
+- Should committed bid funds be represented as balance reservations or immediate
+  debits into escrow?
 
 ## Related files
 
@@ -97,4 +159,3 @@ Expiration jobs must process bounded batches.
 - docs/08_Gameplay/settlement-economy-review.md
 - docs/08_Gameplay/settlement-specifications.md
 - docs/08_Gameplay/settlement-mvp-slicing.md
-

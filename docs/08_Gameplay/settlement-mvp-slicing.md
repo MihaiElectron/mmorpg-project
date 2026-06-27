@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-26
+- Last updated: 2026-06-27
 - Depends on: docs/08_Gameplay/settlement-economy-architecture.md, docs/08_Gameplay/settlement-economy-review.md, docs/08_Gameplay/settlement-gameplay-loops.md, docs/08_Gameplay/settlement-specifications.md
 - Used by: Project owner, developers, game design, conversational assistants, repository-aware coding agents
 
@@ -25,10 +25,10 @@ governors, caravans, banks, and wars. The smallest safe path is:
 ```text
 Decisions
 └── Persistence foundation
-    └── Minimal private craft order
-        └── Fixed-price market
-            └── Timed auction
-                └── Taxes and treasury
+    └── Fixed-price Auction House
+        └── Timed auction
+            └── Taxes and treasury
+                └── Minimal private craft order
                     └── Studio inspection
                         └── Buildings and upgrades
 ```
@@ -57,6 +57,7 @@ represent:
 - one escrow or lock concept;
 - one idempotency concept;
 - one audit/ledger concept.
+- one official currency unit model.
 
 Reason:
 
@@ -70,19 +71,35 @@ Reason:
 Implementing Craft Order first without Economy Core would recreate the exact
 duplication and recovery risks identified in the RFC review.
 
+The next gameplay MVP after that foundation is **Auction MVP 1: fixed-price
+Auction House**. CraftOrder, Buildings, Workshops, full Treasury, and advanced
+taxes are not the current priority.
+
+All monetary MVPs use the official ADR-0006 currency model:
+
+- bronze is the indivisible unit;
+- `1 silver = 100 bronze`;
+- `1 gold = 10 000 bronze`;
+- server and database values use bronze-only fields such as `priceBronze`,
+  `buyoutPriceBronze`, `currentBidBronze`, `amountBronze`, and
+  `balanceBronze`;
+- split business fields such as `priceGold`, `priceSilver`, and `priceBronze`
+  together are forbidden;
+- future persistence should use PostgreSQL `BIGINT` or an equivalent 64-bit
+  integer type for monetary values.
+
 ## 3. MVP dependency graph
 
 ```text
 MVP 0 - Documentation and decisions
 └── MVP 1 - Minimal DB and Economy Core
-    ├── MVP 2 - Minimal Craft Order
-    │   └── MVP 6 - Studio inspection
     ├── MVP 3 - Fixed-price Auction House
     │   └── MVP 4 - Timed auctions
-    │       └── MVP 6 - Studio inspection
-    └── MVP 5 - Taxes + Treasury
-        ├── MVP 6 - Studio inspection
-        └── MVP 7 - Buildings / Upgrades
+    │       └── MVP 5 - Taxes + Treasury
+    │           ├── MVP 6 - Studio inspection
+    │           └── MVP 7 - Buildings / Upgrades
+    └── MVP 2 - Minimal Craft Order
+        └── MVP 6 - Studio inspection
 ```
 
 Hard dependencies:
@@ -98,9 +115,10 @@ Hard dependencies:
 
 Soft dependencies:
 
-- MVP 2 can ship before MVP 3.
-- MVP 3 can ship before MVP 2 if market is prioritized, but this is less useful
-  for settlement gameplay.
+- MVP 2 can ship after MVP 1, but it is intentionally deferred while Auction
+  House is the current priority.
+- MVP 5 can ship after MVP 3 or MVP 4, but the current Auction track places it
+  after timed bids so taxes do not block market proof.
 - MVP 6 can begin as read-only after MVP 1, but meaningful inspection starts
   after MVP 2 or MVP 3.
 
@@ -222,7 +240,7 @@ No WebSocket broadcast needed.
 - settlement key uniqueness;
 - building belongs to settlement;
 - economic account owner type is valid;
-- ledger amount is positive;
+- ledger `amountBronze` is positive and fits the monetary bounds;
 - escrow hold has exactly one asset purpose;
 - idempotency key is scoped by actor and operation;
 - no negative currency balance unless future debt is explicitly enabled.
@@ -389,7 +407,7 @@ No broad WebSocket broadcast. Optional narrow invalidation later.
 - no public-order code included;
 - commit summary names Craft Order MVP.
 
-## 7. MVP 3 - Auction House fixed price only
+## 7. MVP 3 / Auction MVP 1 - Auction House fixed price only
 
 ### Objective
 
@@ -411,7 +429,8 @@ buy it directly, and allow seller return if unsold/cancelled by policy.
 - `apps/api-gateway/src/settlements/entities/auction-listing.entity.ts`;
 - `apps/api-gateway/src/settlements/auction-house.service.ts`;
 - `apps/api-gateway/src/settlements/auction-house.controller.ts`;
-- `apps/api-gateway/src/settlements/dto/create-fixed-listing.dto.ts`;
+- `apps/api-gateway/src/settlements/dto/create-fixed-listing.dto.ts`
+  carrying `priceBronze` or `buyoutPriceBronze`;
 - `apps/api-gateway/src/settlements/dto/buy-listing.dto.ts`;
 - tests colocated with service/controller.
 
@@ -452,7 +471,9 @@ Realtime:
 
 - seller owns listed item;
 - item is tradable and not equipped/locked/escrowed;
-- quantity and fixed price are valid;
+- quantity and `priceBronze` or `buyoutPriceBronze` are valid;
+- auction monetary values are bronze-only and never split into
+  `priceGold`/`priceSilver`/`priceBronze` columns;
 - buyer is authenticated and not seller unless allowed;
 - buyer has available funds;
 - listing is active at buy time;
@@ -470,6 +491,7 @@ Realtime:
 ### Minimum tests
 
 - create fixed listing with owned item;
+- reject listing with invalid `priceBronze` or split denomination payload;
 - reject equipped or missing item;
 - buy listing transfers item and funds once;
 - double click buy does not duplicate item or charge twice;
@@ -502,7 +524,7 @@ Realtime:
 - pagination test included;
 - inventory ownership assumptions documented if unresolved.
 
-## 8. MVP 4 - Timed auctions
+## 8. MVP 4 / Auction MVP 2 - Timed auctions
 
 ### Objective
 
@@ -521,7 +543,8 @@ expiration, winning settlement, and losing-bid refunds.
 
 - `apps/api-gateway/src/settlements/entities/auction-bid.entity.ts`;
 - `apps/api-gateway/src/settlements/auction-expiration.service.ts`;
-- `apps/api-gateway/src/settlements/dto/place-bid.dto.ts`;
+- `apps/api-gateway/src/settlements/dto/place-bid.dto.ts` carrying
+  `amountBronze`;
 - update auction-house service/controller tests.
 
 ### Probable tables
@@ -554,7 +577,7 @@ Scheduled/business events:
 - listing type is timed auction;
 - listing active and not expired;
 - bidder is eligible and not seller unless policy allows;
-- bid amount beats current bid by required increment;
+- bid `amountBronze` beats `currentBidBronze` by required increment;
 - bidder funds available and locked;
 - previous bidder refund path is safe;
 - buyout beats bids only if state transition wins;
@@ -562,8 +585,8 @@ Scheduled/business events:
 
 ### Required transactions
 
-- place bid: lock listing, lock bidder account, create bid hold, release/mark
-  previous bid hold, update current bid;
+- place bid: lock listing, lock bidder account, create bid hold in bronze,
+  release/mark previous bid hold, update `currentBidBronze`;
 - buyout: lock listing, close bidding, release losing bids, settle purchase;
 - expiration: claim listing, settle winner or return item, mark terminal;
 - job claiming for expiration must be idempotent.
@@ -604,7 +627,7 @@ Scheduled/business events:
 - fixed-price regression tests pass;
 - no regional/black-market features included.
 
-## 9. MVP 5 - Taxes + Treasury
+## 9. MVP 5 / Auction MVP 3 - Taxes + Treasury
 
 ### Objective
 
@@ -655,7 +678,7 @@ Business events:
 
 - tax type supported;
 - tax rate within cap;
-- flat fee within cap;
+- flat fee `amountBronze` within cap;
 - combined tax does not silently exceed gross;
 - treasury exists for settlement;
 - transaction source is valid;
@@ -682,7 +705,7 @@ Business events:
 
 ### Risks
 
-- treating taxes as gold sink when they are treasury transfer;
+- treating taxes as a currency sink when they are treasury transfer;
 - treasury hoarding without future sinks;
 - tax changes affecting already active listings incorrectly;
 - admin adjustments without audit.
@@ -911,23 +934,29 @@ Recommended order:
 
 1. MVP 0 - documentation and ADR decisions.
 2. MVP 1 - DB and Economy Core foundation.
-3. MVP 2 - private Craft Order minimal.
-4. MVP 3 - fixed-price Auction House.
-5. MVP 5 - taxes + treasury on fixed-price sales.
-6. MVP 4 - timed auctions.
+3. MVP 3 / Auction MVP 1 - fixed-price Auction House.
+4. MVP 4 / Auction MVP 2 - timed auctions.
+5. MVP 5 / Auction MVP 3 - taxes + treasury.
+6. MVP 2 - private Craft Order minimal.
 7. MVP 6 - Studio inspection.
 8. MVP 7 - buildings/upgrades.
 
-Reason for placing MVP 5 before MVP 4:
+Reason for placing Auction MVPs before CraftOrder and Buildings:
 
-- fixed-price sales provide a simpler taxable flow;
-- treasury can be tested before bid concurrency;
-- timed auctions then integrate with a proven tax path.
+- the current implementation priority is Auction House;
+- fixed-price sales prove item escrow, `priceBronze`, account movement, and
+  idempotent purchase without bid concurrency;
+- timed auctions then add `currentBidBronze`, outbid refunds, and persistent
+  expiration;
+- taxes and Treasury are intentionally delayed until the sale and bid transfer
+  paths are proven.
 
 Alternative order:
 
-- MVP 4 can come before MVP 5 if player market depth matters more than city
-  growth, but tax integration must then be added as a follow-up.
+- MVP 2 can move earlier only if CraftOrder becomes the explicit priority
+  again.
+- MVP 5 can move before MVP 4 if city revenue matters more than timed bidding,
+  but it must still use bronze-only monetary fields from ADR-0006.
 
 ## 14. Global checklist before coding
 
@@ -980,4 +1009,3 @@ Before every MVP commit:
 | MVP 5 | Yes after taxable flow | Partly | Yes | Tax ledger exactness |
 | MVP 6 | Yes after inspected MVP | Dev/admin | No new core | Read-only safe inspection |
 | MVP 7 | Yes after MVP 5 | Yes | Yes | Treasury-funded upgrade |
-
