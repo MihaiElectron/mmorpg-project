@@ -375,6 +375,9 @@ export class CreaturesService implements OnModuleInit {
         });
         if (newHealth === 0) {
           await this.worldService.respawnCharacter(char.id, server);
+          // Cible tuée → abandon immédiat (évite de chasser le joueur respawné)
+          await this.changeCreatureState(creature, 'alive');
+          state.targetCharacterId = undefined;
         }
       }
     }

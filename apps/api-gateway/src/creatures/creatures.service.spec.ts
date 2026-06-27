@@ -1150,4 +1150,63 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect.objectContaining({ worldX: 9000, worldY: 8000, mapId: DEFAULT_MAP_ID }),
     );
   });
+
+  // -------------------------------------------------------------------------
+  describe("doFighting — reset après kill cible", () => {
+    function makePlayer(worldX: number, worldY: number): any {
+      return {
+        characterId: "char-1",
+        socketId: "sock-1",
+        worldX,
+        worldY,
+        mapId: 1,
+        name: "Test",
+        direction: "down",
+      };
+    }
+
+    it("combat normal → état fighting maintenu, cible non réinitialisée", async () => {
+      // creature et joueur à 2000 WU de distance → déplacement, pas d'auto-attaque
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      const state = {
+        dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0,
+        targetCharacterId: "char-1",
+      };
+      const player = makePlayer(6080 + 2000, 12480);
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+
+      await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      expect(creature.state).toBe("fighting");
+      expect(state.targetCharacterId).toBe("char-1");
+    });
+
+    it("auto-attack tue le joueur → état alive, targetCharacterId undefined, respawnCharacter appelé", async () => {
+      // creature et joueur au même point → dist=0 ≤ MELEE_RANGE_WU → auto-attack
+      // char defense=0, template baseAttack=5 → dmg=5 > char.health=1 → kill
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      const state = {
+        dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0,
+        targetCharacterId: "char-1",
+      };
+      const player = makePlayer(6080, 12480);
+      const respawnCharacter = jest.fn().mockResolvedValue(undefined);
+      (service as any).worldService = {
+        getAllConnectedPlayers: jest.fn().mockReturnValue([]),
+        respawnCharacter,
+      };
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 1, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+
+      await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      expect(respawnCharacter).toHaveBeenCalledWith("char-1", mockServer);
+      expect(creature.state).toBe("alive");
+      expect(state.targetCharacterId).toBeUndefined();
+    });
+
+  });
 });
