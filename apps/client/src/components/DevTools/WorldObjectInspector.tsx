@@ -100,6 +100,41 @@ export default function WorldObjectInspector() {
             </>
           )}
 
+          {metaStr(obj.metadata, "itemName") != null && (
+            <>
+              <dt className="woi__label">item</dt>
+              <dd className="woi__value">{metaStr(obj.metadata, "itemName")}</dd>
+            </>
+          )}
+
+          {metaStr(obj.metadata, "itemId") != null && (
+            <>
+              <dt className="woi__label">itemId</dt>
+              <dd className="woi__value woi__value--muted">{metaStr(obj.metadata, "itemId")}</dd>
+            </>
+          )}
+
+          {metaNum(obj.metadata, "quantity") != null && (
+            <>
+              <dt className="woi__label">quantity</dt>
+              <dd className="woi__value">{metaNum(obj.metadata, "quantity")}</dd>
+            </>
+          )}
+
+          {metaStr(obj.metadata, "ownerCharacterId") != null && (
+            <>
+              <dt className="woi__label">owner</dt>
+              <dd className="woi__value woi__value--muted">{metaStr(obj.metadata, "ownerCharacterId")}</dd>
+            </>
+          )}
+
+          {metaStr(obj.metadata, "expiresAt") != null && (
+            <>
+              <dt className="woi__label">expiresAt</dt>
+              <dd className="woi__value">{metaStr(obj.metadata, "expiresAt")}</dd>
+            </>
+          )}
+
           {metaNum(obj.metadata, "patrolRadius") != null && (
             <>
               <dt className="woi__label">patrolRadius</dt>

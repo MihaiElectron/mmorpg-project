@@ -61,6 +61,10 @@ const CRAFTING_STATION_WO_CAPABILITIES = Object.freeze([
   "crafting_station", "placement", "validation",
 ]);
 
+const WORLD_ITEM_WO_CAPABILITIES = Object.freeze([
+  "world_item", "persistence", "selection", "validation",
+]);
+
 const CRAFTING_STATION_COLORS = Object.freeze({
   forge: 0xff8a00,
   workbench: 0x2f80ed,
@@ -115,6 +119,33 @@ function resourceToWorldObject(resource) {
     capabilities: RESOURCE_WO_CAPABILITIES,
     metadata: {
       legacy: null,
+    },
+  };
+}
+
+function worldItemToWorldObject(worldItem) {
+  const hasWU =
+    worldItem.worldX != null && worldItem.worldY != null && worldItem.mapId != null;
+  const item = worldItem.item ?? {};
+  return {
+    kind: "entity",
+    category: "world_item",
+    id: worldItem.id,
+    type: item.category ?? item.type ?? worldItem.itemId ?? "unknown",
+    mapId: worldItem.mapId ?? null,
+    position: hasWU ? { worldX: worldItem.worldX, worldY: worldItem.worldY } : null,
+    state: worldItem.state ?? "spawned",
+    capabilities: WORLD_ITEM_WO_CAPABILITIES,
+    metadata: {
+      itemId: worldItem.itemId ?? item.id ?? null,
+      itemName: item.name ?? null,
+      itemType: item.type ?? null,
+      itemCategory: item.category ?? null,
+      itemImage: item.image ?? null,
+      quantity: worldItem.quantity ?? 0,
+      ownerCharacterId: worldItem.ownerCharacterId ?? null,
+      expiresAt: worldItem.expiresAt ?? null,
+      createdAt: worldItem.createdAt ?? null,
     },
   };
 }
@@ -243,6 +274,8 @@ export default class WorldScene extends Phaser.Scene {
     this.interactionTargets = [];
     this.resourceSprites = new Map();
     this.resourceData = new Map();
+    this.worldItemSprites = new Map();
+    this.worldItemData = new Map();
     this.craftingStationDebugObjects = new Map();
     this.craftingStationData = new Map();
     this.resourceOverlayGraphics = null;
@@ -422,6 +455,13 @@ export default class WorldScene extends Phaser.Scene {
 
       getCharacterStore().getState().closePanel?.();
 
+      const worldItem = this.getWorldItemAt(worldX, worldY);
+      if (worldItem) {
+        getActionPanelStore().getState().closePanel();
+        getDevToolsStore().getState().setSelectedWorldObject(worldItemToWorldObject(worldItem));
+        return;
+      }
+
       const targets = this.getGatheringTargetsAt(worldX, worldY);
 
       if (targets.length > 0) {
@@ -519,6 +559,7 @@ export default class WorldScene extends Phaser.Scene {
       const resourceOverlayChanged      = state.resourceOverlayEnabled      !== prev.resourceOverlayEnabled;
       const creatureOverlayChanged        = state.creatureOverlayEnabled        !== prev.creatureOverlayEnabled;
       const creatureSpawnOverlayChanged = state.creatureSpawnOverlayEnabled !== prev.creatureSpawnOverlayEnabled;
+      const worldItemOverlayChanged     = state.worldItemOverlayEnabled     !== prev.worldItemOverlayEnabled;
       const stationRadiusOverlayChanged = state.stationRadiusOverlayEnabled !== prev.stationRadiusOverlayEnabled;
       const walkabilityOverlayChanged   = state.walkabilityOverlayEnabled   !== prev.walkabilityOverlayEnabled;
       const tileCoordinatesChanged      = state.tileCoordinatesOverlayEnabled !== prev.tileCoordinatesOverlayEnabled;
@@ -534,6 +575,9 @@ export default class WorldScene extends Phaser.Scene {
       }
       if (creatureSpawnOverlayChanged || selectionChanged) {
         this.redrawCreatureSpawnOverlay();
+      }
+      if (worldItemOverlayChanged || selectionChanged) {
+        this.redrawWorldItemOverlay();
       }
       if (stationRadiusOverlayChanged) {
         this.redrawCraftingStationRadiusOverlay();
@@ -748,6 +792,15 @@ export default class WorldScene extends Phaser.Scene {
     );
   }
 
+  getWorldItemAt(x, y) {
+    for (const [id, sprite] of this.worldItemSprites.entries()) {
+      if (sprite.getBounds().contains(x, y)) {
+        return this.worldItemData.get(id) ?? null;
+      }
+    }
+    return null;
+  }
+
   // SOCKET EVENTS
   registerGatheringEvents() {
     if (this.gatheringEventsRegistered) {
@@ -764,6 +817,7 @@ export default class WorldScene extends Phaser.Scene {
     this.socket.on("connect", () => {
       this.socket.emit("get_resources");
       this.socket.emit("get_creatures");
+      this.socket.emit("get_world_items");
       this.joinWorld();
     });
 
@@ -773,6 +827,18 @@ export default class WorldScene extends Phaser.Scene {
 
     this.socket.on("creatures", (creatures) => {
       this.renderCreatures(creatures);
+    });
+
+    this.socket.on("world_items", (worldItems) => {
+      this.renderWorldItems(worldItems);
+    });
+
+    this.socket.on("world_item_spawn", (worldItem) => {
+      this.upsertWorldItem(worldItem);
+    });
+
+    this.socket.on("world_item_remove", (payload) => {
+      this.removeWorldItem(payload.id);
     });
 
     this.socket.on("inventory_update", (data) => {
@@ -871,6 +937,7 @@ export default class WorldScene extends Phaser.Scene {
       this.player.setPosition(x, y);
       this.lastSyncedPosition = { x, y, direction: player.direction };
       updateLocalCharacterPosition(player);
+      this.socket.emit("get_world_items", { mapId: player.mapId });
     });
 
     this.socket.on("player_joined", (player) => {
@@ -918,6 +985,7 @@ export default class WorldScene extends Phaser.Scene {
     if (this.socket.connected) {
       this.socket.emit("get_resources");
       this.socket.emit("get_creatures");
+      this.socket.emit("get_world_items");
       this.loadCraftingStations();
       this.joinWorld();
     }
@@ -1204,6 +1272,42 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawResourceOverlay();
   }
 
+  renderWorldItems(worldItems) {
+    this.clearWorldItems();
+    worldItems
+      .filter((worldItem) => worldItem.state === "spawned")
+      .forEach((worldItem) => this.upsertWorldItem(worldItem));
+    this.redrawWorldItemOverlay();
+  }
+
+  upsertWorldItem(worldItem) {
+    if (worldItem.state && worldItem.state !== "spawned") {
+      this.removeWorldItem(worldItem.id);
+      return;
+    }
+
+    const { x, y } = resolveScreen(worldItem);
+    const existing = this.worldItemSprites.get(worldItem.id);
+    if (existing) {
+      this.tweens.add({ targets: existing, x, y: y - 10, duration: 160, ease: "Linear" });
+      this.worldItemData.set(worldItem.id, worldItem);
+      this.redrawWorldItemOverlay();
+      return;
+    }
+
+    const sprite = this.add.circle(x, y - 10, 7, 0xf1c40f, 0.95);
+    sprite.setStrokeStyle(2, 0x2f80ed, 0.9);
+    sprite.setDepth(11);
+    sprite.setInteractive(
+      new Phaser.Geom.Circle(0, 0, 10),
+      Phaser.Geom.Circle.Contains,
+    );
+
+    this.worldItemSprites.set(worldItem.id, sprite);
+    this.worldItemData.set(worldItem.id, worldItem);
+    this.redrawWorldItemOverlay();
+  }
+
   // ── Crafting Stations debug render ───────────────────────────────────────
 
   loadCraftingStations() {
@@ -1404,6 +1508,16 @@ export default class WorldScene extends Phaser.Scene {
     const state = getDevToolsStore().getState();
     this.overlayManager.redrawResources(
       this.resourceData, state.resourceOverlayEnabled, state.selectedWorldObject?.id ?? null,
+    );
+  }
+
+  // ── Studio SDK — WorldItem Overlay ─────────────────────────────────────────
+
+  redrawWorldItemOverlay() {
+    if (!this.overlayManager) return;
+    const state = getDevToolsStore().getState();
+    this.overlayManager.redrawWorldItems(
+      this.worldItemData, state.worldItemOverlayEnabled, state.selectedWorldObject?.id ?? null,
     );
   }
 
@@ -1610,6 +1724,15 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawCreatureOverlay();
   }
 
+  clearWorldItems() {
+    for (const sprite of this.worldItemSprites.values()) {
+      sprite.destroy();
+    }
+    this.worldItemSprites.clear();
+    this.worldItemData.clear();
+    this.redrawWorldItemOverlay();
+  }
+
   removeResource(resourceId) {
     const sprite = this.resourceSprites.get(resourceId);
 
@@ -1663,11 +1786,29 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawCreatureOverlay();
   }
 
+  removeWorldItem(worldItemId) {
+    const sprite = this.worldItemSprites.get(worldItemId);
+    if (sprite) {
+      sprite.destroy();
+      this.worldItemSprites.delete(worldItemId);
+    }
+    this.worldItemData.delete(worldItemId);
+
+    const state = getDevToolsStore().getState();
+    if (state.selectedWorldObject?.id === worldItemId) {
+      state.clearSelectedWorldObject();
+    }
+    this.redrawWorldItemOverlay();
+  }
+
   destroy() {
     if (this.socket) {
       this.socket.off("connect");
       this.socket.off("resources");
       this.socket.off("creatures");
+      this.socket.off("world_items");
+      this.socket.off("world_item_spawn");
+      this.socket.off("world_item_remove");
       this.socket.off("inventory_update");
       this.socket.off("creature_loot");
       this.socket.off("resource_loot");
@@ -1700,6 +1841,7 @@ export default class WorldScene extends Phaser.Scene {
     this.creatureSpawnData.clear();
 
     this.clearResources();
+    this.clearWorldItems();
     this.clearCraftingStations();
     destroyHpBar(this.playerHpBar);
     this.playerHpBar = null;

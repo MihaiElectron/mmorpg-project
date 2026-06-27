@@ -9,6 +9,8 @@ function makeMap(overrides: Partial<OverlayBindingsMap> = {}): OverlayBindingsMa
     toggleCreatureOverlayEnabled: vi.fn(),
     creatureSpawnOverlayEnabled: false,
     toggleCreatureSpawnOverlayEnabled: vi.fn(),
+    worldItemOverlayEnabled: false,
+    toggleWorldItemOverlayEnabled: vi.fn(),
     stationRadiusOverlayEnabled: false,
     toggleStationRadiusOverlayEnabled: vi.fn(),
     walkabilityOverlayEnabled: false,
@@ -76,6 +78,24 @@ describe("getOverlayBinding", () => {
       const binding = getOverlayBinding(
         "creature_spawn.overlay",
         makeMap({ toggleCreatureSpawnOverlayEnabled: toggle }),
+      );
+      binding!.toggle();
+      expect(toggle).toHaveBeenCalledOnce();
+    });
+
+    it("world_item.overlay — enabled true si worldItemOverlayEnabled=true", () => {
+      const binding = getOverlayBinding(
+        "world_item.overlay",
+        makeMap({ worldItemOverlayEnabled: true }),
+      );
+      expect(binding!.enabled).toBe(true);
+    });
+
+    it("world_item.overlay — toggle appelle toggleWorldItemOverlayEnabled", () => {
+      const toggle = vi.fn();
+      const binding = getOverlayBinding(
+        "world_item.overlay",
+        makeMap({ toggleWorldItemOverlayEnabled: toggle }),
       );
       binding!.toggle();
       expect(toggle).toHaveBeenCalledOnce();

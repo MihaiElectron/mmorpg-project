@@ -4,6 +4,7 @@ import { resourceCommandProvider } from "./ResourceCommandProvider";
 import { resourceOverlayProvider } from "./ResourceOverlayProvider";
 import { creatureOverlayProvider } from "./CreatureOverlayProvider";
 import { creatureSpawnOverlayProvider } from "./CreatureSpawnOverlayProvider";
+import { worldItemOverlayProvider } from "./WorldItemOverlayProvider";
 import { stationRadiusOverlayProvider } from "./StationRadiusOverlayProvider";
 import { walkabilityOverlayProvider } from "./WalkabilityOverlayProvider";
 import { isCommandProvider, isOverlayProvider } from "./CapabilityProvider";
@@ -17,6 +18,7 @@ capabilityRegistry.register(resourceCommandProvider);
 capabilityRegistry.register(resourceOverlayProvider);
 capabilityRegistry.register(creatureOverlayProvider);
 capabilityRegistry.register(creatureSpawnOverlayProvider);
+capabilityRegistry.register(worldItemOverlayProvider);
 capabilityRegistry.register(stationRadiusOverlayProvider);
 capabilityRegistry.register(walkabilityOverlayProvider);
 

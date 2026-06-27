@@ -43,6 +43,7 @@ export class DevToolsOverlayManager {
     this._resources    = makeLayer();
     this._creatures      = makeLayer();
     this._spawns       = { ...makeLayer(), zones: new Map() };
+    this._worldItems   = makeLayer();
   }
 
   // ── Helpers internes ────────────────────────────────────────────────────────
@@ -93,6 +94,36 @@ export class DevToolsOverlayManager {
       this._resources.graphics.strokeCircle(x, y - 18, radius);
       this._addLabel(this._resources, id, x, y - 34, resource.type, _shortId(id),
         isSelected ? "#f1c40f" : "#2ecc71");
+    }
+  }
+
+  // ── WorldItems ─────────────────────────────────────────────────────────────
+
+  redrawWorldItems(worldItemData, enabled, selectedId) {
+    this._clearLayer(this._worldItems);
+    if (!enabled) return;
+    this._ensureGraphics(this._worldItems);
+
+    for (const [id, worldItem] of worldItemData.entries()) {
+      const { x, y } = resolveScreen(worldItem);
+      const isSelected = id === selectedId;
+      const color = isSelected ? 0xf1c40f : 0x2f80ed;
+      const alpha = isSelected ? 1.0 : 0.78;
+      const radius = isSelected ? 13 : 8;
+      const item = worldItem.item ?? {};
+      const label = item.name ?? item.category ?? worldItem.itemId ?? "item";
+
+      this._worldItems.graphics.lineStyle(isSelected ? 3 : 2, color, alpha);
+      this._worldItems.graphics.strokeCircle(x, y - 10, radius);
+      this._addLabel(
+        this._worldItems,
+        id,
+        x,
+        y - 24,
+        `${label} x${worldItem.quantity ?? 0}`,
+        _shortId(id),
+        isSelected ? "#f1c40f" : "#2f80ed",
+      );
     }
   }
 
@@ -163,7 +194,7 @@ export class DevToolsOverlayManager {
   // ── Cleanup ──────────────────────────────────────────────────────────────────
 
   destroy() {
-    for (const layer of [this._resources, this._creatures, this._spawns]) {
+    for (const layer of [this._resources, this._creatures, this._spawns, this._worldItems]) {
       this._clearLayer(layer);
       if (layer.graphics) {
         layer.graphics.destroy();

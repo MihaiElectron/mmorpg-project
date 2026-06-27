@@ -267,6 +267,15 @@ const storeLogic = (set, get) => ({
   toggleCreatureSpawnOverlayEnabled: () =>
     set({ creatureSpawnOverlayEnabled: !get().creatureSpawnOverlayEnabled }),
 
+  // ── Overlay Studio — WorldItems ───────────────────────────────────────────
+  worldItemOverlayEnabled: false,
+
+  setWorldItemOverlayEnabled: (enabled: boolean) =>
+    set({ worldItemOverlayEnabled: enabled }),
+
+  toggleWorldItemOverlayEnabled: () =>
+    set({ worldItemOverlayEnabled: !get().worldItemOverlayEnabled }),
+
   // ── Overlay Studio — Crafting Stations ───────────────────────────────────
   stationRadiusOverlayEnabled: false,
 

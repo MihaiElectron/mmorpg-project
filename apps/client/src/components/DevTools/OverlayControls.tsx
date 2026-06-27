@@ -13,6 +13,8 @@ function useOverlayBindingsMap(): OverlayBindingsMap {
   const toggleCreatureSpawnOverlayEnabled = useDevToolsStore(
     (s) => s.toggleCreatureSpawnOverlayEnabled,
   );
+  const worldItemOverlayEnabled = useDevToolsStore((s) => s.worldItemOverlayEnabled);
+  const toggleWorldItemOverlayEnabled = useDevToolsStore((s) => s.toggleWorldItemOverlayEnabled);
   const stationRadiusOverlayEnabled = useDevToolsStore((s) => s.stationRadiusOverlayEnabled);
   const toggleStationRadiusOverlayEnabled = useDevToolsStore(
     (s) => s.toggleStationRadiusOverlayEnabled,
@@ -33,6 +35,8 @@ function useOverlayBindingsMap(): OverlayBindingsMap {
     toggleCreatureOverlayEnabled,
     creatureSpawnOverlayEnabled,
     toggleCreatureSpawnOverlayEnabled,
+    worldItemOverlayEnabled,
+    toggleWorldItemOverlayEnabled,
     stationRadiusOverlayEnabled,
     toggleStationRadiusOverlayEnabled,
     walkabilityOverlayEnabled,

@@ -29,6 +29,7 @@ import { CraftingModule } from './crafting/crafting.module';
 import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
 import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.module';
 import { ItemModule } from './items/item.module';
+import { WorldItemsModule } from './world-items/world-items.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { ItemModule } from './items/item.module';
     CraftingModule,
     PlayerRuntimeModule,
     CreatureRuntimeModule,
+    WorldItemsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
