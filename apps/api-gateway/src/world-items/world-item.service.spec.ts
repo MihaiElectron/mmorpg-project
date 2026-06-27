@@ -415,4 +415,44 @@ describe('WorldItemService', () => {
       mapId: 1,
     })).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it("toDto inclut itemInstanceId null pour un WorldItem stack", () => {
+    const worldItem = {
+      id: "wi-1",
+      itemId: item.id,
+      item,
+      quantity: 3,
+      itemInstanceId: null,
+      worldX: 512,
+      worldY: 1024,
+      mapId: 1,
+      ownerCharacterId: null,
+      createdAt: new Date("2026-06-27T10:00:00Z"),
+      expiresAt: null,
+      state: WorldItemState.SPAWNED,
+    } as WorldItem;
+
+    const dto = service.toDto(worldItem);
+
+    expect(dto.itemInstanceId).toBeNull();
+    expect(dto.itemId).toBe(item.id);
+    expect(dto.quantity).toBe(3);
+  });
+
+  it("spawnItem persiste itemInstanceId null quand non fourni", async () => {
+    items.findOne.mockResolvedValue(item);
+    worldItems.save.mockImplementation(async (wi) => ({ ...wi, id: "wi-2", createdAt: new Date() }) as WorldItem);
+
+    await service.spawnItem({
+      itemId: item.id,
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(worldItems.create).toHaveBeenCalledWith(
+      expect.objectContaining({ itemInstanceId: null }),
+    );
+  });
 });

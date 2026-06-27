@@ -42,6 +42,10 @@ export class WorldItem {
   @Column({ type: 'integer' })
   mapId: number;
 
+  @Column({ type: 'varchar', nullable: true, default: null })
+  @Index()
+  itemInstanceId: string | null;
+
   @Column({ type: 'uuid', nullable: true })
   ownerCharacterId: string | null;
 

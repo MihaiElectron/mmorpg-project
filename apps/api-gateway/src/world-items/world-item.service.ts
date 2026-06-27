@@ -23,6 +23,7 @@ export interface SpawnWorldItemInput {
   mapId: number;
   ownerCharacterId?: string | null;
   expiresAt?: Date | null;
+  itemInstanceId?: string | null;
 }
 
 export interface PickupWorldItemInput {
@@ -51,6 +52,7 @@ export interface WorldItemDto {
   id: string;
   itemId: string;
   quantity: number;
+  itemInstanceId: string | null;
   worldX: number;
   worldY: number;
   mapId: number;
@@ -105,6 +107,7 @@ export class WorldItemService {
       item,
       itemId: item.id,
       quantity: input.quantity,
+      itemInstanceId: input.itemInstanceId ?? null,
       worldX: Math.round(input.worldX),
       worldY: Math.round(input.worldY),
       mapId: Math.round(input.mapId),
@@ -258,6 +261,7 @@ export class WorldItemService {
       id: worldItem.id,
       itemId: worldItem.itemId,
       quantity: worldItem.quantity,
+      itemInstanceId: worldItem.itemInstanceId ?? null,
       worldX: worldItem.worldX,
       worldY: worldItem.worldY,
       mapId: worldItem.mapId,
