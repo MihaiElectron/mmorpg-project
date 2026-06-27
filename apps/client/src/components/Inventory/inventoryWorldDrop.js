@@ -63,7 +63,7 @@ export function buildInventoryWorldDropPayload({ event, inventoryEntry, quantity
   const qty = quantity != null ? quantity : inventoryEntry.quantity;
 
   return {
-    itemId: inventoryEntry.item.id,
+    inventoryEntryId: inventoryEntry.id,
     quantity: qty,
   };
 }

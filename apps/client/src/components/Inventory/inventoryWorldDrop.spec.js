@@ -64,13 +64,14 @@ describe("inventoryWorldDrop", () => {
         target: { closest: () => null },
       },
       inventoryEntry: {
+        id: "inv-entry-1",
         quantity: 3,
         item: { id: "item-1" },
       },
       game: makeGame(),
     });
 
-    expect(payload).toEqual({ itemId: "item-1", quantity: 3 });
+    expect(payload).toEqual({ inventoryEntryId: "inv-entry-1", quantity: 3 });
   });
 
   it("construit un payload avec une quantite partielle si precisee", () => {
@@ -81,6 +82,7 @@ describe("inventoryWorldDrop", () => {
         target: { closest: () => null },
       },
       inventoryEntry: {
+        id: "inv-entry-1",
         quantity: 5,
         item: { id: "item-1" },
       },
@@ -88,7 +90,7 @@ describe("inventoryWorldDrop", () => {
       game: makeGame(),
     });
 
-    expect(payload).toEqual({ itemId: "item-1", quantity: 2 });
+    expect(payload).toEqual({ inventoryEntryId: "inv-entry-1", quantity: 2 });
   });
 
   it("retourne null si l’item est hors canvas", () => {
@@ -139,11 +141,11 @@ describe("inventoryWorldDrop", () => {
       emit: vi.fn((_event, _payload, ack) => ack({ success: true })),
     };
 
-    const result = await emitInventoryWorldDrop(socket, { itemId: "item-1", quantity: 3 });
+    const result = await emitInventoryWorldDrop(socket, { inventoryEntryId: "inv-1", quantity: 3 });
 
     expect(socket.emit).toHaveBeenCalledWith(
       "drop_inventory_item",
-      { itemId: "item-1", quantity: 3 },
+      { inventoryEntryId: "inv-1", quantity: 3 },
       expect.any(Function),
     );
     expect(result).toEqual({ success: true });

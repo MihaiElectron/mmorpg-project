@@ -13,10 +13,11 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { WsAuthService } from '../common/ws-auth.service';
 import type { WorldSocket } from '../types/world-socket';
+import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
 import { WorldItemService } from './world-item.service';
 
 type DropInventoryItemPayload = {
-  itemId?: string;
+  inventoryEntryId?: string;
   quantity?: number;
 };
 
@@ -32,6 +33,7 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
   constructor(
     private readonly worldItems: WorldItemService,
     private readonly wsAuthService: WsAuthService,
+    private readonly inventoryEntryResolver: InventoryEntryResolverService,
   ) {}
 
   afterInit(server: Server) {
@@ -71,17 +73,22 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
       if (!player?.characterId) {
         throw new BadRequestException('Character must join world before dropping items');
       }
-      if (!payload || typeof payload.itemId !== 'string') {
-        throw new BadRequestException('itemId is required');
+      if (!payload || typeof payload.inventoryEntryId !== 'string') {
+        throw new BadRequestException('inventoryEntryId is required');
       }
       const quantity = Number(payload.quantity);
       if (!Number.isInteger(quantity) || quantity < 1) {
         throw new BadRequestException('quantity must be a positive integer');
       }
 
+      const resolution = await this.inventoryEntryResolver.resolve(
+        player.characterId,
+        payload.inventoryEntryId,
+      );
+
       const result = await this.worldItems.dropInventoryItem({
         characterId: player.characterId,
-        itemId: payload.itemId,
+        itemId: resolution.itemId,
         quantity,
         worldX: player.worldX,
         worldY: player.worldY,
@@ -89,7 +96,7 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
       });
 
       client.emit('inventory_update', {
-        itemId: payload.itemId,
+        itemId: resolution.itemId,
         total: result.inventoryQuantity,
         item: result.worldItem.item
           ? this.worldItems.toDto(result.worldItem).item

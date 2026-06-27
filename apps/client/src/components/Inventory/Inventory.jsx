@@ -83,7 +83,7 @@ export default function Inventory() {
     if (!pendingDrop) return;
     const qty = Math.max(1, Math.min(dropQty, pendingDrop.inventoryEntry.quantity));
     const payload = {
-      itemId: pendingDrop.inventoryEntry.item.id,
+      inventoryEntryId: pendingDrop.inventoryEntry.id,
       quantity: qty,
     };
     const result = await emitInventoryWorldDrop(getDevToolsSocket(), payload);
