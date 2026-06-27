@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 Guide pour Claude Code dans ce repository. Ce fichier est versionne afin de
 partager les conventions de travail du projet.
 
@@ -38,6 +40,7 @@ Tables metier attendues selon l'etat actuel:
 - `item`: objets.
 - `resources`: ressources de recolte sur la map.
 - `creatures`: animaux chassables.
+- `world_item`: objets deposes au sol (state: spawned/picked/expired, ownerCharacterId nullable).
 
 Toute evolution de schema doit rester explicite, prudente et justifiee. Pour une
 approche production, privilegier des migrations TypeORM plutot que
@@ -80,16 +83,21 @@ Infrastructure, depuis la racine:
 - `app.module.ts` charge TypeORM avec
   `entities: [__dirname + '/**/*.entity.{ts,js}']`: toute nouvelle entite est
   auto-detectee, pas besoin de l'enregistrer manuellement quelque part.
-- Trois gateways Socket.IO independantes coexistent sur le namespace par
+- Quatre gateways Socket.IO independantes coexistent sur le namespace par
   defaut: `WorldGateway` (deplacement des joueurs, gathering avec timer
   serveur, anti-cheat par distance), `ResourcesGateway` (recolte instantanee
-  des ressources) et `CreaturesGateway` (combat contre les animaux). Elles ne
-  sont pas isolees par room: `server.emit` broadcast a tous les clients
-  connectes, a surveiller en montee en charge (cf. Performance Temps Reel).
-- `WorldService.checkInteraction` (verification de distance joueur/objet) est
-  la seule barriere anti-cheat sur les interactions au sol. Toute nouvelle
-  interaction doit reutiliser ou etendre ce garde-fou plutot que faire
-  confiance aux coordonnees envoyees par le client.
+  des ressources), `CreaturesGateway` (combat contre les animaux) et
+  `WorldItemsGateway` (objets au sol: drop/pickup). `WorldGateway` et
+  `ResourcesGateway` broadcastent encore via `server.emit` (dette scalabilite);
+  `WorldItemsGateway` utilise des rooms Socket.IO via `getMapRoomId(mapId)`
+  (`src/common/socket-rooms.ts`) — pattern a adopter pour les nouveaux evenements.
+- `WorldService.checkInteraction` (verification de distance joueur/objet) et
+  `chebyshevDistanceWU` (`src/common/world-coordinates.ts`) sont les barrières
+  anti-cheat de distance. `WorldItemService.pickupItem` est la reference pour
+  les operations transactionnelles avec verrou pessimiste (`pessimistic_write`):
+  charge l'entite sous verrou, verifie etat/map/owner/expiration/distance,
+  modifie l'inventaire, change l'etat, commit — tout dans une seule transaction
+  DataSource. Reutiliser ce pattern pour toute operation critique similaire.
 - Le generateur `npm run make:entity` (`tools/cli/`) scaffold un domaine
   complet (entite, DTOs, service, controller, module, seed) de facon
   coherente avec les conventions existantes; preferable a l'ecriture manuelle
@@ -127,6 +135,15 @@ Infrastructure, depuis la racine:
   prealable.
 
 ## Tests
+
+- **Encodage dans les specs** : l'editeur convertit les guillemets simples
+  droits `'` (U+0027) en guillemets courbes `'` `'` (U+2018/U+2019) lorsqu'ils
+  sont ecrits via des outils d'edition. Ces caracteres ne sont pas valides comme
+  delimiteurs de chaine en TypeScript et cassent les suites de tests. Utiliser
+  des guillemets doubles `"..."` dans le code des nouveaux tests (descriptions
+  `it()`et valeurs de chaines dans les fixtures). Les guillemets courbes en tant
+  que contenu (apostrophes) a l'interieur d'une chaine delimitee par `'` droits
+  sont acceptes par ts-jest.
 
 - Un fichier `*.spec.ts` doit toujours contenir une vraie suite de tests
   (`describe`/`it`); ne jamais laisser un spec vide ou dupliquant une classe

@@ -141,6 +141,10 @@ export class WorldItemService {
         throw new BadRequestException('WorldItem is on another map');
       }
 
+      if (worldItem.ownerCharacterId && worldItem.ownerCharacterId !== input.characterId) {
+        throw new BadRequestException('This item belongs to another player');
+      }
+
       if (worldItem.expiresAt && worldItem.expiresAt.getTime() <= Date.now()) {
         worldItem.state = WorldItemState.EXPIRED;
         await manager.save(WorldItem, worldItem);
@@ -266,7 +270,7 @@ export class WorldItemService {
     return manager
       .getRepository(WorldItem)
       .createQueryBuilder('worldItem')
-      .leftJoinAndSelect('worldItem.item', 'item')
+      .innerJoinAndSelect('worldItem.item', 'item')
       .setLock('pessimistic_write')
       .where('worldItem.id = :id', { id: worldItemId })
       .andWhere('worldItem.state = :state', { state: WorldItemState.SPAWNED })
@@ -314,8 +318,8 @@ export class WorldItemService {
     return manager
       .getRepository(Inventory)
       .createQueryBuilder('inventory')
-      .leftJoinAndSelect('inventory.item', 'item')
-      .leftJoin('inventory.character', 'character')
+      .innerJoinAndSelect('inventory.item', 'item')
+      .innerJoin('inventory.character', 'character')
       .setLock('pessimistic_write')
       .where('character.id = :characterId', { characterId })
       .andWhere('item.id = :itemId', { itemId })
@@ -340,8 +344,8 @@ export class WorldItemService {
     if (!input.itemId) {
       throw new BadRequestException('itemId is required');
     }
-    if (!Number.isInteger(input.quantity) || input.quantity !== 1) {
-      throw new BadRequestException('quantity must be exactly 1 for this phase');
+    if (!Number.isInteger(input.quantity) || input.quantity < 1) {
+      throw new BadRequestException('quantity must be a positive integer');
     }
     this.assertFinitePosition(input.worldX, input.worldY, input.mapId);
   }

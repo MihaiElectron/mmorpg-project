@@ -118,7 +118,7 @@ describe('WorldItemService', () => {
       createdAt: new Date(),
     } as WorldItem;
     const qb = {
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -179,8 +179,8 @@ describe('WorldItemService', () => {
       createdAt: new Date(),
     } as WorldItem;
     const qb = {
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
-      leftJoin: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -229,8 +229,8 @@ describe('WorldItemService', () => {
       equipped: false,
     } as Inventory;
     const qb = {
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
-      leftJoin: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -257,16 +257,81 @@ describe('WorldItemService', () => {
     expect(result.inventoryQuantity).toBe(0);
   });
 
-  it('dropInventoryItem refuse une quantité différente de 1', async () => {
+  it("dropInventoryItem refuse une quantite nulle ou negative", async () => {
     await expect(service.dropInventoryItem({
-      characterId: 'char-1',
+      characterId: "char-1",
       itemId: item.id,
-      quantity: 2,
+      quantity: 0,
       worldX: 0,
       worldY: 0,
       mapId: 1,
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuse le pickup si ownerCharacterId ne correspond pas au personnage", async () => {
+    const ownedItem = {
+      id: "world-item-owned",
+      itemId: item.id,
+      item,
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+      state: WorldItemState.SPAWNED,
+      ownerCharacterId: "owner-char",
+      expiresAt: null,
+      createdAt: new Date(),
+    } as WorldItem;
+    const qb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(ownedItem),
+    };
+    const manager = {
+      getRepository: jest.fn(() => ({ createQueryBuilder: jest.fn(() => qb) })),
+      findOne: jest.fn(),
+      save: jest.fn(),
+      create: jest.fn(),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: ownedItem.id,
+      characterId: "other-char",
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(manager.findOne).not.toHaveBeenCalled();
+  });
+
+  it("refuse le pickup concurrent quand le WorldItem est deja ramasse", async () => {
+    const qb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    const manager = {
+      getRepository: jest.fn(() => ({ createQueryBuilder: jest.fn(() => qb) })),
+      findOne: jest.fn(),
+      save: jest.fn(),
+      create: jest.fn(),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: "world-item-gone",
+      characterId: "char-1",
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(NotFoundException);
+    expect(manager.findOne).not.toHaveBeenCalled();
   });
 
   it('refuse le pickup hors portée sans ajouter à l’inventaire', async () => {
@@ -284,7 +349,7 @@ describe('WorldItemService', () => {
       createdAt: new Date(),
     } as WorldItem;
     const qb = {
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),

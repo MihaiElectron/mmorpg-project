@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useActionPanelStore } from "../../store/actionPanel.store";
+import { useActionPanelStore, getActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
@@ -188,19 +188,35 @@ export default function ActionPanel() {
 
   // ── Actions gameplay ──────────────────────────────────────────────────────
   function handleAction(action: string) {
-    if (target?.kind === "crafting_station") {
-      setCraftingStation(target as CraftingStationTarget);
+    // Read target from the store directly at click time to avoid stale React closures.
+    // openPanel() can be called from Phaser before React re-renders the component,
+    // so the `target` variable captured at render time may refer to the previous item.
+    const currentTarget = getActionPanelStore().getState().target;
+
+    if (currentTarget?.kind === "crafting_station") {
+      setCraftingStation(currentTarget as CraftingStationTarget);
       return;
     }
 
     const socket = getDevToolsSocket();
     if (!socket?.connected || !character?.id) { closePanel(); return; }
 
-    if (target?.kind === "creature") {
+    if (currentTarget?.kind === "world_item") {
+      const itemId = currentTarget.id;
+      socket.emit("pickup_world_item", { worldItemId: itemId }, (ack: any) => {
+        if (!ack?.success) {
+          console.error("[pickup] worldItemId=" + itemId, ack?.message ?? "Pickup failed");
+        }
+      });
+      closePanel();
+      return;
+    }
+
+    if (currentTarget?.kind === "creature") {
       const scene = getWorldScene();
-      if (scene?.startAutoAttack) scene.startAutoAttack(target.id);
+      if (scene?.startAutoAttack) scene.startAutoAttack(currentTarget.id);
     } else {
-      socket.emit("interact_resource", { targetId: target!.id, characterId: character.id });
+      socket.emit("interact_resource", { targetId: currentTarget!.id, characterId: character.id });
     }
     closePanel();
   }
@@ -281,7 +297,7 @@ export default function ActionPanel() {
               {action}
             </button>
           ))}
-          {isAdmin && target.kind !== "crafting_station" && (
+          {isAdmin && target.kind !== "crafting_station" && target.kind !== "world_item" && (
             <button
               className="action-panel__button action-panel__button--danger"
               onClick={() => handleAdminDelete()}

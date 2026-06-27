@@ -43,7 +43,13 @@ export function getWorldDropPosition({ clientX, clientY, game }) {
   };
 }
 
-export function buildInventoryWorldDropPayload({ event, inventoryEntry, game = window.game }) {
+export function isValidWorldDrop({ event, inventoryEntry, game = window.game }) {
+  if (!inventoryEntry?.item?.id || inventoryEntry.quantity < 1) return false;
+  if (isBlockedDropTarget(event.target)) return false;
+  return getWorldDropPosition({ clientX: event.clientX, clientY: event.clientY, game }) !== null;
+}
+
+export function buildInventoryWorldDropPayload({ event, inventoryEntry, quantity, game = window.game }) {
   if (!inventoryEntry?.item?.id || inventoryEntry.quantity < 1) return null;
   if (isBlockedDropTarget(event.target)) return null;
 
@@ -54,22 +60,22 @@ export function buildInventoryWorldDropPayload({ event, inventoryEntry, game = w
   });
   if (!position) return null;
 
+  const qty = quantity != null ? quantity : inventoryEntry.quantity;
+
   return {
     itemId: inventoryEntry.item.id,
-    quantity: 1,
-    worldX: position.worldX,
-    worldY: position.worldY,
+    quantity: qty,
   };
 }
 
 export function emitInventoryWorldDrop(socket, payload) {
   return new Promise((resolve) => {
     if (!socket?.connected || !payload) {
-      resolve({ success: false, message: "Socket non connecté." });
+      resolve({ success: false, message: "Socket non connecte." });
       return;
     }
     socket.emit("drop_inventory_item", payload, (response) => {
-      resolve(response ?? { success: false, message: "Aucune réponse serveur." });
+      resolve(response ?? { success: false, message: "Aucune reponse serveur." });
     });
   });
 }

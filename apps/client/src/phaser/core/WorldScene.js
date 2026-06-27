@@ -457,7 +457,17 @@ export default class WorldScene extends Phaser.Scene {
 
       const worldItem = this.getWorldItemAt(worldX, worldY);
       if (worldItem) {
-        getActionPanelStore().getState().closePanel();
+        getActionPanelStore().getState().openPanel(
+          {
+            id: worldItem.id,
+            type: worldItem.item?.category ?? worldItem.item?.type ?? worldItem.itemId ?? "item",
+            kind: "world_item",
+            name: worldItem.item?.name ?? null,
+            health: null,
+            maxHealth: null,
+          },
+          ["Ramasser"],
+        );
         getDevToolsStore().getState().setSelectedWorldObject(worldItemToWorldObject(worldItem));
         return;
       }
@@ -793,8 +803,12 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   getWorldItemAt(x, y) {
+    // Container.getBounds() returns 0-size for Graphics children — use proximity instead.
+    const HIT_SQ = 18 * 18;
     for (const [id, sprite] of this.worldItemSprites.entries()) {
-      if (sprite.getBounds().contains(x, y)) {
+      const dx = x - sprite.x;
+      const dy = y - sprite.y;
+      if (dx * dx + dy * dy <= HIT_SQ) {
         return this.worldItemData.get(id) ?? null;
       }
     }
@@ -1297,17 +1311,62 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const sprite = this.add.circle(x, y - 10, 7, 0xf1c40f, 0.95);
-    sprite.setStrokeStyle(2, 0x2f80ed, 0.9);
-    sprite.setDepth(11);
-    sprite.setInteractive(
-      new Phaser.Geom.Circle(0, 0, 10),
-      Phaser.Geom.Circle.Contains,
-    );
+    const imageUrl = worldItem.item?.image ?? null;
+    const textureKey = imageUrl ? ("wi:" + worldItem.itemId) : null;
 
-    this.worldItemSprites.set(worldItem.id, sprite);
+    // Mark data early so removeWorldItem can abort an in-flight texture load
     this.worldItemData.set(worldItem.id, worldItem);
-    this.redrawWorldItemOverlay();
+
+    const buildContainer = () => {
+      if (!this.worldItemData.has(worldItem.id) || this.worldItemSprites.has(worldItem.id)) return;
+
+      const posY = y - 10;
+      const container = this.add.container(x, posY);
+      container.setDepth(11);
+
+      if (textureKey && this.textures.exists(textureKey)) {
+        const img = this.add.image(0, 0, textureKey).setDisplaySize(22, 22);
+        container.add(img);
+      } else {
+        const circ = this.add.graphics();
+        circ.fillStyle(0xf1c40f, 0.95);
+        circ.fillCircle(0, 0, 7);
+        circ.lineStyle(2, 0x2f80ed, 0.9);
+        circ.strokeCircle(0, 0, 7);
+        container.add(circ);
+      }
+
+      if (worldItem.quantity > 1) {
+        const badge = this.add.text(9, 4, String(worldItem.quantity), {
+          fontFamily: "monospace",
+          fontSize: "9px",
+          color: "#fff",
+          backgroundColor: "#000000bb",
+          padding: { x: 2, y: 1 },
+        }).setDepth(1).setOrigin(0);
+        container.add(badge);
+      }
+
+      container.setInteractive(
+        new Phaser.Geom.Rectangle(-13, -13, 26, 26),
+        Phaser.Geom.Rectangle.Contains,
+      );
+
+      this.worldItemSprites.set(worldItem.id, container);
+      this.redrawWorldItemOverlay();
+    };
+
+    if (textureKey && !this.textures.exists(textureKey)) {
+      const img = new Image();
+      img.onload = () => {
+        this.textures.addImage(textureKey, img);
+        buildContainer();
+      };
+      img.onerror = () => buildContainer();
+      img.src = imageUrl;
+    } else {
+      buildContainer();
+    }
   }
 
   // ── Crafting Stations debug render ───────────────────────────────────────

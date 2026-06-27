@@ -18,8 +18,10 @@ import { WorldItemService } from './world-item.service';
 type DropInventoryItemPayload = {
   itemId?: string;
   quantity?: number;
-  worldX?: number;
-  worldY?: number;
+};
+
+type PickupWorldItemPayload = {
+  worldItemId?: string;
 };
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
@@ -72,16 +74,17 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
       if (!payload || typeof payload.itemId !== 'string') {
         throw new BadRequestException('itemId is required');
       }
-      if (payload.quantity !== 1) {
-        throw new BadRequestException('quantity must be exactly 1 for this phase');
+      const quantity = Number(payload.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        throw new BadRequestException('quantity must be a positive integer');
       }
 
       const result = await this.worldItems.dropInventoryItem({
         characterId: player.characterId,
         itemId: payload.itemId,
-        quantity: 1,
-        worldX: Number(payload.worldX),
-        worldY: Number(payload.worldY),
+        quantity,
+        worldX: player.worldX,
+        worldY: player.worldY,
         mapId: player.mapId ?? DEFAULT_MAP_ID,
       });
 
@@ -102,6 +105,49 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Drop failed',
+      };
+    }
+  }
+
+  @SubscribeMessage('pickup_world_item')
+  async onPickupWorldItem(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: PickupWorldItemPayload,
+  ) {
+    try {
+      const player = client.data.player;
+      if (!player?.characterId) {
+        throw new BadRequestException('Character must join world before picking up items');
+      }
+      if (!payload || typeof payload.worldItemId !== 'string') {
+        throw new BadRequestException('worldItemId is required');
+      }
+
+      const inventory = await this.worldItems.pickupItem({
+        worldItemId: payload.worldItemId,
+        characterId: player.characterId,
+        worldX: player.worldX,
+        worldY: player.worldY,
+        mapId: player.mapId ?? DEFAULT_MAP_ID,
+      });
+
+      client.emit('inventory_update', {
+        itemId: inventory.item.id,
+        total: inventory.quantity,
+        item: {
+          id: inventory.item.id,
+          name: inventory.item.name,
+          type: inventory.item.type,
+          category: inventory.item.category,
+          image: inventory.item.image ?? null,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Pickup failed',
       };
     }
   }

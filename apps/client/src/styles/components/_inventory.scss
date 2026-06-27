@@ -47,6 +47,14 @@
   }
 }
 
+.inventory-item-image {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
 .inventory-item-name {
   font-size: 8px;
   text-align: center;
@@ -54,4 +62,95 @@
   line-height: 1.2;
   word-break: break-word;
   padding: 2px;
+}
+
+.inventory-quantity {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: vars.$color-text-primary;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.inventory-drop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+
+  &__box {
+    background: vars.$panel-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius;
+    padding: 16px 20px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__label {
+    font-size: 13px;
+    font-weight: 600;
+    color: vars.$color-text-primary;
+    margin: 0;
+  }
+
+  &__hint {
+    font-size: 11px;
+    color: vars.$color-text-muted;
+    margin: 0;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 14px;
+    text-align: center;
+    box-sizing: border-box;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      opacity: 1;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  &__btn {
+    flex: 1;
+    padding: 6px 0;
+    border: none;
+    border-radius: vars.$btn-radius;
+    font-size: 12px;
+    cursor: pointer;
+
+    &--confirm {
+      background: vars.$btn-success-bg;
+      color: #fff;
+
+      &:hover { background: vars.$btn-success-hover; }
+    }
+
+    &--cancel {
+      background: vars.$btn-neutral-bg;
+      color: vars.$color-text-primary;
+
+      &:hover { background: vars.$btn-neutral-hover; }
+    }
+  }
 }

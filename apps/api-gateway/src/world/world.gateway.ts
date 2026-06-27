@@ -66,6 +66,10 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * événement (join_world, gather, etc.).
    */
   async handleConnection(client: WorldSocket) {
+    // Multiple gateways share the default namespace and each registers internal
+    // disconnect listeners — raise the limit to silence the false-positive warning.
+    client.setMaxListeners(20);
+
     const auth = await this.wsAuthService.authenticate(client);
     if (!auth) {
       client.disconnect(true);
