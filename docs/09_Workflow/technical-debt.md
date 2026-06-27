@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-27
+- Last updated: 2026-06-28
 - Depends on: docs/09_Workflow/runtime-roadmap.md, docs/09_Workflow/audit-alerts.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/economy-foundation.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md
 - Used by: Project owner, developers, reviewers, repository-aware coding agents
 
@@ -36,7 +36,6 @@ Priorities:
 
 | ID | Titre | Priorité | Phase prévue | Statut |
 |---|---|---|---|---|
-| TD-001 | `Inventory.equipped` comme source de vérité legacy | High | Equipment Runtime V2 | Open |
 | TD-002 | `InventoryService` / équipement legacy par `Item` catalogue | High | Equipment Runtime V2 | Open |
 | TD-003 | `WorldItem.itemInstanceId` non validé par relation/transition | High | WorldItem Hybrid | Open |
 | TD-004 | `getOrCreateWallet` race condition | High | Economy hardening | Open |
@@ -51,28 +50,18 @@ Priorities:
 
 ## Details
 
-### TD-001 - `Inventory.equipped` comme source de vérité legacy
-
-- Description : `Inventory` conserve un booléen `equipped`, alors que
-  l'architecture cible impose `CharacterEquipment + ItemInstance` comme vérité
-  de l'équipement.
-- Impact : divergence possible entre inventaire, équipement et futurs états
-  `ItemInstance`; risque de double usage d'un objet équipé.
-- Priorité : High
-- Décision prise : conserver temporairement le champ pour compatibilité, puis
-  le retirer du chemin critique dans Equipment Runtime V2.
-- Phase prévue de résolution : Equipment Runtime V2
-- Statut : Open
-
 ### TD-002 - `InventoryService` / équipement legacy par `Item` catalogue
 
-- Description : les flows d'équipement actuels manipulent encore des `Item`
-  catalogue et des lignes d'inventaire stackées, pas un objet physique unique.
+- Description : les flows d'équipement actuels utilisent désormais
+  `CharacterEquipment` comme source de vérité projetée, mais manipulent encore
+  des `Item` catalogue et des lignes d'inventaire stackées, pas un objet
+  physique unique.
 - Impact : impossible de garantir durabilité, enchantements, craftedBy,
   binding ou ownership d'un équipement concret.
 - Priorité : High
-- Décision prise : garder le modèle legacy jusqu'à la phase Equipment Runtime
-  V2, après Inventory Hybrid.
+- Décision prise : garder la compatibilité stack-era jusqu'à la fin
+  d'Equipment Runtime V2, puis basculer les equip/unequip vers
+  `ItemInstance`.
 - Phase prévue de résolution : Equipment Runtime V2
 - Statut : Open
 
@@ -117,8 +106,9 @@ Priorities:
 
 ### TD-006 - `CharacterEquipment.itemInstanceId` nullable sans source de vérité
 
-- Description : `CharacterEquipment` accepte désormais `itemInstanceId`, mais le
-  service d'équipement continue de créer des rows via `itemId`.
+- Description : `CharacterEquipment` accepte désormais `itemInstanceId` et sert
+  de source de vérité projetée pour l'équipement, mais les flows d'équipement
+  continuent de créer des rows via `itemId`.
 - Impact : la préparation DB existe, mais aucun invariant ne garantit encore
   qu'un équipement unique référence un `ItemInstance`.
 - Priorité : High

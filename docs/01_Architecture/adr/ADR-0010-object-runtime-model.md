@@ -5,7 +5,7 @@
 - Status: Draft
 - Decision status: Proposed
 - Owner: Project
-- Last updated: 2026-06-27
+- Last updated: 2026-06-28
 - Date proposed: 2026-06-27
 - Date accepted: N/A
 - Approved by: TBD
@@ -191,6 +191,31 @@ An `ItemInstance` keeps the same UUID for its whole lifecycle.
 The UUID is not replaced when the object moves between Inventory, Equipment,
 WorldItem, Auction, Mail, Bank, Guild Storage, Housing, Craft Order, or
 Destroyed/Archived states.
+
+## Runtime Invariants
+
+The following invariants are part of the proposed Object Runtime model and are
+supported by the current Runtime direction.
+
+### I1 - Single Active Container
+
+An `ItemInstance` has exactly one active container at a time.
+
+The active container is represented by its `containerType` and `containerId`
+pair. Runtime systems must not make the same `ItemInstance` simultaneously
+available in Inventory, Equipment, WorldItem, Auction, Mail, Bank, Guild
+Storage, Housing, or Craft Order.
+
+### I4 - Legal Owner vs Physical Container
+
+`ownerId` represents the legal owner.
+
+`containerId` represents the physical or domain container where the object
+currently resides.
+
+These concepts are independent. For example, an item can remain legally owned
+by a character while physically locked in Auction, stored in Mail, or placed in
+Bank, depending on the domain transition.
 
 ## Alternatives Considered
 

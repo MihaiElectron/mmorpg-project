@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-27
+- Last updated: 2026-06-28
 - Depends on: docs/08_Gameplay/economy-foundation.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/auction-house-specifications.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md, docs/09_Workflow/audit-alerts.md
 - Used by: Project owner, backend developers, DevTools developers, repository-aware coding agents
 
@@ -30,8 +30,8 @@ Statuses:
 | ItemInstance Foundation | Créer la fondation Runtime `ItemInstance` avec identité, état et conteneur. | Completed | ADR-0010, Item Taxonomy | `f17dc15` |
 | CharacterEquipment Preparation | Préparer `CharacterEquipment` à référencer un `ItemInstance` sans casser le modèle legacy. | Completed | ItemInstance Foundation | `b2048ee` |
 | WorldItem Preparation | Préparer `WorldItem` à référencer un `ItemInstance` sans casser les drops stackables actuels. | Completed | ItemInstance Foundation | `1c07e7d` |
-| Inventory Hybrid | Faire coexister officiellement stacks d'inventaire et `ItemInstance` dans les lectures/écritures Runtime. | Not Started | ItemInstance Foundation, CharacterEquipment Preparation, WorldItem Preparation | N/A |
-| Equipment Runtime V2 | Équiper/déséquiper des `ItemInstance` comme source de vérité, retirer la dépendance legacy à `Inventory.equipped`. | Not Started | Inventory Hybrid, CharacterEquipment Preparation | N/A |
+| Inventory Hybrid | Faire coexister officiellement stacks d'inventaire et `ItemInstance` dans les lectures/écritures Runtime. | In Progress | ItemInstance Foundation, CharacterEquipment Preparation, WorldItem Preparation | `f37265b` |
+| Equipment Runtime V2 | Équiper/déséquiper des `ItemInstance` comme source de vérité, retirer la dépendance legacy à `Inventory.equipped`. | In Progress | Inventory Hybrid, CharacterEquipment Preparation | `b8ac4a6` |
 | WorldItem Hybrid | Gérer pickup/drop stackable et unique via `WorldItem`, avec transitions `ItemInstance` validées. | Not Started | Inventory Hybrid, WorldItem Preparation | N/A |
 | Loot Hybrid | Produire soit des stacks, soit des `ItemInstance` selon la taxonomie d'objet. | Not Started | WorldItem Hybrid, Item Taxonomy | N/A |
 | Craft Hybrid | Consommer/produire stacks et `ItemInstance`, avec craftedBy/provenance pour les sorties uniques. | Not Started | Inventory Hybrid, Equipment Runtime V2, Loot Hybrid | N/A |
@@ -117,10 +117,51 @@ Completion evidence:
 
 This is preparation only. WorldItem Hybrid is not complete.
 
+### Inventory Hybrid
+
+Objective:
+
+- Project stack inventory rows and `ItemInstance` inventory objects through a
+  single read model.
+
+Progress evidence:
+
+- `apps/api-gateway/src/inventory/projection/inventory-projection.service.ts`
+- `apps/api-gateway/src/inventory/projection/inventory-entry.mapper.ts`
+- `apps/api-gateway/src/inventory/projection/inventory-entry.dto.ts`
+- `apps/api-gateway/src/inventory/projection/inventory-projection.service.spec.ts`
+- commit `f37265b`
+
+Current status:
+
+- In Progress. Hybrid projection exists for reads, but write flows still need
+  full stack vs `ItemInstance` transition rules before the phase can be marked
+  Completed.
+
+### Equipment Runtime V2
+
+Objective:
+
+- Make `CharacterEquipment` the equipment truth and move toward
+  `ItemInstance`-based equip/unequip.
+
+Progress evidence:
+
+- `apps/api-gateway/src/inventory/inventory.service.ts`
+- `apps/api-gateway/src/inventory/inventory.service.spec.ts`
+- commit `b8ac4a6`
+
+Current status:
+
+- In Progress. `CharacterEquipment` is now the projected equipment source of
+  truth for stack-era items, while `Inventory.equipped` remains a transitional
+  compatibility field and equip/unequip still use catalogue `Item` ids rather
+  than concrete `ItemInstance` ids.
+
 ## Next Recommended Order
 
-1. Inventory Hybrid.
-2. Equipment Runtime V2.
+1. Complete Inventory Hybrid write transitions.
+2. Complete Equipment Runtime V2 with `ItemInstance` equip/unequip.
 3. WorldItem Hybrid.
 4. Loot Hybrid.
 5. Craft Hybrid.
