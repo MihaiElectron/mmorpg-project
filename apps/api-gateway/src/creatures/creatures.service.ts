@@ -683,7 +683,7 @@ export class CreaturesService implements OnModuleInit {
     return this.toDto(creature);
   }
 
-  refreshTemplateInMemory(key: string, fields: Partial<Record<string, number>>): void {
+  refreshTemplateInMemory(key: string, fields: Partial<Record<string, unknown>>): void {
     for (const creature of this.liveCreatures.values()) {
       if (creature.spawn?.template?.key === key) {
         Object.assign(creature.spawn.template, fields);

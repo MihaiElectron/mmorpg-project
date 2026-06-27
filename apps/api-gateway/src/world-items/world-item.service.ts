@@ -88,7 +88,7 @@ export class WorldItemService {
   async spawnItem(input: SpawnWorldItemInput): Promise<WorldItem> {
     this.assertValidSpawnInput(input);
 
-    const item = await this.items.findOneBy({ id: input.itemId });
+    const item = await this.resolveItem(input.itemId);
     if (!item) {
       throw new NotFoundException('Item not found');
     }
@@ -237,6 +237,20 @@ export class WorldItemService {
       this.emitRemove(worldItem);
     }
     return saved;
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private async resolveItem(itemRef: string): Promise<Item | null> {
+    if (this.isUuid(itemRef)) {
+      const item = await this.items.findOneBy({ id: itemRef });
+      if (item) return item;
+    }
+    const material = await this.items.findOne({ where: { category: itemRef, type: 'material' } });
+    if (material) return material;
+    return this.items.findOne({ where: [{ type: itemRef }, { category: itemRef }] });
   }
 
   toDto(worldItem: WorldItem): WorldItemDto {

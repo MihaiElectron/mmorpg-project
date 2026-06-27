@@ -11,7 +11,7 @@ import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { CreaturesService, isAttackFailure } from './creatures.service';
 import { WsAuthService } from '../common/ws-auth.service';
-import { InventoryService } from '../inventory/inventory.service';
+import { WorldItemService } from '../world-items/world-item.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
@@ -24,7 +24,7 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
   constructor(
     private readonly creaturesService: CreaturesService,
     private readonly wsAuthService: WsAuthService,
-    private readonly inventoryService: InventoryService,
+    private readonly worldItemService: WorldItemService,
   ) {}
 
   afterInit(server: Server) {
@@ -84,19 +84,17 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
 
     if (result.loot) {
       try {
-        const entry = await this.inventoryService.addItem({
-          characterId: player.characterId,
+        await this.worldItemService.spawnItem({
           itemId: result.loot.itemId,
           quantity: result.loot.quantity,
-        });
-        client.emit('creature_loot', {
-          itemId: entry.item.id,
-          lootItemId: result.loot.itemId,
-          quantity: result.loot.quantity,
-          total: entry.quantity,
+          worldX: result.dto.worldX ?? 0,
+          worldY: result.dto.worldY ?? 0,
+          mapId: result.dto.mapId ?? DEFAULT_MAP_ID,
+          ownerCharacterId: null,
+          expiresAt: null,
         });
       } catch (err) {
-        console.warn('[CreaturesGateway] loot ignoré:', (err as Error).message);
+        console.warn('[CreaturesGateway] spawn loot WorldItem ignoré:', (err as Error).message);
       }
     }
   }

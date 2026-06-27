@@ -61,6 +61,7 @@ export class AdminController {
   async updateTemplate(@Param('key') key: string, @Body() fields: Record<string, unknown>) {
     const updated = await this.adminService.updateTemplate(key, fields);
     if (!updated) throw new NotFoundException(`Template "${key}" introuvable.`);
+    this.creaturesService.refreshTemplateInMemory(key, fields);
     return updated;
   }
 

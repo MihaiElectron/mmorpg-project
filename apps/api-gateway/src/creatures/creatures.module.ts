@@ -11,7 +11,7 @@ import { WorldModule } from '../world/world.module';
 import { SkillsModule } from '../skills/skills.module';
 import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.module';
 import { LootService } from '../world/loot.service';
-import { InventoryModule } from '../inventory/inventory.module';
+import { WorldItemsModule } from '../world-items/world-items.module';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { InventoryModule } from '../inventory/inventory.module';
     WorldModule,
     SkillsModule,
     CreatureRuntimeModule,
-    InventoryModule,
+    WorldItemsModule,
   ],
   providers: [CreaturesGateway, CreaturesService, LootService],
   exports: [CreaturesService],

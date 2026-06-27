@@ -9,6 +9,7 @@ import { WORLD_ITEM_PICKUP_RANGE_WU, WorldItemService } from './world-item.servi
 function makeRepo<T>() {
   return {
     findOneBy: jest.fn(),
+    findOne: jest.fn(),
     create: jest.fn((value) => value),
     save: jest.fn(async (value) => value),
     find: jest.fn(),
@@ -55,7 +56,7 @@ describe('WorldItemService', () => {
   it('spawn un WorldItem et diffuse dans la room map:N', async () => {
     const server = makeServer();
     service.setServer(server as any);
-    items.findOneBy.mockResolvedValue(item);
+    items.findOne.mockResolvedValue(item);
     worldItems.save.mockImplementation(async (worldItem) => ({
       ...worldItem,
       id: 'world-item-1',
@@ -404,7 +405,7 @@ describe('WorldItemService', () => {
   });
 
   it('signale un item absent au spawn', async () => {
-    items.findOneBy.mockResolvedValue(null);
+    items.findOne.mockResolvedValue(null);
 
     await expect(service.spawnItem({
       itemId: 'missing',
