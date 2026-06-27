@@ -33,6 +33,20 @@ export interface PickupWorldItemInput {
   mapId: number;
 }
 
+export interface DropInventoryItemInput {
+  characterId: string;
+  itemId: string;
+  quantity: number;
+  worldX: number;
+  worldY: number;
+  mapId: number;
+}
+
+export interface DropInventoryItemResult {
+  inventoryQuantity: number;
+  worldItem: WorldItem;
+}
+
 export interface WorldItemDto {
   id: string;
   itemId: string;
@@ -157,6 +171,50 @@ export class WorldItemService {
     return picked.inventory;
   }
 
+  async dropInventoryItem(input: DropInventoryItemInput): Promise<DropInventoryItemResult> {
+    this.assertValidDropInput(input);
+
+    const result = await this.dataSource.transaction(async (manager) => {
+      const inventory = await this.findInventoryForUpdate(manager, input.characterId, input.itemId);
+      if (!inventory) {
+        throw new NotFoundException('Inventory item not found');
+      }
+      if (!inventory.item) {
+        throw new NotFoundException('Item not found');
+      }
+      if (inventory.quantity < input.quantity) {
+        throw new BadRequestException('Not enough inventory quantity');
+      }
+
+      const nextQuantity = inventory.quantity - input.quantity;
+      if (nextQuantity <= 0) {
+        await manager.remove(Inventory, inventory);
+      } else {
+        inventory.quantity = nextQuantity;
+        await manager.save(Inventory, inventory);
+      }
+
+      const worldItem = manager.create(WorldItem, {
+        item: inventory.item,
+        itemId: inventory.item.id,
+        quantity: input.quantity,
+        worldX: Math.round(input.worldX),
+        worldY: Math.round(input.worldY),
+        mapId: Math.round(input.mapId),
+        ownerCharacterId: input.characterId,
+        expiresAt: null,
+        state: WorldItemState.SPAWNED,
+      });
+      const saved = await manager.save(WorldItem, worldItem);
+      saved.item = inventory.item;
+
+      return { inventoryQuantity: Math.max(nextQuantity, 0), worldItem: saved };
+    });
+
+    this.emitSpawn(result.worldItem);
+    return result;
+  }
+
   async removeExpiredItems(now = new Date()): Promise<WorldItem[]> {
     const expired = await this.worldItems.find({
       where: {
@@ -248,12 +306,42 @@ export class WorldItemService {
     return manager.save(Inventory, inventory);
   }
 
+  private async findInventoryForUpdate(
+    manager: EntityManager,
+    characterId: string,
+    itemId: string,
+  ): Promise<Inventory | null> {
+    return manager
+      .getRepository(Inventory)
+      .createQueryBuilder('inventory')
+      .leftJoinAndSelect('inventory.item', 'item')
+      .leftJoin('inventory.character', 'character')
+      .setLock('pessimistic_write')
+      .where('character.id = :characterId', { characterId })
+      .andWhere('item.id = :itemId', { itemId })
+      .andWhere('inventory.equipped = false')
+      .getOne();
+  }
+
   private assertValidSpawnInput(input: SpawnWorldItemInput) {
     if (!input.itemId) {
       throw new BadRequestException('itemId is required');
     }
     if (!Number.isInteger(input.quantity) || input.quantity < 1) {
       throw new BadRequestException('quantity must be >= 1');
+    }
+    this.assertFinitePosition(input.worldX, input.worldY, input.mapId);
+  }
+
+  private assertValidDropInput(input: DropInventoryItemInput) {
+    if (!input.characterId) {
+      throw new BadRequestException('characterId is required');
+    }
+    if (!input.itemId) {
+      throw new BadRequestException('itemId is required');
+    }
+    if (!Number.isInteger(input.quantity) || input.quantity !== 1) {
+      throw new BadRequestException('quantity must be exactly 1 for this phase');
     }
     this.assertFinitePosition(input.worldX, input.worldY, input.mapId);
   }

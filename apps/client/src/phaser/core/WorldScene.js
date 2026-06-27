@@ -842,12 +842,14 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("inventory_update", (data) => {
+      const item = data.item || {};
+      const itemId = item.id || data.itemId;
       const store = getCharacterStore();
       store.getState().updateInventoryItem({
-        id: data.itemId,
+        id: itemId,
         quantity: data.total,
-        name: data.itemId.replace("_", " "),
-        image: `/assets/images/items/${data.itemId}.png`,
+        name: item.name || itemId.replace("_", " "),
+        image: item.image || `/assets/images/items/${itemId}.png`,
       });
     });
 

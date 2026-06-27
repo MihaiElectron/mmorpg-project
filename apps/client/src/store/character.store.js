@@ -23,13 +23,19 @@ const storeLogic = (set, get) => ({
     set((state) => {
       const inventory = [...(state.inventory || [])];
       const index = inventory.findIndex((inv) => inv.item?.id === itemData.id);
+      const nextQuantity = Number(itemData.quantity ?? 0);
 
       if (index > -1) {
-        inventory[index] = { ...inventory[index], quantity: itemData.quantity };
+        if (nextQuantity <= 0) {
+          inventory.splice(index, 1);
+        } else {
+          inventory[index] = { ...inventory[index], quantity: nextQuantity };
+        }
       } else {
+        if (nextQuantity <= 0) return { inventory };
         inventory.push({
           id: `inv-${itemData.id}-${Date.now()}`,
-          quantity: itemData.quantity,
+          quantity: nextQuantity,
           equipped: false,
           item: { 
             id: itemData.id, 

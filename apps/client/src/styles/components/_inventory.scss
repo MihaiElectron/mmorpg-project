@@ -29,6 +29,22 @@
   justify-content: center;
   font-size: 10px;
   color: vars.$color-text-muted;
+  position: relative;
+  user-select: none;
+
+  &--filled {
+    cursor: grab;
+  }
+
+  &--filled:active {
+    cursor: grabbing;
+  }
+
+  &--dragging {
+    opacity: 0.55;
+    outline: 2px solid vars.$color-text-gold;
+    outline-offset: 2px;
+  }
 }
 
 .inventory-item-name {

@@ -154,6 +154,121 @@ describe('WorldItemService', () => {
     });
   });
 
+  it('dropInventoryItem décrémente l’inventaire et spawn un WorldItem dans la même transaction', async () => {
+    const server = makeServer();
+    service.setServer(server as any);
+    const character = { id: 'char-1' } as Character;
+    const inventory = {
+      id: 'inv-1',
+      character,
+      item,
+      quantity: 4,
+      equipped: false,
+    } as Inventory;
+    const worldItem = {
+      id: 'world-item-1',
+      itemId: item.id,
+      item,
+      quantity: 1,
+      worldX: 1200,
+      worldY: 1300,
+      mapId: 1,
+      state: WorldItemState.SPAWNED,
+      ownerCharacterId: character.id,
+      expiresAt: null,
+      createdAt: new Date(),
+    } as WorldItem;
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(inventory),
+    };
+    const manager = {
+      getRepository: jest.fn(() => ({ createQueryBuilder: jest.fn(() => qb) })),
+      save: jest.fn(async (entity, value) => entity === WorldItem ? worldItem : value),
+      remove: jest.fn(),
+      create: jest.fn((_entity, value) => value),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const result = await service.dropInventoryItem({
+      characterId: character.id,
+      itemId: item.id,
+      quantity: 1,
+      worldX: 1200,
+      worldY: 1300,
+      mapId: 1,
+    });
+
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(qb.setLock).toHaveBeenCalledWith('pessimistic_write');
+    expect(inventory.quantity).toBe(3);
+    expect(manager.save).toHaveBeenCalledWith(Inventory, inventory);
+    expect(manager.save).toHaveBeenCalledWith(WorldItem, expect.objectContaining({
+      itemId: item.id,
+      quantity: 1,
+      ownerCharacterId: character.id,
+      state: WorldItemState.SPAWNED,
+    }));
+    expect(result.inventoryQuantity).toBe(3);
+    expect(server.to).toHaveBeenCalledWith('map:1');
+    expect(server.emit).toHaveBeenCalledWith(
+      'world_item_spawn',
+      expect.objectContaining({ id: 'world-item-1', itemId: item.id, quantity: 1 }),
+    );
+  });
+
+  it('dropInventoryItem supprime la pile inventaire quand la dernière unité est déposée', async () => {
+    const inventory = {
+      id: 'inv-1',
+      item,
+      quantity: 1,
+      equipped: false,
+    } as Inventory;
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(inventory),
+    };
+    const manager = {
+      getRepository: jest.fn(() => ({ createQueryBuilder: jest.fn(() => qb) })),
+      save: jest.fn(async (_entity, value) => ({ ...value, id: 'world-item-1', createdAt: new Date() })),
+      remove: jest.fn(),
+      create: jest.fn((_entity, value) => value),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const result = await service.dropInventoryItem({
+      characterId: 'char-1',
+      itemId: item.id,
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(manager.remove).toHaveBeenCalledWith(Inventory, inventory);
+    expect(result.inventoryQuantity).toBe(0);
+  });
+
+  it('dropInventoryItem refuse une quantité différente de 1', async () => {
+    await expect(service.dropInventoryItem({
+      characterId: 'char-1',
+      itemId: item.id,
+      quantity: 2,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
   it('refuse le pickup hors portée sans ajouter à l’inventaire', async () => {
     const worldItem = {
       id: 'world-item-1',
