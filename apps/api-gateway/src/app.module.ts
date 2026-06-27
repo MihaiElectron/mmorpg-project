@@ -30,6 +30,7 @@ import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
 import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.module';
 import { ItemModule } from './items/item.module';
 import { WorldItemsModule } from './world-items/world-items.module';
+import { EconomyModule } from './economy/economy.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { WorldItemsModule } from './world-items/world-items.module';
     PlayerRuntimeModule,
     CreatureRuntimeModule,
     WorldItemsModule,
+    EconomyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
