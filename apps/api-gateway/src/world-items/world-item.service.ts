@@ -9,6 +9,12 @@ import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item } from '../items/entities/item.entity';
+import {
+  ItemInstance,
+  ItemInstanceContainerType,
+  ItemInstanceState,
+} from '../item-instances/entities/item-instance.entity';
+import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
 import { getMapRoomId } from '../common/socket-rooms';
 import { chebyshevDistanceWU } from '../common/world-coordinates';
 import { WorldItem, WorldItemState } from './entities/world-item.entity';
@@ -36,7 +42,7 @@ export interface PickupWorldItemInput {
 
 export interface DropInventoryItemInput {
   characterId: string;
-  itemId: string;
+  inventoryEntryId: string;
   quantity: number;
   worldX: number;
   worldY: number;
@@ -81,6 +87,7 @@ export class WorldItemService {
     @InjectRepository(Character)
     private readonly characters: Repository<Character>,
     private readonly dataSource: DataSource,
+    private readonly inventoryEntryResolver: InventoryEntryResolverService,
   ) {}
 
   setServer(server: Server) {
@@ -182,7 +189,18 @@ export class WorldItemService {
     this.assertValidDropInput(input);
 
     const result = await this.dataSource.transaction(async (manager) => {
-      const inventory = await this.findInventoryForUpdate(manager, input.characterId, input.itemId);
+      const resolution = await this.inventoryEntryResolver.resolveWithinTransaction(
+        manager,
+        input.characterId,
+        input.inventoryEntryId,
+      );
+
+      if (resolution.type === 'INSTANCE') {
+        return this.dropInstance(manager, resolution.instance, input);
+      }
+
+      // STACK path — flux inchangé
+      const inventory = await this.findInventoryForUpdate(manager, input.characterId, resolution.itemId);
       if (!inventory) {
         throw new NotFoundException('Inventory item not found');
       }
@@ -220,6 +238,71 @@ export class WorldItemService {
 
     this.emitSpawn(result.worldItem);
     return result;
+  }
+
+  private async dropInstance(
+    manager: EntityManager,
+    resolvedInstance: ItemInstance,
+    input: DropInventoryItemInput,
+  ): Promise<DropInventoryItemResult> {
+    if (input.quantity !== 1) {
+      throw new BadRequestException('Cannot drop more than 1 of an instance');
+    }
+
+    const instance = await this.findInstanceForUpdate(
+      manager,
+      resolvedInstance.id,
+      input.characterId,
+    );
+    if (!instance) {
+      throw new NotFoundException('Instance not found or not available for drop');
+    }
+    if (instance.state === ItemInstanceState.EQUIPPED) {
+      throw new BadRequestException('Cannot drop an equipped instance');
+    }
+    if (instance.state !== ItemInstanceState.AVAILABLE) {
+      throw new BadRequestException('Instance is not available for drop');
+    }
+
+    const item = await manager.findOne(Item, { where: { id: instance.itemId } });
+    if (!item) throw new NotFoundException('Item not found');
+
+    const worldItemEntity = manager.create(WorldItem, {
+      item,
+      itemId: item.id,
+      quantity: 1,
+      itemInstanceId: instance.id,
+      worldX: Math.round(input.worldX),
+      worldY: Math.round(input.worldY),
+      mapId: Math.round(input.mapId),
+      ownerCharacterId: input.characterId,
+      expiresAt: null,
+      state: WorldItemState.SPAWNED,
+    });
+    const savedWorldItem = await manager.save(WorldItem, worldItemEntity);
+    savedWorldItem.item = item;
+
+    instance.state = ItemInstanceState.IN_WORLD;
+    instance.containerType = ItemInstanceContainerType.WORLD;
+    instance.containerId = savedWorldItem.id;
+    await manager.save(ItemInstance, instance);
+
+    return { inventoryQuantity: 0, worldItem: savedWorldItem };
+  }
+
+  private async findInstanceForUpdate(
+    manager: EntityManager,
+    instanceId: string,
+    characterId: string,
+  ): Promise<ItemInstance | null> {
+    return manager
+      .getRepository(ItemInstance)
+      .createQueryBuilder('instance')
+      .setLock('pessimistic_write')
+      .where('instance.id = :instanceId', { instanceId })
+      .andWhere('instance.ownerId = :characterId', { characterId })
+      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.INVENTORY })
+      .getOne();
   }
 
   async removeExpiredItems(now = new Date()): Promise<WorldItem[]> {
@@ -359,8 +442,8 @@ export class WorldItemService {
     if (!input.characterId) {
       throw new BadRequestException('characterId is required');
     }
-    if (!input.itemId) {
-      throw new BadRequestException('itemId is required');
+    if (!input.inventoryEntryId) {
+      throw new BadRequestException('inventoryEntryId is required');
     }
     if (!Number.isInteger(input.quantity) || input.quantity < 1) {
       throw new BadRequestException('quantity must be a positive integer');

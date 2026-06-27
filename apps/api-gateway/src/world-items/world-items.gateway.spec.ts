@@ -1,17 +1,11 @@
-import { NotFoundException } from '@nestjs/common';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { WorldItemService } from './world-item.service';
 import { WorldItemsGateway } from './world-items.gateway';
-import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
-
-function makeResolver(resolution?: object): Pick<InventoryEntryResolverService, 'resolve'> {
-  return { resolve: jest.fn().mockResolvedValue(resolution) };
-}
 
 describe('WorldItemsGateway', () => {
   it('branche le serveur socket sur le service pour les broadcasts spawn/remove', () => {
     const service = { setServer: jest.fn() } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const server = {};
 
     gateway.afterInit(server as any);
@@ -25,7 +19,7 @@ describe('WorldItemsGateway', () => {
       findSpawnedByMap: jest.fn().mockResolvedValue([dto]),
       toDto: jest.fn((item) => item),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
       data: { player: { mapId: 1 } },
       emit: jest.fn(),
@@ -37,7 +31,7 @@ describe('WorldItemsGateway', () => {
     expect(client.emit).toHaveBeenCalledWith('world_items', [dto]);
   });
 
-  it('drop_inventory_item résout inventoryEntryId, décrémente via service, émet inventory_update et retourne un ack', async () => {
+  it('drop_inventory_item passe inventoryEntryId au service et émet inventory_update', async () => {
     const item = {
       id: 'item-1',
       name: 'Baton',
@@ -58,13 +52,11 @@ describe('WorldItemsGateway', () => {
       expiresAt: null,
       state: 'spawned',
     };
-    const resolution = { type: 'STACK', inventory: { id: 'inv-1', item, quantity: 3 }, itemId: item.id };
-    const resolver = makeResolver(resolution);
     const service = {
       dropInventoryItem: jest.fn().mockResolvedValue({ inventoryQuantity: 2, worldItem }),
       toDto: jest.fn((value) => value),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, resolver as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
       data: { player: { characterId: "char-1", mapId: 5, worldX: 120, worldY: 240 } },
       emit: jest.fn(),
@@ -75,10 +67,9 @@ describe('WorldItemsGateway', () => {
       quantity: 1,
     });
 
-    expect(resolver.resolve).toHaveBeenCalledWith("char-1", "inv-1");
     expect(service.dropInventoryItem).toHaveBeenCalledWith({
       characterId: "char-1",
-      itemId: item.id,
+      inventoryEntryId: "inv-1",
       quantity: 1,
       worldX: 120,
       worldY: 240,
@@ -101,7 +92,7 @@ describe('WorldItemsGateway', () => {
       dropInventoryItem: jest.fn(),
       toDto: jest.fn((value) => value),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
 
     const ack = await gateway.onDropInventoryItem({ data: {}, emit: jest.fn() } as any, {
       inventoryEntryId: "inv-1",
@@ -112,10 +103,12 @@ describe('WorldItemsGateway', () => {
     expect(service.dropInventoryItem).not.toHaveBeenCalled();
   });
 
-  it('drop_inventory_item retourne une erreur si inventoryEntryId inconnu', async () => {
-    const resolver = { resolve: jest.fn().mockRejectedValue(new NotFoundException('not found')) };
-    const service = { dropInventoryItem: jest.fn(), toDto: jest.fn() } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, resolver as any);
+  it("drop_inventory_item retourne une erreur si le service rejette", async () => {
+    const service = {
+      dropInventoryItem: jest.fn().mockRejectedValue(new Error("not found")),
+      toDto: jest.fn(),
+    } as unknown as WorldItemService;
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
       data: { player: { characterId: "char-1", mapId: 5, worldX: 120, worldY: 240 } },
       emit: jest.fn(),
@@ -124,7 +117,7 @@ describe('WorldItemsGateway', () => {
     const ack = await gateway.onDropInventoryItem(client as any, { inventoryEntryId: "unknown", quantity: 1 });
 
     expect(ack.success).toBe(false);
-    expect(service.dropInventoryItem).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalled();
   });
 
   it('pickup_world_item appelle pickupItem avec la position serveur et émet inventory_update', async () => {
@@ -139,7 +132,7 @@ describe('WorldItemsGateway', () => {
     const service = {
       pickupItem: jest.fn().mockResolvedValue(inventory),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
       data: { player: { characterId: 'char-1', worldX: 1000, worldY: 2000, mapId: 1 } },
       emit: jest.fn(),
@@ -172,7 +165,7 @@ describe('WorldItemsGateway', () => {
     const service = {
       pickupItem: jest.fn(),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
 
     const ack = await gateway.onPickupWorldItem(
       { data: {}, emit: jest.fn() } as any,
@@ -187,7 +180,7 @@ describe('WorldItemsGateway', () => {
     const service = {
       pickupItem: jest.fn().mockRejectedValue(new Error('WorldItem is too far away')),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
       data: { player: { characterId: 'char-1', worldX: 0, worldY: 0, mapId: 1 } },
       emit: jest.fn(),
@@ -204,7 +197,7 @@ describe('WorldItemsGateway', () => {
       findSpawnedByMap: jest.fn().mockResolvedValue([]),
       toDto: jest.fn((item) => item),
     } as unknown as WorldItemService;
-    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any, makeResolver() as any);
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
 
     await gateway.onGetWorldItems({ data: { player: { mapId: 2 } }, emit: jest.fn() } as any, {});
     await gateway.onGetWorldItems({ data: {}, emit: jest.fn() } as any, {});

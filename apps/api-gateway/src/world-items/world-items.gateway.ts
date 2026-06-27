@@ -13,7 +13,6 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { WsAuthService } from '../common/ws-auth.service';
 import type { WorldSocket } from '../types/world-socket';
-import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
 import { WorldItemService } from './world-item.service';
 
 type DropInventoryItemPayload = {
@@ -33,7 +32,6 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
   constructor(
     private readonly worldItems: WorldItemService,
     private readonly wsAuthService: WsAuthService,
-    private readonly inventoryEntryResolver: InventoryEntryResolverService,
   ) {}
 
   afterInit(server: Server) {
@@ -81,14 +79,9 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
         throw new BadRequestException('quantity must be a positive integer');
       }
 
-      const resolution = await this.inventoryEntryResolver.resolve(
-        player.characterId,
-        payload.inventoryEntryId,
-      );
-
       const result = await this.worldItems.dropInventoryItem({
         characterId: player.characterId,
-        itemId: resolution.itemId,
+        inventoryEntryId: payload.inventoryEntryId,
         quantity,
         worldX: player.worldX,
         worldY: player.worldY,
@@ -96,7 +89,7 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
       });
 
       client.emit('inventory_update', {
-        itemId: resolution.itemId,
+        itemId: result.worldItem.itemId,
         total: result.inventoryQuantity,
         item: result.worldItem.item
           ? this.worldItems.toDto(result.worldItem).item
