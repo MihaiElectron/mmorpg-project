@@ -1,5 +1,8 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource, EntityManager } from 'typeorm';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { InventoryService } from './inventory.service';
 import { Inventory } from './entities/inventory.entity';
 import { Character } from '../characters/entities/character.entity';
@@ -46,6 +49,11 @@ describe('InventoryService — findItemForLoot', () => {
           useValue: { findOne: jest.fn() },
         },
         { provide: getRepositoryToken(Item), useValue: itemRepo },
+        {
+          provide: getRepositoryToken(CharacterEquipment),
+          useValue: { findOne: jest.fn(), save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: DataSource, useValue: { transaction: jest.fn() } },
       ],
     }).compile();
 
@@ -134,5 +142,169 @@ describe('InventoryService — findItemForLoot', () => {
     const result = await (service as any).findItemForLoot(uuid);
     expect(result?.id).toBe(uuid);
     expect(itemRepo.findOneBy).toHaveBeenCalledWith({ id: uuid });
+  });
+});
+
+function makeEquipService(overrides: {
+  inventoryRepo?: Record<string, jest.Mock>;
+  itemRepo?: Record<string, jest.Mock>;
+  equipmentRepo?: Record<string, jest.Mock>;
+  dataSource?: { transaction: jest.Mock };
+} = {}): InventoryService {
+  const inventoryRepo = overrides.inventoryRepo ?? { findOne: jest.fn(), save: jest.fn(), create: jest.fn((x) => x), find: jest.fn().mockResolvedValue([]) };
+  const itemRepo = overrides.itemRepo ?? { findOne: jest.fn(), findOneBy: jest.fn() };
+  const equipmentRepo = overrides.equipmentRepo ?? { findOne: jest.fn(), save: jest.fn(), delete: jest.fn() };
+  const dataSource = overrides.dataSource ?? { transaction: jest.fn() };
+
+  return new InventoryService(
+    inventoryRepo as any,
+    { findOneBy: jest.fn() } as any,
+    itemRepo as any,
+    equipmentRepo as any,
+    dataSource as any,
+  );
+}
+
+function makeManager(calls: {
+  findOne?: jest.Mock;
+  save?: jest.Mock;
+  delete?: jest.Mock;
+  create?: jest.Mock;
+}): jest.Mocked<EntityManager> {
+  return {
+    findOne: calls.findOne ?? jest.fn(),
+    save: calls.save ?? jest.fn(async (_entity, value) => value),
+    delete: calls.delete ?? jest.fn(),
+    create: calls.create ?? jest.fn((_entity, value) => value),
+  } as unknown as jest.Mocked<EntityManager>;
+}
+
+describe("InventoryService.equipItem — Equipment Runtime V2", () => {
+  const weaponItem = makeItem({ id: "sword-1", type: "weapon", category: "basic_sword", slot: "weapon" as any });
+  const characterId = "char-1";
+
+  it("cree CharacterEquipment et met à jour Inventory.equipped à true", async () => {
+    const inv = { id: "inv-1", quantity: 1, equipped: false, item: weaponItem } as Inventory;
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(null)       // existing CharacterEquipment: none
+        .mockResolvedValueOnce(inv),       // Inventory row
+      save: jest.fn(async (_entity, value) => value),
+      delete: jest.fn(),
+      create: jest.fn((_entity, value) => value),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({
+      itemRepo: { findOne: jest.fn().mockResolvedValue(weaponItem), findOneBy: jest.fn() },
+      dataSource,
+    });
+
+    const result = await service.equipItem(characterId, weaponItem.id);
+
+    expect(manager.save).toHaveBeenCalledWith(CharacterEquipment, expect.objectContaining({ characterId, itemId: weaponItem.id, slot: "weapon" }));
+    expect(result.equipped).toBe(true);
+  });
+
+  it("retire l ancien CharacterEquipment et met Inventory.equipped à false pour l item precedent", async () => {
+    const existingEquip = { characterId, itemId: "old-sword", slot: "weapon" } as CharacterEquipment;
+    const oldInv = { id: "inv-old", quantity: 1, equipped: true, item: makeItem({ id: "old-sword" }) } as Inventory;
+    const newInv = { id: "inv-new", quantity: 1, equipped: false, item: weaponItem } as Inventory;
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(existingEquip)  // existing CharacterEquipment
+        .mockResolvedValueOnce(oldInv)         // old Inventory row
+        .mockResolvedValueOnce(newInv),        // new Inventory row
+      save: jest.fn(async (_entity, value) => value),
+      delete: jest.fn(),
+      create: jest.fn((_entity, value) => value),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({
+      itemRepo: { findOne: jest.fn().mockResolvedValue(weaponItem), findOneBy: jest.fn() },
+      dataSource,
+    });
+
+    await service.equipItem(characterId, weaponItem.id);
+
+    expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot: "weapon" });
+    expect(oldInv.equipped).toBe(false);
+  });
+
+  it("refuse si l item n a pas de slot defini", async () => {
+    const noSlotItem = makeItem({ id: "ore-1", type: "material", category: "iron_ore", slot: undefined as any });
+    const service = makeEquipService({
+      itemRepo: { findOne: jest.fn().mockResolvedValue(noSlotItem), findOneBy: jest.fn() },
+    });
+
+    await expect(service.equipItem(characterId, noSlotItem.id)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuse si l item n est pas dans l inventaire du personnage", async () => {
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(null)   // no existing CharacterEquipment
+        .mockResolvedValueOnce(null),  // Inventory row: not found
+      save: jest.fn(),
+      delete: jest.fn(),
+      create: jest.fn((_entity, value) => value),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({
+      itemRepo: { findOne: jest.fn().mockResolvedValue(weaponItem), findOneBy: jest.fn() },
+      dataSource,
+    });
+
+    await expect(service.equipItem(characterId, weaponItem.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe("InventoryService.unequipItem — Equipment Runtime V2", () => {
+  const characterId = "char-1";
+  const slot = "weapon";
+  const itemId = "sword-1";
+
+  it("supprime CharacterEquipment et met Inventory.equipped à false", async () => {
+    const equipment = { characterId, itemId, slot } as CharacterEquipment;
+    const inv = { id: "inv-1", quantity: 1, equipped: true, item: makeItem({ id: itemId }) } as Inventory;
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(equipment)  // CharacterEquipment found
+        .mockResolvedValueOnce(inv),       // Inventory row
+      save: jest.fn(async (_entity, value) => value),
+      delete: jest.fn(),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+
+    const result = await service.unequipItem(characterId, slot);
+
+    expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot });
+    expect(result.equipped).toBe(false);
+  });
+
+  it("refuse si aucune CharacterEquipment n existe pour le slot", async () => {
+    const manager = makeManager({
+      findOne: jest.fn().mockResolvedValueOnce(null),  // no CharacterEquipment
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+
+    await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
+    expect(manager.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuse si aucune ligne Inventory ne correspond à l item equipe", async () => {
+    const equipment = { characterId, itemId, slot } as CharacterEquipment;
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(equipment)  // CharacterEquipment found
+        .mockResolvedValueOnce(null),      // Inventory row: not found
+      save: jest.fn(),
+      delete: jest.fn(),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+
+    await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

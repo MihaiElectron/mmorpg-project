@@ -6,9 +6,10 @@
  * - Récupération de l’inventaire complet
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { Character } from '../characters/entities/character.entity';
@@ -25,6 +26,11 @@ export class InventoryService {
 
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
+
+    @InjectRepository(CharacterEquipment)
+    private readonly equipmentRepository: Repository<CharacterEquipment>,
+
+    private readonly dataSource: DataSource,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -90,34 +96,71 @@ export class InventoryService {
 
   // ---------------------------------------------------------------------------
   // Équiper un item depuis l'inventaire
+  // Crée une ligne CharacterEquipment (source de vérité).
+  // Met aussi à jour Inventory.equipped (transitoire — requis par WorldItemService.findInventoryForUpdate).
   // ---------------------------------------------------------------------------
   async equipItem(characterId: string, itemId: string): Promise<Inventory> {
-    const inventory = await this.inventoryRepository.findOne({
-      where: { character: { id: characterId }, item: { id: itemId } },
-      relations: ['item', 'character'],
-    });
-    if (!inventory) throw new NotFoundException('Item not in inventory');
+    const item = await this.itemRepository.findOne({ where: { id: itemId } });
+    if (!item) throw new NotFoundException(`Item ${itemId} not found`);
+    if (!item.slot) throw new BadRequestException('Item has no slot defined');
 
-    inventory.equipped = true;
-    return this.inventoryRepository.save(inventory);
+    return this.dataSource.transaction(async (manager) => {
+      // Retire l'équipement existant dans ce slot (s'il y en a un)
+      const existing = await manager.findOne(CharacterEquipment, {
+        where: { characterId, slot: item.slot },
+      });
+      if (existing) {
+        await manager.delete(CharacterEquipment, { characterId, slot: item.slot });
+        const oldInv = await manager.findOne(Inventory, {
+          where: { character: { id: characterId }, item: { id: existing.itemId } },
+        });
+        if (oldInv) {
+          oldInv.equipped = false;
+          await manager.save(Inventory, oldInv);
+        }
+      }
+
+      // Crée le nouvel équipement
+      const equipment = manager.create(CharacterEquipment, {
+        characterId,
+        itemId: item.id,
+        slot: item.slot,
+      });
+      await manager.save(CharacterEquipment, equipment);
+
+      // Met à jour Inventory.equipped pour compat WorldItemService (transitoire)
+      const inv = await manager.findOne(Inventory, {
+        where: { character: { id: characterId }, item: { id: item.id } },
+        relations: ['item'],
+      });
+      if (!inv) throw new NotFoundException('Item not in inventory');
+      inv.equipped = true;
+      return manager.save(Inventory, inv);
+    });
   }
 
   // ---------------------------------------------------------------------------
   // Déséquiper un item selon le slot
+  // Supprime la ligne CharacterEquipment (source de vérité).
+  // Met aussi à jour Inventory.equipped (transitoire — requis par WorldItemService.findInventoryForUpdate).
   // ---------------------------------------------------------------------------
   async unequipItem(characterId: string, slot: string): Promise<Inventory> {
-    const inventory = await this.inventoryRepository
-      .createQueryBuilder('inv')
-      .leftJoinAndSelect('inv.item', 'item')
-      .leftJoinAndSelect('inv.character', 'character')
-      .where('character.id = :characterId', { characterId })
-      .andWhere('item.slot = :slot', { slot })
-      .getOne();
+    return this.dataSource.transaction(async (manager) => {
+      const equipment = await manager.findOne(CharacterEquipment, {
+        where: { characterId, slot },
+      });
+      if (!equipment) throw new NotFoundException(`No item equipped in slot ${slot}`);
 
-    if (!inventory) throw new NotFoundException('Item not equipped in slot');
+      await manager.delete(CharacterEquipment, { characterId, slot });
 
-    inventory.equipped = false;
-    return this.inventoryRepository.save(inventory);
+      const inv = await manager.findOne(Inventory, {
+        where: { character: { id: characterId }, item: { id: equipment.itemId } },
+        relations: ['item'],
+      });
+      if (!inv) throw new NotFoundException('Inventory row not found for equipped item');
+      inv.equipped = false;
+      return manager.save(Inventory, inv);
+    });
   }
 
   // ---------------------------------------------------------------------------
