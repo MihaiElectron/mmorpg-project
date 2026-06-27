@@ -12,15 +12,17 @@ import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
 import { Inventory } from './entities/inventory.entity';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { Item } from '../items/entities/item.entity';
+import { InventoryProjectionService } from './projection/inventory-projection.service';
 
 @Module({
   imports: [
-    // On importe toutes les entités nécessaires pour le service
-    TypeOrmModule.forFeature([Inventory, Character, Item]),
+    TypeOrmModule.forFeature([Inventory, Character, Item, ItemInstance, CharacterEquipment]),
   ],
-  providers: [InventoryService],
+  providers: [InventoryService, InventoryProjectionService],
   controllers: [InventoryController],
-  exports: [InventoryService],
+  exports: [InventoryService, InventoryProjectionService],
 })
 export class InventoryModule {}

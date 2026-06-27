@@ -13,6 +13,8 @@ import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto, EquipmentSlot } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
 import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
+import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
@@ -31,6 +33,7 @@ export class CharacterService {
     @InjectRepository(Inventory)
     private readonly inventoryRepository: Repository<Inventory>,
     private readonly dataSource: DataSource,
+    private readonly inventoryProjection: InventoryProjectionService,
   ) {}
 
   /**
@@ -71,6 +74,19 @@ export class CharacterService {
     if (!character)
       throw new NotFoundException(`No character found for user ${userId}`);
     return character;
+  }
+
+  async findFirstByUserProjected(
+    userId: string,
+  ): Promise<Omit<Character, 'inventory'> & { inventory: InventoryEntryDto[] }> {
+    const character = await this.characterRepository.findOne({
+      where: { userId },
+      relations: ['equipment', 'equipment.item'],
+      order: { createdAt: 'ASC' },
+    });
+    if (!character) throw new NotFoundException(`No character found for user ${userId}`);
+    const inventory = await this.inventoryProjection.project(character.id);
+    return Object.assign(character, { inventory });
   }
 
   /**

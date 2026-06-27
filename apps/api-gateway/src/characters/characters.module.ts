@@ -9,12 +9,14 @@ import { CharacterController } from './character.controller';
 import { ItemModule } from '../items/item.module';
 import { Item } from '../items/entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
+import { InventoryModule } from '../inventory/inventory.module';
 import { SkillsModule } from '../skills/skills.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Character, CharacterEquipment, Item, Inventory]),
     ItemModule,
+    InventoryModule,
     SkillsModule,
   ],
   controllers: [CharacterController],

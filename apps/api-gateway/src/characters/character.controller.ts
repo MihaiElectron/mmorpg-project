@@ -48,7 +48,7 @@ export class CharacterController {
    */
   @Get('me')
   findMe(@Request() req) {
-    return this.characterService.findFirstByUser(req.user.userId);
+    return this.characterService.findFirstByUserProjected(req.user.userId);
   }
 
   /**
