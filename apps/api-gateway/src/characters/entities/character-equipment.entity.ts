@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -43,6 +44,10 @@ export class CharacterEquipment {
 
   @Column()
   slot: string; // 'head', 'chest', 'legs', 'weapon', 'shield', etc.
+
+  @Column({ type: 'varchar', nullable: true, default: null })
+  @Index()
+  itemInstanceId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
