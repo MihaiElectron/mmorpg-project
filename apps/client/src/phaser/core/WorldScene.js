@@ -1359,7 +1359,9 @@ export default class WorldScene extends Phaser.Scene {
     if (textureKey && !this.textures.exists(textureKey)) {
       const img = new Image();
       img.onload = () => {
-        this.textures.addImage(textureKey, img);
+        if (!this.textures.exists(textureKey)) {
+          this.textures.addImage(textureKey, img);
+        }
         buildContainer();
       };
       img.onerror = () => buildContainer();
