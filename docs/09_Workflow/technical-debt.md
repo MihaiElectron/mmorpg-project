@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-28
+- Last updated: 2026-06-29
 - Depends on: docs/09_Workflow/runtime-roadmap.md, docs/09_Workflow/audit-alerts.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/economy-foundation.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md
 - Used by: Project owner, developers, reviewers, repository-aware coding agents
 
@@ -37,16 +37,18 @@ Priorities:
 | ID | Titre | Priorité | Phase prévue | Statut |
 |---|---|---|---|---|
 | TD-002 | `InventoryService` / équipement legacy par `Item` catalogue | High | Equipment Runtime V2 | Open |
-| TD-003 | `WorldItem.itemInstanceId` non validé par relation/transition | High | WorldItem Hybrid | Open |
+| TD-003 | `WorldItem.itemInstanceId` non validé par relation/transition | High | WorldItem Hybrid | Resolved |
 | TD-004 | `getOrCreateWallet` race condition | High | Economy hardening | Open |
 | TD-005 | Vérification `characterId/userId` incomplète dans `equipItem` | Blocker | Equipment Runtime V2 / Security hardening | Open |
 | TD-006 | `CharacterEquipment.itemInstanceId` nullable sans source de vérité | High | Equipment Runtime V2 | Open |
 | TD-007 | `ItemInstance` sans historique append-only | Medium | ItemInstance Runtime hardening | Open |
-| TD-008 | `ItemInstance` sans validations métier de transition | High | Inventory Hybrid | Open |
+| TD-008 | `ItemInstance` sans validations métier de transition | High | Inventory Hybrid | In Progress |
 | TD-009 | Craft produit encore l'équipement comme stack `Item + quantity` | High | Craft Hybrid | Open |
 | TD-010 | Loot produit encore uniquement des résultats stack-like | Medium | Loot Hybrid | Open |
 | TD-011 | Auction House dépend d'un verrouillage `ItemInstance` non implémenté | Blocker | Auction House | Open |
 | TD-012 | Cascades destructives du catalogue `Item` vers possessions joueur | Blocker | Persistence hardening | Open |
+| TD-013 | `removeExpiredItems` scheduler non branché | Medium | WorldItem maintenance | Open |
+| TD-014 | Race condition `removeExpiredItems` sur les stacks | Low | WorldItem hardening | Open |
 
 ## Details
 
@@ -76,7 +78,10 @@ Priorities:
 - Décision prise : accepter le champ préparatoire, puis terminer la cohérence en
   WorldItem Hybrid.
 - Phase prévue de résolution : WorldItem Hybrid
-- Statut : Open
+- Statut : Resolved
+- Résolution : commits `e07e9d6`, `2f7c736`, `941b30b`. DROP, PICKUP et EXPIRE
+  sont implémentés avec verrous pessimistes et transitions atomiques dans
+  `WorldItemService`. Aucune `ItemInstance` n'est supprimée.
 
 ### TD-004 - `getOrCreateWallet` race condition
 
@@ -140,7 +145,12 @@ Priorities:
 - Décision prise : introduire les transitions serveur pendant Inventory Hybrid,
   avant Auction House.
 - Phase prévue de résolution : Inventory Hybrid
-- Statut : Open
+- Statut : In Progress
+- Progression : WorldItem Hybrid (commits `e07e9d6`, `2f7c736`, `941b30b`)
+  implémente des transitions atomiques avec verrous pessimistes pour le cycle
+  DROP/PICKUP/EXPIRE. Les transitions pour Loot, Craft, Auction, Bank et Mail
+  restent à implémenter dans leurs phases respectives. Pas de service centralisé
+  de transition — chaque domaine implémente son propre pattern.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -188,6 +198,36 @@ Priorities:
 - Décision prise : remplacer par `RESTRICT`, soft-delete ou workflow admin
   contrôlé pendant le hardening persistance.
 - Phase prévue de résolution : Persistence hardening
+- Statut : Open
+
+### TD-013 - `removeExpiredItems` scheduler non branché
+
+- Description : `WorldItemService.removeExpiredItems()` est définie et testée,
+  mais aucun `@Cron` ou scheduler NestJS ne l'appelle automatiquement. Les
+  WorldItems avec `expiresAt` dépassé ne sont nettoyés que si une tâche
+  externe déclenche la méthode manuellement.
+- Impact : les objets STACK et INSTANCE expirés restent en état `spawned` en
+  DB et visibles côté client jusqu'au prochain redémarrage ou déclenchement
+  manuel.
+- Priorité : Medium
+- Décision prise : implémenter le scheduler après validation fonctionnelle de
+  WorldItem Hybrid.
+- Phase prévue de résolution : WorldItem maintenance
+- Statut : Open
+
+### TD-014 - Race condition `removeExpiredItems` sur les stacks
+
+- Description : l'expiration des WorldItems STACK utilise un `find` puis un
+  `save` en bulk hors transaction. Un pickup concurrent entre ces deux
+  opérations transiterait le WorldItem en `picked`, mais le save bulk le
+  repasse à `expired`.
+- Impact : très faible en pratique (fenêtre étroite, impact limité à la
+  persistance d'état d'un item au sol), mais divergence observable entre le
+  client et la DB.
+- Priorité : Low
+- Décision prise : accepter la dette pendant WorldItem Hybrid. Reporter vers
+  WorldItem hardening si la fréquence d'expiration monte.
+- Phase prévue de résolution : WorldItem hardening
 - Statut : Open
 
 ## Maintenance Rules

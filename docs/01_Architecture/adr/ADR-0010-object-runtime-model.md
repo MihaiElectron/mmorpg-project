@@ -381,11 +381,42 @@ Recommended future implementation order:
 7. Mail and Bank support for stack and instance containers.
 8. Guild Storage and Housing storage.
 
+## Implementation Notes
+
+The following open questions have been answered by the WorldItem Hybrid
+implementation (commits `e07e9d6`, `2f7c736`, `941b30b`):
+
+**Enum names (resolved):**
+`ItemInstanceState` — `AVAILABLE | EQUIPPED | LOCKED | LISTED |
+SOLD_PENDING_CLAIM | IN_WORLD | IN_MAIL | IN_BANK | IN_GUILD_STORAGE |
+IN_CRAFT_ORDER | DESTROYED | ARCHIVED`
+
+`ItemInstanceContainerType` — `INVENTORY | EQUIPMENT | WORLD | AUCTION |
+MAIL | BANK | GUILD_STORAGE | HOUSING | CRAFT_ORDER | NONE`
+
+**`containerId` convention (resolved):**
+
+| containerType | containerId value |
+|---|---|
+| `INVENTORY` | `characterId` |
+| `EQUIPMENT` | TBD (CharacterEquipment.id — Equipment Runtime V2) |
+| `WORLD` | `worldItem.id` |
+| `NONE` (ARCHIVED) | `null` |
+
+All other container types remain defined but unimplemented.
+
+**Invariant validation (Inventory Hybrid + WorldItem Hybrid):**
+
+- I1 (Single Active Container): enforced by pessimistic write lock + strict
+  filter on `(id, containerType, containerId)` in DROP, PICKUP, and EXPIRE.
+  No `ItemInstance` is deleted; ARCHIVED instances remain in DB with
+  `containerType = NONE, containerId = null`.
+- I4 (Legal Owner vs Physical Container): `ownerId` is never changed during
+  DROP, PICKUP, or EXPIRE — it identifies the legal owner throughout all
+  world transitions.
+
 ## Open Questions
 
-- What are the exact first enum names for object states and containers?
-- Does `containerId` reference a row id, owner id, or domain-specific id for
-  each container type?
 - What is the first append-only history structure for item movements?
 - Which current seeded items should be migrated first into the taxonomy?
 - Should commodity stack markets be designed as Auction House V2 or as a

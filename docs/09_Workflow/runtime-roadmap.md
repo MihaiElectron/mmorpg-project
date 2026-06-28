@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-28
+- Last updated: 2026-06-29
 - Depends on: docs/08_Gameplay/economy-foundation.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/auction-house-specifications.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md, docs/09_Workflow/audit-alerts.md
 - Used by: Project owner, backend developers, DevTools developers, repository-aware coding agents
 
@@ -30,9 +30,9 @@ Statuses:
 | ItemInstance Foundation | Créer la fondation Runtime `ItemInstance` avec identité, état et conteneur. | Completed | ADR-0010, Item Taxonomy | `f17dc15` |
 | CharacterEquipment Preparation | Préparer `CharacterEquipment` à référencer un `ItemInstance` sans casser le modèle legacy. | Completed | ItemInstance Foundation | `b2048ee` |
 | WorldItem Preparation | Préparer `WorldItem` à référencer un `ItemInstance` sans casser les drops stackables actuels. | Completed | ItemInstance Foundation | `1c07e7d` |
-| Inventory Hybrid | Faire coexister officiellement stacks d'inventaire et `ItemInstance` dans les lectures/écritures Runtime. | In Progress | ItemInstance Foundation, CharacterEquipment Preparation, WorldItem Preparation | `f37265b` |
+| Inventory Hybrid | Faire coexister officiellement stacks d'inventaire et `ItemInstance` dans les lectures/écritures Runtime. | Completed | ItemInstance Foundation, CharacterEquipment Preparation, WorldItem Preparation | `f37265b`, `626ed6f`, `e07e9d6`, `2f7c736` |
 | Equipment Runtime V2 | Équiper/déséquiper des `ItemInstance` comme source de vérité, retirer la dépendance legacy à `Inventory.equipped`. | In Progress | Inventory Hybrid, CharacterEquipment Preparation | `b8ac4a6` |
-| WorldItem Hybrid | Gérer pickup/drop stackable et unique via `WorldItem`, avec transitions `ItemInstance` validées. | Not Started | Inventory Hybrid, WorldItem Preparation | N/A |
+| WorldItem Hybrid | Gérer pickup/drop stackable et unique via `WorldItem`, avec transitions `ItemInstance` validées. | Completed | Inventory Hybrid, WorldItem Preparation | `e07e9d6`, `2f7c736`, `941b30b` |
 | Loot Hybrid | Produire soit des stacks, soit des `ItemInstance` selon la taxonomie d'objet. | Not Started | WorldItem Hybrid, Item Taxonomy | N/A |
 | Craft Hybrid | Consommer/produire stacks et `ItemInstance`, avec craftedBy/provenance pour les sorties uniques. | Not Started | Inventory Hybrid, Equipment Runtime V2, Loot Hybrid | N/A |
 | Auction House | Implémenter le MVP prix fixe avec `buyoutPriceBronze`, verrouillage `ItemInstance`, transfert Economy et claim acheteur. | Not Started | Economy Foundation, Inventory Hybrid, Equipment Runtime V2, WorldItem Hybrid | N/A |
@@ -115,28 +115,34 @@ Completion evidence:
 - `apps/api-gateway/src/world-items/world-item.service.spec.ts`
 - `apps/api-gateway/src/migrations/1782777600000-AddItemInstanceIdToWorldItem.ts`
 
-This is preparation only. WorldItem Hybrid is not complete.
+This was preparation only. WorldItem Hybrid is now complete.
 
 ### Inventory Hybrid
 
 Objective:
 
 - Project stack inventory rows and `ItemInstance` inventory objects through a
-  single read model.
+  single read model, and provide stack vs `ItemInstance` resolution for write
+  flows.
 
-Progress evidence:
+Completion evidence:
 
 - `apps/api-gateway/src/inventory/projection/inventory-projection.service.ts`
 - `apps/api-gateway/src/inventory/projection/inventory-entry.mapper.ts`
 - `apps/api-gateway/src/inventory/projection/inventory-entry.dto.ts`
 - `apps/api-gateway/src/inventory/projection/inventory-projection.service.spec.ts`
-- commit `f37265b`
+- `apps/api-gateway/src/inventory/resolution/inventory-entry-resolver.service.ts`
+- `apps/api-gateway/src/inventory/resolution/inventory-entry-resolver.service.spec.ts`
+- `apps/api-gateway/src/inventory/resolution/inventory-entry-resolution.ts`
+- commits `f37265b`, `626ed6f`, `e07e9d6`, `2f7c736`
 
 Current status:
 
-- In Progress. Hybrid projection exists for reads, but write flows still need
-  full stack vs `ItemInstance` transition rules before the phase can be marked
-  Completed.
+- Completed. Hybrid projection for reads exists. `InventoryEntryResolverService`
+  resolves `inventoryEntryId` to STACK or INSTANCE within a transaction.
+  Write flows for DROP (INSTANCE → WORLD) and PICKUP (WORLD → INVENTORY) are
+  implemented and tested in `WorldItemService`. Remaining write paths (Craft,
+  Loot) are deferred to their respective phases.
 
 ### Equipment Runtime V2
 
@@ -158,17 +164,48 @@ Current status:
   compatibility field and equip/unequip still use catalogue `Item` ids rather
   than concrete `ItemInstance` ids.
 
+### WorldItem Hybrid
+
+Objective:
+
+- Handle stackable and unique world drops and pickups with validated
+  `ItemInstance` transitions. Expire world-dropped `ItemInstance` objects
+  without physical deletion.
+
+Completion evidence:
+
+- `apps/api-gateway/src/world-items/world-item.service.ts`
+  — `dropInventoryItem` (STACK/INSTANCE branch, `dropInstance`, `findInstanceForUpdate`)
+  — `pickupItem` (STACK/INSTANCE branch, `pickupInstance`, `findInstanceForPickup`)
+  — `removeExpiredItems` (STACK/INSTANCE branch, `expireInstance`, `findInstanceForExpiration`)
+- `apps/api-gateway/src/world-items/world-item.service.spec.ts`
+- `apps/api-gateway/src/world-items/world-items.gateway.ts`
+- `apps/api-gateway/src/world-items/world-items.gateway.spec.ts`
+- commits `e07e9d6`, `2f7c736`, `941b30b`
+
+Transitions implemented:
+
+| Operation | state | containerType | containerId |
+|---|---|---|---|
+| DROP | `AVAILABLE → IN_WORLD` | `INVENTORY → WORLD` | `characterId → worldItem.id` |
+| PICKUP | `IN_WORLD → AVAILABLE` | `WORLD → INVENTORY` | `worldItem.id → characterId` |
+| EXPIRE | `IN_WORLD → ARCHIVED` | `WORLD → NONE` | `worldItem.id → null` |
+
+All transitions use pessimistic write locks and are wrapped in a single
+`dataSource.transaction`. No `ItemInstance` is ever deleted.
+
+Known remaining debts: `removeExpiredItems` scheduler not yet wired (TD-013),
+race condition on stack expiration (TD-014).
+
 ## Next Recommended Order
 
-1. Complete Inventory Hybrid write transitions.
-2. Complete Equipment Runtime V2 with `ItemInstance` equip/unequip.
-3. WorldItem Hybrid.
-4. Loot Hybrid.
-5. Craft Hybrid.
-6. Auction House fixed-price MVP.
-7. Bank and Mail.
-8. Guild Storage.
-9. Housing.
+1. Complete Equipment Runtime V2 with `ItemInstance` equip/unequip.
+2. Loot Hybrid.
+3. Craft Hybrid.
+4. Auction House fixed-price MVP.
+5. Bank and Mail.
+6. Guild Storage.
+7. Housing.
 
 ## Maintenance Rules
 
