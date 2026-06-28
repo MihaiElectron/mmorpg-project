@@ -531,4 +531,70 @@ describe("EconomyService", () => {
       expect(typeof balance).toBe("bigint");
     });
   });
+
+  // ── transferWithinManager ─────────────────────────────────────────────────
+
+  describe("transferWithinManager", () => {
+    it("debite la source et credite la destination dans le manager fourni", async () => {
+      const src = makeWallet("w-src", "1000");
+      const dst = makeWallet("w-dst", "200");
+      const manager = makeManager({ "w-src": src, "w-dst": dst });
+
+      await service.transferWithinManager(manager, {
+        type: TransactionType.AUCTION_BUY,
+        sourceWalletId: "w-src",
+        destinationWalletId: "w-dst",
+        amountBronze: 300n,
+      });
+
+      expect(src.balanceBronze).toBe("700");
+      expect(dst.balanceBronze).toBe("500");
+    });
+
+    it("leve BadRequestException si solde insuffisant", async () => {
+      const src = makeWallet("w-src", "50");
+      const dst = makeWallet("w-dst", "0");
+      const manager = makeManager({ "w-src": src, "w-dst": dst });
+
+      await expect(
+        service.transferWithinManager(manager, {
+          type: TransactionType.AUCTION_BUY,
+          sourceWalletId: "w-src",
+          destinationWalletId: "w-dst",
+          amountBronze: 100n,
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("leve BadRequestException si montant zero", async () => {
+      const src = makeWallet("w-src", "100");
+      const dst = makeWallet("w-dst", "0");
+      const manager = makeManager({ "w-src": src, "w-dst": dst });
+
+      await expect(
+        service.transferWithinManager(manager, {
+          type: TransactionType.AUCTION_BUY,
+          sourceWalletId: "w-src",
+          destinationWalletId: "w-dst",
+          amountBronze: 0n,
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("utilise le manager fourni (sans ouvrir sa propre transaction)", async () => {
+      const src = makeWallet("w-src", "1000");
+      const dst = makeWallet("w-dst", "0");
+      const manager = makeManager({ "w-src": src, "w-dst": dst });
+
+      await service.transferWithinManager(manager, {
+        type: TransactionType.AUCTION_BUY,
+        sourceWalletId: "w-src",
+        destinationWalletId: "w-dst",
+        amountBronze: 100n,
+      });
+
+      // dataSource.transaction n'a pas été appelé (manager fourni directement)
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+  });
 });

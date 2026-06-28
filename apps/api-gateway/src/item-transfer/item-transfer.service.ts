@@ -15,7 +15,11 @@ export type ItemTransition =
   | { type: 'UNEQUIP'; characterId: string }
   | { type: 'DROP_TO_WORLD'; worldItemId: string }
   | { type: 'PICKUP_FROM_WORLD'; worldItemId: string; characterId: string }
-  | { type: 'ARCHIVE'; worldItemId: string };
+  | { type: 'ARCHIVE'; worldItemId: string }
+  | { type: 'LIST_FOR_AUCTION'; listingId: string }
+  | { type: 'SELL_AUCTION'; listingId: string }
+  | { type: 'CLAIM_BUYER'; listingId: string; buyerCharacterId: string }
+  | { type: 'RETURN_TO_SELLER'; listingId: string; sellerCharacterId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -47,6 +51,14 @@ export class ItemTransferService {
         return this.applyPickupFromWorld(manager, instance, requesterId, transition);
       case 'ARCHIVE':
         return this.applyArchive(manager, instance, transition.worldItemId);
+      case 'LIST_FOR_AUCTION':
+        return this.applyListForAuction(manager, instance, requesterId, transition.listingId);
+      case 'SELL_AUCTION':
+        return this.applySellAuction(manager, instance, transition.listingId);
+      case 'CLAIM_BUYER':
+        return this.applyClaimBuyer(manager, instance, transition);
+      case 'RETURN_TO_SELLER':
+        return this.applyReturnToSeller(manager, instance, transition);
     }
   }
 
@@ -176,6 +188,65 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.ARCHIVED;
     instance.containerType = ItemInstanceContainerType.NONE;
     instance.containerId = null;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Auction transitions ───────────────────────────────────────────────────
+
+  private async applyListForAuction(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    listingId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.LISTED;
+    instance.containerType = ItemInstanceContainerType.AUCTION;
+    instance.containerId = listingId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applySellAuction(
+    manager: EntityManager,
+    instance: ItemInstance,
+    listingId: string,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.LISTED);
+    this.validateContainer(instance, ItemInstanceContainerType.AUCTION, listingId);
+
+    instance.state = ItemInstanceState.SOLD_PENDING_CLAIM;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyClaimBuyer(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'CLAIM_BUYER' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.SOLD_PENDING_CLAIM);
+    this.validateContainer(instance, ItemInstanceContainerType.AUCTION, transition.listingId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.buyerCharacterId;
+    instance.ownerId = transition.buyerCharacterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyReturnToSeller(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'RETURN_TO_SELLER' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.LISTED);
+    this.validateContainer(instance, ItemInstanceContainerType.AUCTION, transition.listingId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.sellerCharacterId;
     return manager.save(ItemInstance, instance);
   }
 }

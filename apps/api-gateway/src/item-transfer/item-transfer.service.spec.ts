@@ -356,4 +356,199 @@ describe("ItemTransferService", () => {
       })
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  // ── LIST_FOR_AUCTION ───────────────────────────────────────────────────────
+
+  describe("transition LIST_FOR_AUCTION", () => {
+    it("transitionne AVAILABLE+INVENTORY → LISTED+AUCTION+listingId", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "LIST_FOR_AUCTION", listingId: "listing-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.LISTED);
+      expect(result.containerType).toBe(ItemInstanceContainerType.AUCTION);
+      expect(result.containerId).toBe("listing-1");
+    });
+
+    it("refuse si owner incorrect", async () => {
+      const instance = makeInstance({ ownerId: "other" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "LIST_FOR_AUCTION", listingId: "listing-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.EQUIPPED, containerType: ItemInstanceContainerType.EQUIPMENT });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "LIST_FOR_AUCTION", listingId: "listing-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY", async () => {
+      const instance = makeInstance({ containerType: ItemInstanceContainerType.EQUIPMENT });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "LIST_FOR_AUCTION", listingId: "listing-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── SELL_AUCTION ───────────────────────────────────────────────────────────
+
+  describe("transition SELL_AUCTION", () => {
+    it("transitionne LISTED+AUCTION → SOLD_PENDING_CLAIM+AUCTION+listingId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "SELL_AUCTION", listingId: "listing-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.SOLD_PENDING_CLAIM);
+      expect(result.containerType).toBe(ItemInstanceContainerType.AUCTION);
+      expect(result.containerId).toBe("listing-1");
+    });
+
+    it("refuse si state != LISTED", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "SELL_AUCTION", listingId: "listing-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != listingId (double achat)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "SELL_AUCTION", listingId: "listing-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── CLAIM_BUYER ────────────────────────────────────────────────────────────
+
+  describe("transition CLAIM_BUYER", () => {
+    it("transitionne SOLD_PENDING_CLAIM+AUCTION → AVAILABLE+INVENTORY+buyerCharacterId et change ownerId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.SOLD_PENDING_CLAIM,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-1",
+        ownerId: "seller-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "buyer-1",
+        transition: { type: "CLAIM_BUYER", listingId: "listing-1", buyerCharacterId: "buyer-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("buyer-1");
+      expect(result.ownerId).toBe("buyer-1");
+    });
+
+    it("refuse si state != SOLD_PENDING_CLAIM", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-1",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "buyer-1",
+          transition: { type: "CLAIM_BUYER", listingId: "listing-1", buyerCharacterId: "buyer-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != listingId (double claim)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.SOLD_PENDING_CLAIM,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "buyer-1",
+          transition: { type: "CLAIM_BUYER", listingId: "listing-1", buyerCharacterId: "buyer-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── RETURN_TO_SELLER ───────────────────────────────────────────────────────
+
+  describe("transition RETURN_TO_SELLER", () => {
+    it("transitionne LISTED+AUCTION → AVAILABLE+INVENTORY+sellerCharacterId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-1",
+        ownerId: "seller-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "RETURN_TO_SELLER", listingId: "listing-1", sellerCharacterId: "seller-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("seller-1");
+      expect(result.ownerId).toBe("seller-1");
+    });
+
+    it("refuse si state != LISTED", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "RETURN_TO_SELLER", listingId: "listing-1", sellerCharacterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != listingId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+        containerId: "listing-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "RETURN_TO_SELLER", listingId: "listing-1", sellerCharacterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

@@ -32,6 +32,7 @@ import { ItemModule } from './items/item.module';
 import { WorldItemsModule } from './world-items/world-items.module';
 import { EconomyModule } from './economy/economy.module';
 import { ItemInstancesModule } from './item-instances/item-instances.module';
+import { AuctionModule } from './auction/auction.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { ItemInstancesModule } from './item-instances/item-instances.module';
     WorldItemsModule,
     EconomyModule,
     ItemInstancesModule,
+    AuctionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

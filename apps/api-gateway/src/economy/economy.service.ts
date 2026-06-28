@@ -208,73 +208,87 @@ export class EconomyService {
     }
 
     return this.dataSource.transaction(async (manager) => {
-      // Verrous dans l'ordre déterministe pour éviter les deadlocks
-      const ids = [params.sourceWalletId, params.destinationWalletId].sort();
-      const walletMap = new Map<string, Wallet>();
-      for (const id of ids) {
-        walletMap.set(id, await this.lockWallet(manager, id));
-      }
-
-      const sourceWallet = walletMap.get(params.sourceWalletId)!;
-      const destWallet = walletMap.get(params.destinationWalletId)!;
-      this.assertWalletOperable(sourceWallet);
-      this.assertWalletOperable(destWallet);
-
-      const sourceBalance = BigInt(sourceWallet.balanceBronze);
-      if (sourceBalance < params.amountBronze) {
-        throw new BadRequestException('Solde insuffisant');
-      }
-
-      const newSourceBalance = sourceBalance - params.amountBronze;
-      const newDestBalance = BigInt(destWallet.balanceBronze) + params.amountBronze;
-
-      sourceWallet.balanceBronze = newSourceBalance.toString();
-      destWallet.balanceBronze = newDestBalance.toString();
-      await manager.save(Wallet, sourceWallet);
-      await manager.save(Wallet, destWallet);
-
-      const tx = manager.create(EconomicTransaction, {
-        type: params.type,
-        status: TransactionStatus.APPLIED,
-        sourceWalletId: params.sourceWalletId,
-        destinationWalletId: params.destinationWalletId,
-        amountBronze: params.amountBronze.toString(),
-        idempotencyKey: params.idempotencyKey ?? null,
-        actorId: params.actorId ?? null,
-        correlationId: params.correlationId ?? null,
-        metadata: params.metadata ?? null,
-        committedAt: new Date(),
-      });
-      const savedTx = await manager.save(EconomicTransaction, tx);
-
-      await manager.save(
-        LedgerEntry,
-        manager.create(LedgerEntry, {
-          transactionId: savedTx.id,
-          walletId: params.sourceWalletId,
-          direction: LedgerDirection.DEBIT,
-          amountBronze: params.amountBronze.toString(),
-          balanceAfterBronze: newSourceBalance.toString(),
-          entryType: params.type,
-          metadata: params.metadata ?? null,
-        }),
-      );
-
-      await manager.save(
-        LedgerEntry,
-        manager.create(LedgerEntry, {
-          transactionId: savedTx.id,
-          walletId: params.destinationWalletId,
-          direction: LedgerDirection.CREDIT,
-          amountBronze: params.amountBronze.toString(),
-          balanceAfterBronze: newDestBalance.toString(),
-          entryType: params.type,
-          metadata: params.metadata ?? null,
-        }),
-      );
-
-      return savedTx;
+      return this.transferWithinManager(manager, params);
     });
+  }
+
+  /**
+   * Transfère des fonds dans un EntityManager fourni par l'appelant.
+   * L'appelant est responsable d'ouvrir la transaction.
+   * Pas de vérification d'idempotence — l'appelant gère la protection contre les replays.
+   */
+  async transferWithinManager(
+    manager: EntityManager,
+    params: TransferParams,
+  ): Promise<EconomicTransaction> {
+    this.assertPositiveAmount(params.amountBronze);
+
+    // Verrous dans l'ordre déterministe pour éviter les deadlocks
+    const ids = [params.sourceWalletId, params.destinationWalletId].sort();
+    const walletMap = new Map<string, Wallet>();
+    for (const id of ids) {
+      walletMap.set(id, await this.lockWallet(manager, id));
+    }
+
+    const sourceWallet = walletMap.get(params.sourceWalletId)!;
+    const destWallet = walletMap.get(params.destinationWalletId)!;
+    this.assertWalletOperable(sourceWallet);
+    this.assertWalletOperable(destWallet);
+
+    const sourceBalance = BigInt(sourceWallet.balanceBronze);
+    if (sourceBalance < params.amountBronze) {
+      throw new BadRequestException('Solde insuffisant');
+    }
+
+    const newSourceBalance = sourceBalance - params.amountBronze;
+    const newDestBalance = BigInt(destWallet.balanceBronze) + params.amountBronze;
+
+    sourceWallet.balanceBronze = newSourceBalance.toString();
+    destWallet.balanceBronze = newDestBalance.toString();
+    await manager.save(Wallet, sourceWallet);
+    await manager.save(Wallet, destWallet);
+
+    const tx = manager.create(EconomicTransaction, {
+      type: params.type,
+      status: TransactionStatus.APPLIED,
+      sourceWalletId: params.sourceWalletId,
+      destinationWalletId: params.destinationWalletId,
+      amountBronze: params.amountBronze.toString(),
+      idempotencyKey: params.idempotencyKey ?? null,
+      actorId: params.actorId ?? null,
+      correlationId: params.correlationId ?? null,
+      metadata: params.metadata ?? null,
+      committedAt: new Date(),
+    });
+    const savedTx = await manager.save(EconomicTransaction, tx);
+
+    await manager.save(
+      LedgerEntry,
+      manager.create(LedgerEntry, {
+        transactionId: savedTx.id,
+        walletId: params.sourceWalletId,
+        direction: LedgerDirection.DEBIT,
+        amountBronze: params.amountBronze.toString(),
+        balanceAfterBronze: newSourceBalance.toString(),
+        entryType: params.type,
+        metadata: params.metadata ?? null,
+      }),
+    );
+
+    await manager.save(
+      LedgerEntry,
+      manager.create(LedgerEntry, {
+        transactionId: savedTx.id,
+        walletId: params.destinationWalletId,
+        direction: LedgerDirection.CREDIT,
+        amountBronze: params.amountBronze.toString(),
+        balanceAfterBronze: newDestBalance.toString(),
+        entryType: params.type,
+        metadata: params.metadata ?? null,
+      }),
+    );
+
+    return savedTx;
   }
 
   private assertIdempotentCompatibility(
