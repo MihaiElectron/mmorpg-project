@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-28_
-_Session : 2026-06-28 (Loot Hybrid — ItemMaterializationService + ObjectMode)_
+_Dernière mise à jour : 2026-06-29_
+_Session : 2026-06-29 (Runtime Transfer Pipeline — ItemTransferService)_
 _Branche : main_
 _État : développement local_
 
@@ -37,6 +37,15 @@ avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensio
 Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
 Onglets Talents/Succès placeholder actifs.
 
+**Runtime Transfer Pipeline opérationnel (2026-06-29).** `ItemTransferService`
+(`src/item-transfer/`) est le point d'entrée unique pour toutes les transitions
+Runtime `ItemInstance` : EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD, ARCHIVE.
+Reçoit un `EntityManager` de l'appelant, pose lui-même le verrou pessimiste, valide
+les invariants owner/state/container, applique la mutation. `InventoryService`,
+`CharacterService` et `WorldItemService` ne mutent plus `ItemInstance` directement.
+TD-008 In Progress (les domaines Auction, Bank, Mail, Trade, Guild Storage,
+Housing restent à connecter).
+
 **Pipeline Loot Hybrid opérationnel (2026-06-28).** `Item.objectMode` (enum `STACKABLE | INSTANCE`)
 est la source de vérité pour la matérialisation du loot. `LootService` reste pur et synchrone
 (aucune dépendance DB). `ItemMaterializationService` reçoit un `EntityManager` de l'appelant
@@ -56,6 +65,19 @@ autoritaire.
 
 ## Derniers changements importants
 
+- **Runtime Transfer Pipeline — `ItemTransferService`** : service créé dans
+  `src/item-transfer/` comme unique point de mutation Runtime `ItemInstance`.
+  Machine d'états : EQUIP (`AVAILABLE+INVENTORY → EQUIPPED+EQUIPMENT`), UNEQUIP
+  (`EQUIPPED+EQUIPMENT → AVAILABLE+INVENTORY`), DROP_TO_WORLD (`AVAILABLE+INVENTORY → IN_WORLD+WORLD`),
+  PICKUP_FROM_WORLD (`IN_WORLD+WORLD → AVAILABLE+INVENTORY`), ARCHIVE (`IN_WORLD+WORLD → ARCHIVED+NONE`).
+  Verrou pessimiste posé à l'intérieur du service. L'appelant fournit toujours un
+  `EntityManager` et ouvre la transaction. `InventoryService.equipItemInstance`,
+  `InventoryService.unequipItem` (INSTANCE), `CharacterService.unequipItem` (INSTANCE),
+  `WorldItemService.pickupInstance`, `WorldItemService.dropInstance`,
+  `WorldItemService.expireInstance` délèguent tous à `transfer()`. Trois méthodes
+  lock privées supprimées de `WorldItemService`. `ItemMaterializationService` reste
+  indépendant (création uniquement). 22 tests `item-transfer.service.spec.ts`,
+  1055/1056 suite complète.
 - **Pipeline Loot Hybrid — `ItemMaterializationService`** : enum `ObjectMode` (`STACKABLE | INSTANCE`)
   ajouté sur `Item.objectMode` (default `STACKABLE`). `LootService.generateLoot()` retourne
   `LootEntry[]` (tableau vide = pas de loot) ; `generateLootFromPool()` retourne `LootEntry | null`.
@@ -335,6 +357,24 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-29 (Runtime Transfer Pipeline — ItemTransferService)
+
+- **ItemTransferService** : machine d'états centralisée pour toutes les
+  transitions Runtime `ItemInstance`. 5 transitions : EQUIP, UNEQUIP,
+  DROP_TO_WORLD, PICKUP_FROM_WORLD, ARCHIVE. Verrou pessimiste interne,
+  `EntityManager` fourni par l'appelant. `ItemTransferModule` importé dans
+  `InventoryModule`, `CharactersModule`, `WorldItemsModule`.
+- **Migration des 3 services** : `InventoryService` (equipItemInstance, unequipItem
+  INSTANCE), `CharacterService` (unequipItem INSTANCE), `WorldItemService`
+  (pickupInstance, dropInstance, expireInstance) — toutes les mutations
+  `ItemInstance` délèguent à `transfer()`. Trois méthodes lock privées supprimées
+  de `WorldItemService`. `ItemMaterializationService` inchangé (création uniquement).
+- **Craft Hybrid C1–C6** (session précédente, non journalisé) : `CraftingService.craft()`
+  step 9 délègue à `ItemMaterializationService` avec `source: 'CRAFT'`,
+  `destination: { type: 'INVENTORY', characterId }`. `CraftingModule` importe
+  `ItemMaterializationModule`. 7 tests `crafting.service.spec.ts`.
+- 1055/1056 tests, build propre.
 
 ### 2026-06-28 (Loot Hybrid — ItemMaterializationService + ObjectMode)
 

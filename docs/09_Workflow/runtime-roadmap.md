@@ -154,15 +154,21 @@ Objective:
 Progress evidence:
 
 - `apps/api-gateway/src/inventory/inventory.service.ts`
+  — `equipItemInstance`, `unequipItem` INSTANCE path delegate to `ItemTransferService`
 - `apps/api-gateway/src/inventory/inventory.service.spec.ts`
-- commit `b8ac4a6`
+- `apps/api-gateway/src/characters/character.service.ts`
+  — `unequipItem` INSTANCE path delegates to `ItemTransferService`
+- `apps/api-gateway/src/item-transfer/item-transfer.service.ts`
+  — transitions EQUIP, UNEQUIP (verrou pessimiste centralisé)
+- commits `b8ac4a6`
 
 Current status:
 
 - In Progress. `CharacterEquipment` is now the projected equipment source of
-  truth for stack-era items, while `Inventory.equipped` remains a transitional
-  compatibility field and equip/unequip still use catalogue `Item` ids rather
-  than concrete `ItemInstance` ids.
+  truth for stack-era items. `equipItemInstance` and the `unequipItem` INSTANCE
+  path delegate to `ItemTransferService`. The legacy `equipItem` (catalogue
+  `Item` ids) remains in use for stack-era items; `Inventory.equipped` remains
+  a transitional compatibility field. TDs 002, 005, 006 remain open.
 
 ### WorldItem Hybrid
 
@@ -175,12 +181,14 @@ Objective:
 Completion evidence:
 
 - `apps/api-gateway/src/world-items/world-item.service.ts`
-  — `dropInventoryItem` (STACK/INSTANCE branch, `dropInstance`, `findInstanceForUpdate`)
-  — `pickupItem` (STACK/INSTANCE branch, `pickupInstance`, `findInstanceForPickup`)
-  — `removeExpiredItems` (STACK/INSTANCE branch, `expireInstance`, `findInstanceForExpiration`)
+  — `dropInventoryItem` (STACK/INSTANCE branch, `dropInstance`)
+  — `pickupItem` (STACK/INSTANCE branch, `pickupInstance`)
+  — `removeExpiredItems` (STACK/INSTANCE branch, `expireInstance`)
 - `apps/api-gateway/src/world-items/world-item.service.spec.ts`
 - `apps/api-gateway/src/world-items/world-items.gateway.ts`
 - `apps/api-gateway/src/world-items/world-items.gateway.spec.ts`
+- `apps/api-gateway/src/item-transfer/item-transfer.service.ts`
+  — transitions DROP_TO_WORLD, PICKUP_FROM_WORLD, ARCHIVE (verrou pessimiste centralisé)
 - commits `e07e9d6`, `2f7c736`, `941b30b`
 
 Transitions implemented:
@@ -191,8 +199,10 @@ Transitions implemented:
 | PICKUP | `IN_WORLD → AVAILABLE` | `WORLD → INVENTORY` | `worldItem.id → characterId` |
 | EXPIRE | `IN_WORLD → ARCHIVED` | `WORLD → NONE` | `worldItem.id → null` |
 
-All transitions use pessimistic write locks and are wrapped in a single
-`dataSource.transaction`. No `ItemInstance` is ever deleted.
+All transitions delegate to `ItemTransferService`, which applies the
+pessimistic write lock and state machine in a single point. The caller
+(`WorldItemService`) opens the transaction via `dataSource.transaction`.
+No `ItemInstance` is ever deleted.
 
 Known remaining debts: `removeExpiredItems` scheduler not yet wired (TD-013),
 race condition on stack expiration (TD-014).

@@ -9,12 +9,9 @@ import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item } from '../items/entities/item.entity';
-import {
-  ItemInstance,
-  ItemInstanceContainerType,
-  ItemInstanceState,
-} from '../item-instances/entities/item-instance.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { getMapRoomId } from '../common/socket-rooms';
 import { chebyshevDistanceWU } from '../common/world-coordinates';
 import { WorldItem, WorldItemState } from './entities/world-item.entity';
@@ -92,6 +89,7 @@ export class WorldItemService {
     private readonly characters: Repository<Character>,
     private readonly dataSource: DataSource,
     private readonly inventoryEntryResolver: InventoryEntryResolverService,
+    private readonly itemTransfer: ItemTransferService,
   ) {}
 
   setServer(server: Server) {
@@ -205,42 +203,14 @@ export class WorldItemService {
     worldItem: WorldItem,
     characterId: string,
   ): Promise<ItemInstance> {
-    const instance = await this.findInstanceForPickup(
-      manager,
-      worldItem.itemInstanceId!,
-      characterId,
-      worldItem.id,
-    );
-    if (!instance) {
-      throw new NotFoundException('Instance not found or not available for pickup');
-    }
-    if (instance.state !== ItemInstanceState.IN_WORLD) {
-      throw new BadRequestException('Instance is not in world state');
-    }
-
-    instance.state = ItemInstanceState.AVAILABLE;
-    instance.containerType = ItemInstanceContainerType.INVENTORY;
-    instance.containerId = characterId;
-    await manager.save(ItemInstance, instance);
-
-    return instance;
-  }
-
-  private async findInstanceForPickup(
-    manager: EntityManager,
-    instanceId: string,
-    characterId: string,
-    worldItemId: string,
-  ): Promise<ItemInstance | null> {
-    return manager
-      .getRepository(ItemInstance)
-      .createQueryBuilder('instance')
-      .setLock('pessimistic_write')
-      .where('instance.id = :instanceId', { instanceId })
-      .andWhere('instance.ownerId = :characterId', { characterId })
-      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.WORLD })
-      .andWhere('instance.containerId = :worldItemId', { worldItemId })
-      .getOne();
+    return this.itemTransfer.transfer(manager, worldItem.itemInstanceId!, {
+      requesterId: characterId,
+      transition: {
+        type: 'PICKUP_FROM_WORLD',
+        worldItemId: worldItem.id,
+        characterId,
+      },
+    });
   }
 
   async dropInventoryItem(input: DropInventoryItemInput): Promise<DropInventoryItemResult> {
@@ -307,29 +277,15 @@ export class WorldItemService {
       throw new BadRequestException('Cannot drop more than 1 of an instance');
     }
 
-    const instance = await this.findInstanceForUpdate(
-      manager,
-      resolvedInstance.id,
-      input.characterId,
-    );
-    if (!instance) {
-      throw new NotFoundException('Instance not found or not available for drop');
-    }
-    if (instance.state === ItemInstanceState.EQUIPPED) {
-      throw new BadRequestException('Cannot drop an equipped instance');
-    }
-    if (instance.state !== ItemInstanceState.AVAILABLE) {
-      throw new BadRequestException('Instance is not available for drop');
-    }
-
-    const item = await manager.findOne(Item, { where: { id: instance.itemId } });
+    const item = await manager.findOne(Item, { where: { id: resolvedInstance.itemId } });
     if (!item) throw new NotFoundException('Item not found');
 
+    // Le WorldItem est créé avant la transition ; son id est requis comme containerId
     const worldItemEntity = manager.create(WorldItem, {
       item,
       itemId: item.id,
       quantity: 1,
-      itemInstanceId: instance.id,
+      itemInstanceId: resolvedInstance.id,
       worldX: Math.round(input.worldX),
       worldY: Math.round(input.worldY),
       mapId: Math.round(input.mapId),
@@ -340,27 +296,13 @@ export class WorldItemService {
     const savedWorldItem = await manager.save(WorldItem, worldItemEntity);
     savedWorldItem.item = item;
 
-    instance.state = ItemInstanceState.IN_WORLD;
-    instance.containerType = ItemInstanceContainerType.WORLD;
-    instance.containerId = savedWorldItem.id;
-    await manager.save(ItemInstance, instance);
+    // Validation owner/state/container + verrou dans ItemTransferService
+    await this.itemTransfer.transfer(manager, resolvedInstance.id, {
+      requesterId: input.characterId,
+      transition: { type: 'DROP_TO_WORLD', worldItemId: savedWorldItem.id },
+    });
 
     return { inventoryQuantity: 0, worldItem: savedWorldItem };
-  }
-
-  private async findInstanceForUpdate(
-    manager: EntityManager,
-    instanceId: string,
-    characterId: string,
-  ): Promise<ItemInstance | null> {
-    return manager
-      .getRepository(ItemInstance)
-      .createQueryBuilder('instance')
-      .setLock('pessimistic_write')
-      .where('instance.id = :instanceId', { instanceId })
-      .andWhere('instance.ownerId = :characterId', { characterId })
-      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.INVENTORY })
-      .getOne();
   }
 
   async removeExpiredItems(now = new Date()): Promise<WorldItem[]> {
@@ -404,39 +346,16 @@ export class WorldItemService {
       const lockedWI = await this.findSpawnedForUpdate(manager, worldItem.id);
       if (!lockedWI) return null;
 
-      const instance = await this.findInstanceForExpiration(
-        manager,
-        lockedWI.itemInstanceId!,
-        lockedWI.id,
-      );
-      if (!instance) return null;
-
-      instance.state = ItemInstanceState.ARCHIVED;
-      instance.containerType = ItemInstanceContainerType.NONE;
-      instance.containerId = null;
-      await manager.save(ItemInstance, instance);
+      await this.itemTransfer.transfer(manager, lockedWI.itemInstanceId!, {
+        requesterId: null,
+        transition: { type: 'ARCHIVE', worldItemId: lockedWI.id },
+      });
 
       lockedWI.state = WorldItemState.EXPIRED;
       const saved = await manager.save(WorldItem, lockedWI);
       saved.item = lockedWI.item;
       return saved;
     });
-  }
-
-  private async findInstanceForExpiration(
-    manager: EntityManager,
-    instanceId: string,
-    worldItemId: string,
-  ): Promise<ItemInstance | null> {
-    return manager
-      .getRepository(ItemInstance)
-      .createQueryBuilder('instance')
-      .setLock('pessimistic_write')
-      .where('instance.id = :instanceId', { instanceId })
-      .andWhere('instance.state = :state', { state: ItemInstanceState.IN_WORLD })
-      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.WORLD })
-      .andWhere('instance.containerId = :worldItemId', { worldItemId })
-      .getOne();
   }
 
   private isUuid(value: string): boolean {

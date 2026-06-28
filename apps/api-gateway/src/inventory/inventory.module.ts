@@ -17,10 +17,12 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { Item } from '../items/entities/item.entity';
 import { InventoryProjectionService } from './projection/inventory-projection.service';
 import { InventoryEntryResolverService } from './resolution/inventory-entry-resolver.service';
+import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Inventory, Character, Item, ItemInstance, CharacterEquipment]),
+    ItemTransferModule,
   ],
   providers: [InventoryService, InventoryProjectionService, InventoryEntryResolverService],
   controllers: [InventoryController],

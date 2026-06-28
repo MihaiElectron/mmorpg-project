@@ -15,11 +15,8 @@ import { UnequipItemDto } from './dto/unequip-item.dto';
 import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
-import {
-  ItemInstance,
-  ItemInstanceContainerType,
-  ItemInstanceState,
-} from '../item-instances/entities/item-instance.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
@@ -39,6 +36,7 @@ export class CharacterService {
     private readonly inventoryRepository: Repository<Inventory>,
     private readonly dataSource: DataSource,
     private readonly inventoryProjection: InventoryProjectionService,
+    private readonly itemTransfer: ItemTransferService,
   ) {}
 
   /**
@@ -246,15 +244,10 @@ export class CharacterService {
 
       // 3a. Chemin INSTANCE : retransitionner l'ItemInstance vers AVAILABLE/INVENTORY
       if (equippedItem.itemInstanceId) {
-        const instance = await manager.findOne(ItemInstance, {
-          where: { id: equippedItem.itemInstanceId },
+        await this.itemTransfer.transfer(manager, equippedItem.itemInstanceId, {
+          requesterId: characterId,
+          transition: { type: 'UNEQUIP', characterId },
         });
-        if (instance) {
-          instance.state = ItemInstanceState.AVAILABLE;
-          instance.containerType = ItemInstanceContainerType.INVENTORY;
-          instance.containerId = characterId;
-          await manager.save(ItemInstance, instance);
-        }
       } else {
         // 3b. Chemin legacy stack : mettre à jour Inventory.equipped = false
         const inventoryEntry = await manager

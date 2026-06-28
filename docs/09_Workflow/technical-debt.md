@@ -146,11 +146,13 @@ Priorities:
   avant Auction House.
 - Phase prévue de résolution : Inventory Hybrid
 - Statut : In Progress
-- Progression : WorldItem Hybrid (commits `e07e9d6`, `2f7c736`, `941b30b`)
-  implémente des transitions atomiques avec verrous pessimistes pour le cycle
-  DROP/PICKUP/EXPIRE. Les transitions pour Loot, Craft, Auction, Bank et Mail
-  restent à implémenter dans leurs phases respectives. Pas de service centralisé
-  de transition — chaque domaine implémente son propre pattern.
+- Progression : `ItemTransferService` (`src/item-transfer/`) créé comme point
+  d'entrée centralisé pour EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD et
+  ARCHIVE. `InventoryService`, `CharacterService` et `WorldItemService`
+  délèguent toutes leurs mutations `ItemInstance` à ce service ; verrou
+  pessimiste et machine d'états appliqués en un seul endroit. Les domaines
+  Auction, Bank, Mail, Trade, Guild Storage et Housing restent à connecter
+  dans leurs phases respectives.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 

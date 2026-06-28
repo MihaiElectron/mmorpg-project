@@ -8,6 +8,7 @@ import { Item } from '../items/entities/item.entity';
 import { DataSource } from 'typeorm';
 import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 function makeRepo() {
   return {
@@ -42,6 +43,7 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
         { provide: getRepositoryToken(Item), useValue: makeRepo() },
         { provide: DataSource, useValue: {} },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
       ],
     }).compile();
     service = module.get<CharacterService>(CharacterService);

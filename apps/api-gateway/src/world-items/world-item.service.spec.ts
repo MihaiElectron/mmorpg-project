@@ -11,6 +11,7 @@ import {
 import { InventoryEntryResolverService } from '../inventory/resolution/inventory-entry-resolver.service';
 import { WorldItem, WorldItemState } from './entities/world-item.entity';
 import { WORLD_ITEM_PICKUP_RANGE_WU, WorldItemService } from './world-item.service';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 function makeRepo<T>() {
   return {
@@ -58,6 +59,7 @@ describe('WorldItemService', () => {
   let characters: jest.Mocked<Repository<Character>>;
   let dataSource: { transaction: jest.Mock };
   let resolver: { resolveWithinTransaction: jest.Mock };
+  let itemTransfer: { transfer: jest.Mock };
 
   beforeEach(() => {
     worldItems = makeRepo<WorldItem>();
@@ -67,6 +69,7 @@ describe('WorldItemService', () => {
       transaction: jest.fn(async (fn: (manager: EntityManager) => unknown) => fn({} as EntityManager)),
     };
     resolver = { resolveWithinTransaction: jest.fn() };
+    itemTransfer = { transfer: jest.fn().mockResolvedValue(makeInstance()) };
 
     service = new WorldItemService(
       worldItems,
@@ -74,6 +77,7 @@ describe('WorldItemService', () => {
       characters,
       dataSource as unknown as DataSource,
       resolver as unknown as InventoryEntryResolverService,
+      itemTransfer as unknown as ItemTransferService,
     );
   });
 
@@ -212,10 +216,7 @@ describe('WorldItemService', () => {
     });
   }
 
-  function makePickupInstanceManager(
-    worldItem: WorldItem,
-    instanceResult: ItemInstance | null,
-  ) {
+  function makeWorldItemOnlyManager(worldItem: WorldItem) {
     const worldItemQb = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
@@ -223,54 +224,47 @@ describe('WorldItemService', () => {
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(worldItem),
     };
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instanceResult),
-    };
     return {
-      getRepository: jest.fn().mockImplementation((entity: unknown) => {
-        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
-        return { createQueryBuilder: jest.fn(() => worldItemQb) };
-      }),
+      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => worldItemQb) }),
       save: jest.fn(async (_entity: unknown, value: unknown) => value),
       findOne: jest.fn(),
       create: jest.fn(),
-      instanceQb,
       worldItemQb,
     };
   }
 
-  it("pickup INSTANCE — transitionne ItemInstance vers INVENTORY avec containerId = characterId", async () => {
+  it("pickup INSTANCE — appelle itemTransfer.transfer PICKUP_FROM_WORLD", async () => {
     const worldItem = makeWorldItemWithInstance();
-    const instance = makeInstanceInWorld();
-    const manager = makePickupInstanceManager(worldItem, instance);
+    const pickedInstance = makeInstance({ state: ItemInstanceState.AVAILABLE, containerType: ItemInstanceContainerType.INVENTORY, containerId: "char-1" });
+    itemTransfer.transfer.mockResolvedValue(pickedInstance);
+    const manager = makeWorldItemOnlyManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    await service.pickupItem({
+    const result = await service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
     });
 
-    expect(instance.state).toBe(ItemInstanceState.AVAILABLE);
-    expect(instance.containerType).toBe(ItemInstanceContainerType.INVENTORY);
-    expect(instance.containerId).toBe('char-1');
-    expect(manager.save).toHaveBeenCalledWith(ItemInstance, instance);
+    expect(itemTransfer.transfer).toHaveBeenCalledWith(
+      manager, worldItem.itemInstanceId,
+      { requesterId: "char-1", transition: { type: "PICKUP_FROM_WORLD", worldItemId: worldItem.id, characterId: "char-1" } },
+    );
+    expect(result.type).toBe("INSTANCE");
+    if (result.type === "INSTANCE") expect(result.instance).toBe(pickedInstance);
   });
 
   it("pickup INSTANCE — met WorldItem a PICKED", async () => {
     const worldItem = makeWorldItemWithInstance();
-    const instance = makeInstanceInWorld();
-    const manager = makePickupInstanceManager(worldItem, instance);
+    itemTransfer.transfer.mockResolvedValue(makeInstance());
+    const manager = makeWorldItemOnlyManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
     await service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
@@ -284,54 +278,56 @@ describe('WorldItemService', () => {
     const server = makeServer();
     service.setServer(server as any);
     const worldItem = makeWorldItemWithInstance();
-    const instance = makeInstanceInWorld();
-    const manager = makePickupInstanceManager(worldItem, instance);
+    const pickedInstance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+    itemTransfer.transfer.mockResolvedValue(pickedInstance);
+    const manager = makeWorldItemOnlyManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
     const result = await service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
     });
 
-    expect(result.type).toBe('INSTANCE');
-    if (result.type === 'INSTANCE') {
-      expect(result.instance).toBe(instance);
+    expect(result.type).toBe("INSTANCE");
+    if (result.type === "INSTANCE") {
+      expect(result.instance).toBe(pickedInstance);
       expect(result.item).toBe(item);
     }
-    expect(server.to).toHaveBeenCalledWith('map:1');
-    expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
+    expect(server.to).toHaveBeenCalledWith("map:1");
+    expect(server.emit).toHaveBeenCalledWith("world_item_remove", {
       id: worldItem.id,
       mapId: 1,
       state: WorldItemState.PICKED,
     });
   });
 
-  it("pickup INSTANCE — refuse si findInstanceForPickup retourne null (proprietaire incorrect)", async () => {
+  it("pickup INSTANCE — refuse si transfer leve NotFoundException (proprietaire incorrect)", async () => {
     const worldItem = makeWorldItemWithInstance();
-    const manager = makePickupInstanceManager(worldItem, null);
+    itemTransfer.transfer.mockRejectedValue(new NotFoundException("Instance not found"));
+    const manager = makeWorldItemOnlyManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
     await expect(service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
     })).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("pickup INSTANCE — refuse si instance state != IN_WORLD (defense en profondeur)", async () => {
+  it("pickup INSTANCE — refuse si transfer leve BadRequestException (mauvais etat)", async () => {
     const worldItem = makeWorldItemWithInstance();
-    const instance = makeInstanceInWorld({ state: ItemInstanceState.AVAILABLE });
-    const manager = makePickupInstanceManager(worldItem, instance);
+    itemTransfer.transfer.mockRejectedValue(new BadRequestException("Expected state IN_WORLD"));
+    const manager = makeWorldItemOnlyManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
     await expect(service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
@@ -355,17 +351,17 @@ describe('WorldItemService', () => {
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
     await expect(service.pickupItem({
-      worldItemId: 'world-item-inst-1',
-      characterId: 'char-1',
+      worldItemId: "world-item-inst-1",
+      characterId: "char-1",
       worldX: 0,
       worldY: 0,
       mapId: 1,
     })).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("pickup INSTANCE — rollback si save ItemInstance echoue", async () => {
+  it("pickup INSTANCE — l erreur de save WorldItem se propage (rollback DB)", async () => {
     const worldItem = makeWorldItemWithInstance();
-    const instance = makeInstanceInWorld();
+    itemTransfer.transfer.mockResolvedValue(makeInstance({ state: ItemInstanceState.AVAILABLE }));
     const worldItemQb = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
@@ -373,17 +369,8 @@ describe('WorldItemService', () => {
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(worldItem),
     };
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instance),
-    };
     const manager = {
-      getRepository: jest.fn().mockImplementation((entity: unknown) => {
-        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
-        return { createQueryBuilder: jest.fn(() => worldItemQb) };
-      }),
+      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => worldItemQb) }),
       save: jest.fn().mockRejectedValue(new Error("DB failure")),
       findOne: jest.fn(),
       create: jest.fn(),
@@ -392,14 +379,13 @@ describe('WorldItemService', () => {
 
     await expect(service.pickupItem({
       worldItemId: worldItem.id,
-      characterId: 'char-1',
+      characterId: "char-1",
       worldX: 1100,
       worldY: 1100,
       mapId: 1,
     })).rejects.toThrow("DB failure");
-    // worldItem.state reste SPAWNED : la transition WorldItem n a jamais eu lieu en memoire
-    // (le save(ItemInstance) a echoue avant d atteindre worldItem.state = PICKED)
-    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
+    // transfer a ete appele — le rollback DB (non simulable en memoire) defait les deux mutations
+    expect(itemTransfer.transfer).toHaveBeenCalled();
   });
 
   it("dropInventoryItem STACK — decremente inventaire et spawn un WorldItem dans la meme transaction", async () => {
@@ -523,31 +509,22 @@ describe('WorldItemService', () => {
   // INSTANCE path
   // -------------------------------------------------------------------------
 
-  function makeInstanceDropManager(
-    instanceResult: ItemInstance | null,
-    itemResult: Item | null = item,
-    worldItemId = "world-item-inst-1",
-  ) {
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instanceResult),
-    };
+  function makeDropInstanceManager(itemResult: Item | null = item, worldItemId = "world-item-inst-1") {
     return {
-      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => instanceQb) }),
+      getRepository: jest.fn(),
       findOne: jest.fn().mockResolvedValue(itemResult),
-      save: jest.fn(async (entity, value) => {
-        if (entity === WorldItem) return { ...value, id: worldItemId, createdAt: new Date() };
+      save: jest.fn(async (entity: unknown, value: unknown) => {
+        if (entity === WorldItem) return { ...(value as object), id: worldItemId, createdAt: new Date() };
         return value;
       }),
-      create: jest.fn((_entity, value) => value),
+      create: jest.fn((_entity: unknown, value: unknown) => value),
     };
   }
 
-  it("dropInventoryItem INSTANCE — crée un WorldItem avec itemInstanceId", async () => {
+  it("dropInventoryItem INSTANCE — cree un WorldItem avec itemInstanceId et appelle transfer DROP_TO_WORLD", async () => {
     const instance = makeInstance();
-    const manager = makeInstanceDropManager(instance);
+    const manager = makeDropInstanceManager(item, "world-item-inst-1");
+    itemTransfer.transfer.mockResolvedValue(makeInstance({ state: ItemInstanceState.IN_WORLD }));
     resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
@@ -566,33 +543,17 @@ describe('WorldItemService', () => {
       ownerCharacterId: "char-1",
       state: WorldItemState.SPAWNED,
     }));
+    expect(itemTransfer.transfer).toHaveBeenCalledWith(
+      manager, instance.id,
+      { requesterId: "char-1", transition: { type: "DROP_TO_WORLD", worldItemId: "world-item-inst-1" } },
+    );
     expect(result.worldItem.itemInstanceId).toBe(instance.id);
-  });
-
-  it("dropInventoryItem INSTANCE — transitionne instance vers IN_WORLD avec containerId = worldItem.id", async () => {
-    const instance = makeInstance();
-    const manager = makeInstanceDropManager(instance, item, "world-item-inst-1");
-    resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
-    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
-
-    await service.dropInventoryItem({
-      characterId: "char-1",
-      inventoryEntryId: "instance-1",
-      quantity: 1,
-      worldX: 0,
-      worldY: 0,
-      mapId: 1,
-    });
-
-    expect(instance.state).toBe(ItemInstanceState.IN_WORLD);
-    expect(instance.containerType).toBe(ItemInstanceContainerType.WORLD);
-    expect(instance.containerId).toBe("world-item-inst-1");
-    expect(manager.save).toHaveBeenCalledWith(ItemInstance, instance);
   });
 
   it("dropInventoryItem INSTANCE — retourne inventoryQuantity = 0", async () => {
     const instance = makeInstance();
-    const manager = makeInstanceDropManager(instance);
+    const manager = makeDropInstanceManager();
+    itemTransfer.transfer.mockResolvedValue(makeInstance({ state: ItemInstanceState.IN_WORLD }));
     resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
@@ -611,7 +572,7 @@ describe('WorldItemService', () => {
   it("dropInventoryItem INSTANCE — refuse quantity > 1", async () => {
     const instance = makeInstance();
     resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
-    dataSource.transaction.mockImplementation(async (fn) => fn({ getRepository: jest.fn(), findOne: jest.fn(), save: jest.fn(), create: jest.fn() } as unknown as EntityManager));
+    dataSource.transaction.mockImplementation(async (fn) => fn({ findOne: jest.fn(), save: jest.fn(), create: jest.fn() } as unknown as EntityManager));
 
     await expect(service.dropInventoryItem({
       characterId: "char-1",
@@ -623,9 +584,44 @@ describe('WorldItemService', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("dropInventoryItem INSTANCE — refuse si findInstanceForUpdate retourne null (propriétaire incorrect ou hors INVENTORY)", async () => {
+  it("dropInventoryItem INSTANCE — refuse si transfer leve BadRequestException (EQUIPPED)", async () => {
+    const instance = makeInstance({ state: ItemInstanceState.EQUIPPED });
+    const manager = makeDropInstanceManager();
+    itemTransfer.transfer.mockRejectedValue(new BadRequestException("Cannot drop an equipped instance"));
+    resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.dropInventoryItem({
+      characterId: "char-1",
+      inventoryEntryId: "instance-1",
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("dropInventoryItem INSTANCE — refuse si transfer leve BadRequestException (deja IN_WORLD)", async () => {
+    const instance = makeInstance({ state: ItemInstanceState.IN_WORLD });
+    const manager = makeDropInstanceManager();
+    itemTransfer.transfer.mockRejectedValue(new BadRequestException("Expected state AVAILABLE"));
+    resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.dropInventoryItem({
+      characterId: "char-1",
+      inventoryEntryId: "instance-1",
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("dropInventoryItem INSTANCE — refuse si transfer leve NotFoundException (proprietaire incorrect)", async () => {
     const instance = makeInstance({ ownerId: "other-char" });
-    const manager = makeInstanceDropManager(null); // lock query returns null
+    const manager = makeDropInstanceManager();
+    itemTransfer.transfer.mockRejectedValue(new NotFoundException("Instance not found"));
     resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
@@ -639,51 +635,13 @@ describe('WorldItemService', () => {
     })).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("dropInventoryItem INSTANCE — refuse une instance EQUIPPED", async () => {
-    const instance = makeInstance({ state: ItemInstanceState.EQUIPPED });
-    const manager = makeInstanceDropManager(instance);
-    resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
-    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
-
-    await expect(service.dropInventoryItem({
-      characterId: "char-1",
-      inventoryEntryId: "instance-1",
-      quantity: 1,
-      worldX: 0,
-      worldY: 0,
-      mapId: 1,
-    })).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it("dropInventoryItem INSTANCE — refuse une instance déjà IN_WORLD", async () => {
-    const instance = makeInstance({ state: ItemInstanceState.IN_WORLD });
-    const manager = makeInstanceDropManager(instance);
-    resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
-    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
-
-    await expect(service.dropInventoryItem({
-      characterId: "char-1",
-      inventoryEntryId: "instance-1",
-      quantity: 1,
-      worldX: 0,
-      worldY: 0,
-      mapId: 1,
-    })).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it("dropInventoryItem INSTANCE — rollback si save WorldItem échoue", async () => {
+  it("dropInventoryItem INSTANCE — rollback si save WorldItem echoue (avant transfer)", async () => {
     const instance = makeInstance();
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instance),
-    };
     const manager = {
-      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => instanceQb) }),
+      getRepository: jest.fn(),
       findOne: jest.fn().mockResolvedValue(item),
       save: jest.fn().mockRejectedValue(new Error("DB failure")),
-      create: jest.fn((_entity, value) => value),
+      create: jest.fn((_entity: unknown, value: unknown) => value),
     };
     resolver.resolveWithinTransaction.mockResolvedValue({ type: "INSTANCE", instance, itemId: item.id });
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
@@ -696,8 +654,8 @@ describe('WorldItemService', () => {
       worldY: 0,
       mapId: 1,
     })).rejects.toThrow("DB failure");
-    // instance.state reste AVAILABLE : save WorldItem a echoue avant la transition
-    expect(instance.state).toBe(ItemInstanceState.AVAILABLE);
+    // transfer n a pas ete appele : save WorldItem a echoue avant
+    expect(itemTransfer.transfer).not.toHaveBeenCalled();
   });
 
   it("refuse le pickup si ownerCharacterId ne correspond pas au personnage", async () => {
@@ -858,10 +816,7 @@ describe('WorldItemService', () => {
     } as WorldItem;
   }
 
-  function makeExpireInstanceManager(
-    worldItemResult: WorldItem | null,
-    instanceResult: ItemInstance | null,
-  ) {
+  function makeExpireWorldItemManager(worldItemResult: WorldItem | null) {
     const worldItemQb = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
@@ -869,39 +824,32 @@ describe('WorldItemService', () => {
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(worldItemResult),
     };
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instanceResult),
-    };
     return {
-      getRepository: jest.fn().mockImplementation((entity: unknown) => {
-        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
-        return { createQueryBuilder: jest.fn(() => worldItemQb) };
-      }),
+      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => worldItemQb) }),
       save: jest.fn(async (_entity: unknown, value: unknown) => value),
     };
   }
 
-  it("expiration INSTANCE — transitionne ItemInstance vers ARCHIVED et WorldItem vers EXPIRED", async () => {
+  it("expiration INSTANCE — appelle transfer ARCHIVE et transitionne WorldItem vers EXPIRED", async () => {
     const server = makeServer();
     service.setServer(server as any);
     const worldItem = makeExpiredInstanceWorldItem();
-    const instance = makeInstanceInWorld({ containerId: worldItem.id });
+    const archivedInstance = makeInstance({ state: ItemInstanceState.ARCHIVED, containerType: ItemInstanceContainerType.NONE, containerId: null });
     worldItems.find.mockResolvedValue([worldItem]);
-    const manager = makeExpireInstanceManager(worldItem, instance);
+    itemTransfer.transfer.mockResolvedValue(archivedInstance);
+    const manager = makeExpireWorldItemManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+    const saved = await service.removeExpiredItems(new Date("2026-06-27T10:01:00Z"));
 
-    expect(instance.state).toBe(ItemInstanceState.ARCHIVED);
-    expect(instance.containerType).toBe(ItemInstanceContainerType.NONE);
-    expect(instance.containerId).toBeNull();
+    expect(itemTransfer.transfer).toHaveBeenCalledWith(
+      manager, worldItem.itemInstanceId,
+      { requesterId: null, transition: { type: "ARCHIVE", worldItemId: worldItem.id } },
+    );
     expect(worldItem.state).toBe(WorldItemState.EXPIRED);
     expect(saved).toHaveLength(1);
-    expect(server.to).toHaveBeenCalledWith('map:3');
-    expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
+    expect(server.to).toHaveBeenCalledWith("map:3");
+    expect(server.emit).toHaveBeenCalledWith("world_item_remove", {
       id: worldItem.id,
       mapId: 3,
       state: WorldItemState.EXPIRED,
@@ -911,33 +859,35 @@ describe('WorldItemService', () => {
   it("expiration INSTANCE — ignore si WorldItem deja PICKED (findSpawnedForUpdate retourne null)", async () => {
     const worldItem = makeExpiredInstanceWorldItem();
     worldItems.find.mockResolvedValue([worldItem]);
-    const manager = makeExpireInstanceManager(null, null);
+    const manager = makeExpireWorldItemManager(null);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+    const saved = await service.removeExpiredItems(new Date("2026-06-27T10:01:00Z"));
 
     expect(saved).toHaveLength(0);
     expect(worldItem.state).toBe(WorldItemState.SPAWNED);
+    expect(itemTransfer.transfer).not.toHaveBeenCalled();
   });
 
-  it("expiration INSTANCE — ignore si instance deja deplacee (findInstanceForExpiration retourne null)", async () => {
+  it("expiration INSTANCE — ignore si transfer leve une exception (instance deja deplacee)", async () => {
     const worldItem = makeExpiredInstanceWorldItem();
     worldItems.find.mockResolvedValue([worldItem]);
-    const manager = makeExpireInstanceManager(worldItem, null);
+    itemTransfer.transfer.mockRejectedValue(new BadRequestException("containerId mismatch"));
+    const manager = makeExpireWorldItemManager(worldItem);
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+    const saved = await service.removeExpiredItems(new Date("2026-06-27T10:01:00Z"));
 
     expect(saved).toHaveLength(0);
     expect(worldItem.state).toBe(WorldItemState.SPAWNED);
   });
 
-  it("expiration INSTANCE — rollback si save echoue (WorldItem reste SPAWNED)", async () => {
+  it("expiration INSTANCE — erreur save WorldItem est catchee, item non emis", async () => {
     const server = makeServer();
     service.setServer(server as any);
     const worldItem = makeExpiredInstanceWorldItem();
-    const instance = makeInstanceInWorld({ containerId: worldItem.id });
     worldItems.find.mockResolvedValue([worldItem]);
+    itemTransfer.transfer.mockResolvedValue(makeInstance({ state: ItemInstanceState.ARCHIVED }));
     const worldItemQb = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
       setLock: jest.fn().mockReturnThis(),
@@ -945,26 +895,16 @@ describe('WorldItemService', () => {
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(worldItem),
     };
-    const instanceQb = {
-      setLock: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(instance),
-    };
     const manager = {
-      getRepository: jest.fn().mockImplementation((entity: unknown) => {
-        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
-        return { createQueryBuilder: jest.fn(() => worldItemQb) };
-      }),
+      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => worldItemQb) }),
       save: jest.fn().mockRejectedValue(new Error("DB failure")),
     };
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+    const saved = await service.removeExpiredItems(new Date("2026-06-27T10:01:00Z"));
 
-    // erreur catchee par item ; la methode n a pas rethrow
+    // erreur catchee par removeExpiredItems (batch continue) — rien n est emis
     expect(saved).toHaveLength(0);
-    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
     expect(server.emit).not.toHaveBeenCalled();
   });
 

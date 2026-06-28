@@ -14,11 +14,8 @@ import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { Character } from '../characters/entities/character.entity';
 import { Item } from '../items/entities/item.entity';
-import {
-  ItemInstance,
-  ItemInstanceContainerType,
-  ItemInstanceState,
-} from '../item-instances/entities/item-instance.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 @Injectable()
 export class InventoryService {
@@ -36,6 +33,7 @@ export class InventoryService {
     private readonly equipmentRepository: Repository<CharacterEquipment>,
 
     private readonly dataSource: DataSource,
+    private readonly itemTransfer: ItemTransferService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -108,22 +106,11 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
   async equipItemInstance(characterId: string, instanceId: string): Promise<ItemInstance> {
     return this.dataSource.transaction(async (manager) => {
-      const lockedInstance = await manager
-        .getRepository(ItemInstance)
-        .createQueryBuilder('i')
-        .setLock('pessimistic_write')
-        .where('i.id = :id', { id: instanceId })
-        .getOne();
+      // Lecture sans verrou pour résoudre itemId/slot (itemId est immuable)
+      const rawInstance = await manager.findOne(ItemInstance, { where: { id: instanceId } });
+      if (!rawInstance) throw new NotFoundException(`ItemInstance ${instanceId} not found`);
 
-      if (!lockedInstance) throw new NotFoundException(`ItemInstance ${instanceId} not found`);
-      if (lockedInstance.ownerId !== characterId)
-        throw new BadRequestException('Instance does not belong to this character');
-      if (lockedInstance.containerType !== ItemInstanceContainerType.INVENTORY)
-        throw new BadRequestException('Instance is not in inventory');
-      if (lockedInstance.state !== ItemInstanceState.AVAILABLE)
-        throw new BadRequestException('Instance is not available');
-
-      const item = await manager.findOne(Item, { where: { id: lockedInstance.itemId } });
+      const item = await manager.findOne(Item, { where: { id: rawInstance.itemId } });
       if (!item) throw new NotFoundException('Item not found');
       if (!item.slot) throw new BadRequestException('Item has no slot defined');
 
@@ -132,15 +119,10 @@ export class InventoryService {
       });
       if (existing) {
         if (existing.itemInstanceId) {
-          const oldInstance = await manager.findOne(ItemInstance, {
-            where: { id: existing.itemInstanceId },
+          await this.itemTransfer.transfer(manager, existing.itemInstanceId, {
+            requesterId: characterId,
+            transition: { type: 'UNEQUIP', characterId },
           });
-          if (oldInstance) {
-            oldInstance.state = ItemInstanceState.AVAILABLE;
-            oldInstance.containerType = ItemInstanceContainerType.INVENTORY;
-            oldInstance.containerId = characterId;
-            await manager.save(ItemInstance, oldInstance);
-          }
         } else {
           const oldInv = await manager.findOne(Inventory, {
             where: { character: { id: characterId }, item: { id: existing.itemId } },
@@ -157,14 +139,15 @@ export class InventoryService {
         characterId,
         itemId: item.id,
         slot: item.slot,
-        itemInstanceId: lockedInstance.id,
+        itemInstanceId: rawInstance.id,
       });
       await manager.save(CharacterEquipment, equipment);
 
-      lockedInstance.state = ItemInstanceState.EQUIPPED;
-      lockedInstance.containerType = ItemInstanceContainerType.EQUIPMENT;
-      lockedInstance.containerId = characterId;
-      return manager.save(ItemInstance, lockedInstance);
+      // Validation owner/state/container + verrou dans ItemTransferService
+      return this.itemTransfer.transfer(manager, instanceId, {
+        requesterId: characterId,
+        transition: { type: 'EQUIP', characterId },
+      });
     });
   }
 
@@ -229,14 +212,10 @@ export class InventoryService {
       await manager.delete(CharacterEquipment, { characterId, slot });
 
       if (equipment.itemInstanceId) {
-        const instance = await manager.findOne(ItemInstance, {
-          where: { id: equipment.itemInstanceId },
+        return this.itemTransfer.transfer(manager, equipment.itemInstanceId, {
+          requesterId: characterId,
+          transition: { type: 'UNEQUIP', characterId },
         });
-        if (!instance) throw new NotFoundException('ItemInstance not found for equipped slot');
-        instance.state = ItemInstanceState.AVAILABLE;
-        instance.containerType = ItemInstanceContainerType.INVENTORY;
-        instance.containerId = characterId;
-        return manager.save(ItemInstance, instance);
       }
 
       const inv = await manager.findOne(Inventory, {

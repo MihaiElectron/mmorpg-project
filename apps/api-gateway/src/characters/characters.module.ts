@@ -11,6 +11,7 @@ import { Item } from '../items/entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SkillsModule } from '../skills/skills.module';
+import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SkillsModule } from '../skills/skills.module';
     ItemModule,
     InventoryModule,
     SkillsModule,
+    ItemTransferModule,
   ],
   controllers: [CharacterController],
   providers: [CharacterService],
