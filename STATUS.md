@@ -1,675 +1,98 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-29_
-_Session : 2026-06-29 (Clôture officielle Runtime V2 — documentation)_
-_Branche : main_
-_État : développement local_
+_Branche : main — État : développement local_
 
 ---
 
 ## État général
 
-Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté
-via Socket.IO. Combat creature complet. Panneau admin fonctionnel avec console de
-commandes, hiérarchie deux niveaux (template → instances), drag-and-drop vers la
-map, suppression d'entités et vue d'ensemble temps réel (joueurs connectés,
-personnages enregistrés, animaux actifs, templates, spawns).
-
-**Migration WU P0–P7 entièrement terminée (2026-06-26).** Protocole WebSocket WU pur
-(P0–P6 soldés). Colonnes legacy DB supprimées (P7-A à P7-D) : `character.positionX/Y`,
-`creature.x/y`, `resource.x/y`, `creature_spawn.spawnX/Y`, `respawn_point.x/y`.
-Migration TypeORM `1782432000000-DropLegacyPixelColumns` créée pour la production.
-Scripts de backfill supprimés. `world-position.adapter.ts` réduit à `WUPositionRecord`.
-
-Source de vérité unique pour toutes les entités : `worldX / worldY / mapId`.
-Pixel cache (`x/y`) conservé uniquement dans `ConnectedPlayer` (rendu frontend)
-et dérivé côté serveur via `wuToIsoScreenX/Y`. `legacyRadiusToWU()` conservé
-dans `legacy-pixel-position.adapter.ts` pour les valeurs de template IA
-(`aggroRadius`, `patrolRadius`, `speed`) encore exprimées en pixels en DB.
-
-Drag-to-map et boutons Tp du panneau admin passent en WU via `screenToWorldWU`.
-Infrastructure DevTools complète : shell, panel, store centralisé, bridge React ↔
-Phaser, module World, HUD admin-only.
-
-**AdminPanelWOM** opérationnel avec Skills et CraftingRecipes : création/édition
-de `SkillDefinition`, sélects dynamiques pour categories/stations, `requiredSkillKey`
-avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensionnable.
-Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
-Onglets Talents/Succès placeholder actifs.
-
-**Runtime V2 entièrement terminé (2026-06-29).** `ItemTransferService`
-(`src/item-transfer/`) est le point d'entrée unique pour toutes les transitions
-Runtime `ItemInstance` : 20 transitions couvrant 10 domaines (Equipment, WorldItem,
-Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade). Verrou pessimiste
-systématique, transaction toujours ouverte par l'appelant, zéro mutation directe
-d'`ItemInstance` détectée hors service autorisé. TD-008 résolu. ADR-0010 et
-ADR-0011 promus Accepted. `ItemInstance.createdBySource` ajouté (migration
-`1783468800000-AddCreatedBySourceToItemInstance`). Gameplay V1 s'ouvre.
-
-**Pipeline Loot Hybrid opérationnel (2026-06-28).** `Item.objectMode` (enum `STACKABLE | INSTANCE`)
-est la source de vérité pour la matérialisation du loot. `LootService` reste pur et synchrone
-(aucune dépendance DB). `ItemMaterializationService` reçoit un `EntityManager` de l'appelant
-et implémente 4 chemins : `STACKABLE+INVENTORY`, `STACKABLE+WORLD`, `INSTANCE+INVENTORY`,
-`INSTANCE+WORLD`. `CreaturesGateway` et `ResourcesGateway` ouvrent la transaction et délèguent
-au service. Migration TypeORM `1782864000000-AddObjectModeToItem` créée pour la production.
-
-**Crafting Stations runtime** opérationnel : `CraftingStationTemplate` et
-`CraftingStation` sont persistés, administrables via WOM/AdminPanel, rendus en
-debug dans `WorldScene` et utilisables par le joueur depuis l'ActionPanel. Les
-recettes avec `stationType != "none"` sont validées côté serveur par distance
-euclidienne WU à une station compatible proche. Le client affiche un indicateur
-estimatif de portée et les erreurs structurées serveur, sans jamais devenir
-autoritaire.
+Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté via Socket.IO.
+Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` source de vérité unique).
+**Runtime V2 terminé** : `ItemTransferService` couvre 20 transitions sur 10 domaines, verrou pessimiste systématique.
+**Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
 
 ---
 
-## Derniers changements importants
+## Fonctionnalités opérationnelles
 
-- **Clôture Runtime V2 — documentation (2026-06-29)** : ADR-0010 et ADR-0011
-  promus `Accepted`. `runtime-roadmap.md` marqué `Accepted`, Trade ajouté comme
-  phase `Completed`, section "Runtime V2 Completed" et "Gameplay V1" créées.
-  `technical-debt.md` : TD-008 `Resolved`, TD-010 `Resolved`, TD-009 mis à jour
-  (craft instance OK, craftedBy absent), TD-019 créé (Trade MVP debts).
-  `ItemInstance.createdBySource` colonne ajoutée (migration
-  `1783468800000-AddCreatedBySourceToItemInstance`) — correction du bug silencieux
-  où `ItemMaterializationService` tentait d'écrire ce champ sans colonne en DB.
-  1238/1239 tests, build propre.
-- **Trade Runtime MVP — `TradeService` (2026-06-29)** : échange peer-to-peer
-  transactionnel d'`ItemInstance`. `TradeSession` (PENDING/COMPLETED/CANCELLED),
-  `createTrade`, `addItem` (TRADE_LOCK), `removeItem` (TRADE_CANCEL),
-  `accept` (commit atomique si les deux acceptent), `cancel` (TRADE_CANCEL sur
-  tous les items). Tri lexicographique des UUIDs avant multi-verrou (anti-deadlock).
-  `ItemTransferService` étendu : TRADE_LOCK, TRADE_COMMIT, TRADE_CANCEL.
-  TRADE_CANCEL : `containerId = instance.ownerId` — retour élégant vers le
-  propriétaire légal sans changer `ownerId`. TRADE_COMMIT change `ownerId →
-  recipientCharacterId`. 29 tests `trade.service.spec.ts`, commit `772cc75`.
-  TD-008 désormais Resolved (Trade était le dernier domaine manquant).
-- **Runtime Transfer Pipeline — `ItemTransferService`** : service créé dans
-  `src/item-transfer/` comme unique point de mutation Runtime `ItemInstance`.
-  20 transitions couvrant 10 domaines. Verrou pessimiste posé à l'intérieur du
-  service. L'appelant fournit toujours un `EntityManager` et ouvre la transaction.
-  `InventoryService`, `CharacterService`, `WorldItemService`, `AuctionService`,
-  `BankService`, `MailService`, `GuildStorageService`, `HousingService`,
-  `TradeService` délèguent tous à `transfer()`. `ItemMaterializationService` reste
-  indépendant (création uniquement). 74 tests `item-transfer.service.spec.ts`,
-  1238/1239 suite complète.
-- **Pipeline Loot Hybrid — `ItemMaterializationService`** : enum `ObjectMode` (`STACKABLE | INSTANCE`)
-  ajouté sur `Item.objectMode` (default `STACKABLE`). `LootService.generateLoot()` retourne
-  `LootEntry[]` (tableau vide = pas de loot) ; `generateLootFromPool()` retourne `LootEntry | null`.
-  `ItemMaterializationService` (4 chemins × 2 destinations) reçoit `EntityManager`, ne crée jamais
-  sa propre transaction. `CreaturesGateway` : loot creature → `WorldItem` via transaction.
-  `ResourcesGateway` : loot récolte → `Inventory` via transaction, émet `resource_loot` pour
-  chaque `LootEntry[]`. Seeds : `wooden_stick/iron_ore/iron_bar/basic_handle/rough_blade = STACKABLE`,
-  `basic_sword = INSTANCE`. Migration `1782864000000-AddObjectModeToItem` créée.
-- **Crafting Stations + runtime craft joueur** : ajout de `CraftingStationTemplate`
-  et `CraftingStation` (templates + instances WU), seeds non destructifs
-  (`forge`, `workbench`, `sawmill`, `alchemy_table`, `cooking_station`),
-  adapter WOM avec capabilities `crafting_station`, `placement`, `validation`,
-  AdminPanel/WOM pour templates et instances, drag-to-map et bouton TP station.
-  `CraftingService.craft()` valide les recettes `stationType != "none"` par
-  station enabled/template enabled, même `mapId`, `stationType` compatible et
-  distance euclidienne WU <= `interactionRadiusWU`.
-- **Rendu debug stations et Station Radius Overlay** : `WorldScene` affiche les
-  stations enabled en carrés debug (`forge` orange, `workbench` bleu, `sawmill`
-  vert, `alchemy_table` violet, `cooking_station` rouge, fallback gris). Le
-  toggle DevTools `Station Radius` affiche le rayon issu de
-  `interactionRadiusWU`. Ces rendus sont visuels uniquement : pas de collision,
-  pas de validation gameplay.
-- **Runtime Crafting UI** : clic station → `ActionPanel` → ouverture du panneau
-  craft runtime, chargement des recettes compatibles via `stationType`, puis
-  `POST /crafting/craft { recipeId, quantity }`. Le client n'envoie ni
-  `characterId`, ni `stationId`; le serveur résout le personnage et choisit la
-  station valide. Après succès, inventaire et skills sont rafraîchis.
-- **UX portée estimée et erreurs station structurées** : le client affiche
-  `Station à portée` ou `Hors de portée estimée` à partir des coordonnées WU
-  locales, sans bloquer le craft. Les refus serveur station renvoient
-  `CRAFTING_STATION_REQUIRED` ou `CRAFTING_STATION_OUT_OF_RANGE` avec
-  `stationType`, et si calculable `nearestDistanceWU` + `requiredRadiusWU`.
-- **Migration WU P5 — `player_move` WU-only** : `x/y` pixels supprimés du payload
-  `player_move` (client → serveur). `WorldScene.syncLocalPlayer` envoie désormais
-  `{ worldX, worldY, mapId, direction }`. `updatePlayer` accepte uniquement WU,
-  dérive le pixel cache via `wuToIsoScreenX/Y`. Fallback `isoScreenToWorldWU` supprimé.
-  Suite "métriques passives mouvement" de `world.service.spec.ts` mise à jour.
-- **Migration WU P6 — Protocole admin WU pur** : `admin:spawn`, `admin:teleport`,
-  `admin:move_creature`, `admin:spawn_resource`, `admin:update_creature`,
-  `admin:update_resource` — tous les payloads de coordonnées en `worldX/worldY`.
-  `CreaturesService.createAdminSpawn/moveCreature/adminUpdateCreature`,
-  `AdminService.createResource/updateResource` dérivent le pixel cache côté serveur.
-  `commandRegistry.ts` utilise `lastClickedWorldPoint` (WU). `adminPanel.shared.tsx`
-  : `toWorldWU()` via `screenToWorldWU`, drag-to-map et boutons Tp passent en WU.
-  `admin.actions.ts` : signatures WU. Tests : `admin.service.spec.ts` + tests
-  `teleportCharacter` WU mis à jour.
-- **Migration WU P4–P4.5** : `character_respawn` et `character_teleport` transportent
-  désormais `worldX/worldY/chunkX/chunkY + characterId`. Champs `x/y` pixels legacy
-  supprimés des deux payloads. `WorldScene.js` utilisait déjà `resolveScreen()` WU-first.
-  7 nouveaux tests `world.service.spec.ts` (suites `teleportCharacter` + `respawnCharacter`).
-- **CraftingRecipe administrable (WOM)** : adapter WOM, `AdminService` CRUD + ingrédients/
-  résultats + validation, 7 événements `AdminGateway`, 4 endpoints REST. `RecipesSection.tsx`
-  avec sélects dynamiques (category, stationType, requiredSkillKey avec labels). 65 tests
-  `admin.service.spec.ts`, 14 tests adapter.
-- **SkillDefinition admin amélioré** : labels lisibles dans le form création, hint sous
-  le champ Key, sélects catégorie. `optionLabels` ajouté à `FieldDef` + `StatField`.
-- **Onglet Skills joueur** : `GET /characters/me/skills` (level, xp, nextLevelXp),
-  `loadSkills()` dans `character.store`, `SkillsTab.tsx` (groupé par catégorie, barre XP,
-  niveau max). Onglets Talents/Succès placeholders cliquables dans le panneau personnage.
-- **DevTools UX** : panneau redimensionnable (`resize: both`, min/max), `template-stats`
-  responsive (`flex: 1 + min-width: 72px`), header recette à deux lignes, sélects
-  category/station, classes SCSS manquantes (`__recipe-subtext`, `__instance-row`, etc.).
-
----
-
-## Fonctionnalités actuellement opérationnelles
-
-| Domaine | Ce qui fonctionne |
+| Domaine | État |
 |---|---|
-| Combat | Aggro, fuite, auto-attaque, poursuite, états `alive/fighting/escaping/dead` |
-| Respawn | Creature (20 s), personnage (point le plus proche à 0 PV), resource (timer template) |
-| Récolte | Gathering avec timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
-| UI | ActionPanel, barre de vie flottante, panneau personnage onglet Perso, HUD DevTools admin-only |
-| DevTools — commandes | `/spawn`, `/tp`, `/sethp`, `/aggro`, `/respawn all`, `/help` — voir `docs/07_Admin/admin-tool.md` |
-| DevTools — panneau | Panneau flottant draggable : module World + OverlayControls + AdminPanel WOM (onglet toggle Legacy) |
-| DevTools — store | `DevToolsStore` singleton `__GLOBAL_DEVTOOLS_STORE__` : console, historique, ouverture HUD, mode edit, position panneau, lastClickedPos, contexte coordonnées (world click px/WU/tile/chunk) |
-| DevTools — bridge | `DevToolsBridge` minimal : getters tolérants pour `window.game`, `WorldScene`, socket, mapId courant et caméra principale |
-| DevTools — World | `CoordinateInspector` lecture seule : activeTool, dernier clic monde Phaser en pixels, WU, tile, chunk |
-| DevTools — overlays | Overlays Resources / Creatures / CreatureSpawns avec sélection au clic, Station Radius Overlay pour les stations de craft |
-| DevTools — Command Palette | Input filtré par label/id, Enter = première action, liste cliquable, pending state |
-| AdminPanelWOM | Resources (instances WOM + templates dérivés, respawnDelayMs éditable, lootPool lecture seule, WU/respawnAt affichés, Reset template). Creatures (instances WOM, templates REST). CraftingRecipes et CraftingStations (templates + instances WU, drag-to-map, TP). Players/Overview REST. Console identique legacy. |
-| Studio SDK — ActionRegistry | `PositionActionProvider` (Focus Camera), `WorldObjectActionProvider` (Copy Info), `ResourceActionProvider` (Force Respawn + Reset Template) |
-| Studio SDK — projection | `wuToScreen()` centralisée dans `phaser/utils/wuProjection.ts` |
-| Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
-| Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
-| Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé loot : `npm --workspace api-gateway run test -- loot.service item-materialization creatures.service resources.gateway item.service`, client complet : `npm --workspace client run test` |
-| Migration WU | **P0–P7 entièrement soldés (2026-06-26).** Protocole WebSocket WU pur. Colonnes legacy DB supprimées. Source de vérité unique : `worldX/worldY/mapId`. Voir `docs/01_Architecture/wu-migration-audit.md`. |
-| Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
-| Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
-| Loot Hybrid | `Item.objectMode` source de vérité `STACKABLE/INSTANCE`. `ItemMaterializationService` 4 chemins. `LootService` pur/synchrone. Loot creature → `WorldItem`, loot récolte → `Inventory`. Migration `1782864000000-AddObjectModeToItem`. |
-| Runtime V2 | **Entièrement terminé (2026-06-29).** `ItemTransferService` 20 transitions, 10 domaines, verrou pessimiste systématique, zéro mutation directe. `ItemInstance.createdBySource` persisté. ADR-0010/ADR-0011 Accepted. Voir `docs/09_Workflow/runtime-roadmap.md`. |
-| Trade | `TradeService` : échange peer-to-peer d'`ItemInstance`. Sessions PENDING/COMPLETED/CANCELLED. TRADE_LOCK/COMMIT/CANCEL. Anti-deadlock lexicographique. `POST /trade/create`, add, remove, accept, cancel. |
-| Bank | `BankService` : dépôt/retrait d'`ItemInstance`. `GET /bank/:charId`, `POST deposit`, `POST withdraw`. Instance-only MVP. |
-| Mail | `MailService` : envoi/réclamation d'`ItemInstance` en pièce jointe. Inbox/Sent/Delete. Instance-only MVP. |
-| Guild Storage | `GuildStorageService` : stockage partagé d'`ItemInstance` dans une guilde. Propriétaire uniquement MVP. |
-| Housing | `HousingService` : stockage d'`ItemInstance` dans une maison joueur. Propriétaire uniquement MVP. |
-| Auction | `AuctionService` : listing, vente, claim acheteur, retour vendeur. Wallet Economy intégré. Instance-only MVP. |
+| Combat creature | Aggro, fuite, auto-attaque, respawn (20 s) |
+| Récolte | Timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
+| Loot | Hybrid STACKABLE/INSTANCE — `ItemMaterializationService` 4 chemins |
+| Crafting | Stations placées en WU, validation distance serveur, ActionPanel → craft |
+| Skills joueur | Niveau, XP, nextLevelXp par skill — onglet panneau personnage |
+| Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
+| Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
+| Bank / Mail / Guild / Housing | MVPs Instance-only opérationnels (endpoints REST, pas d'UI en jeu) |
+| Auction | Listing, achat, claim acheteur/vendeur, wallet Economy intégré (pas d'UI en jeu) |
+| DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations, Command Palette, Studio SDK ActionRegistry |
+| Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 
 ---
 
-## Décisions et règles à ne pas oublier
+## Dette technique ouverte
 
-- **Système de coordonnées WU (ADR-0001 Accepted, ADR-0002 Accepted)** : migration P0–P7
-  entièrement soldée. `1 tile = 1024 WU`, `CHUNK_SIZE=64`, `CHUNK_SIZE_WU=65536`,
-  `DEFAULT_MAP_ID=1`. Source de vérité unique : `worldX / worldY / mapId` (toutes entités).
-  Projection isométrique (client uniquement) : `screenX = 1000 + (worldX − worldY) / 16`,
-  `screenY = (worldX + worldY) / 32`. Helper TS partagé : `src/phaser/utils/wuProjection.ts`.
-  Les trois couches : **Runtime/DB** (`worldX/worldY/mapId`), **Projection écran** (dérivée
-  côté serveur pour `ConnectedPlayer.x/y`, côté client pour les sprites Phaser),
-  **Phaser** (`sprite.x/y` — rendu local uniquement, jamais persisté).
-  Voir `docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md` et
-  `docs/01_Architecture/wu-migration-audit.md`.
-- **Navigation client — NavGrid / Pathfinder** : `NAV_CELL_SIZE_WU = 128` (8×8 nav
-  cells par tile, `NAV_CELLS_PER_TILE = 8`). `WalkabilityGrid` (résolution tile) →
-  `createNavGridFromWalkabilityGrid(wg, 8)` → `NavGrid` (512×512 pour une map 64×64 tiles).
-  Format : `grid[y][x]`, `0` = walkable, `1` = bloqué. A\* 8 directions, coût `hypot`,
-  résultat `{x: navX, y: navY}[]`. `smoothPath` (string-pulling greedy Bresenham LOS).
-  `findNearestWalkableCell` (Chebyshev rings) : si la cible est bloquée, `wasSnapped=true`
-  supprime le fallback mouvement direct. Modules : `walkabilityGrid.ts`, `pathfinding.js`.
-- Le client ne fait jamais autorité sur les dégâts, positions critiques, loot ou
-  ownership — voir `docs/02_Security/client-server-trust.md`.
-- Les actions admin doivent être autorisées côté serveur. `AdminGateway` implémente
-  `OnGatewayConnection` et valide le JWT indépendamment via `WsAuthService`. Le rôle
-  `client.data.role` vient exclusivement du JWT signé côté serveur — voir
-  `docs/02_Security/admin-permissions.md`.
-- `WorldService.checkInteraction` est la barrière anti-cheat de distance ; toute
-  nouvelle interaction doit la réutiliser — voir `docs/01_Architecture/client-server-boundaries.md`.
-- `server.emit` broadcast à tous les clients (pas de rooms) — acceptable maintenant,
-  dette de scalabilité — voir `docs/01_Architecture/realtime-socketio.md`.
-- `synchronize: true` en développement local uniquement — colonnes NOT NULL
-  nécessitent `{ default: x }` — voir `docs/04_Server/typeorm.md`.
-- Le socket Socket.IO est un singleton créé dans `WorldPage.jsx`, partagé via
-  `window.game.socket`. Les stores Zustand sont des singletons `window.__GLOBAL_*_STORE__`.
-- **Studio SDK — ActionRegistry** : les providers d'actions sont déclenchés par
-  capabilities WOM. Un provider peut partager une capability avec un autre (ex.
-  `PositionActionProvider` et `WorldObjectActionProvider` utilisent tous deux `transform`).
-  L'ordre d'enregistrement dans `index.ts` détermine l'ordre d'affichage.
-- **Tokens de génération respawn** : `ResourcesService.pendingRespawnTokens` invalide
-  les timers legacy après un `forceRespawn`. Tout nouveau timer doit capturer son
-  token au moment de `armRespawnTimer` et le vérifier dans `doRespawn`.
-- **`buildResourceBroadcast`** : tout broadcast `resource_update` depuis le service
-  doit utiliser ce helper pour inclure `type`/`worldX`/`worldY`/`mapId`.
-  Sans ces champs, le client ne peut pas recréer le sprite après un état `dead`.
-  (`x`/`y` pixels ne sont plus stockés en entité — supprimés en P7-D.)
-- **`lootPool` non éditable via socket** : `admin:update_resource_template` n'accepte
-  que `defaultRemainingLoots` et `respawnDelayMs`. `lootPool` est affiché en lecture
-  seule dans AdminPanelWOM.
-- Les maps Tiled utilisent exclusivement le format TMJ (natif JSON). Les tilesets
-  utilisent TSX. Aucun convertisseur TMX → JSON autorisé. Le tileset doit être inliné
-  dans le TMJ (pas de référence TSX externe) pour que Phaser le charge correctement.
-  Lors d'un export Tiled, vérifier qu'aucun tileset externe parasite n'est ajouté
-  — voir `docs/05_World/tiled.md`.
+| ID | Description | Priorité | Phase |
+|---|---|---|---|
+| TD-002 | Equipment legacy par `Item` catalogue — `Inventory.equipped` encore actif | High | Equipment Runtime V2 |
+| TD-005 | `CharacterEquipment` non migré vers `ItemInstance` | High | Equipment Runtime V2 |
+| TD-006 | Unequip ne passe pas par `ItemTransferService` pour les items legacy | High | Equipment Runtime V2 |
+| TD-009 | `craftedBy`/`quality` absents des `ItemInstance` craftées | Medium | Craft avancé |
+| TD-013 | `removeExpiredItems` scheduler non branché | Medium | WorldItem maintenance |
+| TD-014 | Race condition `removeExpiredItems` sur les stacks | Low | WorldItem hardening |
+| TD-015 | Bank MVP — stacks non supportés, pas de limite de slots | Medium | Bank V2 |
+| TD-016 | Mail MVP — pièce jointe unique, stacks non supportés, pas de scheduler | Medium | Mail V2 |
+| TD-017 | Guild Storage MVP — propriétaire uniquement, stacks non supportés | Medium | Guild V2 |
+| TD-018 | Housing MVP — propriétaire uniquement, stacks non supportés | Medium | Housing V2 |
+| TD-019 | Trade MVP — expiration session absente, stacks non supportés | Medium | Trade V2 |
+| — | `auth.controller.spec.ts` — 1 test pré-existant en échec (AuthService manquant) | High | avant CI/prod |
+| — | `RespawnPoint.radius` en pixels (drift respawn) — `legacyRadiusToWU()` disponible | Low | WU cleanup |
+| — | Templates IA (`aggroRadius`, `patrolRadius`, `speedMin/Max`) encore en pixels en DB | Medium | WU cleanup |
+| — | `mapId` hardcodé à `1` dans DevToolsStore/WorldScene | Medium | multi-cartes |
+| — | `wuToScreen` dupliquée dans `WorldScene.js` (`resolveScreen()` local) | Low | TS migration WorldScene |
+| — | Double console admin (`ActionPanel.tsx` + `AdminPanelWOM.tsx`) | Low | — |
+| — | `server.emit` broadcast global — pas de rooms/zones | Medium | montée en charge |
+| — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
+| — | Sprite goblin utilise `textureKey: 'turkey'` en placeholder | Low | contenu |
+| — | `synchronize: true` en dev — migrations TypeORM pour prod non créées | Medium | prod-readiness |
 
 ---
 
-## Dette technique connue
+## Prochaines priorités
 
-- ~~**[CRITIQUE] `creatures.service.ts` entièrement en pixels**~~ — **SOLDÉ**.
-- ~~**[CRITIQUE] Anomalies OUT_OF_MAP_BOUNDS**~~ — **SOLDÉ**.
-- ~~**[CRITIQUE] `resources.gateway.ts` range check en pixels**~~ — **SOLDÉ**.
-- ~~**[IMPORTANT] Animaux — worldX/Y jamais écrits au runtime**~~ — **SOLDÉ**.
-- ~~**[IMPORTANT] Cycle respawn resource invisible après dead**~~ — **SOLDÉ** (`buildResourceBroadcast`).
-- ~~**[IMPORTANT] `resources.gateway.ts` MOVE_TOLERANCE en pixels**~~ — **SOLDÉ** (P7-C2 : `MOVE_TOLERANCE_WU = 128`, `GatherSession.lastWorldX/Y`).
-- ~~**[IMPORTANT] `character_respawn` et `character_teleport` en pixels**~~ — **SOLDÉ** (P4–P4.5).
-- ~~**[IMPORTANT] `player_move` — x/y fallback à supprimer**~~ — **SOLDÉ** (P5).
-- ~~**[IMPORTANT] Protocole admin en pixels**~~ — **SOLDÉ** (P6).
-- ~~**[IMPORTANT] Colonnes legacy DB (`positionX/Y`, `creature.x/y`, etc.)**~~ — **SOLDÉ** (P7-A à P7-D : backfill, double-write supprimé, colonnes supprimées des entités, migration `1782432000000-DropLegacyPixelColumns` créée).
-- **[IMPORTANT] `auth.controller.spec.ts` en échec** : 1 test pré-existant échoue
-  (dépendance `AuthService` manquante dans le module de test). Non bloquant en dev,
-  à corriger avant CI/prod.
-- **[IMPORTANT] `RespawnPoint.radius` en pixels** : drift de respawn encore calculé
-  avec `nearest.radius` en pixels. `legacyRadiusToWU()` disponible pour convertir.
-  Ne concerne que le drift aléatoire de respawn, faible criticité gameplay.
-- **[IMPORTANT] Templates IA en pixels** : `aggroRadius`, `patrolRadius`, `speedMin/Max`
-  dans `CreatureTemplate` sont encore exprimés en pixels. `legacyRadiusToWU()` convertit
-  ces valeurs à la volée. Migration vers colonnes WU native : future dette explicite.
-- **[IMPORTANT] `mapId` hardcodé à `1` dans DevToolsStore/WorldScene** : le contexte
-  de clic alimente `mapId: 1` statique. À rendre dynamique quand le multi-cartes arrive.
-- **[IMPORTANT] DevTools HUD — rôle admin côté client uniquement pour l'affichage** :
-  le bouton HUD reprend la visibilité client-side existante. Les actions sensibles
-  restent à valider côté serveur comme avant.
-- **[MINEUR] `wuToScreen` encore dupliquée dans `WorldScene.js`** : `resolveScreen()`
-  local n'utilise pas encore `wuProjection.ts`. Migration possible quand `WorldScene`
-  sera partiellement converti en TS ou quand le besoin se représente.
-- **[MINEUR] Double console admin** : `ActionPanel.tsx` et `AdminPanelWOM.tsx`
-  dupliquent la logique `runCommand`/`onKeyDown`/autocomplete (~80 lignes chacun).
-- **[MINEUR] `window.game` résiduel** : les attachements restent dans `WorldPage.jsx`
-  et `WorldScene.js`, et `CoordinatesLayer.jsx` lit encore directement `window.game`.
-  Migration progressive via `DevToolsBridge` prévue.
-- **[MINEUR] Zone hit spawn rectangulaire** : les Zones Phaser pour la sélection
-  CreatureSpawn sont 28×28 rectangulaires (pas circulaires). Un clic dans le coin
-  hors du cercle visuel déclenche quand même la sélection — acceptable pour un outil admin.
-- **[MINEUR] Copy Info sans feedback visuel** : action `worldObject.copyInfo` silencieuse
-  si clipboard indisponible (HTTP sans HTTPS). Pas de toast / confirmation prévue.
-- **[MINEUR] `lootPool` non éditable dans AdminPanelWOM** : affiché en lecture seule.
-  Édition nécessiterait un nouveau socket event ou endpoint REST avec validation JSON.
-- **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
-- `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
-- Pathfinder peut échouer si un creature est sur une tuile bloquante.
-- ~~**[IMPORTANT] TD-008 : `ItemInstance` sans validations de transition**~~ — **SOLDÉ** (Runtime V2, `772cc75`).
-- ~~**[IMPORTANT] TD-010 : Loot stack-like uniquement**~~ — **SOLDÉ** (Loot Hybrid, `0f4edf3`).
-- **[IMPORTANT] TD-009 : `craftedBy`/`quality` absents des `ItemInstance` craftées** — Open (Craft avancé, Gameplay V1).
-- **[IMPORTANT] TD-019 : Trade MVP — expiration session absente, stacks non supportés** — Open (Trade V2).
-- **[IMPORTANT] Equipment Runtime V2 en cours** : `Inventory.equipped` legacy encore actif, TDs 002/005/006 ouverts.
-- `synchronize: true` — migrations TypeORM à prévoir pour la prod.
-- Sprite goblin utilise `textureKey: 'turkey'` en placeholder.
-- Le tileset grass ne contient qu'une seule tuile — variété visuelle à construire.
+**Gameplay V1** — voir `docs/09_Workflow/runtime-roadmap.md` section "Gameplay V1" et ADR-0012.
 
----
+1. **Skills Runtime Foundation** — entité `SkillRuntime`, XP award, level-up, validation craft/récolte
+2. **Combat avancé** — effets, cooldowns, résistances
+3. **Récolte avancée** — skill check, XP, qualité
+4. **Craft avancé** — `craftedBy`, quality, `SkillRuntime` check
+5. **Économie** — UI Auction/Mail en jeu (chantier Building/WOM dédié requis)
+6. **Social, Quêtes, IA, Contenu**
 
-## Prochaines priorités possibles
-
-### Runtime V2 — **ENTIÈREMENT TERMINÉ (2026-06-29)**
-
-Voir `docs/09_Workflow/runtime-roadmap.md` section "Runtime V2 — Completed".
-
-### Gameplay V1 — Prochain chapitre
-
-Priorités ordonnées dans `docs/09_Workflow/runtime-roadmap.md` section "Gameplay V1".
-
-1. Skills & Progression
-2. Combat avancé
-3. Récolte avancée
-4. Craft avancé
-5. Économie
-6. Social
-7. Quêtes
-8. IA
-9. Contenu
-
-### DevTools — Admin WOM (en cours)
-- [x] AdminPanelWOM — pipeline WOM pour ressources et animaux
-- [x] Overlay Creature Spawns corrigé (URL + auth + fallback legacy)
-- [x] `respawnDelayMs` éditable dans les templates resource
-- [x] `respawnAt` exposé dans les Resource WorldObjects
-- [x] Coordonnées WU et respawnAt affichés sur les instances resource
-- [x] Bouton "Reset template" sur les instances resource
-- [x] Étape 7 — migration `admin.store` → `devtools.store` entièrement soldée (commit 137fb10)
-- [ ] Phase A — voir `docs/01_Architecture/admin-tool-roadmap.md` (auth WS admin, pagination serveur, spawns éditables)
+**DevTools — Admin WOM** :
+- [ ] Phase A — auth WS admin, pagination serveur, spawns éditables (`docs/01_Architecture/admin-tool-roadmap.md`)
 - [ ] Phase B — overlays debug (chunks, collisions, aggro, pathfinding)
 
-### Migration WU — **ENTIÈREMENT SOLDÉE (2026-06-26)**
-
-- [x] P0–P6 — Protocole WebSocket WU pur (soldés en sessions précédentes)
-- [x] P7-A à P7-D — Colonnes legacy DB supprimées, migration TypeORM créée, backfill scripts supprimés
-
-Dettes restantes **intentionnelles** post-migration :
-- `RespawnPoint.radius` encore en pixels (faible criticité, `legacyRadiusToWU()` disponible)
-- Templates IA (`aggroRadius`, `patrolRadius`, `speedMin/Max`) encore en pixels en DB
-
-Voir `docs/01_Architecture/wu-migration-audit.md` pour l'audit complet.
-
-### Gameplay / contenu
-- [x] Système de loot sur les animaux tués (pipeline Loot Hybrid — 2026-06-28)
-- [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
-- [ ] Import sprite goblin (textureKey propre)
-- [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
-- [ ] Autres types d'animaux (loup, sanglier…)
-- [ ] Section Décor dans le panneau DevTools
-- [ ] Migrations TypeORM pour la prod
-
 ---
 
-- **`ItemMaterializationService` — règle transaction** : le service reçoit toujours
-  un `EntityManager` de l'appelant et ne crée jamais sa propre transaction. L'appelant
-  (`CreaturesGateway`, `ResourcesGateway`) ouvre la transaction via `DataSource.transaction()`.
-  Tout nouveau consommateur doit respecter ce contrat.
-- **`LootService` — contrat retour** : `generateLoot()` retourne `LootEntry[]` (tableau vide
-  = pas de loot, plus de sentinel `{ quantity: 0 }`). `generateLootFromPool()` retourne
-  `LootEntry | null` (null = pas de drop).
-- **`Item.objectMode` — source de vérité matérialisation** : `STACKABLE` = stack en `Inventory`
-  ou `WorldItem` avec `quantity`. `INSTANCE` = une `ItemInstance` par unité, containerId =
-  `characterId` (inventaire) ou `worldItem.id` (sol). Ne jamais déduire le mode autrement.
+## Règles critiques (non documentées ailleurs)
 
----
-
-## Documents potentiellement impactés
-
-- [ ] `docs/04_Server/loot.md` (à créer) — pipeline Loot Hybrid : `LootService`, `ItemMaterializationService`, `ObjectMode`, 4 chemins, contrat `EntityManager`
-- [ ] `docs/06_Database/schema.md` — colonne `item.objectMode`, migration `1782864000000-AddObjectModeToItem`
-- [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection, AdminPanelWOM, NavGrid/Pathfinder
-- [ ] `docs/04_Server/websockets.md` — `player_move` WU-only (P5), protocole admin WU (P6), `buildResourceBroadcast`
-- [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, admin protocol WU, drag-to-map WU, Tp WU
-- [ ] `docs/06_Database/schema.md` — colonnes WU : déjà documentées, vérifier cohérence
-- [ ] `docs/05_World/maps-and-collisions.md` — NavGrid 8×8, `NAV_CELL_SIZE_WU=128`, pathfinding WU
-- [x] `docs/01_Architecture/websocket-wu-migration-study.md` — P0–P7 soldés marqués
-- [x] `docs/01_Architecture/wu-migration-audit.md` — P7 soldé, audit complet à 100%
-- [x] `docs/01_Architecture/adr/ADR-0002-entity-positioning.md` — promu Accepted
-- [x] `docs/00_Project/glossary.md` — "Known gaps" WU mis à jour
+- **`ItemTransferService`** est le seul point de mutation de `state/containerType/containerId/ownerId` sur `ItemInstance`. Zéro mutation directe autorisée hors de ce service.
+- **`ItemMaterializationService`** reçoit toujours un `EntityManager` de l'appelant et n'ouvre jamais sa propre transaction.
+- **`LootService`** est pur et synchrone — `generateLoot()` retourne `LootEntry[]`, `generateLootFromPool()` retourne `LootEntry | null`.
+- **`buildResourceBroadcast`** obligatoire pour tout `resource_update` — sans `type/worldX/worldY/mapId`, le client ne peut pas recréer le sprite après `dead`.
+- **`WorldService.checkInteraction`** est la barrière anti-cheat de distance — toute nouvelle interaction doit la réutiliser.
+- **Coordonnées** : DB/Runtime = `worldX/worldY/mapId` (WU). Pixel cache `x/y` uniquement dans `ConnectedPlayer` (rendu). Ne jamais persister les pixels Phaser.
+- **`lootPool`** non éditable via socket — `admin:update_resource_template` n'accepte que `defaultRemainingLoots` et `respawnDelayMs`.
+- **Tiled** : format TMJ natif uniquement, tileset inliné dans le TMJ. Aucun convertisseur TMX→JSON.
+- **Socket** : singleton créé dans `WorldPage.jsx`, partagé via `window.game.socket`. Stores Zustand = singletons `window.__GLOBAL_*_STORE__`.
 
 ---
 
 ## Règle de mise à jour
 
-Mettre à jour `STATUS.md` uniquement quand demandé explicitement ou quand une
-évolution structurante doit être reflétée. Garder ce fichier synthétique.
-
-Quand une mise à jour est demandée :
-
-1. Mettre à jour `STATUS.md`.
-2. Résumer ce qui a changé.
-3. Ajouter ou retirer les dettes techniques.
-4. Lister les documents `docs/` potentiellement impactés.
-5. Ne modifier les documents `docs/` que si le changement affecte une règle, une architecture, une API, une sécurité, une base de données ou un workflow durable.
-
----
-
-## Historique court des sessions
-
-### 2026-06-29 (Runtime Transfer Pipeline — ItemTransferService)
-
-- **ItemTransferService** : machine d'états centralisée pour toutes les
-  transitions Runtime `ItemInstance`. 5 transitions : EQUIP, UNEQUIP,
-  DROP_TO_WORLD, PICKUP_FROM_WORLD, ARCHIVE. Verrou pessimiste interne,
-  `EntityManager` fourni par l'appelant. `ItemTransferModule` importé dans
-  `InventoryModule`, `CharactersModule`, `WorldItemsModule`.
-- **Migration des 3 services** : `InventoryService` (equipItemInstance, unequipItem
-  INSTANCE), `CharacterService` (unequipItem INSTANCE), `WorldItemService`
-  (pickupInstance, dropInstance, expireInstance) — toutes les mutations
-  `ItemInstance` délèguent à `transfer()`. Trois méthodes lock privées supprimées
-  de `WorldItemService`. `ItemMaterializationService` inchangé (création uniquement).
-- **Craft Hybrid C1–C6** (session précédente, non journalisé) : `CraftingService.craft()`
-  step 9 délègue à `ItemMaterializationService` avec `source: 'CRAFT'`,
-  `destination: { type: 'INVENTORY', characterId }`. `CraftingModule` importe
-  `ItemMaterializationModule`. 7 tests `crafting.service.spec.ts`.
-- 1055/1056 tests, build propre.
-
-### 2026-06-28 (Loot Hybrid — ItemMaterializationService + ObjectMode)
-
-- **Pipeline Loot Hybrid** : enum `ObjectMode` (`STACKABLE | INSTANCE`) sur `Item.objectMode`,
-  migration `1782864000000-AddObjectModeToItem`. `LootService` retourne `LootEntry[]` /
-  `LootEntry | null` — pur, synchrone, sans DB. `ItemMaterializationService` (4 chemins :
-  stack/instance × inventaire/monde), reçoit `EntityManager`, ne crée jamais sa transaction.
-  `CreaturesGateway` remplace `worldItemService.spawnItem` par transaction + materialize →
-  emit `world_item_spawn`. `ResourcesGateway` remplace `inventoryService.addItem` par
-  transaction + materialize → emit `resource_loot` pour chaque `LootEntry[]` (matching par
-  `stack.item.category`). Seeds : 5 items STACKABLE, `basic_sword` INSTANCE.
-  157 tests ciblés, build propre.
-
-### 2026-06-26 (clôture migration WU — P7-D + documentation)
-
-- **P7-D — Suppression colonnes legacy DB** : `character.positionX/Y`, `creature.x/y`,
-  `resource.x/y`, `creature_spawn.spawnX/Y`, `respawn_point.x/y` supprimés des entités
-  TypeORM. `world-position.adapter.ts` réduit à l'interface `WUPositionRecord`.
-  `world-position.adapter.spec.ts` supprimé. Scripts `wu-backfill-dry-run.ts` et
-  `wu-backfill-real.ts` supprimés. Commandes npm `wu:dry-run` et `wu:backfill` retirées.
-  Migration TypeORM `1782432000000-DropLegacyPixelColumns` créée (5 tables, 10 colonnes,
-  `IF EXISTS`, `down()` restauratrice). 6 fichiers de specs mis à jour pour retirer
-  les fixtures `x/y/spawnX/Y`. Build propre. 861/862 tests (1 pre-existing auth failure).
-- **Documentation WU** : `wu-migration-audit.md` clos à 100%. `websocket-wu-migration-study.md`
-  P7 soldé. ADR-0002 promu Accepted/Implemented. ADR-0001 TODOs finaux marqués résolus.
-  Glossaire : "Known gaps" coordonnées mis à jour. STATUS.md.
-
-### 2026-06-24 (sessions 16–18 — Crafting Stations et runtime craft joueur)
-
-- **Crafting Stations Phase 1** : `CraftingStationTemplate` et `CraftingStation`
-  ajoutés comme World Objects persistés, administrables via WOM/AdminPanel. Seeds
-  non destructifs minimum : `forge`, `workbench`, `sawmill`, `alchemy_table`,
-  `cooking_station`. Validation serveur dans `CraftingService.craft()` pour
-  `stationType != "none"` : station compatible enabled, template enabled, même
-  `mapId`, distance euclidienne WU <= `interactionRadiusWU`.
-- **Crafting Stations Phase 2 + 2.5** : rendu debug in-world des stations enabled
-  dans `WorldScene`, bouton TP station dans AdminPanel, live refresh via
-  `crafting_station_update`, toggle DevTools `Station Radius` basé sur
-  `interactionRadiusWU`.
-- **Runtime Crafting UI joueur** : clic station → `ActionPanel` → panneau craft,
-  liste recettes compatibles, `POST /crafting/craft { recipeId, quantity }`,
-  refresh inventaire/skills. Le client n'envoie jamais `characterId` ni
-  `stationId`.
-- **UX portée et erreurs structurées** : indicateur purement informatif de portée
-  estimée côté client. Erreurs serveur station enrichies :
-  `CRAFTING_STATION_REQUIRED` et `CRAFTING_STATION_OUT_OF_RANGE` avec distance/rayon
-  si calculables.
-
-### 2026-06-24 (sessions 14–15 — migration WU P5 + P6)
-
-- **Migration WU P5 — `player_move` WU-only** : `x/y` supprimés du payload
-  `player_move`. `WorldScene.syncLocalPlayer` envoie `{ worldX, worldY, mapId,
-  direction }`. `world.gateway.ts` : validation WU uniquement. `world.service.ts`
-  `updatePlayer` : accepte uniquement `worldX/worldY/mapId`, dérive pixel cache via
-  `wuToIsoScreenX/Y`, supprime appel `isoScreenToWorldWU`. Suite "métriques passives
-  mouvement" mise à jour (retrait `x/y` des payloads de test). 572 tests backend.
-- **Migration WU P6 — Protocole admin WU pur** :
-  - Backend : `CreaturesService.createAdminSpawn`, `moveCreature`, `adminUpdateCreature` —
-    signatures `(worldX, worldY)`, pixel cache dérivé. `AdminService.createResource`,
-    `updateResource` — idem, guard `isFinite`. `admin.gateway.ts` : types payload
-    `worldX/worldY` pour les 6 événements admin de coordonnées.
-  - Frontend `admin.actions.ts` : `spawnCreature/teleportCharacter/moveCreature` en WU.
-    `commandRegistry.ts` : `getLastClickedWorldPoint()`, `resolvePos` utilise WU.
-    `/spawn` et `/tp` passent `worldX/worldY`. `adminPanel.shared.tsx` : `toWorldWU()`
-    via `screenToWorldWU`, drag-to-map et boutons Tp en WU. `AdminPanelWOM.tsx` :
-    `getDragPayload` et `getTpPosition/getInstanceTpPosition` en `worldX/worldY`.
-  - Tests : `teleportCharacter` mis à jour (WU input, guard NaN, pixel cache), nouveaux
-    tests `admin.service.spec.ts` (`createResource WU`, `updateResource WU`, guard Infinity).
-
-### 2026-06-24 (sessions 9–13 — Skills, Crafting, UX DevTools, migration WU P4–P5)
-
-- **SkillDefinition admin** : `SkillDefinition` entité, endpoints REST, gateway events,
-  `AdminPanelWOM` section Skills avec formulaire création (labels, hint snake_case, sélect catégorie).
-  `FieldDef.optionLabels?: string[]` ajouté pour sélects avec labels lisibles (`StatField`).
-- **CraftingRecipe admin** : `CraftingRecipe` entité (ingrédients JSON, résultats JSON,
-  requiredSkillKey, category, stationType). `craft-recipe-world-object.adapter.ts` (14 tests).
-  `AdminService` : `CraftingRecipeRepository` injecté, 7 méthodes CRUD. 65 tests
-  `admin.service.spec.ts`. 7 events `AdminGateway`. 4 endpoints REST `AdminController`.
-- **RecipesSection.tsx** : `skillDefinitions` prop → sélects dynamiques `requiredSkillKey`
-  avec labels. Constantes `RECIPE_CATEGORIES`, `STATION_TYPES`. Header recette deux lignes
-  (nom+badge / key·category·skill). Sélects create form.
-- **SkillsTab joueur** : `GET /characters/me/skills` (level, xp, nextLevelXp).
-  `character.store.loadSkills()`. `SkillsTab.tsx` (groupé par catégorie, barre XP,
-  niveau max). Onglets Talents/Succès placeholders cliquables.
-- **DevTools UX** : panneau `resize: both` (min 280 px), `overflow: auto`, `__body: flex: 1`.
-  `template-stat` responsive (`flex: 1 + min-width: 72px + width: 100%`), SCSS sélects.
-  Classes `.admin-panel__recipe-*` et `__field-hint` ajoutées.
-- **Migration WU P4** : `character_respawn` et `character_teleport` — ajout `chunkX/chunkY`
-  + `characterId` (téléport). 7 nouveaux tests `world.service.spec.ts` (31 total).
-- **Migration WU P5** : `x/y` legacy supprimés des deux payloads. `resolveScreen()` WU-first
-  dans `WorldScene.js` déjà en place — aucun consommateur ne dépendait des champs supprimés.
-
-### 2026-06-23 (session 8 — AdminPanelWOM, fixes overlays et respawn)
-
-- **AdminPanelWOM** : `adminPanel.shared.tsx` extrait GroupedSection, EntitySection,
-  useDraft, usePagination, InstanceAction des composants partagés. `AdminPanel.tsx`
-  refactorisé pour importer depuis shared. `AdminPanelWOM.tsx` pipeline WOM pour
-  ressources (instances + templates dérivés) et animaux (instances WOM, templates REST).
-  `DevToolsPanel.tsx` onglet toggle Legacy/WOM.
-- **Overlay Creature Spawns corrigé** : `WorldScene.js` — URL relative `/admin/...`
-  corrigée en `${VITE_API_URL}/admin/...` avec header `Authorization`. Fallback
-  `spawnX/spawnY` legacy dans `resolveWomScreen` de `DevToolsOverlayManager.js`.
-- **Resource templates enrichis** : `admin:update_resource_template` accepte
-  `respawnDelayMs`. `AdminPanelWOM` ajoute `respawnDelayMs` dans groupFields,
-  `lootPoolItems` en lecture seule. `_admin-panel.scss` règle `.admin-panel__info-line`.
-- **Resource instances enrichies** : `wosToResourceInstances` expose `worldX/Y/mapId`
-  et `respawnAt`. `getInstanceInfoLine` + `formatRespawnAt()`. Bouton "Reset template"
-  via `instanceActions`. `GroupedSectionConfig` étendu avec `getGroupInfoLine`,
-  `getInstanceInfoLine`, `instanceActions`, `InstanceActionButton`.
-- **`respawnAt` dans Resource WorldObjects** : `ResourceMetadata.respawnAt: Date | null`.
-  2 tests adapter. Type frontend `WorldObject.metadata.respawnAt?: string | null`.
-- **Cycle respawn resource corrigé** : `buildResourceBroadcast()` dans
-  `ResourcesService` — payload complet (`type`, `x`, `y`, `worldX`, `worldY`, `mapId`)
-  utilisé dans `armRespawnTimer`, `forceRespawn`, `resetInstanceFromTemplate`.
-  Cause : le client supprime le sprite à `dead` ; sans position/type au respawn,
-  la garde `x !== undefined` empêchait `upsertResource` de recréer le sprite.
-  Tests : 51 `resources.service.spec.ts` (2 nouveaux sur payload).
-
-### 2026-06-23 (session 7 — Studio SDK : actions, Command Palette, overlays)
-
-- **OverlayControls global** : panneau centralisé listant tous les overlays via
-  `getAllOverlayDefinitions()`. Boutons overlay locaux supprimés des modules WOM.
-- **Command Palette** : `CommandPalette.tsx` avec `filterActions()` pure, input filtré,
-  Enter = première action, clic = action choisie. 10 tests.
-- **Sélection CreatureSpawn depuis Phaser** : `Phaser.GameObjects.Zone` 28×28 au
-  centre de chaque spawn quand overlay ON. Callback → `setSelectedWorldObject`.
-  Cleanup automatique quand overlay OFF ou destroy.
-- **Action Focus Camera** : `PositionActionProvider` (capability `transform`),
-  `wuToScreen()` + `camera.pan(x, y, 400, "Power2")` via `DevToolsBridge`. 8 tests.
-- **Action Copy Info** : `WorldObjectActionProvider` (capability `transform`),
-  `formatWorldObjectInfo()` pure + `navigator.clipboard.writeText`. 12 tests.
-- **Action Force Respawn** : backend `ResourcesService.forceRespawn()` + tokens de
-  génération + endpoint `POST /admin/resources/:id/force-respawn`. Frontend
-  `ResourceActionProvider` (capability `harvestable`). Bouton local retiré de
-  `ResourceTemplateControls`.
-- **Projection WU centralisée** : `wuProjection.ts` + `wuProjection.spec.ts` (8 tests).
-  `DevToolsOverlayManager._wu2px()` supprimée, `PositionActionProvider` inline supprimée.
-- **Tests frontend** : 138 tests (10 fichiers) tous verts.
-
-### 2026-06-22 (session 6 — DevTools HUD et module World)
-
-- **DevTools hors panneau personnage** : entrée déplacée dans un HUD admin-only
-  monté depuis `GameLayout`, avec panneau flottant draggable et reset de position
-  à la fermeture.
-- **Module World** : premier module DevTools indépendant, avec `CoordinateInspector`
-  lecture seule (`World Click (px)`, WU, tile, chunk).
-- **AdminPanel legacy** : toujours accessible dans le panneau DevTools flottant,
-  sans modification fonctionnelle.
-
-### 2026-06-22 (session 5 — DevToolsBridge minimal)
-
-- **`devtoolsBridge.ts`** : premier bridge tolérant React ↔ Phaser côté DevTools
-  (`getPhaserGame`, `getWorldScene`, `getDevToolsSocket`, `getCurrentMapId`,
-  `getMainCamera`), sans état React et sans exception si Phaser n'est pas prêt.
-- **`AdminPanel.tsx`** : accès socket, clavier Phaser et caméra drag-to-map passés
-  par le bridge.
-- **`ActionPanel.tsx`** : accès socket, clavier Phaser et scène WorldScene passés
-  par le bridge.
-- **Validation** : `npm run build` dans `apps/client` OK (warning Vite de taille
-  de chunk uniquement).
-
-### 2026-06-22 (session 4 — DevTools infrastructure)
-
-- **DevToolsShell + DevToolsPanel** : créés dans `src/components/DevTools/`. `CharacterLayout`
-  branché sur `DevToolsShell`. Onglet "Admin" → "DevTools". `AdminPanel` inchangé.
-- **devtools.store.ts** : store Zustand singleton `__GLOBAL_DEVTOOLS_STORE__` avec
-  `isConsoleActive`, `lastClickedPos`, `commandHistory`, `historyIndex`. `admin.store.ts`
-  (alias de compatibilité, depuis supprimé — commit 137fb10).
-- **DevToolsStore enrichi** : `activeTool` (défaut `"legacy-admin"`), types
-  `DevToolsScreenPoint / WorldPoint / TilePoint / ChunkPoint`, setters individuels +
-  `setLastClickedContext` composite + `clearLastClickedContext`.
-- **WorldScene.js** : au pointerdown sans cible, calcule et alimente les quatre espaces
-  de coordonnées via l'inverse ADR-0001. `lastClickedPos` legacy conservé.
-- **Documentation** : `admin-tool-roadmap.md`, `project-audit.md`, 6 documents `docs/10_AI/`,
-  `docs/00_Project/domains.md`.
-
-### 2026-06-22 (session 3 — Phase 2 + protocole WebSocket)
-
-- **`creatures.service.ts` — migration WU complète** : boucle IA (doPatrolMovement,
-  doFighting, doEscaping) WU-authoritative, pixel cache dérivé de WU. `findNearestPlayer`
-  WU + filtre `mapId`. `attack()` utilise `creature.worldX/Y` directement. 27/27 tests.
-- **Backfill secondaire validé** : `wu:dry-run` confirme `creature_spawn` et
-  `respawn_point` 1/1 WU — prérequis B1/B2 de l'audit satisfaits.
-- **P0** : `join_world` ne fait plus confiance aux coordonnées client — `x/y` supprimés
-  de `JoinWorldPayload`, fallback serveur contrôlé uniquement.
-- **P1** : `player_move` payload additif — client envoie `x/y + worldX/worldY/mapId`,
-  backend WU-first. 6 nouveaux tests (24 total `world.service.spec.ts`).
-- **P2** : Frontend positionne joueurs depuis `worldX/worldY` — helper `resolveScreen`
-  (renommé depuis `resolvePlayerScreen`), fallback `x/y` conservé.
-- **P3** : Frontend positionne animaux et ressources depuis `worldX/worldY` via `resolveScreen`.
-- **Audits créés** : `wu-final-backend-audit.md` (migration ~60 % backend estimée) et
-  `websocket-wu-migration-study.md` (plan P0-P7).
-
-### 2026-06-22 (session 2 — clôture Phase 1)
-
-- **Phase 1 WU — clôturée** : backfill exécuté (0 anomalie), ADR-0001 accepté.
-- **Documentation alignée** : `worldTileX/Y` → `worldX/Y` dans glossaire, ROADMAP,
-  `movement-authority-audit.md`. Formule bounds ADR-0003 corrigée (`CHUNK_SIZE` → `CHUNK_SIZE_WU`).
-- **`coordinate-system-phase1-validation.md`** mis à jour : section backfill, section ADR, critères de sortie.
-- **`wu-migration-audit.md`** : C1 et C4 marqués soldés, estimations mises à jour (~35–40%).
-
-### 2026-06-22 (session 1)
-
-- **`updatePlayer()` WU-first** : pixels → WU en priorité, x/y mis à jour seulement
-  si conversion réussit, garde-fous NaN/Infinity. 16 tests (`world.service.spec.ts`).
-- **`teleportCharacter()` double-écriture** : bug CRITIQUE soldé — DB écrit désormais
-  `positionX/Y` + `worldX/Y/mapId` sur téléportation.
-
-### 2026-06-21 (session 2)
-
-- **Migration WU — infrastructure** : `world-coordinates.ts` (module central),
-  `legacy-pixel-position.adapter.ts`, `world-position.adapter.ts` (32 tests),
-  `wu-backfill-report.ts` (36 tests, 6 anomalies dont OUT_OF_MAP_BOUNDS).
-- **Scripts backfill** : `wu-backfill-dry-run.ts` et `wu-backfill-real.ts`
-  (`npm run wu:dry-run` / `npm run wu:backfill`). Entités TypeORM complètes.
-- **Migration WU — world.service.ts** : `ConnectedPlayer` avec `worldX/Y/mapId`
-  requis + `x/y` cache pixel. `joinPlayer`, `updatePlayer`, `persistPlayerPosition`
-  (double-écriture), `respawnCharacter` (Chebyshev WU + filtre mapId) migrés.
-- **Audit** : `docs/01_Architecture/wu-migration-audit.md` créé.
-
-### 2026-06-21 (session 1)
-
-- ADR-0001 créé (Draft/Proposed) : système de coordonnées monde tile-first,
-  `CHUNK_SIZE=64`, formules de projection isométrique, responsabilités par couche.
-- Relecture ADR-0001 : contradiction option B / question ouverte corrigée.
-- Documentation coordonnées mise à jour : `phaser-world.md`, `maps-and-collisions.md`,
-  `chunks.md` — dette de conversion documentée.
-- `WorldScene.js` : constantes renommées `TILEMAP_TEST_OFFSET_X/Y`, commentaire
-  simplifié.
-
-### 2026-06-19 (suite)
-
-- Pipeline graphique isométrique : workspace `assets/source/` créé, templates GIMP,
-  masques PNG, SVG géométrique, guides, art-direction.
-- Décision d'architecture Tiled : TMJ natif + TSX, pas de convertisseur.
-- Tilemap grass intégrée dans Phaser (64×64, isométrique 128×64 px).
-- Correction SCSS `lighten()` → `color.adjust()`.
-- Renommage `phaser/map/` → `phaser/world/`.
-
-### 2026-06-18 / 2026-06-19
-
-- Documentation projet restructurée et complétée dans `docs/`.
-- Documents client, serveur, sécurité, monde, base de données, admin et workflow complétés.
-- `STATUS.md` transformé en tableau de bord synthétique.
-- Vue d'ensemble admin enrichie : joueurs connectés (temps réel) et personnages enregistrés.
-- Panneau admin : mises à jour temps réel via socket, suppression définitive en DB,
-  sélecteur d'état sur les instances, templates ressources éditables.
-
-### 2026-06-17 et avant
-
-- Boucle combat complète (aggro, fuite, auto-attaque, respawn).
-- Panneau admin : hiérarchie deux niveaux, drag-and-drop map, console de commandes.
-- Entités `ResourceTemplate`, `CreatureTemplate`, `CreatureSpawn`, `RespawnPoint` seedées.
+Mettre à jour STATUS.md uniquement sur demande explicite ou évolution structurante.
+Ne pas dupliquer ce qui est dans `docs/` — pointer vers les ADR et documents concernés.
+Supprimer les dettes soldées, ne pas conserver l'historique des sessions (rôle de `git log`).
