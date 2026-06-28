@@ -123,7 +123,7 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
         throw new BadRequestException('worldItemId is required');
       }
 
-      const inventory = await this.worldItems.pickupItem({
+      const result = await this.worldItems.pickupItem({
         worldItemId: payload.worldItemId,
         characterId: player.characterId,
         worldX: player.worldX,
@@ -131,17 +131,31 @@ export class WorldItemsGateway implements OnGatewayInit, OnGatewayConnection {
         mapId: player.mapId ?? DEFAULT_MAP_ID,
       });
 
-      client.emit('inventory_update', {
-        itemId: inventory.item.id,
-        total: inventory.quantity,
-        item: {
-          id: inventory.item.id,
-          name: inventory.item.name,
-          type: inventory.item.type,
-          category: inventory.item.category,
-          image: inventory.item.image ?? null,
-        },
-      });
+      if (result.type === 'STACK') {
+        client.emit('inventory_update', {
+          itemId: result.inventory.item.id,
+          total: result.inventory.quantity,
+          item: {
+            id: result.inventory.item.id,
+            name: result.inventory.item.name,
+            type: result.inventory.item.type,
+            category: result.inventory.item.category,
+            image: result.inventory.item.image ?? null,
+          },
+        });
+      } else {
+        client.emit('inventory_update', {
+          itemId: result.item.id,
+          total: 1,
+          item: {
+            id: result.item.id,
+            name: result.item.name,
+            type: result.item.type,
+            category: result.item.category,
+            image: result.item.image ?? null,
+          },
+        });
+      }
 
       return { success: true };
     } catch (error) {

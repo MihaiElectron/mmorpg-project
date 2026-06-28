@@ -118,7 +118,7 @@ describe('WorldItemService', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('pickup atomique: verrouille, ajoute inventaire et retire du monde', async () => {
+  it('pickup STACK — verrouille, ajoute inventaire et retire du monde', async () => {
     const server = makeServer();
     service.setServer(server as any);
     const character = { id: 'char-1' } as Character;
@@ -133,6 +133,7 @@ describe('WorldItemService', () => {
       id: 'world-item-1',
       itemId: item.id,
       item,
+      itemInstanceId: null,
       quantity: 5,
       worldX: 1000,
       worldY: 1000,
@@ -159,7 +160,7 @@ describe('WorldItemService', () => {
     };
     dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
 
-    const inventory = await service.pickupItem({
+    const result = await service.pickupItem({
       worldItemId: worldItem.id,
       characterId: character.id,
       worldX: 1100,
@@ -169,7 +170,8 @@ describe('WorldItemService', () => {
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(qb.setLock).toHaveBeenCalledWith('pessimistic_write');
-    expect(inventory.quantity).toBe(7);
+    expect(result.type).toBe('STACK');
+    if (result.type === 'STACK') expect(result.inventory.quantity).toBe(7);
     expect(worldItem.state).toBe(WorldItemState.PICKED);
     expect(server.to).toHaveBeenCalledWith('map:1');
     expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
@@ -177,6 +179,227 @@ describe('WorldItemService', () => {
       mapId: 1,
       state: WorldItemState.PICKED,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // INSTANCE pickup
+  // -------------------------------------------------------------------------
+
+  function makeWorldItemWithInstance(overrides: Partial<WorldItem> = {}): WorldItem {
+    return {
+      id: 'world-item-inst-1',
+      itemId: item.id,
+      item,
+      itemInstanceId: 'instance-1',
+      quantity: 1,
+      worldX: 1000,
+      worldY: 1000,
+      mapId: 1,
+      state: WorldItemState.SPAWNED,
+      ownerCharacterId: 'char-1',
+      expiresAt: null,
+      createdAt: new Date(),
+      ...overrides,
+    } as WorldItem;
+  }
+
+  function makeInstanceInWorld(overrides: Partial<ItemInstance> = {}): ItemInstance {
+    return makeInstance({
+      state: ItemInstanceState.IN_WORLD,
+      containerType: ItemInstanceContainerType.WORLD,
+      containerId: 'world-item-inst-1',
+      ...overrides,
+    });
+  }
+
+  function makePickupInstanceManager(
+    worldItem: WorldItem,
+    instanceResult: ItemInstance | null,
+  ) {
+    const worldItemQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(worldItem),
+    };
+    const instanceQb = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(instanceResult),
+    };
+    return {
+      getRepository: jest.fn().mockImplementation((entity: unknown) => {
+        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
+        return { createQueryBuilder: jest.fn(() => worldItemQb) };
+      }),
+      save: jest.fn(async (_entity: unknown, value: unknown) => value),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      instanceQb,
+      worldItemQb,
+    };
+  }
+
+  it("pickup INSTANCE — transitionne ItemInstance vers INVENTORY avec containerId = characterId", async () => {
+    const worldItem = makeWorldItemWithInstance();
+    const instance = makeInstanceInWorld();
+    const manager = makePickupInstanceManager(worldItem, instance);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    });
+
+    expect(instance.state).toBe(ItemInstanceState.AVAILABLE);
+    expect(instance.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+    expect(instance.containerId).toBe('char-1');
+    expect(manager.save).toHaveBeenCalledWith(ItemInstance, instance);
+  });
+
+  it("pickup INSTANCE — met WorldItem a PICKED", async () => {
+    const worldItem = makeWorldItemWithInstance();
+    const instance = makeInstanceInWorld();
+    const manager = makePickupInstanceManager(worldItem, instance);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    });
+
+    expect(worldItem.state).toBe(WorldItemState.PICKED);
+    expect(manager.save).toHaveBeenCalledWith(WorldItem, worldItem);
+  });
+
+  it("pickup INSTANCE — emet world_item_remove et retourne type INSTANCE", async () => {
+    const server = makeServer();
+    service.setServer(server as any);
+    const worldItem = makeWorldItemWithInstance();
+    const instance = makeInstanceInWorld();
+    const manager = makePickupInstanceManager(worldItem, instance);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const result = await service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    });
+
+    expect(result.type).toBe('INSTANCE');
+    if (result.type === 'INSTANCE') {
+      expect(result.instance).toBe(instance);
+      expect(result.item).toBe(item);
+    }
+    expect(server.to).toHaveBeenCalledWith('map:1');
+    expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
+      id: worldItem.id,
+      mapId: 1,
+      state: WorldItemState.PICKED,
+    });
+  });
+
+  it("pickup INSTANCE — refuse si findInstanceForPickup retourne null (proprietaire incorrect)", async () => {
+    const worldItem = makeWorldItemWithInstance();
+    const manager = makePickupInstanceManager(worldItem, null);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("pickup INSTANCE — refuse si instance state != IN_WORLD (defense en profondeur)", async () => {
+    const worldItem = makeWorldItemWithInstance();
+    const instance = makeInstanceInWorld({ state: ItemInstanceState.AVAILABLE });
+    const manager = makePickupInstanceManager(worldItem, instance);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("pickup INSTANCE — refuse si WorldItem deja PICKED (double pickup)", async () => {
+    const worldItemQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => worldItemQb) }),
+      save: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: 'world-item-inst-1',
+      characterId: 'char-1',
+      worldX: 0,
+      worldY: 0,
+      mapId: 1,
+    })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("pickup INSTANCE — rollback si save ItemInstance echoue", async () => {
+    const worldItem = makeWorldItemWithInstance();
+    const instance = makeInstanceInWorld();
+    const worldItemQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(worldItem),
+    };
+    const instanceQb = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(instance),
+    };
+    const manager = {
+      getRepository: jest.fn().mockImplementation((entity: unknown) => {
+        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
+        return { createQueryBuilder: jest.fn(() => worldItemQb) };
+      }),
+      save: jest.fn().mockRejectedValue(new Error("DB failure")),
+      findOne: jest.fn(),
+      create: jest.fn(),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    await expect(service.pickupItem({
+      worldItemId: worldItem.id,
+      characterId: 'char-1',
+      worldX: 1100,
+      worldY: 1100,
+      mapId: 1,
+    })).rejects.toThrow("DB failure");
+    // worldItem.state reste SPAWNED : la transition WorldItem n a jamais eu lieu en memoire
+    // (le save(ItemInstance) a echoue avant d atteindre worldItem.state = PICKED)
+    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
   });
 
   it("dropInventoryItem STACK — decremente inventaire et spawn un WorldItem dans la meme transaction", async () => {

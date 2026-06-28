@@ -54,6 +54,10 @@ export interface DropInventoryItemResult {
   worldItem: WorldItem;
 }
 
+export type PickupItemResult =
+  | { type: 'STACK'; inventory: Inventory }
+  | { type: 'INSTANCE'; instance: ItemInstance; item: Item };
+
 export interface WorldItemDto {
   id: string;
   itemId: string;
@@ -138,7 +142,7 @@ export class WorldItemService {
     });
   }
 
-  async pickupItem(input: PickupWorldItemInput): Promise<Inventory> {
+  async pickupItem(input: PickupWorldItemInput): Promise<PickupItemResult> {
     this.assertFinitePosition(input.worldX, input.worldY, input.mapId);
 
     const picked = await this.dataSource.transaction(async (manager) => {
@@ -169,6 +173,13 @@ export class WorldItemService {
         throw new BadRequestException('WorldItem is too far away');
       }
 
+      if (worldItem.itemInstanceId) {
+        const instance = await this.pickupInstance(manager, worldItem, input.characterId);
+        worldItem.state = WorldItemState.PICKED;
+        await manager.save(WorldItem, worldItem);
+        return { type: 'INSTANCE' as const, worldItem, instance, item: worldItem.item };
+      }
+
       const inventory = await this.addInventoryQuantity(manager, {
         characterId: input.characterId,
         item: worldItem.item,
@@ -178,11 +189,58 @@ export class WorldItemService {
       worldItem.state = WorldItemState.PICKED;
       await manager.save(WorldItem, worldItem);
 
-      return { inventory, worldItem };
+      return { type: 'STACK' as const, worldItem, inventory };
     });
 
     this.emitRemove(picked.worldItem);
-    return picked.inventory;
+
+    if (picked.type === 'INSTANCE') {
+      return { type: 'INSTANCE', instance: picked.instance, item: picked.item };
+    }
+    return { type: 'STACK', inventory: picked.inventory };
+  }
+
+  private async pickupInstance(
+    manager: EntityManager,
+    worldItem: WorldItem,
+    characterId: string,
+  ): Promise<ItemInstance> {
+    const instance = await this.findInstanceForPickup(
+      manager,
+      worldItem.itemInstanceId!,
+      characterId,
+      worldItem.id,
+    );
+    if (!instance) {
+      throw new NotFoundException('Instance not found or not available for pickup');
+    }
+    if (instance.state !== ItemInstanceState.IN_WORLD) {
+      throw new BadRequestException('Instance is not in world state');
+    }
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = characterId;
+    await manager.save(ItemInstance, instance);
+
+    return instance;
+  }
+
+  private async findInstanceForPickup(
+    manager: EntityManager,
+    instanceId: string,
+    characterId: string,
+    worldItemId: string,
+  ): Promise<ItemInstance | null> {
+    return manager
+      .getRepository(ItemInstance)
+      .createQueryBuilder('instance')
+      .setLock('pessimistic_write')
+      .where('instance.id = :instanceId', { instanceId })
+      .andWhere('instance.ownerId = :characterId', { characterId })
+      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.WORLD })
+      .andWhere('instance.containerId = :worldItemId', { worldItemId })
+      .getOne();
   }
 
   async dropInventoryItem(input: DropInventoryItemInput): Promise<DropInventoryItemResult> {

@@ -120,7 +120,7 @@ describe('WorldItemsGateway', () => {
     expect(client.emit).not.toHaveBeenCalled();
   });
 
-  it('pickup_world_item appelle pickupItem avec la position serveur et émet inventory_update', async () => {
+  it("pickup STACK — appelle pickupItem avec la position serveur et emet inventory_update", async () => {
     const item = {
       id: 'item-1',
       name: 'Baton',
@@ -130,7 +130,7 @@ describe('WorldItemsGateway', () => {
     };
     const inventory = { quantity: 3, item };
     const service = {
-      pickupItem: jest.fn().mockResolvedValue(inventory),
+      pickupItem: jest.fn().mockResolvedValue({ type: 'STACK', inventory }),
     } as unknown as WorldItemService;
     const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
     const client = {
@@ -156,6 +156,40 @@ describe('WorldItemsGateway', () => {
         type: item.type,
         category: item.category,
         image: item.image,
+      },
+    });
+    expect(ack).toEqual({ success: true });
+  });
+
+  it("pickup INSTANCE — emet inventory_update avec total = 1 et l item template", async () => {
+    const item = {
+      id: 'item-1',
+      name: 'Baton',
+      type: 'material',
+      category: 'wooden_stick',
+      image: '/assets/images/items/wooden_stick.png',
+    };
+    const instance = { id: 'instance-1', itemId: item.id };
+    const service = {
+      pickupItem: jest.fn().mockResolvedValue({ type: 'INSTANCE', instance, item }),
+    } as unknown as WorldItemService;
+    const gateway = new WorldItemsGateway(service, { authenticate: jest.fn() } as any);
+    const client = {
+      data: { player: { characterId: 'char-1', worldX: 1000, worldY: 2000, mapId: 1 } },
+      emit: jest.fn(),
+    };
+
+    const ack = await gateway.onPickupWorldItem(client as any, { worldItemId: 'world-item-inst-1' });
+
+    expect(client.emit).toHaveBeenCalledWith('inventory_update', {
+      itemId: item.id,
+      total: 1,
+      item: {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        category: item.category,
+        image: item.image ?? null,
       },
     });
     expect(ack).toEqual({ success: true });
