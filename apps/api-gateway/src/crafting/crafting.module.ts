@@ -12,6 +12,7 @@ import { CraftingGateway } from './crafting.gateway';
 import { SkillsModule } from '../skills/skills.module';
 import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
+import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 
 @Module({
   imports: [
@@ -23,9 +24,10 @@ import { WorldModule } from '../world/world.module';
       CraftingStation,
       Item, // nécessaire pour la résolution des items au seed
     ]),
-    SkillsModule,      // pour SkillsService (helpers transactionnels craft)
-    CharactersModule,  // pour CharacterService (résolution characterId côté serveur)
-    WorldModule,       // pour position serveur connectée
+    SkillsModule,               // pour SkillsService (helpers transactionnels craft)
+    CharactersModule,           // pour CharacterService (résolution characterId côté serveur)
+    WorldModule,                // pour position serveur connectée
+    ItemMaterializationModule,  // pour matérialisation des résultats de craft
   ],
   controllers: [CraftingController],
   providers: [CraftingService, CraftingGateway],

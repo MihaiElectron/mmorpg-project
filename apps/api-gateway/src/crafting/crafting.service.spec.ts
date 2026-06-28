@@ -15,6 +15,7 @@ import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ describe('CraftingService — seedDefaultRecipes', () => {
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: SkillsService, useValue: {} },
         { provide: WorldService, useValue: { getConnectedPlayerByCharacterId: jest.fn() } },
+        { provide: ItemMaterializationService, useValue: { materialize: jest.fn() } },
       ],
     }).compile();
 
@@ -355,6 +357,7 @@ describe('CraftingService — craft()', () => {
   let mockDataSource: { transaction: jest.Mock };
   let mockSkillsService: Partial<Record<keyof SkillsService, jest.Mock>>;
   let mockWorldService: { getConnectedPlayerByCharacterId: jest.Mock };
+  let materializeMock: { materialize: jest.Mock };
 
   beforeEach(async () => {
     mockManager = {
@@ -363,6 +366,10 @@ describe('CraftingService — craft()', () => {
       save: jest.fn().mockImplementation((_entity, data) => Promise.resolve({ ...data })),
       create: jest.fn().mockImplementation((_entity, data) => ({ ...data })),
       remove: jest.fn().mockResolvedValue(undefined),
+    };
+
+    materializeMock = {
+      materialize: jest.fn().mockResolvedValue({ stacks: [], instances: [], worldItems: [] }),
     };
 
     mockDataSource = {
@@ -398,6 +405,7 @@ describe('CraftingService — craft()', () => {
         { provide: DataSource, useValue: mockDataSource },
         { provide: SkillsService, useValue: mockSkillsService },
         { provide: WorldService, useValue: mockWorldService },
+        { provide: ItemMaterializationService, useValue: materializeMock },
       ],
     }).compile();
 
@@ -735,12 +743,9 @@ describe('CraftingService — craft()', () => {
     expect(result.skill.xpGained).toBe(30); // 10 × 3
   });
 
-  it('rejette si une erreur survient pendant la production (rollback)', async () => {
+  it('rejette si une erreur survient pendant la matérialisation (rollback)', async () => {
     setupHappyPath(1);
-    // La 2e écriture (production) lève une exception
-    mockManager.save
-      .mockResolvedValueOnce({}) // consommation OK
-      .mockRejectedValueOnce(new Error('DB error'));
+    materializeMock.materialize.mockRejectedValueOnce(new Error('DB error'));
 
     await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow('DB error');
   });
@@ -823,5 +828,107 @@ describe('CraftingService — craft()', () => {
 
     // successRate = max(0.5, ...) → 0.4 < 0.5 → succès
     expect(result.successes).toBe(1);
+  });
+
+  // ── C5 : Hybrid Runtime ────────────────────────────────────────────────────
+
+  describe("craft() Hybrid Runtime (C5)", () => {
+    it("materialize appelé avec source CRAFT, destination INVENTORY et ownerId", async () => {
+      setupHappyPath(1);
+
+      await service.craft("char-1", "recipe-1", 1);
+
+      expect(materializeMock.materialize).toHaveBeenCalledWith(
+        mockManager,
+        [{ itemId: "item-iron_bar", quantity: 1 }],
+        {
+          source: "CRAFT",
+          destination: { type: "INVENTORY", characterId: "char-1" },
+          ownerId: "char-1",
+        },
+      );
+    });
+
+    it("materialize pas appelé si producedMap est vide (échec sans production)", async () => {
+      setupHappyPath(1);
+      mockManager.findOne.mockImplementation((entity: any) => {
+        if (entity === Character) return Promise.resolve(makeCharacter());
+        if (entity === CraftingRecipe)
+          return Promise.resolve(
+            makeFullRecipe({ baseSuccessRate: 0, minSuccessRate: 0, consumeIngredientsOnFailure: false }),
+          );
+        if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+        return Promise.resolve(null);
+      });
+      service["_randomFn"] = jest.fn().mockReturnValue(0.999);
+
+      await service.craft("char-1", "recipe-1", 1);
+
+      expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
+
+    it("quantity > 1 : materialize appelé avec quantité agrégée sur les tentatives", async () => {
+      setupHappyPath(3);
+
+      await service.craft("char-1", "recipe-1", 3);
+
+      expect(materializeMock.materialize).toHaveBeenCalledWith(
+        mockManager,
+        [{ itemId: "item-iron_bar", quantity: 3 }],
+        expect.objectContaining({ source: "CRAFT" }),
+      );
+    });
+
+    it("craft recette basic_sword : entries passées à materialize — CraftingService ne connaît pas objectMode", async () => {
+      setupHappyPath(1);
+      mockManager.findOne.mockImplementation((entity: any) => {
+        if (entity === Character) return Promise.resolve(makeCharacter());
+        if (entity === CraftingRecipe)
+          return Promise.resolve(
+            makeFullRecipe({
+              results: [{ id: "res-1", itemId: "item-basic_sword", producedQuantity: 1, chance: 1.0 } as CraftingResult],
+            }),
+          );
+        if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+        return Promise.resolve(null);
+      });
+      service["_randomFn"] = jest.fn().mockReturnValue(0.0);
+
+      await service.craft("char-1", "recipe-1", 1);
+
+      expect(materializeMock.materialize).toHaveBeenCalledWith(
+        expect.anything(),
+        [{ itemId: "item-basic_sword", quantity: 1 }],
+        expect.objectContaining({ source: "CRAFT" }),
+      );
+    });
+
+    it("rollback si consommation échoue en DB (manager.save lève une exception)", async () => {
+      setupHappyPath(1);
+      mockManager.save.mockRejectedValueOnce(new Error("DB consumption error"));
+
+      await expect(service.craft("char-1", "recipe-1", 1)).rejects.toThrow("DB consumption error");
+      expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
+
+    it("recette inconnue : NotFoundException avant tout accès à materialize", async () => {
+      setupHappyPath(1);
+      mockManager.findOne.mockImplementation((entity: any) => {
+        if (entity === Character) return Promise.resolve(makeCharacter());
+        if (entity === CraftingRecipe) return Promise.resolve(null);
+        return Promise.resolve(null);
+      });
+
+      await expect(service.craft("char-1", "recipe-1", 1)).rejects.toBeInstanceOf(NotFoundException);
+      expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
+
+    it("quantité insuffisante : BadRequestException avant materialize", async () => {
+      setupHappyPath(1);
+      mockManager.find.mockResolvedValue([]);
+
+      await expect(service.craft("char-1", "recipe-1", 1)).rejects.toBeInstanceOf(BadRequestException);
+      expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
   });
 });

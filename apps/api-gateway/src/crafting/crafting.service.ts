@@ -20,6 +20,8 @@ import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
 import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
 import { CraftingStation } from './entities/crafting-station.entity';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import type { LootEntry } from '../world/loot.service';
 
 // ─── Seed definitions ─────────────────────────────────────────────────────────
 // Les itemCategory réfèrent à Item.category (cherché par (category, 'material')
@@ -220,6 +222,7 @@ export class CraftingService implements OnModuleInit {
     private readonly dataSource: DataSource,
     private readonly skillsService: SkillsService,
     private readonly worldService: WorldService,
+    private readonly itemMaterialization: ItemMaterializationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -484,24 +487,16 @@ export class CraftingService implements OnModuleInit {
         }
       }
 
-      // ── 9. Persister les productions ──────────────────────────────────────
-      for (const [itemId, produced] of producedMap) {
-        if (produced <= 0) continue;
-        const existing = await manager.findOne(Inventory, {
-          where: { character: { id: characterId }, item: { id: itemId } },
+      // ── 9. Matérialisation des résultats ─────────────────────────────────
+      const lootEntries: LootEntry[] = [...producedMap.entries()]
+        .filter(([, qty]) => qty > 0)
+        .map(([itemId, quantity]) => ({ itemId, quantity }));
+      if (lootEntries.length > 0) {
+        await this.itemMaterialization.materialize(manager, lootEntries, {
+          source: 'CRAFT',
+          destination: { type: 'INVENTORY', characterId },
+          ownerId: characterId,
         });
-        if (existing) {
-          existing.quantity += produced;
-          await manager.save(Inventory, existing);
-        } else {
-          const newInv = manager.create(Inventory, {
-            character,
-            item: { id: itemId } as Item,
-            quantity: produced,
-            equipped: false,
-          });
-          await manager.save(Inventory, newInv);
-        }
       }
 
       // ── 10. XP ───────────────────────────────────────────────────────────
