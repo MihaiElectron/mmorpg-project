@@ -51,6 +51,7 @@ Priorities:
 | TD-014 | Race condition `removeExpiredItems` sur les stacks | Low | WorldItem hardening | Open |
 | TD-015 | Bank MVP — stacks non supportés, pas de limite de slots, pagination absente | Medium | Bank V2 | Open |
 | TD-016 | Mail MVP — pièce jointe unique, stacks non supportés, pagination absente, pas de scheduler | Medium | Mail V2 | Open |
+| TD-017 | Guild Storage MVP — propriétaire uniquement, stacks non supportés, pagination absente | Medium | Guild V2 | Open |
 
 ## Details
 
@@ -154,9 +155,9 @@ Priorities:
   CLAIM_BUYER, RETURN_TO_SELLER). `InventoryService`, `CharacterService`,
   `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
   `ItemInstance` à ce service. `BankService` délègue via STORE_BANK et
-  WITHDRAW_BANK. `MailService` délègue via SEND_MAIL et CLAIM_MAIL. Les
-  domaines Trade, Guild Storage et Housing restent à connecter dans leurs
-  phases respectives.
+  WITHDRAW_BANK. `MailService` délègue via SEND_MAIL et CLAIM_MAIL.
+  `GuildStorageService` délègue via STORE_GUILD et WITHDRAW_GUILD. Les
+  domaines Trade et Housing restent à connecter dans leurs phases respectives.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -267,6 +268,22 @@ Priorities:
   jointes multiples et les stacks relèvent de Mail V2 ; le scheduler relève
   de l'infrastructure d'automatisation.
 - Phase prévue de résolution : Mail V2
+- Statut : Open
+
+### TD-017 - Guild Storage MVP — propriétaire uniquement, stacks non supportés, pagination absente
+
+- Description : `GuildStorageService` n'autorise que `ownerCharacterId` à
+  déposer et retirer. Les stacks `Inventory` ne sont pas supportés. `listContents`
+  retourne tous les objets sans limite. Aucune table `GuildMember` ni
+  `GuildStoragePermission` n'existe.
+- Impact : impossibilité de partager le stockage entre plusieurs membres ;
+  objets stackables non stockables ; lectures non bornées sur grandes guildes ;
+  aucun rang, quota ni journal d'audit.
+- Priorité : Medium
+- Décision prise : accepter la dette dans le périmètre Guild Storage MVP.
+  Les rangs et permissions relèvent de Guild V2 ; les stacks et la pagination
+  suivent les règles générales de performance.
+- Phase prévue de résolution : Guild V2
 - Statut : Open
 
 ## Maintenance Rules

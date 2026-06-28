@@ -38,7 +38,7 @@ Statuses:
 | Auction House | Implémenter le MVP prix fixe avec `buyoutPriceBronze`, verrouillage `ItemInstance`, transfert Economy et claim acheteur. | Completed | Economy Foundation, Inventory Hybrid, Equipment Runtime V2, WorldItem Hybrid | `e04e4fe` |
 | Bank | Stocker stacks et `ItemInstance` en banque, avec monnaie gérée par Economy Wallet. | Completed | Inventory Hybrid, ItemInstance transitions | `0d6887c` |
 | Mail | Transporter stacks et `ItemInstance` sans duplication, avec politique binding et claim. | Completed | Inventory Hybrid, ItemInstance transitions, Economy Foundation if currency mail is allowed | `370c001` |
-| Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Not Started | Inventory Hybrid, Bank/Mail policy decisions | N/A |
+| Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Completed | Inventory Hybrid, Bank/Mail policy decisions | `6f0774a` |
 | Housing | Stocker et placer décorations, objets personnalisés et objets liés au logement. | Not Started | Inventory Hybrid, WorldItem Hybrid, Item Taxonomy | N/A |
 
 ## Phase Details
