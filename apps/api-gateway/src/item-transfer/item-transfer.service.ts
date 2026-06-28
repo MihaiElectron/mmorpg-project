@@ -27,7 +27,10 @@ export type ItemTransition =
   | { type: 'STORE_GUILD'; guildId: string }
   | { type: 'WITHDRAW_GUILD'; guildId: string; characterId: string }
   | { type: 'STORE_HOUSE'; houseId: string }
-  | { type: 'WITHDRAW_HOUSE'; houseId: string; characterId: string };
+  | { type: 'WITHDRAW_HOUSE'; houseId: string; characterId: string }
+  | { type: 'TRADE_LOCK'; tradeSessionId: string }
+  | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
+  | { type: 'TRADE_CANCEL'; tradeSessionId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -83,6 +86,12 @@ export class ItemTransferService {
         return this.applyStoreHouse(manager, instance, requesterId, transition.houseId);
       case 'WITHDRAW_HOUSE':
         return this.applyWithdrawHouse(manager, instance, transition);
+      case 'TRADE_LOCK':
+        return this.applyTradeLock(manager, instance, requesterId, transition.tradeSessionId);
+      case 'TRADE_COMMIT':
+        return this.applyTradeCommit(manager, instance, transition);
+      case 'TRADE_CANCEL':
+        return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
     }
   }
 
@@ -404,6 +413,54 @@ export class ItemTransferService {
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = transition.characterId;
     instance.ownerId = transition.characterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Trade transitions ─────────────────────────────────────────────────────
+
+  private async applyTradeLock(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    tradeSessionId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.IN_TRADE;
+    instance.containerType = ItemInstanceContainerType.TRADE;
+    instance.containerId = tradeSessionId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyTradeCommit(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'TRADE_COMMIT' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.IN_TRADE);
+    this.validateContainer(instance, ItemInstanceContainerType.TRADE, transition.tradeSessionId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.recipientCharacterId;
+    instance.ownerId = transition.recipientCharacterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyTradeCancel(
+    manager: EntityManager,
+    instance: ItemInstance,
+    tradeSessionId: string,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.IN_TRADE);
+    this.validateContainer(instance, ItemInstanceContainerType.TRADE, tradeSessionId);
+
+    // Retour chez le propriétaire légal (ownerId inchangé depuis TRADE_LOCK)
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = instance.ownerId;
     return manager.save(ItemInstance, instance);
   }
 }

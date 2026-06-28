@@ -981,4 +981,153 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── TRADE_LOCK ─────────────────────────────────────────────────────────────
+
+  describe("transition TRADE_LOCK", () => {
+    it("transitionne AVAILABLE+INVENTORY → IN_TRADE+TRADE+tradeId, ownerId inchange", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "TRADE_LOCK", tradeSessionId: "trade-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.IN_TRADE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.TRADE);
+      expect(result.containerId).toBe("trade-1");
+      expect(result.ownerId).toBe("char-1");
+    });
+
+    it("refuse si requesterId ne correspond pas au proprietaire", async () => {
+      const instance = makeInstance({ ownerId: "char-1" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "autre",
+          transition: { type: "TRADE_LOCK", tradeSessionId: "trade-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.IN_TRADE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "TRADE_LOCK", tradeSessionId: "trade-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "TRADE_LOCK", tradeSessionId: "trade-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── TRADE_COMMIT ───────────────────────────────────────────────────────────
+
+  describe("transition TRADE_COMMIT", () => {
+    it("transitionne IN_TRADE+TRADE → AVAILABLE+INVENTORY+recipient, change ownerId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_TRADE,
+        containerType: ItemInstanceContainerType.TRADE,
+        containerId: "trade-1",
+        ownerId: "char-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "TRADE_COMMIT", tradeSessionId: "trade-1", recipientCharacterId: "char-2" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-2");
+      expect(result.ownerId).toBe("char-2");
+    });
+
+    it("refuse si state != IN_TRADE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "TRADE_COMMIT", tradeSessionId: "trade-1", recipientCharacterId: "char-2" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != tradeSessionId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_TRADE,
+        containerType: ItemInstanceContainerType.TRADE,
+        containerId: "trade-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "TRADE_COMMIT", tradeSessionId: "trade-1", recipientCharacterId: "char-2" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── TRADE_CANCEL ───────────────────────────────────────────────────────────
+
+  describe("transition TRADE_CANCEL", () => {
+    it("retourne l instance a son proprietaire (containerId = ownerId)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_TRADE,
+        containerType: ItemInstanceContainerType.TRADE,
+        containerId: "trade-1",
+        ownerId: "char-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "TRADE_CANCEL", tradeSessionId: "trade-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-1");
+      expect(result.ownerId).toBe("char-1");
+    });
+
+    it("refuse si state != IN_TRADE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "TRADE_CANCEL", tradeSessionId: "trade-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != tradeSessionId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_TRADE,
+        containerType: ItemInstanceContainerType.TRADE,
+        containerId: "trade-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "TRADE_CANCEL", tradeSessionId: "trade-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

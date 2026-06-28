@@ -18,6 +18,7 @@ export enum ItemInstanceState {
   IN_BANK = 'IN_BANK',
   IN_GUILD_STORAGE = 'IN_GUILD_STORAGE',
   IN_HOUSING = 'IN_HOUSING',
+  IN_TRADE = 'IN_TRADE',
   IN_CRAFT_ORDER = 'IN_CRAFT_ORDER',
   DESTROYED = 'DESTROYED',
   ARCHIVED = 'ARCHIVED',
@@ -32,6 +33,7 @@ export enum ItemInstanceContainerType {
   BANK = 'BANK',
   GUILD_STORAGE = 'GUILD_STORAGE',
   HOUSING = 'HOUSING',
+  TRADE = 'TRADE',
   CRAFT_ORDER = 'CRAFT_ORDER',
   NONE = 'NONE',
 }
