@@ -147,12 +147,12 @@ Priorities:
 - Phase prévue de résolution : Inventory Hybrid
 - Statut : In Progress
 - Progression : `ItemTransferService` (`src/item-transfer/`) créé comme point
-  d'entrée centralisé pour EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD et
-  ARCHIVE. `InventoryService`, `CharacterService` et `WorldItemService`
-  délèguent toutes leurs mutations `ItemInstance` à ce service ; verrou
-  pessimiste et machine d'états appliqués en un seul endroit. Les domaines
-  Auction, Bank, Mail, Trade, Guild Storage et Housing restent à connecter
-  dans leurs phases respectives.
+  d'entrée centralisé pour EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD,
+  ARCHIVE et les 4 transitions Auction (LIST_FOR_AUCTION, SELL_AUCTION,
+  CLAIM_BUYER, RETURN_TO_SELLER). `InventoryService`, `CharacterService`,
+  `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
+  `ItemInstance` à ce service. Les domaines Bank, Mail, Trade, Guild Storage
+  et Housing restent à connecter dans leurs phases respectives.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -188,7 +188,8 @@ Priorities:
 - Décision prise : repousser Auction House après Inventory Hybrid, Equipment
   Runtime V2 et WorldItem Hybrid.
 - Phase prévue de résolution : Auction House
-- Statut : Open
+- Statut : Resolved — `ItemTransferService` fournit verrou pessimiste et
+  machine d'états pour toutes les transitions Auction. Commit `e04e4fe`.
 
 ### TD-012 - Cascades destructives du catalogue `Item` vers possessions joueur
 

@@ -33,9 +33,9 @@ Statuses:
 | Inventory Hybrid | Faire coexister officiellement stacks d'inventaire et `ItemInstance` dans les lectures/écritures Runtime. | Completed | ItemInstance Foundation, CharacterEquipment Preparation, WorldItem Preparation | `f37265b`, `626ed6f`, `e07e9d6`, `2f7c736` |
 | Equipment Runtime V2 | Équiper/déséquiper des `ItemInstance` comme source de vérité, retirer la dépendance legacy à `Inventory.equipped`. | In Progress | Inventory Hybrid, CharacterEquipment Preparation | `b8ac4a6` |
 | WorldItem Hybrid | Gérer pickup/drop stackable et unique via `WorldItem`, avec transitions `ItemInstance` validées. | Completed | Inventory Hybrid, WorldItem Preparation | `e07e9d6`, `2f7c736`, `941b30b` |
-| Loot Hybrid | Produire soit des stacks, soit des `ItemInstance` selon la taxonomie d'objet. | Not Started | WorldItem Hybrid, Item Taxonomy | N/A |
-| Craft Hybrid | Consommer/produire stacks et `ItemInstance`, avec craftedBy/provenance pour les sorties uniques. | Not Started | Inventory Hybrid, Equipment Runtime V2, Loot Hybrid | N/A |
-| Auction House | Implémenter le MVP prix fixe avec `buyoutPriceBronze`, verrouillage `ItemInstance`, transfert Economy et claim acheteur. | Not Started | Economy Foundation, Inventory Hybrid, Equipment Runtime V2, WorldItem Hybrid | N/A |
+| Loot Hybrid | Produire soit des stacks, soit des `ItemInstance` selon la taxonomie d'objet. | Completed | WorldItem Hybrid, Item Taxonomy | `0f4edf3` |
+| Craft Hybrid | Consommer/produire stacks et `ItemInstance`, avec craftedBy/provenance pour les sorties uniques. | Completed | Inventory Hybrid, Equipment Runtime V2, Loot Hybrid | `521674a` |
+| Auction House | Implémenter le MVP prix fixe avec `buyoutPriceBronze`, verrouillage `ItemInstance`, transfert Economy et claim acheteur. | Completed | Economy Foundation, Inventory Hybrid, Equipment Runtime V2, WorldItem Hybrid | `e04e4fe` |
 | Bank | Stocker stacks et `ItemInstance` en banque, avec monnaie gérée par Economy Wallet. | Not Started | Inventory Hybrid, ItemInstance transitions | N/A |
 | Mail | Transporter stacks et `ItemInstance` sans duplication, avec politique binding et claim. | Not Started | Inventory Hybrid, ItemInstance transitions, Economy Foundation if currency mail is allowed | N/A |
 | Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Not Started | Inventory Hybrid, Bank/Mail policy decisions | N/A |
