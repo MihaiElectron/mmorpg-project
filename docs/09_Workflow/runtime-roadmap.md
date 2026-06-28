@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- Status: Draft
+- Status: Accepted
 - Owner: Project
 - Last updated: 2026-06-29
 - Depends on: docs/08_Gameplay/economy-foundation.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/auction-house-specifications.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md, docs/09_Workflow/audit-alerts.md
@@ -40,6 +40,7 @@ Statuses:
 | Mail | Transporter stacks et `ItemInstance` sans duplication, avec politique binding et claim. | Completed | Inventory Hybrid, ItemInstance transitions, Economy Foundation if currency mail is allowed | `370c001` |
 | Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Completed | Inventory Hybrid, Bank/Mail policy decisions | `6f0774a` |
 | Housing | Stocker et placer décorations, objets personnalisés et objets liés au logement. | Completed | Inventory Hybrid, WorldItem Hybrid, Item Taxonomy | `8874ed4` |
+| Trade | Échange peer-to-peer transactionnel d'`ItemInstance`, session deux joueurs avec commit atomique et annulation sécurisée. | Completed | Inventory Hybrid, ItemInstance transitions | `772cc75` |
 
 ## Phase Details
 
@@ -207,15 +208,110 @@ No `ItemInstance` is ever deleted.
 Known remaining debts: `removeExpiredItems` scheduler not yet wired (TD-013),
 race condition on stack expiration (TD-014).
 
-## Next Recommended Order
+### Trade
 
-1. Complete Equipment Runtime V2 with `ItemInstance` equip/unequip.
-2. Loot Hybrid.
-3. Craft Hybrid.
-4. Auction House fixed-price MVP.
-5. Bank and Mail.
-6. Guild Storage.
-7. Housing.
+Objective:
+
+- Implement peer-to-peer item exchange between two characters using
+  `ItemInstance` transitions. Two-phase protocol: TRADE_LOCK to stage items,
+  TRADE_COMMIT to atomically exchange on mutual accept, TRADE_CANCEL to return
+  all items safely.
+
+Completion evidence:
+
+- `apps/api-gateway/src/trade/entities/trade-session.entity.ts`
+- `apps/api-gateway/src/trade/trade.service.ts`
+  — `createTrade`, `addItem`, `removeItem`, `accept`, `cancel`
+  — lexicographic UUID sort before multi-lock (anti-deadlock)
+- `apps/api-gateway/src/trade/trade.controller.ts`
+- `apps/api-gateway/src/trade/trade.service.spec.ts` (29 tests)
+- `apps/api-gateway/src/item-transfer/item-transfer.service.ts`
+  — transitions TRADE_LOCK, TRADE_COMMIT, TRADE_CANCEL
+- `apps/api-gateway/src/migrations/1783382400000-CreateTradeSessionTable.ts`
+- commit `772cc75`
+
+Transitions implemented:
+
+| Operation | state | containerType | containerId | ownerId |
+|---|---|---|---|---|
+| TRADE_LOCK | `AVAILABLE → IN_TRADE` | `INVENTORY → TRADE` | `characterId → tradeSession.id` | unchanged |
+| TRADE_COMMIT | `IN_TRADE → AVAILABLE` | `TRADE → INVENTORY` | `tradeSession.id → recipientId` | → recipientId |
+| TRADE_CANCEL | `IN_TRADE → AVAILABLE` | `TRADE → INVENTORY` | `tradeSession.id → ownerId` | unchanged |
+
+Known remaining debts: session expiry not implemented, stacks not supported
+(TD-008 scope excluded), no character validation on createTrade (future MVP+).
+
+---
+
+## Runtime V2 — Completed
+
+**Date de clôture : 2026-06-29**
+
+Runtime V2 est officiellement terminé. Tous les 10 domaines sont implémentés,
+testés et connectés à `ItemTransferService`.
+
+### Récapitulatif
+
+| Métrique | Valeur |
+|---|---|
+| Domaines Runtime | 10 (Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade) |
+| Transitions `ItemTransferService` | 20 |
+| États `ItemInstanceState` | 14 |
+| ContainerTypes `ItemInstanceContainerType` | 11 |
+| Tests Runtime (item-transfer + domaines) | 201 (74 + 21 + 15 + 21 + 20 + 21 + 29) |
+| Violations de mutation directe détectées | 0 |
+| Services avec transaction caller-owned | 14/14 |
+
+### Commits majeurs Runtime V2
+
+| Phase | Commit |
+|---|---|
+| ItemInstance Foundation | `f17dc15` |
+| Inventory Hybrid | `f37265b`, `626ed6f` |
+| WorldItem Hybrid | `e07e9d6`, `2f7c736`, `941b30b` |
+| Loot Hybrid | `0f4edf3` |
+| Craft Hybrid | `521674a` |
+| Auction House | `e04e4fe` |
+| Bank | `0d6887c` |
+| Mail | `370c001`, `23f4331` |
+| Guild Storage | `6f0774a`, `eae8f79` |
+| Housing | `8874ed4`, `f353b5f` |
+| Trade | `772cc75` |
+| Runtime Transfer Pipeline (ItemTransferService centralisé) | `941b30b` + commits domaine |
+| createdBySource fix | migration `1783468800000` |
+
+### Ce qui reste ouvert intentionnellement
+
+- Equipment Runtime V2 (In Progress) — TDs 002, 005, 006
+- Historique append-only complet (TD-007)
+- Stacks dans Bank/Mail/Guild/Housing (TDs 015–018)
+- Scheduler `removeExpiredItems` (TD-013)
+
+---
+
+## Gameplay V1 — Prochaine étape
+
+Ouverture du chapitre Gameplay V1 après clôture Runtime V2.
+
+Les phases suivantes sont ordonnées par priorité décroissante, en fonction des
+dépendances Runtime V2 et de la valeur gameplay.
+
+| Priorité | Chapitre | Dépendances Runtime | Description courte |
+|---|---|---|---|
+| 1 | **Skills & Progression** | Loot Hybrid, Craft Hybrid | Montée en niveau, XP par activité, déblocage de recettes et capacités |
+| 2 | **Combat avancé** | Equipment V2 | Capacités actives, types de dégâts, résistances, cooldowns, états de combat |
+| 3 | **Récolte avancée** | Loot Hybrid, Skills | Prérequis de compétences, loots rares, outils requis, zones de récolte |
+| 4 | **Craft avancé** | Craft Hybrid, Skills, Equipment V2 | Qualité, craftedBy, blueprints, tables de craft avancées |
+| 5 | **Économie** | Auction House, Economy Foundation | Marchés, pricing dynamique, taxes, commerce NPC |
+| 6 | **Social** | Trade, Guild Storage | Guildes complètes (rangs, permissions, journal), parties, canal de chat |
+| 7 | **Quêtes** | Skills, ItemMaterializationService | Système de quêtes structuré (objectifs, récompenses, chaînes) |
+| 8 | **IA** | Combat avancé | Pathfinding amélioré, comportements complexes (guet-apens, fuite, appel de renfort) |
+| 9 | **Contenu** | Tous | Nouvelles créatures, ressources, cartes, items, biomes |
+
+Les détails d'implémentation de chaque phase seront définis dans des ADR ou
+des documents de spécification dédiés avant de commencer le développement.
+
+---
 
 ## Maintenance Rules
 

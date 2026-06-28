@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- Status: Draft
+- Status: Accepted
 - Owner: Project
 - Last updated: 2026-06-29
 - Depends on: docs/09_Workflow/runtime-roadmap.md, docs/09_Workflow/audit-alerts.md, docs/08_Gameplay/object-runtime-architecture.md, docs/08_Gameplay/item-taxonomy.md, docs/08_Gameplay/economy-foundation.md, docs/01_Architecture/adr/ADR-0010-object-runtime-model.md
@@ -42,9 +42,9 @@ Priorities:
 | TD-005 | Vérification `characterId/userId` incomplète dans `equipItem` | Blocker | Equipment Runtime V2 / Security hardening | Open |
 | TD-006 | `CharacterEquipment.itemInstanceId` nullable sans source de vérité | High | Equipment Runtime V2 | Open |
 | TD-007 | `ItemInstance` sans historique append-only | Medium | ItemInstance Runtime hardening | Open |
-| TD-008 | `ItemInstance` sans validations métier de transition | High | Inventory Hybrid | In Progress |
+| TD-008 | `ItemInstance` sans validations métier de transition | High | Inventory Hybrid | Resolved |
 | TD-009 | Craft produit encore l'équipement comme stack `Item + quantity` | High | Craft Hybrid | Open |
-| TD-010 | Loot produit encore uniquement des résultats stack-like | Medium | Loot Hybrid | Open |
+| TD-010 | Loot produit encore uniquement des résultats stack-like | Medium | Loot Hybrid | Resolved |
 | TD-011 | Auction House dépend d'un verrouillage `ItemInstance` non implémenté | Blocker | Auction House | Open |
 | TD-012 | Cascades destructives du catalogue `Item` vers possessions joueur | Blocker | Persistence hardening | Open |
 | TD-013 | `removeExpiredItems` scheduler non branché | Medium | WorldItem maintenance | Open |
@@ -53,6 +53,7 @@ Priorities:
 | TD-016 | Mail MVP — pièce jointe unique, stacks non supportés, pagination absente, pas de scheduler | Medium | Mail V2 | Open |
 | TD-017 | Guild Storage MVP — propriétaire uniquement, stacks non supportés, pagination absente | Medium | Guild V2 | Open |
 | TD-018 | Housing MVP — propriétaire uniquement, stacks non supportés, pas de placement spatial, pagination absente | Medium | Housing V2 | Open |
+| TD-019 | Trade MVP — expiration de session absente, stacks non supportés, validation de personnage minimale | Medium | Trade V2 | Open |
 
 ## Details
 
@@ -140,49 +141,47 @@ Priorities:
 
 ### TD-008 - `ItemInstance` sans validations métier de transition
 
-- Description : le service `ItemInstancesService` permet la création, mais ne
-  centralise pas encore les transitions `state/container`, les verrous, ni les
+- Description : le service `ItemInstancesService` permettait la création, mais
+  ne centralisait pas les transitions `state/container`, les verrous, ni les
   invariants de déplacement.
-- Impact : les futurs systèmes pourraient modifier les instances de façon
-  divergente et contourner les règles anti-duplication.
+- Impact résolu : tous les domaines Runtime délèguent à `ItemTransferService`.
+  Aucune mutation directe d'`ItemInstance` détectée hors service autorisé.
 - Priorité : High
-- Décision prise : introduire les transitions serveur pendant Inventory Hybrid,
-  avant Auction House.
-- Phase prévue de résolution : Inventory Hybrid
-- Statut : In Progress
-- Progression : `ItemTransferService` (`src/item-transfer/`) créé comme point
-  d'entrée centralisé pour EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD,
-  ARCHIVE et les 4 transitions Auction (LIST_FOR_AUCTION, SELL_AUCTION,
-  CLAIM_BUYER, RETURN_TO_SELLER). `InventoryService`, `CharacterService`,
-  `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
-  `ItemInstance` à ce service. `BankService` délègue via STORE_BANK et
-  WITHDRAW_BANK. `MailService` délègue via SEND_MAIL et CLAIM_MAIL.
-  `GuildStorageService` délègue via STORE_GUILD et WITHDRAW_GUILD.
-  `HousingService` délègue via STORE_HOUSE et WITHDRAW_HOUSE. Le domaine
-  Trade reste à connecter dans sa phase respective.
+- Phase de résolution : Inventory Hybrid → complété en Runtime V2
+- Statut : Resolved
+- Résolution : `ItemTransferService` (`src/item-transfer/`) — machine d'états
+  centralisée, 20 transitions, verrou pessimiste systématique. Tous les domaines
+  délèguent : `InventoryService`, `CharacterService`, `WorldItemService`,
+  `AuctionService`, `BankService`, `MailService`, `GuildStorageService`,
+  `HousingService`, `TradeService`. Commit `772cc75` (Trade — dernier domaine).
+  Audit d'intégrité du 2026-06-29 : zéro mutation directe détectée.
 
-### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
+### TD-009 - Craft — `craftedBy` et provenance non attachés aux `ItemInstance`
 
-- Description : le craft actuel consomme et produit des quantités d'`Item`,
-  même pour une sortie comme `basic_sword`.
-- Impact : les armes craftées ne portent pas encore craftedBy, qualité,
-  durabilité ou identité unique.
+- Description : Craft Hybrid (`521674a`) produit désormais des `ItemInstance`
+  pour les items `INSTANCE` via `ItemMaterializationService`. Cependant, les
+  champs de provenance (`craftedByCharacterId`, `quality`, `craftedAt`) ne sont
+  pas encore écrits sur les instances créées. L'`ItemInstance` retournée par
+  `materialize()` existe mais sans signature de fabrication.
+- Impact : les armes craftées n'ont pas d'identité de fabrication exploitable
+  par le joueur ou par les DevTools.
 - Priorité : High
-- Décision prise : traiter la conversion dans Craft Hybrid, après Equipment V2.
-- Phase prévue de résolution : Craft Hybrid
+- Décision prise : implémenter lors de Craft avancé (Gameplay V1), dans le même
+  commit que la gestion de qualité.
+- Phase prévue de résolution : Craft avancé (Gameplay V1)
 - Statut : Open
 
 ### TD-010 - Loot produit encore uniquement des résultats stack-like
 
-- Description : les services de loot retournent des formes `{ itemId,
+- Description : les services de loot retournaient des formes `{ itemId,
   quantity }`, adaptées aux ressources mais insuffisantes pour des drops uniques.
-- Impact : les équipements ou objets rares lootés ne peuvent pas encore être
-  instanciés avec provenance et historique.
+- Impact résolu : `LootService` reste pur (retourne `LootEntry[]`).
+  `ItemMaterializationService` détermine stack vs instance via `Item.objectMode`.
+  Les drops créature créent des `ItemInstance` pour les items `INSTANCE`.
+  Les drops récolte créent des stacks `Inventory` pour les items `STACKABLE`.
 - Priorité : Medium
-- Décision prise : garder les ressources stackables, puis ajouter la décision
-  stack vs instance en Loot Hybrid.
-- Phase prévue de résolution : Loot Hybrid
-- Statut : Open
+- Phase de résolution : Loot Hybrid — `0f4edf3`
+- Statut : Resolved
 
 ### TD-011 - Auction House dépend d'un verrouillage `ItemInstance` non implémenté
 
@@ -302,6 +301,23 @@ Priorities:
   placement spatial et les décorations relèvent de Housing V2 ; les stacks
   et la pagination suivent les règles générales de performance.
 - Phase prévue de résolution : Housing V2
+- Statut : Open
+
+### TD-019 - Trade MVP — expiration de session absente, stacks non supportés, validation de personnage minimale
+
+- Description : `TradeService` ne fait pas expirer les sessions `PENDING`
+  abandonnées. Les stacks `Inventory` ne sont pas supportés dans un Trade MVP.
+  `createTrade` vérifie que les deux `characterId` sont distincts mais ne valide
+  pas que les deux personnages existent en DB ni qu'ils sont dans la même zone.
+  Aucun `GuildMember` ni permission multi-joueur.
+- Impact : les sessions abandonnées restent en `PENDING` indéfiniment ; les
+  ressources stackables ne peuvent pas être échangées ; un trade peut être
+  créé avec un `characterId` inexistant.
+- Priorité : Medium
+- Décision prise : accepter la dette dans le périmètre Trade MVP. L'expiration
+  et la géolocalisation relèvent de Trade V2 ; les stacks suivent les règles
+  générales de performance.
+- Phase prévue de résolution : Trade V2
 - Statut : Open
 
 ## Maintenance Rules

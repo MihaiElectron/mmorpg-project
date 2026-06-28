@@ -63,6 +63,9 @@ export class ItemInstance {
   @Column({ type: 'varchar', nullable: true })
   containerId: string | null;
 
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  createdBySource: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

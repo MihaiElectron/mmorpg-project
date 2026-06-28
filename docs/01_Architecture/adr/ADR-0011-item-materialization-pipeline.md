@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Accepted
+- Decision status: Accepted
 - Owner: Project
-- Last updated: 2026-06-28
+- Last updated: 2026-06-29
 - Date proposed: 2026-06-28
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-29
+- Approved by: Project owner
+- Approval reference: Loot Hybrid, Craft Hybrid implemented — commit `0f4edf3`, `521674a`
 - Depends on:
   - docs/01_Architecture/adr/ADR-0010-object-runtime-model.md
   - docs/08_Gameplay/object-runtime-architecture.md
@@ -551,10 +551,36 @@ at the production origin.
 
 ---
 
-## TODO
+## Implementation Status
 
-- [ ] Submit for human review before marking Accepted.
-- [ ] Update runtime-roadmap.md to reference this ADR under the Loot Hybrid phase.
-- [ ] Resolve open question on `Item.objectMode` seed update timing before
-      activating instance creation in Loot Hybrid.
-- [ ] Add to docs/01_Architecture/decisions.md when accepted.
+All three decisions are implemented as of 2026-06-29.
+
+**Decision 1 — Item.objectMode:**
+`Item.objectMode` column exists with enum `STACKABLE | INSTANCE`.
+Migration `1782864000000-AddObjectModeToItem`. Seeds updated: `wooden_stick`,
+`iron_ore`, `iron_bar`, `basic_handle`, `rough_blade` = `STACKABLE`;
+`basic_sword` = `INSTANCE`.
+
+**Decision 2 — LootService remains pure:**
+`LootService.generateLoot()` returns `LootEntry[]`. Zero database dependencies.
+Fully synchronous and injectable without infrastructure.
+
+**Decision 3 — ItemMaterializationService:**
+`ItemMaterializationService.materialize()` is the sole entry point for Runtime
+object creation. Three active consumers: `CreaturesGateway` (LOOT → WORLD),
+`ResourcesGateway` (LOOT → INVENTORY), `CraftingService` (CRAFT → INVENTORY).
+All open transaction before calling. `MaterializationSource` type covers:
+`LOOT | CRAFT | QUEST | VENDOR | ADMIN | EVENT | CHEST`.
+
+**createdBySource field:**
+`ItemInstance.createdBySource` column exists as of migration
+`1783468800000-AddCreatedBySourceToItemInstance`. Prior to this migration the
+field was written by the service but not persisted (TypeORM silently ignored the
+unmapped property). This is now corrected.
+
+## Completed TODOs
+
+- [x] Submit for human review — accepted 2026-06-29.
+- [x] Update runtime-roadmap.md to reference Loot Hybrid and Craft Hybrid.
+- [x] `Item.objectMode` seeds updated before Loot Hybrid activation.
+- [ ] Add to docs/01_Architecture/decisions.md when that file exists.

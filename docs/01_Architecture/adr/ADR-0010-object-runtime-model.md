@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Accepted
+- Decision status: Accepted
 - Owner: Project
-- Last updated: 2026-06-28
+- Last updated: 2026-06-29
 - Date proposed: 2026-06-27
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-29
+- Approved by: Project owner
+- Approval reference: Runtime V2 completion — all 10 domains implemented and tested
 - Depends on: docs/01_Architecture/adr/README.md, docs/01_Architecture/adr/ADR-0004-runtime-driven-architecture.md, docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md, docs/01_Architecture/adr/ADR-0007-auction-house-authority.md
 - Used by: Project owner, developers, repository-aware coding agents
 - Supersedes: None
@@ -134,33 +134,36 @@ State describes the lifecycle or usability of the object.
 
 Examples:
 
-- `AVAILABLE`;
-- `EQUIPPED`;
-- `LOCKED`;
-- `LISTED`;
-- `SOLD_PENDING_CLAIM`;
-- `IN_WORLD`;
-- `IN_MAIL`;
-- `IN_BANK`;
-- `IN_GUILD_STORAGE`;
-- `IN_CRAFT_ORDER`;
-- `DESTROYED`;
-- `ARCHIVED`.
+- `AVAILABLE` — object is in inventory, ready to be used;
+- `EQUIPPED` — object is worn or held by a character;
+- `LOCKED` — object is administratively locked (reserved, suspended);
+- `LISTED` — object is listed for sale on the Auction House;
+- `SOLD_PENDING_CLAIM` — object is sold, awaiting buyer claim;
+- `IN_WORLD` — object is physically present on a game map;
+- `IN_MAIL` — object is attached to an in-transit mail message;
+- `IN_BANK` — object is stored in a personal bank slot;
+- `IN_GUILD_STORAGE` — object is stored in a guild shared vault;
+- `IN_HOUSING` — object is stored or placed in a player house;
+- `IN_TRADE` — object is locked in an active peer trade session;
+- `IN_CRAFT_ORDER` — object is reserved for a craft order;
+- `DESTROYED` — object is permanently removed from play (no recovery);
+- `ARCHIVED` — object has expired or been irreversibly consumed (no recovery).
 
 Container describes where the object currently resides.
 
 Examples:
 
-- `INVENTORY`;
-- `EQUIPMENT`;
-- `WORLD`;
-- `AUCTION`;
-- `MAIL`;
-- `BANK`;
-- `GUILD_STORAGE`;
-- `HOUSING`;
-- `CRAFT_ORDER`;
-- `NONE`.
+- `INVENTORY` — character personal inventory (containerId = characterId);
+- `EQUIPMENT` — character equipment slot (containerId = characterId);
+- `WORLD` — world map at a position (containerId = worldItem.id);
+- `AUCTION` — Auction House listing (containerId = auctionListing.id);
+- `MAIL` — mail message attachment (containerId = mail.id);
+- `BANK` — personal bank (containerId = characterId);
+- `GUILD_STORAGE` — guild shared vault (containerId = guild.id);
+- `HOUSING` — player house storage (containerId = house.id);
+- `TRADE` — active peer trade session (containerId = tradeSession.id);
+- `CRAFT_ORDER` — reserved for crafting (containerId = craftOrder.id);
+- `NONE` — no container, used for ARCHIVED and DESTROYED states.
 
 They are separate because an object can be in the same container with different
 states, or have the same broad state in different containers. For example, an
@@ -194,8 +197,8 @@ Destroyed/Archived states.
 
 ## Runtime Invariants
 
-The following invariants are part of the proposed Object Runtime model and are
-supported by the current Runtime direction.
+The following invariants are enforced by `ItemTransferService` and
+`ItemMaterializationService`.
 
 ### I1 - Single Active Container
 
@@ -204,7 +207,35 @@ An `ItemInstance` has exactly one active container at a time.
 The active container is represented by its `containerType` and `containerId`
 pair. Runtime systems must not make the same `ItemInstance` simultaneously
 available in Inventory, Equipment, WorldItem, Auction, Mail, Bank, Guild
-Storage, Housing, or Craft Order.
+Storage, Housing, Trade, or Craft Order.
+
+**Enforcement:** `ItemTransferService.transfer()` acquires a pessimistic write
+lock (`SELECT FOR UPDATE`) on the `ItemInstance` row before every transition and
+validates the expected `(state, containerType, containerId)` triple. Any
+mismatch throws before any mutation. `ItemMaterializationService` creates the
+`ItemInstance` and its container record within the same caller-owned transaction,
+guaranteeing that no instance ever exists without a valid container.
+
+### I2 - Immutable UUID
+
+An `ItemInstance` keeps the same UUID for its entire lifecycle.
+
+No transition creates or deletes an `ItemInstance`. ARCHIVE sets
+`state = ARCHIVED, containerType = NONE, containerId = null` without destroying
+the row. DevTools and audit queries can always reconstruct the object's history
+by UUID.
+
+### I3 - Provenance audit (createdBySource)
+
+Every `ItemInstance` created by `ItemMaterializationService` carries a
+`createdBySource` field recording its production origin: `LOOT`, `CRAFT`,
+`QUEST`, `VENDOR`, `ADMIN`, `EVENT`, or `CHEST`.
+
+This field is immutable after creation. It is the lightweight provenance
+anchor before a full append-only movement history is implemented (see TD-007).
+
+**Implementation status:** `ItemInstance.createdBySource` column exists as of
+migration `1783468800000-AddCreatedBySourceToItemInstance`.
 
 ### I4 - Legal Owner vs Physical Container
 
@@ -216,6 +247,18 @@ currently resides.
 These concepts are independent. For example, an item can remain legally owned
 by a character while physically locked in Auction, stored in Mail, or placed in
 Bank, depending on the domain transition.
+
+**`ownerId` changes only on these five transitions:**
+
+| Transition | New `ownerId` | Reason |
+|---|---|---|
+| `CLAIM_BUYER` | `buyerCharacterId` | Auction sale completed |
+| `CLAIM_MAIL` | `recipientCharacterId` | Mail delivery accepted |
+| `WITHDRAW_GUILD` | `characterId` | Item leaves shared ownership |
+| `WITHDRAW_HOUSE` | `characterId` | Item leaves shared ownership |
+| `TRADE_COMMIT` | `recipientCharacterId` | Peer trade executed |
+
+All other transitions leave `ownerId` unchanged.
 
 ## Alternatives Considered
 
@@ -370,57 +413,98 @@ involved.
 
 ## Roadmap
 
-Recommended future implementation order:
+Runtime V2 is complete as of 2026-06-29.
 
-1. ItemInstance Runtime foundation.
-2. Hybrid Inventory read model.
-3. Equipment V2 using `ItemInstance`.
-4. WorldItem V2 for stackable and unique drops.
-5. Craft V2 for instanced outputs and unique inputs.
-6. Auction House fixed-price MVP using `ItemInstance`.
-7. Mail and Bank support for stack and instance containers.
-8. Guild Storage and Housing storage.
+Implemented in order:
+
+1. ItemInstance Runtime foundation — `f17dc15`
+2. CharacterEquipment Preparation — `b2048ee`
+3. WorldItem Preparation — `1c07e7d`
+4. Inventory Hybrid — `f37265b`, `626ed6f`, `e07e9d6`, `2f7c736`
+5. Equipment Runtime V2 (In Progress) — `b8ac4a6`
+6. WorldItem Hybrid — `e07e9d6`, `2f7c736`, `941b30b`
+7. Loot Hybrid — `0f4edf3`
+8. Craft Hybrid — `521674a`
+9. Auction House — `e04e4fe`
+10. Bank — `0d6887c`
+11. Mail — `370c001`, `23f4331`
+12. Guild Storage — `6f0774a`, `eae8f79`
+13. Housing — `8874ed4`, `f353b5f`
+14. Trade — `772cc75`
+15. ItemTransferService (all domains) — `941b30b`, plus subsequent domain commits
+
+Remaining open work: Equipment Runtime V2 completion (TDs 002, 005, 006),
+full append-only movement history (TD-007), stack support in Bank/Mail/Guild/Housing V2.
 
 ## Implementation Notes
 
-The following open questions have been answered by the WorldItem Hybrid
-implementation (commits `e07e9d6`, `2f7c736`, `941b30b`):
+**Enum names (final — Runtime V2 complete):**
 
-**Enum names (resolved):**
-`ItemInstanceState` — `AVAILABLE | EQUIPPED | LOCKED | LISTED |
-SOLD_PENDING_CLAIM | IN_WORLD | IN_MAIL | IN_BANK | IN_GUILD_STORAGE |
+`ItemInstanceState`:
+`AVAILABLE | EQUIPPED | LOCKED | LISTED | SOLD_PENDING_CLAIM |
+IN_WORLD | IN_MAIL | IN_BANK | IN_GUILD_STORAGE | IN_HOUSING | IN_TRADE |
 IN_CRAFT_ORDER | DESTROYED | ARCHIVED`
 
-`ItemInstanceContainerType` — `INVENTORY | EQUIPMENT | WORLD | AUCTION |
-MAIL | BANK | GUILD_STORAGE | HOUSING | CRAFT_ORDER | NONE`
+`ItemInstanceContainerType`:
+`INVENTORY | EQUIPMENT | WORLD | AUCTION | MAIL | BANK | GUILD_STORAGE |
+HOUSING | TRADE | CRAFT_ORDER | NONE`
 
-**`containerId` convention (resolved):**
+**`containerId` convention (complete — all 10 domains):**
 
-| containerType | containerId value |
-|---|---|
-| `INVENTORY` | `characterId` |
-| `EQUIPMENT` | TBD (CharacterEquipment.id — Equipment Runtime V2) |
-| `WORLD` | `worldItem.id` |
-| `NONE` (ARCHIVED) | `null` |
+| containerType | containerId value | ownerId changes? |
+|---|---|---|
+| `INVENTORY` | `characterId` | Never |
+| `EQUIPMENT` | `characterId` | Never |
+| `WORLD` | `worldItem.id` | Never |
+| `AUCTION` | `auctionListing.id` | On `CLAIM_BUYER` only |
+| `MAIL` | `mail.id` | On `CLAIM_MAIL` only |
+| `BANK` | `characterId` | Never |
+| `GUILD_STORAGE` | `guild.id` | On `WITHDRAW_GUILD` only |
+| `HOUSING` | `house.id` | On `WITHDRAW_HOUSE` only |
+| `TRADE` | `tradeSession.id` | On `TRADE_COMMIT` only |
+| `CRAFT_ORDER` | `craftOrder.id` | Not yet implemented |
+| `NONE` (ARCHIVED) | `null` | Never |
 
-All other container types remain defined but unimplemented.
+**`ItemTransferService` — state machine (20 transitions):**
 
-**Invariant validation (Inventory Hybrid + WorldItem Hybrid):**
+All mutations of `state`, `containerType`, `containerId`, and `ownerId` on any
+`ItemInstance` pass exclusively through `ItemTransferService.transfer()`.
+No domain service mutates these fields directly.
 
-- I1 (Single Active Container): enforced by pessimistic write lock + strict
-  filter on `(id, containerType, containerId)` in DROP, PICKUP, and EXPIRE.
-  No `ItemInstance` is deleted; ARCHIVED instances remain in DB with
-  `containerType = NONE, containerId = null`.
-- I4 (Legal Owner vs Physical Container): `ownerId` is never changed during
-  DROP, PICKUP, or EXPIRE — it identifies the legal owner throughout all
-  world transitions.
+`ItemTransferService`:
+- never opens a transaction (caller's `EntityManager` is mandatory);
+- acquires a pessimistic write lock on every call (`SELECT FOR UPDATE`);
+- validates `(state, containerType, containerId)` before any mutation;
+- throws `BadRequestException` on any pre-condition violation.
+
+`ItemMaterializationService`:
+- is the only authorized creator of `ItemInstance` rows;
+- never opens a transaction (caller's `EntityManager` is mandatory);
+- sets `createdBySource` on every created instance;
+- enforces I1 atomically in the `INSTANCE+WORLD` path by linking
+  `WorldItem` and `ItemInstance` within the same transaction.
+
+**Invariant enforcement summary (Runtime V2):**
+
+- I1: pessimistic lock + pre-condition validation on every transition. Zero
+  direct mutations detected outside `ItemTransferService` and
+  `ItemMaterializationService`.
+- I2: no delete, no UUID change. Only soft-archival via `ARCHIVED/NONE`.
+- I3: `createdBySource` column on `ItemInstance` (migration
+  `1783468800000-AddCreatedBySourceToItemInstance`), written by
+  `ItemMaterializationService` at creation.
+- I4: `ownerId` unchanged across 15 transitions; changes only on 5 legal
+  ownership transfers (CLAIM_BUYER, CLAIM_MAIL, WITHDRAW_GUILD,
+  WITHDRAW_HOUSE, TRADE_COMMIT).
 
 ## Open Questions
 
-- What is the first append-only history structure for item movements?
-- Which current seeded items should be migrated first into the taxonomy?
 - Should commodity stack markets be designed as Auction House V2 or as a
   separate market model?
+- Append-only movement history structure for full DevTools and forensics audit
+  (TD-007 — deferred to ItemInstance Runtime hardening).
+- Which current seeded items should be migrated to `objectMode = INSTANCE` for
+  Equipment V2 activation?
 
 ## Related Files
 

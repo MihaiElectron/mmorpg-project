@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
 _Dernière mise à jour : 2026-06-29_
-_Session : 2026-06-29 (Runtime Transfer Pipeline — ItemTransferService)_
+_Session : 2026-06-29 (Clôture officielle Runtime V2 — documentation)_
 _Branche : main_
 _État : développement local_
 
@@ -37,14 +37,14 @@ avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensio
 Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
 Onglets Talents/Succès placeholder actifs.
 
-**Runtime Transfer Pipeline opérationnel (2026-06-29).** `ItemTransferService`
+**Runtime V2 entièrement terminé (2026-06-29).** `ItemTransferService`
 (`src/item-transfer/`) est le point d'entrée unique pour toutes les transitions
-Runtime `ItemInstance` : EQUIP, UNEQUIP, DROP_TO_WORLD, PICKUP_FROM_WORLD, ARCHIVE.
-Reçoit un `EntityManager` de l'appelant, pose lui-même le verrou pessimiste, valide
-les invariants owner/state/container, applique la mutation. `InventoryService`,
-`CharacterService` et `WorldItemService` ne mutent plus `ItemInstance` directement.
-TD-008 In Progress (les domaines Auction, Bank, Mail, Trade, Guild Storage,
-Housing restent à connecter).
+Runtime `ItemInstance` : 20 transitions couvrant 10 domaines (Equipment, WorldItem,
+Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade). Verrou pessimiste
+systématique, transaction toujours ouverte par l'appelant, zéro mutation directe
+d'`ItemInstance` détectée hors service autorisé. TD-008 résolu. ADR-0010 et
+ADR-0011 promus Accepted. `ItemInstance.createdBySource` ajouté (migration
+`1783468800000-AddCreatedBySourceToItemInstance`). Gameplay V1 s'ouvre.
 
 **Pipeline Loot Hybrid opérationnel (2026-06-28).** `Item.objectMode` (enum `STACKABLE | INSTANCE`)
 est la source de vérité pour la matérialisation du loot. `LootService` reste pur et synchrone
@@ -65,19 +65,34 @@ autoritaire.
 
 ## Derniers changements importants
 
+- **Clôture Runtime V2 — documentation (2026-06-29)** : ADR-0010 et ADR-0011
+  promus `Accepted`. `runtime-roadmap.md` marqué `Accepted`, Trade ajouté comme
+  phase `Completed`, section "Runtime V2 Completed" et "Gameplay V1" créées.
+  `technical-debt.md` : TD-008 `Resolved`, TD-010 `Resolved`, TD-009 mis à jour
+  (craft instance OK, craftedBy absent), TD-019 créé (Trade MVP debts).
+  `ItemInstance.createdBySource` colonne ajoutée (migration
+  `1783468800000-AddCreatedBySourceToItemInstance`) — correction du bug silencieux
+  où `ItemMaterializationService` tentait d'écrire ce champ sans colonne en DB.
+  1238/1239 tests, build propre.
+- **Trade Runtime MVP — `TradeService` (2026-06-29)** : échange peer-to-peer
+  transactionnel d'`ItemInstance`. `TradeSession` (PENDING/COMPLETED/CANCELLED),
+  `createTrade`, `addItem` (TRADE_LOCK), `removeItem` (TRADE_CANCEL),
+  `accept` (commit atomique si les deux acceptent), `cancel` (TRADE_CANCEL sur
+  tous les items). Tri lexicographique des UUIDs avant multi-verrou (anti-deadlock).
+  `ItemTransferService` étendu : TRADE_LOCK, TRADE_COMMIT, TRADE_CANCEL.
+  TRADE_CANCEL : `containerId = instance.ownerId` — retour élégant vers le
+  propriétaire légal sans changer `ownerId`. TRADE_COMMIT change `ownerId →
+  recipientCharacterId`. 29 tests `trade.service.spec.ts`, commit `772cc75`.
+  TD-008 désormais Resolved (Trade était le dernier domaine manquant).
 - **Runtime Transfer Pipeline — `ItemTransferService`** : service créé dans
   `src/item-transfer/` comme unique point de mutation Runtime `ItemInstance`.
-  Machine d'états : EQUIP (`AVAILABLE+INVENTORY → EQUIPPED+EQUIPMENT`), UNEQUIP
-  (`EQUIPPED+EQUIPMENT → AVAILABLE+INVENTORY`), DROP_TO_WORLD (`AVAILABLE+INVENTORY → IN_WORLD+WORLD`),
-  PICKUP_FROM_WORLD (`IN_WORLD+WORLD → AVAILABLE+INVENTORY`), ARCHIVE (`IN_WORLD+WORLD → ARCHIVED+NONE`).
-  Verrou pessimiste posé à l'intérieur du service. L'appelant fournit toujours un
-  `EntityManager` et ouvre la transaction. `InventoryService.equipItemInstance`,
-  `InventoryService.unequipItem` (INSTANCE), `CharacterService.unequipItem` (INSTANCE),
-  `WorldItemService.pickupInstance`, `WorldItemService.dropInstance`,
-  `WorldItemService.expireInstance` délèguent tous à `transfer()`. Trois méthodes
-  lock privées supprimées de `WorldItemService`. `ItemMaterializationService` reste
-  indépendant (création uniquement). 22 tests `item-transfer.service.spec.ts`,
-  1055/1056 suite complète.
+  20 transitions couvrant 10 domaines. Verrou pessimiste posé à l'intérieur du
+  service. L'appelant fournit toujours un `EntityManager` et ouvre la transaction.
+  `InventoryService`, `CharacterService`, `WorldItemService`, `AuctionService`,
+  `BankService`, `MailService`, `GuildStorageService`, `HousingService`,
+  `TradeService` délèguent tous à `transfer()`. `ItemMaterializationService` reste
+  indépendant (création uniquement). 74 tests `item-transfer.service.spec.ts`,
+  1238/1239 suite complète.
 - **Pipeline Loot Hybrid — `ItemMaterializationService`** : enum `ObjectMode` (`STACKABLE | INSTANCE`)
   ajouté sur `Item.objectMode` (default `STACKABLE`). `LootService.generateLoot()` retourne
   `LootEntry[]` (tableau vide = pas de loot) ; `generateLootFromPool()` retourne `LootEntry | null`.
@@ -169,6 +184,13 @@ autoritaire.
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
 | Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
 | Loot Hybrid | `Item.objectMode` source de vérité `STACKABLE/INSTANCE`. `ItemMaterializationService` 4 chemins. `LootService` pur/synchrone. Loot creature → `WorldItem`, loot récolte → `Inventory`. Migration `1782864000000-AddObjectModeToItem`. |
+| Runtime V2 | **Entièrement terminé (2026-06-29).** `ItemTransferService` 20 transitions, 10 domaines, verrou pessimiste systématique, zéro mutation directe. `ItemInstance.createdBySource` persisté. ADR-0010/ADR-0011 Accepted. Voir `docs/09_Workflow/runtime-roadmap.md`. |
+| Trade | `TradeService` : échange peer-to-peer d'`ItemInstance`. Sessions PENDING/COMPLETED/CANCELLED. TRADE_LOCK/COMMIT/CANCEL. Anti-deadlock lexicographique. `POST /trade/create`, add, remove, accept, cancel. |
+| Bank | `BankService` : dépôt/retrait d'`ItemInstance`. `GET /bank/:charId`, `POST deposit`, `POST withdraw`. Instance-only MVP. |
+| Mail | `MailService` : envoi/réclamation d'`ItemInstance` en pièce jointe. Inbox/Sent/Delete. Instance-only MVP. |
+| Guild Storage | `GuildStorageService` : stockage partagé d'`ItemInstance` dans une guilde. Propriétaire uniquement MVP. |
+| Housing | `HousingService` : stockage d'`ItemInstance` dans une maison joueur. Propriétaire uniquement MVP. |
+| Auction | `AuctionService` : listing, vente, claim acheteur, retour vendeur. Wallet Economy intégré. Instance-only MVP. |
 
 ---
 
@@ -271,6 +293,11 @@ autoritaire.
 - **Offset tilemap** : `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js`.
 - `server.emit` broadcast global — prévoir rooms/zones à la montée en charge.
 - Pathfinder peut échouer si un creature est sur une tuile bloquante.
+- ~~**[IMPORTANT] TD-008 : `ItemInstance` sans validations de transition**~~ — **SOLDÉ** (Runtime V2, `772cc75`).
+- ~~**[IMPORTANT] TD-010 : Loot stack-like uniquement**~~ — **SOLDÉ** (Loot Hybrid, `0f4edf3`).
+- **[IMPORTANT] TD-009 : `craftedBy`/`quality` absents des `ItemInstance` craftées** — Open (Craft avancé, Gameplay V1).
+- **[IMPORTANT] TD-019 : Trade MVP — expiration session absente, stacks non supportés** — Open (Trade V2).
+- **[IMPORTANT] Equipment Runtime V2 en cours** : `Inventory.equipped` legacy encore actif, TDs 002/005/006 ouverts.
 - `synchronize: true` — migrations TypeORM à prévoir pour la prod.
 - Sprite goblin utilise `textureKey: 'turkey'` en placeholder.
 - Le tileset grass ne contient qu'une seule tuile — variété visuelle à construire.
@@ -278,6 +305,24 @@ autoritaire.
 ---
 
 ## Prochaines priorités possibles
+
+### Runtime V2 — **ENTIÈREMENT TERMINÉ (2026-06-29)**
+
+Voir `docs/09_Workflow/runtime-roadmap.md` section "Runtime V2 — Completed".
+
+### Gameplay V1 — Prochain chapitre
+
+Priorités ordonnées dans `docs/09_Workflow/runtime-roadmap.md` section "Gameplay V1".
+
+1. Skills & Progression
+2. Combat avancé
+3. Récolte avancée
+4. Craft avancé
+5. Économie
+6. Social
+7. Quêtes
+8. IA
+9. Contenu
 
 ### DevTools — Admin WOM (en cours)
 - [x] AdminPanelWOM — pipeline WOM pour ressources et animaux
