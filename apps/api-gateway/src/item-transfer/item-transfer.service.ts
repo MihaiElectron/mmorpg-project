@@ -23,7 +23,9 @@ export type ItemTransition =
   | { type: 'STORE_BANK'; characterId: string }
   | { type: 'WITHDRAW_BANK'; characterId: string }
   | { type: 'SEND_MAIL'; mailId: string }
-  | { type: 'CLAIM_MAIL'; mailId: string; recipientCharacterId: string };
+  | { type: 'CLAIM_MAIL'; mailId: string; recipientCharacterId: string }
+  | { type: 'STORE_GUILD'; guildId: string }
+  | { type: 'WITHDRAW_GUILD'; guildId: string; characterId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -71,6 +73,10 @@ export class ItemTransferService {
         return this.applySendMail(manager, instance, requesterId, transition.mailId);
       case 'CLAIM_MAIL':
         return this.applyClaimMail(manager, instance, transition);
+      case 'STORE_GUILD':
+        return this.applyStoreGuild(manager, instance, requesterId, transition.guildId);
+      case 'WITHDRAW_GUILD':
+        return this.applyWithdrawGuild(manager, instance, transition);
     }
   }
 
@@ -326,6 +332,39 @@ export class ItemTransferService {
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = transition.recipientCharacterId;
     instance.ownerId = transition.recipientCharacterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Guild Storage transitions ─────────────────────────────────────────────
+
+  private async applyStoreGuild(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    guildId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.IN_GUILD_STORAGE;
+    instance.containerType = ItemInstanceContainerType.GUILD_STORAGE;
+    instance.containerId = guildId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyWithdrawGuild(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'WITHDRAW_GUILD' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.IN_GUILD_STORAGE);
+    this.validateContainer(instance, ItemInstanceContainerType.GUILD_STORAGE, transition.guildId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.characterId;
+    instance.ownerId = transition.characterId;
     return manager.save(ItemInstance, instance);
   }
 }

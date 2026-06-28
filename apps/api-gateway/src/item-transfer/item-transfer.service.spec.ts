@@ -773,4 +773,108 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── STORE_GUILD ────────────────────────────────────────────────────────────
+
+  describe("transition STORE_GUILD", () => {
+    it("transitionne AVAILABLE+INVENTORY → IN_GUILD_STORAGE+GUILD_STORAGE+guildId", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "STORE_GUILD", guildId: "guild-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.IN_GUILD_STORAGE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.GUILD_STORAGE);
+      expect(result.containerId).toBe("guild-1");
+      expect(result.ownerId).toBe("char-1");
+    });
+
+    it("refuse si le requesterId ne correspond pas au proprietaire", async () => {
+      const instance = makeInstance({ ownerId: "char-1" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "autre",
+          transition: { type: "STORE_GUILD", guildId: "guild-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE (double depot)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_GUILD_STORAGE,
+        containerType: ItemInstanceContainerType.GUILD_STORAGE,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_GUILD", guildId: "guild-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_GUILD", guildId: "guild-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── WITHDRAW_GUILD ─────────────────────────────────────────────────────────
+
+  describe("transition WITHDRAW_GUILD", () => {
+    it("transitionne IN_GUILD_STORAGE+GUILD_STORAGE → AVAILABLE+INVENTORY+characterId et change ownerId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_GUILD_STORAGE,
+        containerType: ItemInstanceContainerType.GUILD_STORAGE,
+        containerId: "guild-1",
+        ownerId: "char-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "WITHDRAW_GUILD", guildId: "guild-1", characterId: "char-2" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-2");
+      expect(result.ownerId).toBe("char-2");
+    });
+
+    it("refuse si state != IN_GUILD_STORAGE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "WITHDRAW_GUILD", guildId: "guild-1", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != guildId (mauvaise guilde)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_GUILD_STORAGE,
+        containerType: ItemInstanceContainerType.GUILD_STORAGE,
+        containerId: "guild-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "WITHDRAW_GUILD", guildId: "guild-1", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

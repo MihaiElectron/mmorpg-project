@@ -35,6 +35,7 @@ import { ItemInstancesModule } from './item-instances/item-instances.module';
 import { AuctionModule } from './auction/auction.module';
 import { BankModule } from './bank/bank.module';
 import { MailModule } from './mail/mail.module';
+import { GuildModule } from './guild/guild.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { MailModule } from './mail/mail.module';
     AuctionModule,
     BankModule,
     MailModule,
+    GuildModule,
   ],
   controllers: [AppController],
   providers: [AppService],
