@@ -12,6 +12,7 @@ import { SkillsModule } from '../skills/skills.module';
 import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.module';
 import { LootService } from '../world/loot.service';
 import { WorldItemsModule } from '../world-items/world-items.module';
+import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { WorldItemsModule } from '../world-items/world-items.module';
     SkillsModule,
     CreatureRuntimeModule,
     WorldItemsModule,
+    ItemMaterializationModule,
   ],
   providers: [CreaturesGateway, CreaturesService, LootService],
   exports: [CreaturesService],

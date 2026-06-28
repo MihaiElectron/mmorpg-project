@@ -451,7 +451,7 @@ describe('CreaturesService', () => {
       const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
-      if (result.success) expect(result.loot).toEqual({ itemId: 'wooden_stick', quantity: 2 });
+      if (result.success) expect(result.loot).toEqual([{ itemId: 'wooden_stick', quantity: 2 }]);
       jest.useRealTimers();
     });
 

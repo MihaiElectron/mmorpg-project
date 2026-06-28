@@ -10,17 +10,18 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
+import { DataSource } from 'typeorm';
 import type { WorldSocket } from '../types/world-socket';
 import { ResourcesService } from './resources.service';
 import { LootService } from '../world/loot.service';
-import { InventoryService } from '../inventory/inventory.service';
-import { Inventory } from '../inventory/entities/inventory.entity';
 import { SkillsService } from '../skills/skills.service';
+import type { MaterializationResult } from '../item-materialization/item-materialization.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { WUPositionRecord } from '../common/world-position.adapter';
 import { chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 
 interface InteractResourcePayload {
   targetId: string;
@@ -62,7 +63,8 @@ export class ResourcesGateway
   constructor(
     private readonly resources: ResourcesService,
     private readonly loot: LootService,
-    private readonly inventory: InventoryService,
+    private readonly dataSource: DataSource,
+    private readonly itemMaterialization: ItemMaterializationService,
     private readonly wsAuthService: WsAuthService,
     private readonly skills: SkillsService,
   ) {}
@@ -130,55 +132,40 @@ export class ResourcesGateway
     }
 
     if (!this.isInRange(player, resource)) {
-      console.warn('Too far from resource:', targetId);
+      client.emit('interact_resource_error', { error: 'out_of_range', targetId });
       return;
     }
 
     this.startGatherCycle(client, targetId, player.worldX, player.worldY);
   }
 
-  /**
-   * Démarre (ou relance) un cycle de récolte : émet un tick pour le feedback
-   * visuel client, puis arme le prochain loot dans GATHER_INTERVAL_MS.
-   */
   private startGatherCycle(
     client: WorldSocket,
     targetId: string,
     worldX: number,
     worldY: number,
   ) {
-    client.emit('gather_tick', { targetId, duration: GATHER_INTERVAL_MS });
-
-    const timer = setTimeout(() => {
-      void this.runGatherCycle(client, targetId);
+    const timer = setTimeout(async () => {
+      await this.runGatherCycle(client, targetId);
     }, GATHER_INTERVAL_MS);
 
     this.gatherSessions.set(client.id, { targetId, timer, lastWorldX: worldX, lastWorldY: worldY });
   }
 
-  /**
-   * Un cycle de récolte : revalide tout (mouvement, portée, état de la
-   * ressource) avant d'accorder le loot, puis relance le cycle suivant.
-   */
   private async runGatherCycle(client: WorldSocket, targetId: string) {
-    const session = this.gatherSessions.get(client.id);
-    if (!session || session.targetId !== targetId) return;
-
-    if (!client.connected) {
+    const player = client.data.player;
+    if (!player?.characterId) {
       this.clearSession(client.id);
       return;
     }
 
-    const player = client.data.player;
-    if (!player?.characterId) {
-      this.cancelGathering(client, targetId, 'error');
-      return;
-    }
+    const session = this.gatherSessions.get(client.id);
+    if (!session || session.targetId !== targetId) return;
 
-    const moved =
-      Math.abs(player.worldX - session.lastWorldX) > MOVE_TOLERANCE_WU ||
-      Math.abs(player.worldY - session.lastWorldY) > MOVE_TOLERANCE_WU;
-    if (moved) {
+    const { lastWorldX, lastWorldY } = session;
+    const dx = Math.abs(player.worldX - lastWorldX);
+    const dy = Math.abs(player.worldY - lastWorldY);
+    if (dx > MOVE_TOLERANCE_WU || dy > MOVE_TOLERANCE_WU) {
       this.cancelGathering(client, targetId, 'moved');
       return;
     }
@@ -201,19 +188,25 @@ export class ResourcesGateway
     const characterId = player.characterId;
 
     const template = await this.resources.getTemplate(resource.type);
-    const loot = this.loot.generateLoot(resource.type, template?.lootPool ?? null);
-    if (loot.quantity <= 0) {
+    const lootEntries = this.loot.generateLoot(resource.type, template?.lootPool ?? null);
+    if (lootEntries.length === 0) {
       this.cancelGathering(client, targetId, 'error');
       return;
     }
 
-    let inventoryEntry: Inventory;
+    let matResult: MaterializationResult;
     try {
-      inventoryEntry = await this.inventory.addItem({
-        characterId,
-        itemId: loot.itemId,
-        quantity: loot.quantity,
+      matResult = await this.dataSource.transaction(async (manager) => {
+        return this.itemMaterialization.materialize(manager, lootEntries, {
+          source: 'LOOT',
+          destination: { type: 'INVENTORY', characterId },
+          ownerId: characterId,
+        });
       });
+      if (matResult.stacks.length === 0) {
+        this.cancelGathering(client, targetId, 'error');
+        return;
+      }
     } catch {
       this.cancelGathering(client, targetId, 'error');
       return;
@@ -225,18 +218,21 @@ export class ResourcesGateway
       return;
     }
 
-    // 📤 Envoie le loot au client
-    client.emit('resource_loot', {
-      itemId: inventoryEntry.item.id,
-      lootItemId: loot.itemId,
-      quantity: loot.quantity,
-      total: inventoryEntry.quantity,
-      item: {
-        id: inventoryEntry.item.id,
-        name: inventoryEntry.item.name,
-        image: inventoryEntry.item.image,
-      },
-    });
+    // 📤 Envoie chaque entrée de loot au client
+    for (const stack of matResult.stacks) {
+      const entry = lootEntries.find((e) => e.itemId === stack.item.category);
+      client.emit('resource_loot', {
+        itemId: stack.item.id,
+        lootItemId: stack.item.category,
+        quantity: entry?.quantity ?? stack.quantity,
+        total: stack.quantity,
+        item: {
+          id: stack.item.id,
+          name: stack.item.name,
+          image: stack.item.image,
+        },
+      });
+    }
 
     // 🔄 Mise à jour visuelle pour les joueurs de la même map
     const mapId = (updatedResource as any).mapId ?? DEFAULT_MAP_ID;
@@ -268,33 +264,25 @@ export class ResourcesGateway
     player: { worldX: number; worldY: number; mapId: number },
     target: WUPositionRecord,
   ): boolean {
-    if (target.worldX == null || target.worldY == null || target.mapId == null) return false;
-    if (target.mapId !== player.mapId) return false;
-    return chebyshevDistanceWU(
-      { worldX: player.worldX, worldY: player.worldY },
-      { worldX: target.worldX, worldY: target.worldY },
-    ) <= RESOURCE_INTERACT_RANGE_WU;
+    if (player.mapId !== target.mapId) return false;
+    return chebyshevDistanceWU(player, target as { worldX: number; worldY: number; mapId: number }) <= RESOURCE_INTERACT_RANGE_WU;
   }
 
-  private cancelGathering(
-    client: WorldSocket,
-    targetId: string,
-    reason: string,
-  ) {
+  private cancelGathering(client: WorldSocket, targetId: string, reason: string) {
     this.clearSession(client.id);
-    client.emit('gather_stopped', { targetId, reason });
+    client.emit('gather_cancelled', { targetId, reason });
   }
 
   private clearSession(socketId: string) {
     const session = this.gatherSessions.get(socketId);
-    if (!session) return;
-
-    clearTimeout(session.timer);
-    this.gatherSessions.delete(socketId);
+    if (session) {
+      clearTimeout(session.timer);
+      this.gatherSessions.delete(socketId);
+    }
   }
 
   private async sendResources(client: WorldSocket) {
-    const objects = await this.resources.findAllWithTextureKey();
-    client.emit('resources', objects);
+    const resources = await this.resources.findAll();
+    client.emit('resources', resources);
   }
 }

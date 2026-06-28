@@ -7,7 +7,7 @@ import {
   LEGACY_WOODEN_STICK_MATCH,
   LOOT_ITEM_SEEDS,
 } from './item.service';
-import { Item } from './entities/item.entity';
+import { Item, ObjectMode } from './entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -220,9 +220,12 @@ describe('ItemService', () => {
     });
 
     it('ne duplique pas les items déjà présents', async () => {
-      repo.findOne.mockResolvedValue(
-        makeItem({ image: '/assets/images/items/wooden_stick.png' }),
-      ); // material déjà présents
+      // Chaque seed retourne un item avec image + objectMode identiques → aucun dirty
+      for (const seed of LOOT_ITEM_SEEDS) {
+        repo.findOne.mockResolvedValueOnce(
+          makeItem({ image: seed.image ?? null, objectMode: seed.objectMode }),
+        );
+      }
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
     });
@@ -249,11 +252,12 @@ describe('ItemService', () => {
 
     it('insère uniquement les items manquants (un absent parmi plusieurs présents)', async () => {
       repo.findOne
-        .mockResolvedValueOnce(
-          makeItem({ image: '/assets/images/items/wooden_stick.png' }),
-        ) // wooden_stick présent
-        .mockResolvedValueOnce(null) // iron_ore absent → insert
-        .mockResolvedValue(makeItem({ image: null })); // iron_bar, basic_handle, rough_blade, basic_sword présents
+        .mockResolvedValueOnce(makeItem({ image: '/assets/images/items/wooden_stick.png', objectMode: ObjectMode.STACKABLE })) // wooden_stick présent
+        .mockResolvedValueOnce(null)                                                                                            // iron_ore absent → insert
+        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // iron_bar présent
+        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // basic_handle présent
+        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // rough_blade présent
+        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.INSTANCE }));                                                  // basic_sword présent
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
     });

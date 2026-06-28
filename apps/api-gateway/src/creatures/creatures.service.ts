@@ -14,7 +14,7 @@ import { SkillsService } from '../skills/skills.service';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
-import { LootService } from '../world/loot.service';
+import { LootService, LootEntry } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
@@ -72,7 +72,7 @@ export type AttackSuccess = {
   damage: number;
   attackerId: string;
   riposte?: { damage: number; characterHealth: number };
-  loot?: { itemId: string; quantity: number };
+  loot?: LootEntry[];
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -531,7 +531,7 @@ export class CreaturesService implements OnModuleInit {
 
     // XP de combat accordée uniquement au kill confirmé serveur.
     // characterId provient du paramètre, jamais du client.
-    let loot: { itemId: string; quantity: number } | undefined;
+    let loot: LootEntry[] | undefined;
     if (creature.health === 0) {
       const skillKey = resolveCombatSkill(character.equipment ?? []);
       try {
@@ -541,7 +541,7 @@ export class CreaturesService implements OnModuleInit {
       }
 
       const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
-      if (generated.quantity > 0) loot = generated;
+      if (generated.length > 0) loot = generated;
     }
 
     let riposte: { damage: number; characterHealth: number } | undefined;

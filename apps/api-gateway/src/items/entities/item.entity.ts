@@ -10,6 +10,11 @@ import { CharacterEquipment } from '../../characters/entities/character-equipmen
 import { EquipmentSlot } from '../../characters/dto/equip-item.dto';
 import { Inventory } from '../../inventory/entities/inventory.entity';
 
+export enum ObjectMode {
+  STACKABLE = 'STACKABLE',
+  INSTANCE = 'INSTANCE',
+}
+
 /**
  * Entity représentant un item du jeu
  */
@@ -53,6 +58,9 @@ export class Item {
 
   @Column({ nullable: true })
   image: string;
+
+  @Column({ type: 'enum', enum: ObjectMode, default: ObjectMode.STACKABLE })
+  objectMode: ObjectMode;
 
   /**
    * Relation avec l'équipement des personnages

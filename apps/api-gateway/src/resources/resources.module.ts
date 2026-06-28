@@ -6,16 +6,16 @@ import { ResourceTemplate } from './entities/resource-template.entity';
 import { ResourcesService } from './resources.service';
 import { ResourcesGateway } from './resources.gateway';
 import { LootService } from '../world/loot.service';
-import { InventoryModule } from '../inventory/inventory.module';
 import { CommonModule } from '../common/common.module';
 import { SkillsModule } from '../skills/skills.module';
+import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Resource, ResourceTemplate]),
-    InventoryModule,
     CommonModule,
     SkillsModule,
+    ItemMaterializationModule,
   ],
   providers: [ResourcesService, ResourcesGateway, LootService],
   exports: [ResourcesService, ResourcesGateway],

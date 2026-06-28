@@ -1,9 +1,9 @@
 import { ResourcesGateway } from './resources.gateway';
 import { ResourcesService } from './resources.service';
 import { LootService } from '../world/loot.service';
-import { InventoryService } from '../inventory/inventory.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { SkillsService } from '../skills/skills.service';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -39,9 +39,11 @@ function makeTemplate(
 
 function makeInventoryEntry() {
   return {
+    id: 'inv-row-1',
     quantity: 1,
     item: {
       id: 'item-uuid',
+      category: 'wooden_stick',
       name: 'Bâton de bois',
       image: '/assets/images/items/wooden_stick.png',
     },
@@ -65,14 +67,16 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
   let gateway: ResourcesGateway;
   let resourcesMock: Record<string, jest.Mock>;
   let lootMock: Record<string, jest.Mock>;
-  let inventoryMock: Record<string, jest.Mock>;
+  let dataSourceMock: { transaction: jest.Mock };
+  let materializeMock: Record<string, jest.Mock>;
   let skillsMock: Record<string, jest.Mock>;
 
   function setupGateway() {
     gateway = new ResourcesGateway(
       resourcesMock as unknown as ResourcesService,
       lootMock as unknown as LootService,
-      inventoryMock as unknown as InventoryService,
+      dataSourceMock as any,
+      materializeMock as unknown as ItemMaterializationService,
       {} as unknown as WsAuthService,
       skillsMock as unknown as SkillsService,
     );
@@ -105,10 +109,17 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     lootMock = {
       generateLoot: jest
         .fn()
-        .mockReturnValue({ itemId: 'wooden_stick', quantity: 1 }),
+        .mockReturnValue([{ itemId: 'wooden_stick', quantity: 1 }]),
     };
-    inventoryMock = {
-      addItem: jest.fn().mockResolvedValue(makeInventoryEntry()),
+    materializeMock = {
+      materialize: jest.fn().mockResolvedValue({
+        stacks: [makeInventoryEntry()],
+        instances: [],
+        worldItems: [],
+      }),
+    };
+    dataSourceMock = {
+      transaction: jest.fn().mockImplementation(async (fn) => fn({})),
     };
     skillsMock = {
       addXp: jest.fn().mockResolvedValue({ level: 1, xp: 5 }),
@@ -194,11 +205,8 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     expect(skillsMock.addXp).not.toHaveBeenCalled();
   });
 
-  it("n'accorde pas XP si loot.quantity === 0", async () => {
-    lootMock.generateLoot.mockReturnValue({
-      itemId: 'wooden_stick',
-      quantity: 0,
-    });
+  it("n'accorde pas XP si lootEntries est vide (aucun loot)", async () => {
+    lootMock.generateLoot.mockReturnValue([]);
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.getTemplate.mockResolvedValue(
@@ -212,8 +220,8 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     expect(skillsMock.addXp).not.toHaveBeenCalled();
   });
 
-  it("n'accorde pas XP si addItem échoue (récolte annulée avant XP)", async () => {
-    inventoryMock.addItem.mockRejectedValue(new Error('DB error'));
+  it("n'accorde pas XP si la matérialisation échoue (récolte annulée avant XP)", async () => {
+    dataSourceMock.transaction.mockRejectedValue(new Error('DB error'));
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.getTemplate.mockResolvedValue(
@@ -269,6 +277,13 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
       expect.any(String),
       expect.any(Number),
     );
+    expect(materializeMock.materialize).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Array),
+      expect.objectContaining({
+        destination: expect.objectContaining({ characterId: 'server-resolved-char' }),
+      }),
+    );
   });
 
   it('utilise le skillKey et xpReward du template, pas des constantes hardcodées', async () => {
@@ -306,11 +321,11 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     await (gateway as any).runGatherCycle(client, 'res-1');
 
     expect(lootMock.generateLoot).toHaveBeenCalledWith('dead_tree', null);
-    expect(inventoryMock.addItem).toHaveBeenCalledWith({
-      characterId: 'char-1',
-      itemId: 'wooden_stick',
-      quantity: 1,
-    });
+    expect(materializeMock.materialize).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ itemId: 'wooden_stick', quantity: 1 }],
+      expect.objectContaining({ source: 'LOOT', destination: expect.objectContaining({ type: 'INVENTORY' }) }),
+    );
     expect(client.emit).toHaveBeenCalledWith(
       'resource_loot',
       expect.objectContaining({

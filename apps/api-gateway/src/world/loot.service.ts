@@ -2,7 +2,7 @@
 
 import { Injectable } from '@nestjs/common';
 
-export type LootResult = {
+export type LootEntry = {
   itemId: string;
   quantity: number;
 };
@@ -35,28 +35,29 @@ export class LootService {
    * Génère un loot depuis le pool template si fourni et valide.
    * Fallback vers le switch hardcodé si pool absent, vide, invalide ou si aucune
    * entrée ne passe le tirage de probabilité.
+   * Retourne un tableau vide si aucun loot.
    */
-  generateLoot(type: string, pool?: LootPoolEntry[] | null): LootResult {
+  generateLoot(type: string, pool?: LootPoolEntry[] | null): LootEntry[] {
     if (pool && pool.length > 0) {
       const fromPool = this.generateLootFromPool(pool);
-      if (fromPool.quantity > 0) return fromPool;
+      if (fromPool !== null) return [fromPool];
     }
     switch (type) {
       case 'dead_tree':
-        return { itemId: 'wooden_stick', quantity: 1 };
+        return [{ itemId: 'wooden_stick', quantity: 1 }];
       case 'ore':
-        return { itemId: 'iron_ore', quantity: 1 };
+        return [{ itemId: 'iron_ore', quantity: 1 }];
       default:
-        return { itemId: 'unknown', quantity: 0 };
+        return [];
     }
   }
 
   /**
    * Tire un loot depuis un pool brut. Filtre les entrées invalides, puis tente
    * chaque entrée dans l'ordre selon sa probabilité. Retourne le premier succès,
-   * ou `{ itemId: 'unknown', quantity: 0 }` si aucune entrée ne passe.
+   * ou `null` si aucune entrée ne passe.
    */
-  generateLootFromPool(pool: unknown[]): LootResult {
+  generateLootFromPool(pool: unknown[]): LootEntry | null {
     const valid = pool.filter(isValidEntry);
     for (const entry of valid) {
       if (Math.random() < entry.probability) {
@@ -65,6 +66,6 @@ export class LootService {
         return { itemId: entry.itemId, quantity: qty };
       }
     }
-    return { itemId: 'unknown', quantity: 0 };
+    return null;
   }
 }

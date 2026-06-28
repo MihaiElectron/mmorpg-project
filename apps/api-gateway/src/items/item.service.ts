@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Item } from './entities/item.entity';
+import { Item, ObjectMode } from './entities/item.entity';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { Inventory } from '../inventory/entities/inventory.entity';
@@ -14,7 +14,7 @@ import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 /** Items de loot et de craft garantis présents en DB au démarrage. */
 export const LOOT_ITEM_SEEDS: Pick<
   Item,
-  'name' | 'type' | 'category' | 'image'
+  'name' | 'type' | 'category' | 'image' | 'objectMode'
 >[] = [
   // ── Loot resources ───────────────────────────────────────────────────────
   {
@@ -22,12 +22,14 @@ export const LOOT_ITEM_SEEDS: Pick<
     type: 'material',
     category: 'wooden_stick',
     image: '/assets/images/items/wooden_stick.png',
+    objectMode: ObjectMode.STACKABLE,
   },
   {
     name: 'Minerai de fer',
     type: 'material',
     category: 'iron_ore',
     image: null,
+    objectMode: ObjectMode.STACKABLE,
   },
   // ── Craft outputs (Phase 1) ───────────────────────────────────────────────
   {
@@ -35,24 +37,28 @@ export const LOOT_ITEM_SEEDS: Pick<
     type: 'material',
     category: 'iron_bar',
     image: null,
+    objectMode: ObjectMode.STACKABLE,
   },
   {
     name: 'Manche brut',
     type: 'material',
     category: 'basic_handle',
     image: null,
+    objectMode: ObjectMode.STACKABLE,
   },
   {
     name: 'Lame brute',
     type: 'material',
     category: 'rough_blade',
     image: null,
+    objectMode: ObjectMode.STACKABLE,
   },
   {
     name: 'Épée basique',
     type: 'weapon',
     category: 'basic_sword',
     image: null,
+    objectMode: ObjectMode.INSTANCE,
   },
 ];
 
@@ -114,9 +120,11 @@ export class ItemService implements OnModuleInit {
       });
       if (!exists) {
         await this.repo.save(this.repo.create(seed));
-      } else if (!exists.image && seed.image) {
-        exists.image = seed.image;
-        await this.repo.save(exists);
+      } else {
+        let dirty = false;
+        if (!exists.image && seed.image) { exists.image = seed.image; dirty = true; }
+        if (exists.objectMode !== seed.objectMode) { exists.objectMode = seed.objectMode; dirty = true; }
+        if (dirty) await this.repo.save(exists);
       }
     }
   }
