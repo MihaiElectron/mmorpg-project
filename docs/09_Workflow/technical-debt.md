@@ -49,6 +49,7 @@ Priorities:
 | TD-012 | Cascades destructives du catalogue `Item` vers possessions joueur | Blocker | Persistence hardening | Open |
 | TD-013 | `removeExpiredItems` scheduler non branché | Medium | WorldItem maintenance | Open |
 | TD-014 | Race condition `removeExpiredItems` sur les stacks | Low | WorldItem hardening | Open |
+| TD-015 | Bank MVP — stacks non supportés, pas de limite de slots, pagination absente | Medium | Bank V2 | Open |
 
 ## Details
 
@@ -151,8 +152,9 @@ Priorities:
   ARCHIVE et les 4 transitions Auction (LIST_FOR_AUCTION, SELL_AUCTION,
   CLAIM_BUYER, RETURN_TO_SELLER). `InventoryService`, `CharacterService`,
   `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
-  `ItemInstance` à ce service. Les domaines Bank, Mail, Trade, Guild Storage
-  et Housing restent à connecter dans leurs phases respectives.
+  `ItemInstance` à ce service. `BankService` délègue également via les
+  transitions STORE_BANK et WITHDRAW_BANK. Les domaines Mail, Trade,
+  Guild Storage et Housing restent à connecter dans leurs phases respectives.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -231,6 +233,22 @@ Priorities:
 - Décision prise : accepter la dette pendant WorldItem Hybrid. Reporter vers
   WorldItem hardening si la fréquence d'expiration monte.
 - Phase prévue de résolution : WorldItem hardening
+- Statut : Open
+
+### TD-015 - Bank MVP — stacks non supportés, pas de limite de slots, pagination absente
+
+- Description : `BankService` gère uniquement les `ItemInstance`. Les stacks
+  `Inventory` ne peuvent pas être déposés en banque dans le MVP. Aucune limite
+  de slots n'est appliquée. `listContents` retourne toutes les instances sans
+  pagination.
+- Impact : les objets stackables (ressources, matériaux) ne sont pas bancables ;
+  un personnage peut accumuler un nombre illimité d'objets en banque ; les
+  lectures sur grandes collections sont non bornées.
+- Priorité : Medium
+- Décision prise : accepter la dette dans le périmètre Bank MVP. La gestion des
+  stacks et la limite de slots relèvent de Bank V2 ; la pagination suit les
+  règles générales de performance (ADR-0010).
+- Phase prévue de résolution : Bank V2
 - Statut : Open
 
 ## Maintenance Rules

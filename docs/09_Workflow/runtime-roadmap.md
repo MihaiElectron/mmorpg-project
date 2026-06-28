@@ -36,7 +36,7 @@ Statuses:
 | Loot Hybrid | Produire soit des stacks, soit des `ItemInstance` selon la taxonomie d'objet. | Completed | WorldItem Hybrid, Item Taxonomy | `0f4edf3` |
 | Craft Hybrid | Consommer/produire stacks et `ItemInstance`, avec craftedBy/provenance pour les sorties uniques. | Completed | Inventory Hybrid, Equipment Runtime V2, Loot Hybrid | `521674a` |
 | Auction House | Implémenter le MVP prix fixe avec `buyoutPriceBronze`, verrouillage `ItemInstance`, transfert Economy et claim acheteur. | Completed | Economy Foundation, Inventory Hybrid, Equipment Runtime V2, WorldItem Hybrid | `e04e4fe` |
-| Bank | Stocker stacks et `ItemInstance` en banque, avec monnaie gérée par Economy Wallet. | Not Started | Inventory Hybrid, ItemInstance transitions | N/A |
+| Bank | Stocker stacks et `ItemInstance` en banque, avec monnaie gérée par Economy Wallet. | Completed | Inventory Hybrid, ItemInstance transitions | `0d6887c` |
 | Mail | Transporter stacks et `ItemInstance` sans duplication, avec politique binding et claim. | Not Started | Inventory Hybrid, ItemInstance transitions, Economy Foundation if currency mail is allowed | N/A |
 | Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Not Started | Inventory Hybrid, Bank/Mail policy decisions | N/A |
 | Housing | Stocker et placer décorations, objets personnalisés et objets liés au logement. | Not Started | Inventory Hybrid, WorldItem Hybrid, Item Taxonomy | N/A |
