@@ -8,6 +8,8 @@ export interface ItemSummary {
 
 export interface InventoryEntryDto {
   id: string;
+  /** UUID de l'ItemInstance si entrée INSTANCE, null si entrée STACK. */
+  instanceId: string | null;
   quantity: number;
   equipped: boolean;
   item: ItemSummary;

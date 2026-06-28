@@ -15,6 +15,11 @@ import { UnequipItemDto } from './dto/unequip-item.dto';
 import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
+import {
+  ItemInstance,
+  ItemInstanceContainerType,
+  ItemInstanceState,
+} from '../item-instances/entities/item-instance.entity';
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
@@ -239,19 +244,31 @@ export class CharacterService {
       // 2. Supprimer de CharacterEquipment
       await manager.delete(CharacterEquipment, { characterId, slot: dto.slot });
 
-      // 3. Mettre à jour inventory.equipped = false pour CET item (via itemId)
-      // Utiliser queryBuilder pour être sûr de la jointure
-      const inventoryEntry = await manager
-        .createQueryBuilder(Inventory, 'inv')
-        .leftJoinAndSelect('inv.character', 'character')
-        .leftJoinAndSelect('inv.item', 'item')
-        .where('character.id = :characterId', { characterId })
-        .andWhere('item.id = :itemId', { itemId: equippedItem.item.id })
-        .getOne();
+      // 3a. Chemin INSTANCE : retransitionner l'ItemInstance vers AVAILABLE/INVENTORY
+      if (equippedItem.itemInstanceId) {
+        const instance = await manager.findOne(ItemInstance, {
+          where: { id: equippedItem.itemInstanceId },
+        });
+        if (instance) {
+          instance.state = ItemInstanceState.AVAILABLE;
+          instance.containerType = ItemInstanceContainerType.INVENTORY;
+          instance.containerId = characterId;
+          await manager.save(ItemInstance, instance);
+        }
+      } else {
+        // 3b. Chemin legacy stack : mettre à jour Inventory.equipped = false
+        const inventoryEntry = await manager
+          .createQueryBuilder(Inventory, 'inv')
+          .leftJoinAndSelect('inv.character', 'character')
+          .leftJoinAndSelect('inv.item', 'item')
+          .where('character.id = :characterId', { characterId })
+          .andWhere('item.id = :itemId', { itemId: equippedItem.item.id })
+          .getOne();
 
-      if (inventoryEntry) {
-        inventoryEntry.equipped = false;
-        await manager.save(Inventory, inventoryEntry);
+        if (inventoryEntry) {
+          inventoryEntry.equipped = false;
+          await manager.save(Inventory, inventoryEntry);
+        }
       }
 
       await this.recalculateStats(characterId, manager);

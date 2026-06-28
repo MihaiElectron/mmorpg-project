@@ -22,6 +22,7 @@ export function buildEquippedSets(equipment: CharacterEquipment[]): EquippedSets
 export function mapStackToEntry(inv: Inventory, sets: EquippedSets): InventoryEntryDto {
   return {
     id: inv.id,
+    instanceId: null,
     quantity: inv.quantity,
     equipped: sets.equippedItemIds.has(inv.item.id),
     item: {
@@ -41,6 +42,7 @@ export function mapInstanceToEntry(
 ): InventoryEntryDto {
   return {
     id: instance.id,
+    instanceId: instance.id,
     quantity: 1,
     equipped: sets.equippedInstanceIds.has(instance.id),
     item: {

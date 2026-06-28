@@ -70,6 +70,7 @@ const storeLogic = (set, get) => ({
         .filter((inv) => !inv.equipped)
         .map((inv) => ({
           id: inv.id,
+          instanceId: inv.instanceId ?? null,
           quantity: inv.quantity,
           equipped: inv.equipped,
           item: inv.item,
@@ -104,11 +105,19 @@ const storeLogic = (set, get) => ({
       if (!token || !character) return;
       const invEntry = get().inventory.find(i => i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId);
       if (!invEntry) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${character.id}/equip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemId: invEntry.item.id }),
-      });
+      let res;
+      if (invEntry.instanceId) {
+        res = await fetch(
+          `${import.meta.env.VITE_API_URL}/inventory/${character.id}/equip-instance/${invEntry.instanceId}`,
+          { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+        );
+      } else {
+        res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${character.id}/equip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ itemId: invEntry.item.id }),
+        });
+      }
       if (res.ok) await get().loadCharacter();
     } catch (err) {
       console.error("[CharacterStore] equipItem error:", err);

@@ -71,6 +71,7 @@ describe("InventoryProjectionService", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       id: "inv-1",
+      instanceId: null,
       quantity: 3,
       equipped: false,
       item: { id: "item-1", name: "Baton de bois", type: "material", category: "wooden_stick", image: null },
@@ -102,7 +103,7 @@ describe("InventoryProjectionService", () => {
     expect(result[0].equipped).toBe(false);
   });
 
-  it("projette les ItemInstances actives avec quantity 1", async () => {
+  it("projette les ItemInstances actives avec quantity 1 et instanceId", async () => {
     const instance = {
       id: "inst-1",
       itemId: "item-1",
@@ -118,7 +119,7 @@ describe("InventoryProjectionService", () => {
     const result = await service.project("char-1");
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: "inst-1", quantity: 1, equipped: false });
+    expect(result[0]).toMatchObject({ id: "inst-1", instanceId: "inst-1", quantity: 1, equipped: false });
   });
 
   it("exclut les ItemInstances avec state DESTROYED et n appelle pas itemRepo", async () => {
