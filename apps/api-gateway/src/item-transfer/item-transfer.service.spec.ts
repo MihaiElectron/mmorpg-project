@@ -668,4 +668,109 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── SEND_MAIL ──────────────────────────────────────────────────────────────
+
+  describe("transition SEND_MAIL", () => {
+    it("transitionne AVAILABLE+INVENTORY → IN_MAIL+MAIL+mailId", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "SEND_MAIL", mailId: "mail-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.IN_MAIL);
+      expect(result.containerType).toBe(ItemInstanceContainerType.MAIL);
+      expect(result.containerId).toBe("mail-1");
+      expect(result.ownerId).toBe("char-1");
+    });
+
+    it("refuse si owner incorrect", async () => {
+      const instance = makeInstance({ ownerId: "other" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "SEND_MAIL", mailId: "mail-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE (objet deja en transit)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "SEND_MAIL", mailId: "mail-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY (objet equipe)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "SEND_MAIL", mailId: "mail-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── CLAIM_MAIL ─────────────────────────────────────────────────────────────
+
+  describe("transition CLAIM_MAIL", () => {
+    it("transitionne IN_MAIL+MAIL → AVAILABLE+INVENTORY+recipientId et change ownerId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-1",
+        ownerId: "sender-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "recipient-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("recipient-1");
+      expect(result.ownerId).toBe("recipient-1");
+    });
+
+    it("refuse si state != IN_MAIL (double claim)", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "recipient-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != mailId (mauvais message)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "recipient-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

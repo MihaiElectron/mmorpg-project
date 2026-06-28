@@ -21,7 +21,9 @@ export type ItemTransition =
   | { type: 'CLAIM_BUYER'; listingId: string; buyerCharacterId: string }
   | { type: 'RETURN_TO_SELLER'; listingId: string; sellerCharacterId: string }
   | { type: 'STORE_BANK'; characterId: string }
-  | { type: 'WITHDRAW_BANK'; characterId: string };
+  | { type: 'WITHDRAW_BANK'; characterId: string }
+  | { type: 'SEND_MAIL'; mailId: string }
+  | { type: 'CLAIM_MAIL'; mailId: string; recipientCharacterId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -65,6 +67,10 @@ export class ItemTransferService {
         return this.applyStoreBank(manager, instance, requesterId, transition.characterId);
       case 'WITHDRAW_BANK':
         return this.applyWithdrawBank(manager, instance, requesterId, transition.characterId);
+      case 'SEND_MAIL':
+        return this.applySendMail(manager, instance, requesterId, transition.mailId);
+      case 'CLAIM_MAIL':
+        return this.applyClaimMail(manager, instance, transition);
     }
   }
 
@@ -287,6 +293,39 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.AVAILABLE;
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = characterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Mail transitions ──────────────────────────────────────────────────────
+
+  private async applySendMail(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    mailId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.IN_MAIL;
+    instance.containerType = ItemInstanceContainerType.MAIL;
+    instance.containerId = mailId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyClaimMail(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'CLAIM_MAIL' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.IN_MAIL);
+    this.validateContainer(instance, ItemInstanceContainerType.MAIL, transition.mailId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.recipientCharacterId;
+    instance.ownerId = transition.recipientCharacterId;
     return manager.save(ItemInstance, instance);
   }
 }
