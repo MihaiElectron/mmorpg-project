@@ -139,6 +139,28 @@ describe("InventoryProjectionService", () => {
     expect(itemRepo.findBy).not.toHaveBeenCalled();
   });
 
+  it("retourne une instance equippee avec equipped = true depuis CharacterEquipment", async () => {
+    const instance = {
+      id: "inst-eq",
+      itemId: "item-1",
+      ownerId: "char-1",
+      containerType: ItemInstanceContainerType.EQUIPMENT,
+      state: ItemInstanceState.EQUIPPED,
+    } as ItemInstance;
+    const equipment = [
+      { characterId: "char-1", itemId: "item-1", itemInstanceId: "inst-eq", slot: "weapon" },
+    ] as CharacterEquipment[];
+    inventoryRepo.find.mockResolvedValue([]);
+    instanceRepo.find.mockResolvedValue([instance]);
+    equipmentRepo.find.mockResolvedValue(equipment);
+    itemRepo.findBy.mockResolvedValue([item1]);
+
+    const result = await service.project("char-1");
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "inst-eq", quantity: 1, equipped: true });
+  });
+
   it("retourne stacks et instances melanges dans l ordre stacks d abord", async () => {
     const inv = { id: "inv-1", quantity: 3, equipped: false, item: item1 } as Inventory;
     const instance = {

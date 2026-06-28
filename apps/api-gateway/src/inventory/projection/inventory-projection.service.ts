@@ -36,10 +36,10 @@ export class InventoryProjectionService {
         relations: ['item'],
       }),
       this.instanceRepository.find({
-        where: {
-          ownerId: characterId,
-          containerType: ItemInstanceContainerType.INVENTORY,
-        },
+        where: [
+          { ownerId: characterId, containerType: ItemInstanceContainerType.INVENTORY },
+          { ownerId: characterId, containerType: ItemInstanceContainerType.EQUIPMENT },
+        ],
       }),
       this.equipmentRepository.find({ where: { characterId } }),
     ]);

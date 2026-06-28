@@ -14,6 +14,11 @@ import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { Character } from '../characters/entities/character.entity';
 import { Item } from '../items/entities/item.entity';
+import {
+  ItemInstance,
+  ItemInstanceContainerType,
+  ItemInstanceState,
+} from '../item-instances/entities/item-instance.entity';
 
 @Injectable()
 export class InventoryService {
@@ -95,7 +100,76 @@ export class InventoryService {
   }
 
   // ---------------------------------------------------------------------------
-  // Équiper un item depuis l'inventaire
+  // Équiper une ItemInstance depuis l'inventaire
+  // Transition AVAILABLE/INVENTORY → EQUIPPED/EQUIPMENT. Crée CharacterEquipment
+  // avec itemInstanceId. Ne touche pas Inventory.equipped.
+  // Si le slot avait un item legacy, met son Inventory.equipped à false.
+  // Si le slot avait une autre instance, la retransitionne AVAILABLE/INVENTORY.
+  // ---------------------------------------------------------------------------
+  async equipItemInstance(characterId: string, instanceId: string): Promise<ItemInstance> {
+    return this.dataSource.transaction(async (manager) => {
+      const lockedInstance = await manager
+        .getRepository(ItemInstance)
+        .createQueryBuilder('i')
+        .setLock('pessimistic_write')
+        .where('i.id = :id', { id: instanceId })
+        .getOne();
+
+      if (!lockedInstance) throw new NotFoundException(`ItemInstance ${instanceId} not found`);
+      if (lockedInstance.ownerId !== characterId)
+        throw new BadRequestException('Instance does not belong to this character');
+      if (lockedInstance.containerType !== ItemInstanceContainerType.INVENTORY)
+        throw new BadRequestException('Instance is not in inventory');
+      if (lockedInstance.state !== ItemInstanceState.AVAILABLE)
+        throw new BadRequestException('Instance is not available');
+
+      const item = await manager.findOne(Item, { where: { id: lockedInstance.itemId } });
+      if (!item) throw new NotFoundException('Item not found');
+      if (!item.slot) throw new BadRequestException('Item has no slot defined');
+
+      const existing = await manager.findOne(CharacterEquipment, {
+        where: { characterId, slot: item.slot },
+      });
+      if (existing) {
+        if (existing.itemInstanceId) {
+          const oldInstance = await manager.findOne(ItemInstance, {
+            where: { id: existing.itemInstanceId },
+          });
+          if (oldInstance) {
+            oldInstance.state = ItemInstanceState.AVAILABLE;
+            oldInstance.containerType = ItemInstanceContainerType.INVENTORY;
+            oldInstance.containerId = characterId;
+            await manager.save(ItemInstance, oldInstance);
+          }
+        } else {
+          const oldInv = await manager.findOne(Inventory, {
+            where: { character: { id: characterId }, item: { id: existing.itemId } },
+          });
+          if (oldInv) {
+            oldInv.equipped = false;
+            await manager.save(Inventory, oldInv);
+          }
+        }
+        await manager.delete(CharacterEquipment, { characterId, slot: item.slot });
+      }
+
+      const equipment = manager.create(CharacterEquipment, {
+        characterId,
+        itemId: item.id,
+        slot: item.slot,
+        itemInstanceId: lockedInstance.id,
+      });
+      await manager.save(CharacterEquipment, equipment);
+
+      lockedInstance.state = ItemInstanceState.EQUIPPED;
+      lockedInstance.containerType = ItemInstanceContainerType.EQUIPMENT;
+      lockedInstance.containerId = characterId;
+      return manager.save(ItemInstance, lockedInstance);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Équiper un item depuis l'inventaire (legacy — itemId catalogue)
   // Crée une ligne CharacterEquipment (source de vérité).
   // Met aussi à jour Inventory.equipped (transitoire — requis par WorldItemService.findInventoryForUpdate).
   // ---------------------------------------------------------------------------
@@ -142,9 +216,10 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
   // Déséquiper un item selon le slot
   // Supprime la ligne CharacterEquipment (source de vérité).
-  // Met aussi à jour Inventory.equipped (transitoire — requis par WorldItemService.findInventoryForUpdate).
+  // — Si CharacterEquipment.itemInstanceId est set : transition AVAILABLE/INVENTORY (chemin INSTANCE).
+  // — Sinon : met à jour Inventory.equipped à false (chemin legacy stack).
   // ---------------------------------------------------------------------------
-  async unequipItem(characterId: string, slot: string): Promise<Inventory> {
+  async unequipItem(characterId: string, slot: string): Promise<Inventory | ItemInstance> {
     return this.dataSource.transaction(async (manager) => {
       const equipment = await manager.findOne(CharacterEquipment, {
         where: { characterId, slot },
@@ -152,6 +227,17 @@ export class InventoryService {
       if (!equipment) throw new NotFoundException(`No item equipped in slot ${slot}`);
 
       await manager.delete(CharacterEquipment, { characterId, slot });
+
+      if (equipment.itemInstanceId) {
+        const instance = await manager.findOne(ItemInstance, {
+          where: { id: equipment.itemInstanceId },
+        });
+        if (!instance) throw new NotFoundException('ItemInstance not found for equipped slot');
+        instance.state = ItemInstanceState.AVAILABLE;
+        instance.containerType = ItemInstanceContainerType.INVENTORY;
+        instance.containerId = characterId;
+        return manager.save(ItemInstance, instance);
+      }
 
       const inv = await manager.findOne(Inventory, {
         where: { character: { id: characterId }, item: { id: equipment.itemId } },

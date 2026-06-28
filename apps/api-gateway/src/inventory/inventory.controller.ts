@@ -21,6 +21,14 @@ export class InventoryController {
     return this.inventoryService.equipItem(characterId, itemId);
   }
 
+  @Post(':characterId/equip-instance/:instanceId')
+  equipItemInstance(
+    @Param('characterId') characterId: string,
+    @Param('instanceId') instanceId: string,
+  ) {
+    return this.inventoryService.equipItemInstance(characterId, instanceId);
+  }
+
   @Post(':characterId/unequip/:slot')
   unequipItem(
     @Param('characterId') characterId: string,
