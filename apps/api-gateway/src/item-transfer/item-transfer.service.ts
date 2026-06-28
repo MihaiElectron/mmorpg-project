@@ -19,7 +19,9 @@ export type ItemTransition =
   | { type: 'LIST_FOR_AUCTION'; listingId: string }
   | { type: 'SELL_AUCTION'; listingId: string }
   | { type: 'CLAIM_BUYER'; listingId: string; buyerCharacterId: string }
-  | { type: 'RETURN_TO_SELLER'; listingId: string; sellerCharacterId: string };
+  | { type: 'RETURN_TO_SELLER'; listingId: string; sellerCharacterId: string }
+  | { type: 'STORE_BANK'; characterId: string }
+  | { type: 'WITHDRAW_BANK'; characterId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -59,6 +61,10 @@ export class ItemTransferService {
         return this.applyClaimBuyer(manager, instance, transition);
       case 'RETURN_TO_SELLER':
         return this.applyReturnToSeller(manager, instance, transition);
+      case 'STORE_BANK':
+        return this.applyStoreBank(manager, instance, requesterId, transition.characterId);
+      case 'WITHDRAW_BANK':
+        return this.applyWithdrawBank(manager, instance, requesterId, transition.characterId);
     }
   }
 
@@ -247,6 +253,40 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.AVAILABLE;
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = transition.sellerCharacterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Bank transitions ──────────────────────────────────────────────────────
+
+  private async applyStoreBank(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    characterId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.IN_BANK;
+    instance.containerType = ItemInstanceContainerType.BANK;
+    instance.containerId = characterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyWithdrawBank(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    characterId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.IN_BANK);
+    this.validateContainer(instance, ItemInstanceContainerType.BANK, characterId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = characterId;
     return manager.save(ItemInstance, instance);
   }
 }

@@ -551,4 +551,121 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── STORE_BANK ─────────────────────────────────────────────────────────────
+
+  describe("transition STORE_BANK", () => {
+    it("transitionne AVAILABLE+INVENTORY → IN_BANK+BANK+characterId", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "STORE_BANK", characterId: "char-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.IN_BANK);
+      expect(result.containerType).toBe(ItemInstanceContainerType.BANK);
+      expect(result.containerId).toBe("char-1");
+    });
+
+    it("refuse si owner incorrect", async () => {
+      const instance = makeInstance({ ownerId: "other" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE (double depot)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_BANK,
+        containerType: ItemInstanceContainerType.BANK,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY (objet equipe)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── WITHDRAW_BANK ──────────────────────────────────────────────────────────
+
+  describe("transition WITHDRAW_BANK", () => {
+    it("transitionne IN_BANK+BANK → AVAILABLE+INVENTORY+characterId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_BANK,
+        containerType: ItemInstanceContainerType.BANK,
+        containerId: "char-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "WITHDRAW_BANK", characterId: "char-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-1");
+    });
+
+    it("refuse si owner incorrect", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_BANK,
+        containerType: ItemInstanceContainerType.BANK,
+        containerId: "char-1",
+        ownerId: "other",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "WITHDRAW_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != IN_BANK (double retrait)", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "WITHDRAW_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId ne correspond pas au characterId (mauvais personnage)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_BANK,
+        containerType: ItemInstanceContainerType.BANK,
+        containerId: "char-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "WITHDRAW_BANK", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

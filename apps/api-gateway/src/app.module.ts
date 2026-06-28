@@ -33,6 +33,7 @@ import { WorldItemsModule } from './world-items/world-items.module';
 import { EconomyModule } from './economy/economy.module';
 import { ItemInstancesModule } from './item-instances/item-instances.module';
 import { AuctionModule } from './auction/auction.module';
+import { BankModule } from './bank/bank.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { AuctionModule } from './auction/auction.module';
     EconomyModule,
     ItemInstancesModule,
     AuctionModule,
+    BankModule,
   ],
   controllers: [AppController],
   providers: [AppService],
