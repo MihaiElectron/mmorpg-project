@@ -52,6 +52,7 @@ Priorities:
 | TD-015 | Bank MVP — stacks non supportés, pas de limite de slots, pagination absente | Medium | Bank V2 | Open |
 | TD-016 | Mail MVP — pièce jointe unique, stacks non supportés, pagination absente, pas de scheduler | Medium | Mail V2 | Open |
 | TD-017 | Guild Storage MVP — propriétaire uniquement, stacks non supportés, pagination absente | Medium | Guild V2 | Open |
+| TD-018 | Housing MVP — propriétaire uniquement, stacks non supportés, pas de placement spatial, pagination absente | Medium | Housing V2 | Open |
 
 ## Details
 
@@ -156,8 +157,9 @@ Priorities:
   `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
   `ItemInstance` à ce service. `BankService` délègue via STORE_BANK et
   WITHDRAW_BANK. `MailService` délègue via SEND_MAIL et CLAIM_MAIL.
-  `GuildStorageService` délègue via STORE_GUILD et WITHDRAW_GUILD. Les
-  domaines Trade et Housing restent à connecter dans leurs phases respectives.
+  `GuildStorageService` délègue via STORE_GUILD et WITHDRAW_GUILD.
+  `HousingService` délègue via STORE_HOUSE et WITHDRAW_HOUSE. Le domaine
+  Trade reste à connecter dans sa phase respective.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -284,6 +286,22 @@ Priorities:
   Les rangs et permissions relèvent de Guild V2 ; les stacks et la pagination
   suivent les règles générales de performance.
 - Phase prévue de résolution : Guild V2
+- Statut : Open
+
+### TD-018 - Housing MVP — propriétaire uniquement, stacks non supportés, pas de placement spatial
+
+- Description : `HousingService` n'autorise que `ownerCharacterId` à déposer
+  et retirer. Les stacks `Inventory` ne sont pas supportés. `listContents`
+  retourne tous les objets sans limite. Aucune notion de placement spatial,
+  de décoration ou de colocataire.
+- Impact : impossibilité de partager la maison entre plusieurs joueurs ; objets
+  stackables non stockables ; lectures non bornées ; pas de positionnement
+  visuel des objets dans la maison.
+- Priorité : Medium
+- Décision prise : accepter la dette dans le périmètre Housing MVP. Le
+  placement spatial et les décorations relèvent de Housing V2 ; les stacks
+  et la pagination suivent les règles générales de performance.
+- Phase prévue de résolution : Housing V2
 - Statut : Open
 
 ## Maintenance Rules

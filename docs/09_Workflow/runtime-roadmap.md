@@ -39,7 +39,7 @@ Statuses:
 | Bank | Stocker stacks et `ItemInstance` en banque, avec monnaie gérée par Economy Wallet. | Completed | Inventory Hybrid, ItemInstance transitions | `0d6887c` |
 | Mail | Transporter stacks et `ItemInstance` sans duplication, avec politique binding et claim. | Completed | Inventory Hybrid, ItemInstance transitions, Economy Foundation if currency mail is allowed | `370c001` |
 | Guild Storage | Stocker biens de guilde, stacks et `ItemInstance` éligibles, avec règles de propriété partagée. | Completed | Inventory Hybrid, Bank/Mail policy decisions | `6f0774a` |
-| Housing | Stocker et placer décorations, objets personnalisés et objets liés au logement. | Not Started | Inventory Hybrid, WorldItem Hybrid, Item Taxonomy | N/A |
+| Housing | Stocker et placer décorations, objets personnalisés et objets liés au logement. | Completed | Inventory Hybrid, WorldItem Hybrid, Item Taxonomy | `8874ed4` |
 
 ## Phase Details
 
