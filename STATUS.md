@@ -1,7 +1,7 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-26_
-_Session : 2026-06-26 (clôture WU P7 — suppression colonnes legacy DB, documentation)_
+_Dernière mise à jour : 2026-06-28_
+_Session : 2026-06-28 (Loot Hybrid — ItemMaterializationService + ObjectMode)_
 _Branche : main_
 _État : développement local_
 
@@ -37,6 +37,13 @@ avec labels lisibles, affichage recettes structuré. Panneau DevTools redimensio
 Onglet Skills joueur dans le panneau personnage (barre XP par catégorie).
 Onglets Talents/Succès placeholder actifs.
 
+**Pipeline Loot Hybrid opérationnel (2026-06-28).** `Item.objectMode` (enum `STACKABLE | INSTANCE`)
+est la source de vérité pour la matérialisation du loot. `LootService` reste pur et synchrone
+(aucune dépendance DB). `ItemMaterializationService` reçoit un `EntityManager` de l'appelant
+et implémente 4 chemins : `STACKABLE+INVENTORY`, `STACKABLE+WORLD`, `INSTANCE+INVENTORY`,
+`INSTANCE+WORLD`. `CreaturesGateway` et `ResourcesGateway` ouvrent la transaction et délèguent
+au service. Migration TypeORM `1782864000000-AddObjectModeToItem` créée pour la production.
+
 **Crafting Stations runtime** opérationnel : `CraftingStationTemplate` et
 `CraftingStation` sont persistés, administrables via WOM/AdminPanel, rendus en
 debug dans `WorldScene` et utilisables par le joueur depuis l'ActionPanel. Les
@@ -49,6 +56,14 @@ autoritaire.
 
 ## Derniers changements importants
 
+- **Pipeline Loot Hybrid — `ItemMaterializationService`** : enum `ObjectMode` (`STACKABLE | INSTANCE`)
+  ajouté sur `Item.objectMode` (default `STACKABLE`). `LootService.generateLoot()` retourne
+  `LootEntry[]` (tableau vide = pas de loot) ; `generateLootFromPool()` retourne `LootEntry | null`.
+  `ItemMaterializationService` (4 chemins × 2 destinations) reçoit `EntityManager`, ne crée jamais
+  sa propre transaction. `CreaturesGateway` : loot creature → `WorldItem` via transaction.
+  `ResourcesGateway` : loot récolte → `Inventory` via transaction, émet `resource_loot` pour
+  chaque `LootEntry[]`. Seeds : `wooden_stick/iron_ore/iron_bar/basic_handle/rough_blade = STACKABLE`,
+  `basic_sword = INSTANCE`. Migration `1782864000000-AddObjectModeToItem` créée.
 - **Crafting Stations + runtime craft joueur** : ajout de `CraftingStationTemplate`
   et `CraftingStation` (templates + instances WU), seeds non destructifs
   (`forge`, `workbench`, `sawmill`, `alchemy_table`, `cooking_station`),
@@ -127,10 +142,11 @@ autoritaire.
 | Backend — admin | `POST /admin/resources/:id/force-respawn`, `POST /admin/resources/:id/reset-from-template`, `PATCH admin:update_resource_template` (defaultRemainingLoots + respawnDelayMs) |
 | Templates | Animaux (turkey, goblin) et ressources (dead_tree, ore) seedés au démarrage |
 | Terrain | Tilemap isométrique grass 64×64 rendue dans Phaser via TMJ natif Tiled |
-| Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé craft : `npm --workspace api-gateway run test -- crafting`, client complet : `npm --workspace client run test` |
+| Tests | Suites backend/frontend locales mises à jour régulièrement ; dernier passage ciblé loot : `npm --workspace api-gateway run test -- loot.service item-materialization creatures.service resources.gateway item.service`, client complet : `npm --workspace client run test` |
 | Migration WU | **P0–P7 entièrement soldés (2026-06-26).** Protocole WebSocket WU pur. Colonnes legacy DB supprimées. Source de vérité unique : `worldX/worldY/mapId`. Voir `docs/01_Architecture/wu-migration-audit.md`. |
 | Skills joueur | `GET /characters/me/skills` — niveau, XP, nextLevelXp par skill. Onglet Skills dans le panneau personnage. Talents/Succès placeholders. |
 | Crafting | `CraftingRecipe` administrable via WOM/Admin. `CraftingStationTemplate` et `CraftingStation` administrables et placées en WU. Craft runtime joueur via stations, ActionPanel, validation serveur distance WU, refresh inventaire/skills, erreurs station structurées. |
+| Loot Hybrid | `Item.objectMode` source de vérité `STACKABLE/INSTANCE`. `ItemMaterializationService` 4 chemins. `LootService` pur/synchrone. Loot creature → `WorldItem`, loot récolte → `Inventory`. Migration `1782864000000-AddObjectModeToItem`. |
 
 ---
 
@@ -264,7 +280,7 @@ Dettes restantes **intentionnelles** post-migration :
 Voir `docs/01_Architecture/wu-migration-audit.md` pour l'audit complet.
 
 ### Gameplay / contenu
-- [ ] Système de loot sur les animaux tués
+- [x] Système de loot sur les animaux tués (pipeline Loot Hybrid — 2026-06-28)
 - [ ] Barre de vie des joueurs distants (envoyer HP dans `player_moved`)
 - [ ] Import sprite goblin (textureKey propre)
 - [ ] Autres tuiles terrain (chemins, eau, transition herbe/terre…)
@@ -274,8 +290,23 @@ Voir `docs/01_Architecture/wu-migration-audit.md` pour l'audit complet.
 
 ---
 
+- **`ItemMaterializationService` — règle transaction** : le service reçoit toujours
+  un `EntityManager` de l'appelant et ne crée jamais sa propre transaction. L'appelant
+  (`CreaturesGateway`, `ResourcesGateway`) ouvre la transaction via `DataSource.transaction()`.
+  Tout nouveau consommateur doit respecter ce contrat.
+- **`LootService` — contrat retour** : `generateLoot()` retourne `LootEntry[]` (tableau vide
+  = pas de loot, plus de sentinel `{ quantity: 0 }`). `generateLootFromPool()` retourne
+  `LootEntry | null` (null = pas de drop).
+- **`Item.objectMode` — source de vérité matérialisation** : `STACKABLE` = stack en `Inventory`
+  ou `WorldItem` avec `quantity`. `INSTANCE` = une `ItemInstance` par unité, containerId =
+  `characterId` (inventaire) ou `worldItem.id` (sol). Ne jamais déduire le mode autrement.
+
+---
+
 ## Documents potentiellement impactés
 
+- [ ] `docs/04_Server/loot.md` (à créer) — pipeline Loot Hybrid : `LootService`, `ItemMaterializationService`, `ObjectMode`, 4 chemins, contrat `EntityManager`
+- [ ] `docs/06_Database/schema.md` — colonne `item.objectMode`, migration `1782864000000-AddObjectModeToItem`
 - [ ] `docs/03_Client/phaser-world.md` — `DevToolsShell`, `devtools.store`, `DevToolsBridge`, module World, HUD DevTools, ActionRegistry, wuProjection, AdminPanelWOM, NavGrid/Pathfinder
 - [ ] `docs/04_Server/websockets.md` — `player_move` WU-only (P5), protocole admin WU (P6), `buildResourceBroadcast`
 - [ ] `docs/07_Admin/admin-tool.md` — AdminPanelWOM, admin protocol WU, drag-to-map WU, Tp WU
@@ -304,6 +335,18 @@ Quand une mise à jour est demandée :
 ---
 
 ## Historique court des sessions
+
+### 2026-06-28 (Loot Hybrid — ItemMaterializationService + ObjectMode)
+
+- **Pipeline Loot Hybrid** : enum `ObjectMode` (`STACKABLE | INSTANCE`) sur `Item.objectMode`,
+  migration `1782864000000-AddObjectModeToItem`. `LootService` retourne `LootEntry[]` /
+  `LootEntry | null` — pur, synchrone, sans DB. `ItemMaterializationService` (4 chemins :
+  stack/instance × inventaire/monde), reçoit `EntityManager`, ne crée jamais sa transaction.
+  `CreaturesGateway` remplace `worldItemService.spawnItem` par transaction + materialize →
+  emit `world_item_spawn`. `ResourcesGateway` remplace `inventoryService.addItem` par
+  transaction + materialize → emit `resource_loot` pour chaque `LootEntry[]` (matching par
+  `stack.item.category`). Seeds : 5 items STACKABLE, `basic_sword` INSTANCE.
+  157 tests ciblés, build propre.
 
 ### 2026-06-26 (clôture migration WU — P7-D + documentation)
 
