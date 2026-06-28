@@ -50,6 +50,7 @@ Priorities:
 | TD-013 | `removeExpiredItems` scheduler non branché | Medium | WorldItem maintenance | Open |
 | TD-014 | Race condition `removeExpiredItems` sur les stacks | Low | WorldItem hardening | Open |
 | TD-015 | Bank MVP — stacks non supportés, pas de limite de slots, pagination absente | Medium | Bank V2 | Open |
+| TD-016 | Mail MVP — pièce jointe unique, stacks non supportés, pagination absente, pas de scheduler | Medium | Mail V2 | Open |
 
 ## Details
 
@@ -152,9 +153,10 @@ Priorities:
   ARCHIVE et les 4 transitions Auction (LIST_FOR_AUCTION, SELL_AUCTION,
   CLAIM_BUYER, RETURN_TO_SELLER). `InventoryService`, `CharacterService`,
   `WorldItemService` et `AuctionService` délèguent toutes leurs mutations
-  `ItemInstance` à ce service. `BankService` délègue également via les
-  transitions STORE_BANK et WITHDRAW_BANK. Les domaines Mail, Trade,
-  Guild Storage et Housing restent à connecter dans leurs phases respectives.
+  `ItemInstance` à ce service. `BankService` délègue via STORE_BANK et
+  WITHDRAW_BANK. `MailService` délègue via SEND_MAIL et CLAIM_MAIL. Les
+  domaines Trade, Guild Storage et Housing restent à connecter dans leurs
+  phases respectives.
 
 ### TD-009 - Craft produit encore l'équipement comme stack `Item + quantity`
 
@@ -249,6 +251,22 @@ Priorities:
   stacks et la limite de slots relèvent de Bank V2 ; la pagination suit les
   règles générales de performance (ADR-0010).
 - Phase prévue de résolution : Bank V2
+- Statut : Open
+
+### TD-016 - Mail MVP — pièce jointe unique, stacks non supportés, pagination absente, pas de scheduler
+
+- Description : `MailService` ne transporte qu'une `ItemInstance` par message.
+  Les stacks `Inventory` ne sont pas supportés. `listInbox`/`listSent` retournent
+  tous les messages sans pagination. `deleteExpired` n'est branchée sur aucun
+  scheduler ou cron.
+- Impact : impossibilité d'envoyer plusieurs objets ou des ressources stackables
+  par courrier ; lectures non bornées sur grandes boîtes de réception ; les
+  pièces jointes non réclamées ne sont jamais retournées automatiquement.
+- Priorité : Medium
+- Décision prise : accepter la dette dans le périmètre Mail MVP. Les pièces
+  jointes multiples et les stacks relèvent de Mail V2 ; le scheduler relève
+  de l'infrastructure d'automatisation.
+- Phase prévue de résolution : Mail V2
 - Statut : Open
 
 ## Maintenance Rules
