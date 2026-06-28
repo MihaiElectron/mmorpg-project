@@ -372,15 +372,71 @@ export class WorldItemService {
       relations: ['item'],
     });
 
-    for (const worldItem of expired) {
-      worldItem.state = WorldItemState.EXPIRED;
+    const stackItems = expired.filter((wi) => !wi.itemInstanceId);
+    const instanceItems = expired.filter((wi) => !!wi.itemInstanceId);
+
+    // STACK — chemin inchangé
+    for (const wi of stackItems) {
+      wi.state = WorldItemState.EXPIRED;
+    }
+    const savedStacks = stackItems.length > 0 ? await this.worldItems.save(stackItems) : [];
+
+    // INSTANCE — per-item transaction avec verrous
+    const savedInstances: WorldItem[] = [];
+    for (const wi of instanceItems) {
+      try {
+        const result = await this.expireInstance(wi);
+        if (result) savedInstances.push(result);
+      } catch {
+        // la transaction a rollbacké ; on continue le batch
+      }
     }
 
-    const saved = expired.length > 0 ? await this.worldItems.save(expired) : [];
-    for (const worldItem of saved) {
-      this.emitRemove(worldItem);
+    const allSaved = [...savedStacks, ...savedInstances];
+    for (const wi of allSaved) {
+      this.emitRemove(wi);
     }
-    return saved;
+    return allSaved;
+  }
+
+  private async expireInstance(worldItem: WorldItem): Promise<WorldItem | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const lockedWI = await this.findSpawnedForUpdate(manager, worldItem.id);
+      if (!lockedWI) return null;
+
+      const instance = await this.findInstanceForExpiration(
+        manager,
+        lockedWI.itemInstanceId!,
+        lockedWI.id,
+      );
+      if (!instance) return null;
+
+      instance.state = ItemInstanceState.ARCHIVED;
+      instance.containerType = ItemInstanceContainerType.NONE;
+      instance.containerId = null;
+      await manager.save(ItemInstance, instance);
+
+      lockedWI.state = WorldItemState.EXPIRED;
+      const saved = await manager.save(WorldItem, lockedWI);
+      saved.item = lockedWI.item;
+      return saved;
+    });
+  }
+
+  private async findInstanceForExpiration(
+    manager: EntityManager,
+    instanceId: string,
+    worldItemId: string,
+  ): Promise<ItemInstance | null> {
+    return manager
+      .getRepository(ItemInstance)
+      .createQueryBuilder('instance')
+      .setLock('pessimistic_write')
+      .where('instance.id = :instanceId', { instanceId })
+      .andWhere('instance.state = :state', { state: ItemInstanceState.IN_WORLD })
+      .andWhere('instance.containerType = :ct', { ct: ItemInstanceContainerType.WORLD })
+      .andWhere('instance.containerId = :worldItemId', { worldItemId })
+      .getOne();
   }
 
   private isUuid(value: string): boolean {

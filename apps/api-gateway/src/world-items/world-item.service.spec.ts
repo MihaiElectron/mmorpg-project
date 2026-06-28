@@ -804,13 +804,14 @@ describe('WorldItemService', () => {
     expect(manager.findOne).not.toHaveBeenCalled();
   });
 
-  it('expire les WorldItems spawned et diffuse leur retrait', async () => {
+  it('expiration STACK — expire WorldItems stack et diffuse world_item_remove (non-regression)', async () => {
     const server = makeServer();
     service.setServer(server as any);
     const expired = {
       id: 'world-item-1',
       itemId: item.id,
       item,
+      itemInstanceId: null,
       quantity: 1,
       worldX: 0,
       worldY: 0,
@@ -826,12 +827,145 @@ describe('WorldItemService', () => {
     const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
 
     expect(saved[0].state).toBe(WorldItemState.EXPIRED);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
     expect(server.to).toHaveBeenCalledWith('map:2');
     expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
       id: expired.id,
       mapId: 2,
       state: WorldItemState.EXPIRED,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // INSTANCE expiration
+  // -------------------------------------------------------------------------
+
+  function makeExpiredInstanceWorldItem(overrides: Partial<WorldItem> = {}): WorldItem {
+    return {
+      id: 'world-item-inst-exp-1',
+      itemId: item.id,
+      item,
+      itemInstanceId: 'instance-1',
+      quantity: 1,
+      worldX: 0,
+      worldY: 0,
+      mapId: 3,
+      state: WorldItemState.SPAWNED,
+      ownerCharacterId: 'char-1',
+      expiresAt: new Date('2026-06-27T10:00:00Z'),
+      createdAt: new Date(),
+      ...overrides,
+    } as WorldItem;
+  }
+
+  function makeExpireInstanceManager(
+    worldItemResult: WorldItem | null,
+    instanceResult: ItemInstance | null,
+  ) {
+    const worldItemQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(worldItemResult),
+    };
+    const instanceQb = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(instanceResult),
+    };
+    return {
+      getRepository: jest.fn().mockImplementation((entity: unknown) => {
+        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
+        return { createQueryBuilder: jest.fn(() => worldItemQb) };
+      }),
+      save: jest.fn(async (_entity: unknown, value: unknown) => value),
+    };
+  }
+
+  it("expiration INSTANCE — transitionne ItemInstance vers ARCHIVED et WorldItem vers EXPIRED", async () => {
+    const server = makeServer();
+    service.setServer(server as any);
+    const worldItem = makeExpiredInstanceWorldItem();
+    const instance = makeInstanceInWorld({ containerId: worldItem.id });
+    worldItems.find.mockResolvedValue([worldItem]);
+    const manager = makeExpireInstanceManager(worldItem, instance);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+
+    expect(instance.state).toBe(ItemInstanceState.ARCHIVED);
+    expect(instance.containerType).toBe(ItemInstanceContainerType.NONE);
+    expect(instance.containerId).toBeNull();
+    expect(worldItem.state).toBe(WorldItemState.EXPIRED);
+    expect(saved).toHaveLength(1);
+    expect(server.to).toHaveBeenCalledWith('map:3');
+    expect(server.emit).toHaveBeenCalledWith('world_item_remove', {
+      id: worldItem.id,
+      mapId: 3,
+      state: WorldItemState.EXPIRED,
+    });
+  });
+
+  it("expiration INSTANCE — ignore si WorldItem deja PICKED (findSpawnedForUpdate retourne null)", async () => {
+    const worldItem = makeExpiredInstanceWorldItem();
+    worldItems.find.mockResolvedValue([worldItem]);
+    const manager = makeExpireInstanceManager(null, null);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+
+    expect(saved).toHaveLength(0);
+    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
+  });
+
+  it("expiration INSTANCE — ignore si instance deja deplacee (findInstanceForExpiration retourne null)", async () => {
+    const worldItem = makeExpiredInstanceWorldItem();
+    worldItems.find.mockResolvedValue([worldItem]);
+    const manager = makeExpireInstanceManager(worldItem, null);
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+
+    expect(saved).toHaveLength(0);
+    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
+  });
+
+  it("expiration INSTANCE — rollback si save echoue (WorldItem reste SPAWNED)", async () => {
+    const server = makeServer();
+    service.setServer(server as any);
+    const worldItem = makeExpiredInstanceWorldItem();
+    const instance = makeInstanceInWorld({ containerId: worldItem.id });
+    worldItems.find.mockResolvedValue([worldItem]);
+    const worldItemQb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(worldItem),
+    };
+    const instanceQb = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(instance),
+    };
+    const manager = {
+      getRepository: jest.fn().mockImplementation((entity: unknown) => {
+        if (entity === ItemInstance) return { createQueryBuilder: jest.fn(() => instanceQb) };
+        return { createQueryBuilder: jest.fn(() => worldItemQb) };
+      }),
+      save: jest.fn().mockRejectedValue(new Error("DB failure")),
+    };
+    dataSource.transaction.mockImplementation(async (fn) => fn(manager as unknown as EntityManager));
+
+    const saved = await service.removeExpiredItems(new Date('2026-06-27T10:01:00Z'));
+
+    // erreur catchee par item ; la methode n a pas rethrow
+    expect(saved).toHaveLength(0);
+    expect(worldItem.state).toBe(WorldItemState.SPAWNED);
+    expect(server.emit).not.toHaveBeenCalled();
   });
 
   it('signale un item absent au spawn', async () => {
