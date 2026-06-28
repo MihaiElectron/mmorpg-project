@@ -877,4 +877,108 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── STORE_HOUSE ────────────────────────────────────────────────────────────
+
+  describe("transition STORE_HOUSE", () => {
+    it("transitionne AVAILABLE+INVENTORY → IN_HOUSING+HOUSING+houseId", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "STORE_HOUSE", houseId: "house-1" },
+      });
+      expect(result.state).toBe(ItemInstanceState.IN_HOUSING);
+      expect(result.containerType).toBe(ItemInstanceContainerType.HOUSING);
+      expect(result.containerId).toBe("house-1");
+      expect(result.ownerId).toBe("char-1");
+    });
+
+    it("refuse si requesterId ne correspond pas au proprietaire", async () => {
+      const instance = makeInstance({ ownerId: "char-1" });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "autre",
+          transition: { type: "STORE_HOUSE", houseId: "house-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si state != AVAILABLE (double depot)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_HOUSING,
+        containerType: ItemInstanceContainerType.HOUSING,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_HOUSE", houseId: "house-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerType != INVENTORY", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "STORE_HOUSE", houseId: "house-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── WITHDRAW_HOUSE ─────────────────────────────────────────────────────────
+
+  describe("transition WITHDRAW_HOUSE", () => {
+    it("transitionne IN_HOUSING+HOUSING → AVAILABLE+INVENTORY+characterId et change ownerId", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_HOUSING,
+        containerType: ItemInstanceContainerType.HOUSING,
+        containerId: "house-1",
+        ownerId: "char-1",
+      });
+      const manager = makeManager(instance);
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "WITHDRAW_HOUSE", houseId: "house-1", characterId: "char-2" },
+      });
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-2");
+      expect(result.ownerId).toBe("char-2");
+    });
+
+    it("refuse si state != IN_HOUSING", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "WITHDRAW_HOUSE", houseId: "house-1", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si containerId != houseId (mauvaise maison)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_HOUSING,
+        containerType: ItemInstanceContainerType.HOUSING,
+        containerId: "house-autre",
+      });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "WITHDRAW_HOUSE", houseId: "house-1", characterId: "char-1" },
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

@@ -25,7 +25,9 @@ export type ItemTransition =
   | { type: 'SEND_MAIL'; mailId: string }
   | { type: 'CLAIM_MAIL'; mailId: string; recipientCharacterId: string }
   | { type: 'STORE_GUILD'; guildId: string }
-  | { type: 'WITHDRAW_GUILD'; guildId: string; characterId: string };
+  | { type: 'WITHDRAW_GUILD'; guildId: string; characterId: string }
+  | { type: 'STORE_HOUSE'; houseId: string }
+  | { type: 'WITHDRAW_HOUSE'; houseId: string; characterId: string };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -77,6 +79,10 @@ export class ItemTransferService {
         return this.applyStoreGuild(manager, instance, requesterId, transition.guildId);
       case 'WITHDRAW_GUILD':
         return this.applyWithdrawGuild(manager, instance, transition);
+      case 'STORE_HOUSE':
+        return this.applyStoreHouse(manager, instance, requesterId, transition.houseId);
+      case 'WITHDRAW_HOUSE':
+        return this.applyWithdrawHouse(manager, instance, transition);
     }
   }
 
@@ -360,6 +366,39 @@ export class ItemTransferService {
   ): Promise<ItemInstance> {
     this.validateState(instance, ItemInstanceState.IN_GUILD_STORAGE);
     this.validateContainer(instance, ItemInstanceContainerType.GUILD_STORAGE, transition.guildId);
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = transition.characterId;
+    instance.ownerId = transition.characterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  // ── Housing transitions ───────────────────────────────────────────────────
+
+  private async applyStoreHouse(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    houseId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);
+
+    instance.state = ItemInstanceState.IN_HOUSING;
+    instance.containerType = ItemInstanceContainerType.HOUSING;
+    instance.containerId = houseId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyWithdrawHouse(
+    manager: EntityManager,
+    instance: ItemInstance,
+    transition: Extract<ItemTransition, { type: 'WITHDRAW_HOUSE' }>,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.IN_HOUSING);
+    this.validateContainer(instance, ItemInstanceContainerType.HOUSING, transition.houseId);
 
     instance.state = ItemInstanceState.AVAILABLE;
     instance.containerType = ItemInstanceContainerType.INVENTORY;
