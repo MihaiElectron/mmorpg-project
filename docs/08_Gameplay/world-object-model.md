@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- Status: Draft
+- Status: Partially implemented
 - Owner: Project
-- Last updated: 2026-06-24
+- Last updated: 2026-06-30
 - Depends on: docs/08_Gameplay/world-model.md, docs/08_Gameplay/entity-model.md, docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md, docs/07_Admin/mmorpg-studio.md
 - Used by: Project owner, developers, Claude Code, Claude, tout agent IA travaillant sur ce projet
 
@@ -612,6 +612,8 @@ décide de corriger.
 | Respawn Point | **Implémenté** — pas de capacités exposées |
 | CraftingStationTemplate | **Implémenté** — WOM/AdminPanel, capabilities `crafting_station`, `placement`, `validation` |
 | CraftingStation | **Implémenté** — instance WU placée, rendu debug, ActionPanel runtime |
+| BuildingTemplate | **Implémenté** — WOM/AdminPanel, capabilities `placement`, `persistence`, `validation`, `interaction` ; 7 types (auction_house, mailbox, bank, guild_hall, shrine, teleport, dungeon_entrance) |
+| Building | **Implémenté** — instance WU placée, rendu diamond debug WorldScene, ActionPanel → WindowManager |
 | Area | **Futur** |
 | Trigger | **Futur** |
 | Portal | **Futur** |

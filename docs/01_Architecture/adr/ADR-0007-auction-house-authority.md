@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Accepted
+- Decision status: Accepted
 - Owner: Project
-- Last updated: 2026-06-27
+- Last updated: 2026-06-30
 - Date proposed: 2026-06-26
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-30
+- Approved by: Project owner
+- Approval reference: Auction MVP 1 implemented — create listing, buyout, cancel, expiration scheduler, claim buyer/seller, AuctionHouseWindow, building proximity validation
 - Depends on: docs/01_Architecture/adr/README.md, docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md
 - Used by: Project owner, developers, repository-aware coding agents
 - Supersedes: None
