@@ -3,6 +3,7 @@ import { ObjectMode } from '../items/entities/item.entity';
 import {
   ItemInstanceContainerType,
   ItemInstanceState,
+  ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
 import { WorldItemState } from '../world-items/entities/world-item.entity';
 import type { MaterializeContext } from './item-materialization.service';
@@ -127,6 +128,8 @@ describe('ItemMaterializationService', () => {
       expect(result.instances[0].state).toBe(ItemInstanceState.AVAILABLE);
       expect(result.instances[0].containerType).toBe(ItemInstanceContainerType.INVENTORY);
       expect(result.instances[0].containerId).toBe('char-1');
+      expect(result.instances[0].instanceType).toBe(ItemInstanceType.NORMAL);
+      expect(result.instances[0].quantity).toBeNull();
       expect(result.worldItems).toHaveLength(0);
     });
 
@@ -153,7 +156,7 @@ describe('ItemMaterializationService', () => {
         create: jest.fn().mockImplementation((_E, data) => ({ ...data })),
         save: jest.fn()
           .mockResolvedValueOnce({ id: 'wi-1', itemId: item.id, state: WorldItemState.SPAWNED })
-          .mockResolvedValueOnce({ id: 'inst-1', itemId: item.id, state: ItemInstanceState.IN_WORLD, containerType: ItemInstanceContainerType.WORLD, containerId: 'wi-1' })
+          .mockResolvedValueOnce({ id: 'inst-1', itemId: item.id, state: ItemInstanceState.IN_WORLD, containerType: ItemInstanceContainerType.WORLD, containerId: 'wi-1', instanceType: ItemInstanceType.NORMAL, quantity: null })
           .mockResolvedValueOnce({ id: 'wi-1', itemInstanceId: 'inst-1' }),
       };
 
@@ -167,6 +170,8 @@ describe('ItemMaterializationService', () => {
       expect(result.instances).toHaveLength(1);
       expect(result.instances[0].state).toBe(ItemInstanceState.IN_WORLD);
       expect(result.instances[0].containerType).toBe(ItemInstanceContainerType.WORLD);
+      expect(result.instances[0].instanceType).toBe(ItemInstanceType.NORMAL);
+      expect(result.instances[0].quantity).toBeNull();
       // backfill: itemInstanceId doit être défini sur le WorldItem
       expect(result.worldItems[0].itemInstanceId).toBe('inst-1');
     });

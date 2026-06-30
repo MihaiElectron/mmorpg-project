@@ -6,6 +6,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { ItemInstanceType } from '../enums/item-instance-type.enum';
+
+export { ItemInstanceType };
 
 export enum ItemInstanceState {
   AVAILABLE = 'AVAILABLE',
@@ -65,6 +68,12 @@ export class ItemInstance {
 
   @Column({ type: 'varchar', length: 30, nullable: true })
   createdBySource: string | null;
+
+  @Column({ type: 'varchar', length: 10, default: ItemInstanceType.NORMAL })
+  instanceType: ItemInstanceType;
+
+  @Column({ type: 'int', nullable: true, default: null })
+  quantity: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

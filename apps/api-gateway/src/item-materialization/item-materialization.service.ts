@@ -6,6 +6,7 @@ import {
   ItemInstance,
   ItemInstanceContainerType,
   ItemInstanceState,
+  ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
 import { WorldItem, WorldItemState } from '../world-items/entities/world-item.entity';
 import type { LootEntry } from '../world/loot.service';
@@ -165,6 +166,8 @@ export class ItemMaterializationService {
       containerType: ItemInstanceContainerType.INVENTORY,
       containerId: destination.characterId,
       createdBySource: context.source,
+      instanceType: ItemInstanceType.NORMAL,
+      quantity: null,
     });
     return manager.save(ItemInstance, instance);
   }
@@ -199,6 +202,8 @@ export class ItemMaterializationService {
       containerType: ItemInstanceContainerType.WORLD,
       containerId: savedWi.id,
       createdBySource: context.source,
+      instanceType: ItemInstanceType.NORMAL,
+      quantity: null,
     });
     const savedInstance = await manager.save(ItemInstance, instance);
 
