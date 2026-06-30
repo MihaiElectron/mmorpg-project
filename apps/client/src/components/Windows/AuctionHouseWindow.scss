@@ -290,4 +290,63 @@
       color: #aad4f5;
     }
   }
+
+  // ── LOT badge (browse/mine tables) ──────────────────────────────────────────
+
+  &__badge--lot {
+    display: inline-block;
+    margin-left: 6px;
+    background: #4a3a1a;
+    color: #d4a843;
+    border: 1px solid #7a6a2a;
+    border-radius: 3px;
+    padding: 0 5px;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    vertical-align: middle;
+  }
+
+  // ── Sell mode toggle ─────────────────────────────────────────────────────────
+
+  &__mode-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  &__mode-btn {
+    flex: 1;
+    background: #1e1e32;
+    border: 1px solid #3a3a5a;
+    color: #888;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:hover { border-color: #aad4f5; color: #aad4f5; }
+
+    &--active {
+      background: #1e2e4a;
+      border-color: #aad4f5;
+      color: #aad4f5;
+    }
+  }
+
+  // ── Sell form misc ───────────────────────────────────────────────────────────
+
+  &__label--hint {
+    color: #555;
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  &__error-hint {
+    color: #ff8888;
+    font-size: 11px;
+    margin-top: -4px;
+  }
 }

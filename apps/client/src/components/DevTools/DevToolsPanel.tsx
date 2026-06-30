@@ -9,6 +9,7 @@ import {
 } from "./modules/PlayerRuntime";
 import { worldObjectToInspectorTarget } from "./modules/PlayerRuntime/inspectorTarget";
 import { useDevToolsStore } from "../../store/devtools.store";
+import LotsInspector from "./LotsInspector";
 import "./DevToolsPanel.scss";
 
 export default function DevToolsPanel() {
@@ -22,6 +23,7 @@ export default function DevToolsPanel() {
       <RuntimeInspectorPanel target={target} />
       <ItemsModule />
       <LootPoolModule />
+      <LotsInspector />
       <OverlayControls />
       <AdminPanelWOM />
     </>

@@ -4,6 +4,7 @@ export interface ItemSummary {
   type: string;
   category: string;
   image: string | null;
+  objectMode: string;
 }
 
 export interface InventoryEntryDto {

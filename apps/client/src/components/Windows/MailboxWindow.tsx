@@ -3,6 +3,12 @@ import "./Window.scss";
 
 const API = import.meta.env.VITE_API_URL as string;
 
+type AttachmentSummary = {
+  item: { name: string };
+  quantity: number;
+  instanceId: string | null;
+};
+
 type MailEntry = {
   id: string;
   subject?: string;
@@ -11,6 +17,7 @@ type MailEntry = {
   claimed: boolean;
   createdAt?: string;
   attachedAmountBronze?: string | null;
+  attachment?: AttachmentSummary | null;
 };
 
 function formatBronze(bronze: string): string {
@@ -96,6 +103,14 @@ export default function MailboxWindow({ buildingId, onClose }: Props) {
                   <>
                     {m.attachedAmountBronze && (
                       <span className="game-window__mail-amount">{formatBronze(m.attachedAmountBronze)}</span>
+                    )}
+                    {m.attachment && (
+                      <span className="game-window__mail-item">
+                        {m.attachment.item.name}
+                        {m.attachment.instanceId === null && m.attachment.quantity > 1
+                          ? ` ×${m.attachment.quantity}`
+                          : ""}
+                      </span>
                     )}
                     <button className="game-window__action-btn" onClick={() => claimAttachment(m.id)}>
                       Récupérer

@@ -10,6 +10,9 @@ type ListingDto = {
   itemId: string;
   itemName: string;
   itemImage: string;
+  objectMode: string;
+  instanceType: string;
+  quantity: number | null;
   buyoutPriceBronze: string;
   status: string;
   sellerCharacterId: string;
@@ -19,6 +22,7 @@ type ListingDto = {
 };
 
 type Tab = "browse" | "mine" | "sell";
+type SellMode = "instance" | "stackable";
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem("token") ?? "";
@@ -41,6 +45,10 @@ function formatTimeLeft(endsAt: string): string {
   return `${h}h ${m}m`;
 }
 
+function formatItemName(name: string, quantity: number | null): string {
+  return quantity != null ? `${name} ×${quantity}` : name;
+}
+
 type Props = {
   buildingId: string;
   onClose: () => void;
@@ -53,14 +61,32 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  // Sell form state
-  const inventory = useCharacterStore((s) => s.inventory) as any[];
-  const character = useCharacterStore((s) => s.character) as any;
+  // Sell — mode
+  const [sellMode, setSellMode] = useState<SellMode>("instance");
+
+  // Sell — INSTANCE
   const [sellInstanceId, setSellInstanceId] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [sellDuration, setSellDuration] = useState<24 | 48 | 72>(24);
 
-  const instanceItems = inventory.filter((inv) => inv.instanceId);
+  // Sell — STACKABLE
+  const [sellStackItemId, setSellStackItemId] = useState("");
+  const [sellStackQty, setSellStackQty] = useState("");
+  const [sellStackPrice, setSellStackPrice] = useState("");
+  const [sellStackDuration, setSellStackDuration] = useState<24 | 48 | 72>(24);
+
+  const inventory = useCharacterStore((s) => s.inventory) as any[];
+  const character = useCharacterStore((s) => s.character) as any;
+
+  const instanceItems = inventory.filter((inv: any) => inv.instanceId);
+  const stackItems = inventory.filter(
+    (inv: any) => !inv.instanceId && inv.item?.objectMode === "STACKABLE" && inv.quantity > 0,
+  );
+
+  const selectedStack = stackItems.find((inv: any) => inv.item?.id === sellStackItemId);
+  const maxStackQty = selectedStack?.quantity ?? 0;
+  const parsedStackQty = parseInt(sellStackQty, 10);
+  const stackQtyValid = !isNaN(parsedStackQty) && parsedStackQty > 0 && parsedStackQty <= maxStackQty;
 
   const notify = (msg: string, ok = true) => {
     setFlash({ msg, ok });
@@ -129,7 +155,7 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
     }
   }
 
-  async function createListing() {
+  async function createInstanceListing() {
     if (!sellInstanceId || !sellPrice) return;
     const price = parseInt(sellPrice, 10);
     if (isNaN(price) || price <= 0) { notify("Prix invalide.", false); return; }
@@ -153,8 +179,36 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
     }
   }
 
+  async function createStackableListing() {
+    if (!sellStackItemId || !stackQtyValid) return;
+    const price = parseInt(sellStackPrice, 10);
+    if (isNaN(price) || price <= 0) { notify("Prix invalide.", false); return; }
+    const res = await fetch(`${API}/auction/listings`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        buildingId,
+        itemId: sellStackItemId,
+        quantity: parsedStackQty,
+        buyoutPriceBronze: price,
+        durationHours: sellStackDuration,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setSellStackItemId("");
+      setSellStackQty("");
+      setSellStackPrice("");
+      notify("Annonce publiée.");
+    } else {
+      notify((body as any).message ?? `Erreur ${res.status}`, false);
+    }
+  }
+
   const mineActive = mine.filter((m) => m.status === "LISTED");
   const charId = character?.id ?? "";
+  const hasInstance = instanceItems.length > 0;
+  const hasStack = stackItems.length > 0;
 
   return (
     <div className="ah-window">
@@ -211,7 +265,12 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
                 <tbody>
                   {listings.map((l) => (
                     <tr key={l.id} className={l.sellerCharacterId === charId ? "ah-window__row--own" : ""}>
-                      <td className="ah-window__cell--name">{l.itemName}</td>
+                      <td className="ah-window__cell--name">
+                        {formatItemName(l.itemName, l.quantity)}
+                        {l.instanceType === "LOT" && (
+                          <span className="ah-window__badge--lot">LOT</span>
+                        )}
+                      </td>
                       <td className="ah-window__cell--price">{formatPrice(l.buyoutPriceBronze)}</td>
                       <td className="ah-window__cell--time">{formatTimeLeft(l.endsAt)}</td>
                       <td>
@@ -250,7 +309,12 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
                   <tbody>
                     {mineActive.map((l) => (
                       <tr key={l.id}>
-                        <td className="ah-window__cell--name">{l.itemName}</td>
+                        <td className="ah-window__cell--name">
+                          {formatItemName(l.itemName, l.quantity)}
+                          {l.instanceType === "LOT" && (
+                            <span className="ah-window__badge--lot">LOT</span>
+                          )}
+                        </td>
                         <td className="ah-window__cell--price">{formatPrice(l.buyoutPriceBronze)}</td>
                         <td className="ah-window__cell--time">{formatTimeLeft(l.endsAt)}</td>
                         <td>
@@ -272,57 +336,157 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
         {/* ── Vendre ─────────────────────────────────────────── */}
         {tab === "sell" && (
           <div className="ah-window__sell-form">
-            {instanceItems.length === 0 ? (
-              <p className="ah-window__hint">Aucun objet vendable dans l'inventaire.<br />Seuls les objets uniques (instance) peuvent être mis en vente.</p>
+            {!hasInstance && !hasStack ? (
+              <p className="ah-window__hint">Aucun objet vendable dans l'inventaire.</p>
             ) : (
               <>
-                <label className="ah-window__label">Objet</label>
-                <select
-                  className="ah-window__select"
-                  value={sellInstanceId}
-                  onChange={(e) => setSellInstanceId(e.target.value)}
-                >
-                  <option value="">— Choisir —</option>
-                  {instanceItems.map((inv) => (
-                    <option key={inv.instanceId} value={inv.instanceId}>
-                      {inv.item?.name ?? inv.instanceId}
-                    </option>
-                  ))}
-                </select>
-
-                <label className="ah-window__label">Prix (bronze)</label>
-                <input
-                  className="ah-window__input"
-                  type="number"
-                  min={1}
-                  placeholder="ex: 500"
-                  value={sellPrice}
-                  onChange={(e) => setSellPrice(e.target.value)}
-                />
-                {sellPrice && !isNaN(parseInt(sellPrice)) && (
-                  <span className="ah-window__price-preview">{formatPrice(sellPrice)}</span>
+                {/* Sélecteur de mode si les deux types sont disponibles */}
+                {hasInstance && hasStack && (
+                  <div className="ah-window__mode-row">
+                    <button
+                      className={`ah-window__mode-btn${sellMode === "instance" ? " ah-window__mode-btn--active" : ""}`}
+                      onClick={() => setSellMode("instance")}
+                    >
+                      Objet unique
+                    </button>
+                    <button
+                      className={`ah-window__mode-btn${sellMode === "stackable" ? " ah-window__mode-btn--active" : ""}`}
+                      onClick={() => setSellMode("stackable")}
+                    >
+                      Ressource
+                    </button>
+                  </div>
                 )}
 
-                <label className="ah-window__label">Durée</label>
-                <div className="ah-window__duration-row">
-                  {DURATIONS.map((d) => (
-                    <button
-                      key={d}
-                      className={`ah-window__duration-btn${sellDuration === d ? " ah-window__duration-btn--active" : ""}`}
-                      onClick={() => setSellDuration(d)}
+                {/* ── Branche INSTANCE ── */}
+                {(sellMode === "instance" || !hasStack) && hasInstance && (
+                  <>
+                    <label className="ah-window__label">Objet</label>
+                    <select
+                      className="ah-window__select"
+                      value={sellInstanceId}
+                      onChange={(e) => setSellInstanceId(e.target.value)}
                     >
-                      {d}h
-                    </button>
-                  ))}
-                </div>
+                      <option value="">— Choisir —</option>
+                      {instanceItems.map((inv: any) => (
+                        <option key={inv.instanceId} value={inv.instanceId}>
+                          {inv.item?.name ?? inv.instanceId}
+                        </option>
+                      ))}
+                    </select>
 
-                <button
-                  className="ah-window__btn ah-window__btn--primary"
-                  disabled={!sellInstanceId || !sellPrice}
-                  onClick={createListing}
-                >
-                  Publier l'annonce
-                </button>
+                    <label className="ah-window__label">Prix (bronze)</label>
+                    <input
+                      className="ah-window__input"
+                      type="number"
+                      min={1}
+                      placeholder="ex: 500"
+                      value={sellPrice}
+                      onChange={(e) => setSellPrice(e.target.value)}
+                    />
+                    {sellPrice && !isNaN(parseInt(sellPrice)) && (
+                      <span className="ah-window__price-preview">{formatPrice(sellPrice)}</span>
+                    )}
+
+                    <label className="ah-window__label">Durée</label>
+                    <div className="ah-window__duration-row">
+                      {DURATIONS.map((d) => (
+                        <button
+                          key={d}
+                          className={`ah-window__duration-btn${sellDuration === d ? " ah-window__duration-btn--active" : ""}`}
+                          onClick={() => setSellDuration(d)}
+                        >
+                          {d}h
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      className="ah-window__btn ah-window__btn--primary"
+                      disabled={!sellInstanceId || !sellPrice}
+                      onClick={createInstanceListing}
+                    >
+                      Publier l'annonce
+                    </button>
+                  </>
+                )}
+
+                {/* ── Branche STACKABLE ── */}
+                {(sellMode === "stackable" || !hasInstance) && hasStack && (
+                  <>
+                    <label className="ah-window__label">Ressource</label>
+                    <select
+                      className="ah-window__select"
+                      value={sellStackItemId}
+                      onChange={(e) => { setSellStackItemId(e.target.value); setSellStackQty(""); }}
+                    >
+                      <option value="">— Choisir —</option>
+                      {stackItems.map((inv: any) => (
+                        <option key={inv.item.id} value={inv.item.id}>
+                          {inv.item?.name ?? inv.item.id} (disponible : {inv.quantity})
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="ah-window__label">
+                      Quantité à vendre
+                      {selectedStack && (
+                        <span className="ah-window__label--hint"> — max {maxStackQty}</span>
+                      )}
+                    </label>
+                    <input
+                      className="ah-window__input"
+                      type="number"
+                      min={1}
+                      max={maxStackQty || undefined}
+                      placeholder="ex: 100"
+                      value={sellStackQty}
+                      onChange={(e) => setSellStackQty(e.target.value)}
+                      disabled={!sellStackItemId}
+                    />
+                    {sellStackQty && !stackQtyValid && sellStackItemId && (
+                      <span className="ah-window__error-hint">
+                        {parsedStackQty > maxStackQty
+                          ? `Maximum ${maxStackQty}`
+                          : "Quantité invalide"}
+                      </span>
+                    )}
+
+                    <label className="ah-window__label">Prix total (bronze)</label>
+                    <input
+                      className="ah-window__input"
+                      type="number"
+                      min={1}
+                      placeholder="ex: 500"
+                      value={sellStackPrice}
+                      onChange={(e) => setSellStackPrice(e.target.value)}
+                    />
+                    {sellStackPrice && !isNaN(parseInt(sellStackPrice)) && (
+                      <span className="ah-window__price-preview">{formatPrice(sellStackPrice)}</span>
+                    )}
+
+                    <label className="ah-window__label">Durée</label>
+                    <div className="ah-window__duration-row">
+                      {DURATIONS.map((d) => (
+                        <button
+                          key={d}
+                          className={`ah-window__duration-btn${sellStackDuration === d ? " ah-window__duration-btn--active" : ""}`}
+                          onClick={() => setSellStackDuration(d)}
+                        >
+                          {d}h
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      className="ah-window__btn ah-window__btn--primary"
+                      disabled={!sellStackItemId || !stackQtyValid || !sellStackPrice}
+                      onClick={createStackableListing}
+                    >
+                      Publier l'annonce
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>

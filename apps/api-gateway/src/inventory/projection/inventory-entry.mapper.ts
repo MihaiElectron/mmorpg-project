@@ -1,5 +1,5 @@
 import { CharacterEquipment } from '../../characters/entities/character-equipment.entity';
-import { ItemInstance } from '../../item-instances/entities/item-instance.entity';
+import { ItemInstance, ItemInstanceType } from '../../item-instances/entities/item-instance.entity';
 import { Item } from '../../items/entities/item.entity';
 import { Inventory } from '../entities/inventory.entity';
 import { InventoryEntryDto } from './inventory-entry.dto';
@@ -31,6 +31,7 @@ export function mapStackToEntry(inv: Inventory, sets: EquippedSets): InventoryEn
       type: inv.item.type,
       category: inv.item.category,
       image: inv.item.image ?? null,
+      objectMode: inv.item.objectMode,
     },
   };
 }
@@ -40,10 +41,13 @@ export function mapInstanceToEntry(
   item: Item,
   sets: EquippedSets,
 ): InventoryEntryDto {
+  const quantity = instance.instanceType === ItemInstanceType.LOT
+    ? (instance.quantity ?? 1)
+    : 1;
   return {
     id: instance.id,
     instanceId: instance.id,
-    quantity: 1,
+    quantity,
     equipped: sets.equippedInstanceIds.has(instance.id),
     item: {
       id: item.id,
@@ -51,6 +55,7 @@ export function mapInstanceToEntry(
       type: item.type,
       category: item.category,
       image: item.image ?? null,
+      objectMode: item.objectMode,
     },
   };
 }

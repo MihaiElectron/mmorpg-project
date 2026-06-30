@@ -24,6 +24,9 @@ export interface AuctionListingDto {
   itemId: string;
   itemName: string;
   itemImage: string;
+  objectMode: string;
+  instanceType: string;
+  quantity: number | null;
   buyoutPriceBronze: string;
   status: AuctionListingStatus;
   sellerCharacterId: string;
@@ -92,15 +95,27 @@ export class AuctionService {
   private async enrichListings(rows: AuctionListing[]): Promise<AuctionListingDto[]> {
     if (rows.length === 0) return [];
     const itemIds = [...new Set(rows.map((r) => r.itemId))];
-    const items = await this.items.findByIds(itemIds);
+    const instanceIds = [...new Set(rows.map((r) => r.itemInstanceId))];
+
+    const [items, instances] = await Promise.all([
+      this.items.findByIds(itemIds),
+      this.instances.findByIds(instanceIds),
+    ]);
+
     const itemMap = new Map(items.map((i) => [i.id, i]));
+    const instanceMap = new Map(instances.map((i) => [i.id, i]));
+
     return rows.map((r) => {
       const item = itemMap.get(r.itemId);
+      const instance = instanceMap.get(r.itemInstanceId);
       return {
         id: r.id,
         itemId: r.itemId,
         itemName: item?.name ?? r.itemId,
         itemImage: item?.image ?? '',
+        objectMode: item?.objectMode ?? 'INSTANCE',
+        instanceType: instance?.instanceType ?? 'NORMAL',
+        quantity: instance?.quantity ?? null,
         buyoutPriceBronze: r.buyoutPriceBronze,
         status: r.status,
         sellerCharacterId: r.sellerCharacterId,
