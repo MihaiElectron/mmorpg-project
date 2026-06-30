@@ -13,6 +13,7 @@ import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto, EquipmentSlot } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
 import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { recalculateEquipmentStats } from './equipment-stats.helper';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
@@ -281,17 +282,11 @@ export class CharacterService {
     });
   }
 
-  /**
-   * Recalcule les stats du personnage (placeholder)
-   */
   private async recalculateStats(
     characterId: string,
     manager: EntityManager,
   ): Promise<void> {
-    void characterId;
-    void manager;
-
-    await Promise.resolve();
+    await recalculateEquipmentStats(manager, characterId);
   }
 
   /**

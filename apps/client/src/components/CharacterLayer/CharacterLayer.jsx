@@ -72,6 +72,21 @@ export default function CharacterLayer() {
           );
         })}
       </div>
+
+      <div className="character-layer__stats-panel">
+        <div className="character-layer__stat">
+          <span className="character-layer__stat-label">Attaque</span>
+          <span className="character-layer__stat-value character-layer__stat-value--attack">
+            {character.attack ?? 0}
+          </span>
+        </div>
+        <div className="character-layer__stat">
+          <span className="character-layer__stat-label">Défense</span>
+          <span className="character-layer__stat-value character-layer__stat-value--defense">
+            {character.defense ?? 0}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

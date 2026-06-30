@@ -6,7 +6,7 @@
  * - Récupération de l’inventaire complet
  */
 
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
@@ -16,6 +16,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Item } from '../items/entities/item.entity';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { recalculateEquipmentStats } from '../characters/equipment-stats.helper';
 
 @Injectable()
 export class InventoryService {
@@ -104,7 +105,11 @@ export class InventoryService {
   // Si le slot avait un item legacy, met son Inventory.equipped à false.
   // Si le slot avait une autre instance, la retransitionne AVAILABLE/INVENTORY.
   // ---------------------------------------------------------------------------
-  async equipItemInstance(characterId: string, instanceId: string): Promise<ItemInstance> {
+  async equipItemInstance(characterId: string, instanceId: string, userId: string): Promise<ItemInstance> {
+    const character = await this.characterRepository.findOneBy({ id: characterId });
+    if (!character || character.userId !== userId) {
+      throw new ForbiddenException('Personnage introuvable ou accès refusé.');
+    }
     return this.dataSource.transaction(async (manager) => {
       // Lecture sans verrou pour résoudre itemId/slot (itemId est immuable)
       const rawInstance = await manager.findOne(ItemInstance, { where: { id: instanceId } });
@@ -144,10 +149,12 @@ export class InventoryService {
       await manager.save(CharacterEquipment, equipment);
 
       // Validation owner/state/container + verrou dans ItemTransferService
-      return this.itemTransfer.transfer(manager, instanceId, {
+      const equipped = await this.itemTransfer.transfer(manager, instanceId, {
         requesterId: characterId,
         transition: { type: 'EQUIP', characterId },
       });
+      await recalculateEquipmentStats(manager, characterId);
+      return equipped;
     });
   }
 

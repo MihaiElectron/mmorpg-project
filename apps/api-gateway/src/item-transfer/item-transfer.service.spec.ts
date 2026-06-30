@@ -163,6 +163,17 @@ describe("ItemTransferService", () => {
         })
       ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it("refuse si instanceType est LOT", async () => {
+      const instance = makeInstance({ instanceType: ItemInstanceType.LOT });
+      const manager = makeManager(instance);
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "EQUIP", characterId: "char-1" },
+        })
+      ).rejects.toThrow("Cannot equip a LOT item instance");
+    });
   });
 
   // ── UNEQUIP ────────────────────────────────────────────────────────────────

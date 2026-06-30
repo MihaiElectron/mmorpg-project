@@ -40,10 +40,16 @@ export class Character {
   experience: number;
 
   @Column({ default: 0 })
-  attack: number; // Attaque de base
+  baseAttack: number;
 
   @Column({ default: 0 })
-  defense: number; // Défense de base
+  baseDefense: number;
+
+  @Column({ default: 0 })
+  attack: number; // stat finale = baseAttack + Σ équipement
+
+  @Column({ default: 0 })
+  defense: number; // stat finale = baseDefense + Σ équipement
 
   // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })

@@ -211,6 +211,9 @@ export class ItemTransferService {
     requesterId: string | null,
     characterId: string,
   ): Promise<ItemInstance> {
+    if (instance.instanceType !== ItemInstanceType.NORMAL) {
+      throw new BadRequestException('Cannot equip a LOT item instance');
+    }
     this.validateOwner(instance, requesterId);
     this.validateState(instance, ItemInstanceState.AVAILABLE);
     this.validateContainer(instance, ItemInstanceContainerType.INVENTORY);

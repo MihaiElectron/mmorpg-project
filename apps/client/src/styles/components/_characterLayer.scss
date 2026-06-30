@@ -73,6 +73,39 @@
   color: vars.$color-text-primary;
 }
 
+// ── Panneau stats ─────────────────────────────────────────────────────────────
+
+.character-layer__stats-panel {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 6px 0 2px;
+  border-top: 1px solid vars.$panel-border;
+}
+
+.character-layer__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.character-layer__stat-label {
+  font-size: 0.62rem;
+  color: vars.$color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.character-layer__stat-value {
+  font-size: 1rem;
+  font-weight: bold;
+  color: vars.$color-text-primary;
+
+  &--attack  { color: vars.$color-stat-attack; }
+  &--defense { color: vars.$color-stat-defense; }
+}
+
 // ── Positionnement des slots ──────────────────────────────────────────────────
 
 .slot--left-earring  { grid-column: 1; grid-row: 1; }

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, UseGuards, Request } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -25,8 +25,9 @@ export class InventoryController {
   equipItemInstance(
     @Param('characterId') characterId: string,
     @Param('instanceId') instanceId: string,
+    @Request() req: { user: { userId: string } },
   ) {
-    return this.inventoryService.equipItemInstance(characterId, instanceId);
+    return this.inventoryService.equipItemInstance(characterId, instanceId, req.user.userId);
   }
 
   @Post(':characterId/unequip/:slot')
