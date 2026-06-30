@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-28_
+_Dernière mise à jour : 2026-06-30_
 _Branche : main — État : développement local_
 
 ---
@@ -11,6 +11,7 @@ Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connect
 Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` source de vérité unique).
 **Runtime V2 terminé** : `ItemTransferService` couvre 20 transitions sur 10 domaines, verrou pessimiste systématique.
 **Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
+**Market Lots implémentés** : objets STACKABLE vendables via l'Auction House — pipeline Inventory → LOT → Auction → Mail → Claim → Inventory validé en base (5 cas + 6 contrôles de sécurité).
 **Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
 
 ---
@@ -27,7 +28,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
 | Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
 | Bank / Mail / Guild / Housing | MVPs Instance-only opérationnels (endpoints REST, pas d'UI en jeu) |
-| Auction | Listing INSTANCE + STACKABLE (Market Lot), achat → 2 mails système (acheteur+vendeur), wallet Economy + escrow `auction_escrow` — `AuctionHouseWindow` (validation distance building) |
+| Auction | Listing INSTANCE + STACKABLE (Market Lot), achat → 2 mails système (acheteur+vendeur), wallet Economy + escrow `auction_escrow` — `AuctionHouseWindow` avec formulaire STACKABLE, badge LOT, affichage ×qty |
 | Mail | Inbox, claim pièce jointe ou argent, courrier système (sender `SYSTEM`) — `MailboxWindow` (validation distance building) |
 | Buildings | `BuildingTemplate`/`Building`, WOM adapter, CRUD admin WS, rendu WorldScene, drag-to-map, WindowManager |
 | Économie joueur | `GET /economy/me/balance` — solde gold/argent/bronze affiché dans le panneau Perso ; admin crédit/débit via `admin:add_balance` (EconomyService, ledger, rôle vérifié) |
@@ -93,6 +94,9 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 - **`WorldService.validateInteraction(char, target, radiusWU)`** est la barrière anti-cheat de distance (chebyshevDistanceWU, L∞) — toute nouvelle interaction doit la réutiliser.
 - **`BuildingsService`** est le seul service autorisé à créer/modifier les `Building` et `BuildingTemplate`. Les contrôleurs Auction/Mail lui délèguent la recherche du building pour valider la proximité.
 - **`buildingId` obligatoire** sur toute mutation Auction (createListing, buyListing) et Mail (inbox, send, claim). Le serveur valide type, état ACTIVE, template.enabled et distance WU avant toute action sensible. `GET /auction/listings`, `GET /auction/listings/mine`, `DELETE /auction/listings/:id` et `GET /mail/sent` restent publics sans contrainte de proximité.
+- **Market Lots** : `ItemTransferService.createLot()` est la seule voie pour créer un `ItemInstance` de type LOT. `applyClaimMail()` branché sur LOT : `Inventory += quantity` puis `state = DESTROYED`. Un LOT n'est jamais AVAILABLE, jamais INSTANCE, jamais en stock direct.
+- **`AuctionListingDto`** expose `instanceType`, `quantity` et `objectMode` — l'UI ne déduit jamais le type d'un lot.
+- **Contrainte SQL `chk_instance_type_quantity`** et index partiel `idx_item_instance_lots` non créés par `synchronize: true` — à appliquer manuellement ou via la migration Phase 1 en prod.
 - **Pipeline Auction → Mailbox** : `buyListing()` transfère l'argent acheteur → escrow `auction_escrow`, crée 2 mails système (objet pour acheteur, montant pour vendeur), transitione l'instance via `AUCTION_TO_MAIL` (LISTED+AUCTION → IN_MAIL+MAIL). `cancelListing()` et expiration créent un mail système objet pour le vendeur. `claimBuyer`/`claimSeller` supprimés. Tout claim passe par `MailService.claim()`.
 - **`MailService.sendSystemMailWithinManager(manager, input)`** : seul point d'entrée autorisé pour les mails système (sender `SYSTEM`). Fonctionne dans la transaction de l'appelant. Pas de validation ownership ni de transition ItemTransfer — l'appelant en est responsable.
 - **WindowManager** (`window-manager.store.ts`) est le seul point d'ouverture des fenêtres runtime (Auction, Mailbox, etc.). ActionPanel route uniquement — il ne contient pas la logique métier de ces fenêtres.
