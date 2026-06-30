@@ -53,7 +53,7 @@ function emptyEntry(item: ItemCatalogEntry): LootPoolEntry {
 }
 
 export default function LootPoolModule() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ItemCatalogEntry[]>([]);
   const [sources, setSources] = useState<LootPoolSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);

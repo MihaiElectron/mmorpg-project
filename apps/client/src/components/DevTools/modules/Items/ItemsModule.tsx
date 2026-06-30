@@ -60,7 +60,7 @@ function UsageList({ items }: { items: ItemUsageRef[] }) {
 }
 
 export default function ItemsModule() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ItemCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItemEditorDraft>(emptyDraft);
