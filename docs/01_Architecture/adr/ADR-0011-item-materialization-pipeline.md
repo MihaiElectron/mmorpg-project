@@ -17,7 +17,7 @@
   - docs/09_Workflow/runtime-roadmap.md
 - Used by: Project owner, backend developers, repository-aware coding agents
 - Supersedes: None
-- Superseded by: None
+- Superseded by: Clause "Auction MVP 1 — INSTANCE items only" superseded by ADR-0013-market-lots.md
 - Related documents:
   - docs/08_Gameplay/object-runtime-architecture.md
   - docs/08_Gameplay/item-taxonomy.md

@@ -13,7 +13,7 @@
 - Depends on: docs/01_Architecture/adr/README.md, docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md
 - Used by: Project owner, developers, repository-aware coding agents
 - Supersedes: None
-- Superseded by: None
+- Superseded by: None (STACKABLE listings extended by ADR-0013-market-lots.md)
 - Related documents: docs/08_Gameplay/settlement-economy-architecture.md, docs/08_Gameplay/settlement-economy-review.md, docs/08_Gameplay/settlement-specifications.md, docs/08_Gameplay/settlement-mvp-slicing.md
 - Related code: N/A
 
