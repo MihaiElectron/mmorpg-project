@@ -50,7 +50,6 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("browse");
   const [listings, setListings] = useState<ListingDto[]>([]);
   const [mine, setMine] = useState<ListingDto[]>([]);
-  const [purchases, setPurchases] = useState<ListingDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -87,12 +86,8 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
   const loadMine = useCallback(async () => {
     setLoading(true);
     try {
-      const [resMine, resBuyer] = await Promise.all([
-        fetch(`${API}/auction/listings/mine`, { headers: authHeaders() }),
-        fetch(`${API}/auction/listings/pending-as-buyer`, { headers: authHeaders() }),
-      ]);
-      if (resMine.ok) setMine(await resMine.json().then((d) => (Array.isArray(d) ? d : [])));
-      if (resBuyer.ok) setPurchases(await resBuyer.json().then((d) => (Array.isArray(d) ? d : [])));
+      const res = await fetch(`${API}/auction/listings/mine`, { headers: authHeaders() });
+      if (res.ok) setMine(await res.json().then((d: unknown) => (Array.isArray(d) ? d : [])));
     } catch (e: any) {
       notify(e.message, false);
     } finally {
@@ -134,36 +129,6 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
     }
   }
 
-  async function claimBuyer(listingId: string) {
-    const res = await fetch(`${API}/auction/listings/${listingId}/claim-buyer`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ buildingId }),
-    });
-    if (res.ok) {
-      setPurchases((prev) => prev.filter((p) => p.id !== listingId));
-      notify("Objet récupéré dans l'inventaire.");
-    } else {
-      const body = await res.json().catch(() => ({}));
-      notify((body as any).message ?? `Erreur ${res.status}`, false);
-    }
-  }
-
-  async function claimSeller(listingId: string) {
-    const res = await fetch(`${API}/auction/listings/${listingId}/claim-seller`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ buildingId }),
-    });
-    if (res.ok) {
-      loadMine();
-      notify("Récupéré.");
-    } else {
-      const body = await res.json().catch(() => ({}));
-      notify((body as any).message ?? `Erreur ${res.status}`, false);
-    }
-  }
-
   async function createListing() {
     if (!sellInstanceId || !sellPrice) return;
     const price = parseInt(sellPrice, 10);
@@ -189,9 +154,6 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
   }
 
   const mineActive = mine.filter((m) => m.status === "LISTED");
-  const minePending = mine.filter((m) =>
-    ["SOLD_PENDING_CLAIM", "EXPIRED_PENDING_CLAIM", "CANCELLED_PENDING_CLAIM"].includes(m.status),
-  );
   const charId = character?.id ?? "";
 
   return (
@@ -213,9 +175,6 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
           onClick={() => setTab("mine")}
         >
           Mes annonces
-          {(minePending.length + purchases.length) > 0 && (
-            <span className="ah-window__badge">{minePending.length + purchases.length}</span>
-          )}
         </button>
         <button
           className={`ah-window__tab${tab === "sell" ? " ah-window__tab--active" : ""}`}
@@ -306,57 +265,7 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
               </section>
             )}
 
-            {purchases.length > 0 && (
-              <section className="ah-window__section">
-                <h4 className="ah-window__section-title">Achats à récupérer</h4>
-                <table className="ah-window__table">
-                  <thead>
-                    <tr><th>Objet</th><th>Prix payé</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {purchases.map((p) => (
-                      <tr key={p.id}>
-                        <td className="ah-window__cell--name">{p.itemName}</td>
-                        <td className="ah-window__cell--price">{formatPrice(p.buyoutPriceBronze)}</td>
-                        <td>
-                          <button className="ah-window__btn" onClick={() => claimBuyer(p.id)}>
-                            Récupérer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
-
-            {minePending.length > 0 && (
-              <section className="ah-window__section">
-                <h4 className="ah-window__section-title">Revenus à récupérer</h4>
-                <table className="ah-window__table">
-                  <thead>
-                    <tr><th>Objet</th><th>Statut</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {minePending.map((l) => (
-                      <tr key={l.id}>
-                        <td className="ah-window__cell--name">{l.itemName}</td>
-                        <td className="ah-window__cell--status">
-                          {l.status === "SOLD_PENDING_CLAIM" && "Vendu"}
-                          {l.status === "EXPIRED_PENDING_CLAIM" && "Expiré"}
-                          {l.status === "CANCELLED_PENDING_CLAIM" && "Annulé"}
-                        </td>
-                        <td>
-                          <button className="ah-window__btn" onClick={() => claimSeller(l.id)}>
-                            Récupérer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
+            <p className="ah-window__hint">Vos achats et revenus sont livrés par courrier. Consultez votre boîte aux lettres.</p>
           </>
         )}
 

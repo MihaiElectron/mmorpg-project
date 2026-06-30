@@ -37,6 +37,9 @@ export class MailMessage {
   @Column({ type: 'varchar', nullable: true })
   attachedItemInstanceId: string | null;
 
+  @Column({ type: 'bigint', nullable: true })
+  attachedAmountBronze: string | null;
+
   @Column({ type: 'varchar', length: 20 })
   @Index()
   status: MailStatus;

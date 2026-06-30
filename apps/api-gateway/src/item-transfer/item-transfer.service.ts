@@ -28,6 +28,7 @@ export type ItemTransition =
   | { type: 'WITHDRAW_GUILD'; guildId: string; characterId: string }
   | { type: 'STORE_HOUSE'; houseId: string }
   | { type: 'WITHDRAW_HOUSE'; houseId: string; characterId: string }
+  | { type: 'AUCTION_TO_MAIL'; listingId: string; mailId: string }
   | { type: 'TRADE_LOCK'; tradeSessionId: string }
   | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
   | { type: 'TRADE_CANCEL'; tradeSessionId: string };
@@ -86,6 +87,8 @@ export class ItemTransferService {
         return this.applyStoreHouse(manager, instance, requesterId, transition.houseId);
       case 'WITHDRAW_HOUSE':
         return this.applyWithdrawHouse(manager, instance, transition);
+      case 'AUCTION_TO_MAIL':
+        return this.applyAuctionToMail(manager, instance, transition.listingId, transition.mailId);
       case 'TRADE_LOCK':
         return this.applyTradeLock(manager, instance, requesterId, transition.tradeSessionId);
       case 'TRADE_COMMIT':
@@ -280,6 +283,21 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.AVAILABLE;
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = transition.sellerCharacterId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  private async applyAuctionToMail(
+    manager: EntityManager,
+    instance: ItemInstance,
+    listingId: string,
+    mailId: string,
+  ): Promise<ItemInstance> {
+    this.validateState(instance, ItemInstanceState.LISTED);
+    this.validateContainer(instance, ItemInstanceContainerType.AUCTION, listingId);
+
+    instance.state = ItemInstanceState.IN_MAIL;
+    instance.containerType = ItemInstanceContainerType.MAIL;
+    instance.containerId = mailId;
     return manager.save(ItemInstance, instance);
   }
 

@@ -99,6 +99,7 @@ describe("AuctionService", () => {
   let listingsRepo: ReturnType<typeof makeListingsRepo>;
   let itemTransfer: jest.Mocked<Pick<ItemTransferService, "transfer">>;
   let economy: jest.Mocked<Pick<EconomyService, "getOrCreateWallet" | "transferWithinManager">>;
+  let mailService: { sendSystemMailWithinManager: jest.Mock };
   let dataSource: { transaction: jest.Mock };
 
   function buildService(
@@ -128,6 +129,10 @@ describe("AuctionService", () => {
       transferWithinManager: jest.fn().mockResolvedValue({}),
     };
 
+    mailService = {
+      sendSystemMailWithinManager: jest.fn().mockResolvedValue({ id: "mail-1" }),
+    };
+
     const managerFactory = () =>
       makeManager(instance, item, listingsRepo);
 
@@ -144,6 +149,7 @@ describe("AuctionService", () => {
       dataSource as unknown as DataSource,
       itemTransfer as unknown as ItemTransferService,
       economy as unknown as EconomyService,
+      mailService as any,
     );
   }
 
@@ -223,12 +229,16 @@ describe("AuctionService", () => {
   // ── cancelListing ──────────────────────────────────────────────────────────
 
   describe("cancelListing", () => {
-    it("passe le statut a CANCELLED_PENDING_CLAIM", async () => {
+    it("passe le statut a CANCELLED_CLAIMED et cree un courrier vendeur", async () => {
       const listing = makeListing();
       buildService(makeInstance(), makeItem(), listing);
 
       const result = await service.cancelListing("seller-1", "listing-1");
-      expect(result.status).toBe(AuctionListingStatus.CANCELLED_PENDING_CLAIM);
+      expect(result.status).toBe(AuctionListingStatus.CANCELLED_CLAIMED);
+      expect(mailService.sendSystemMailWithinManager).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recipientCharacterId: "seller-1", attachedItemInstanceId: "inst-1" }),
+      );
     });
 
     it("refuse si ce n est pas le vendeur", async () => {
@@ -238,7 +248,7 @@ describe("AuctionService", () => {
     });
 
     it("refuse si statut != LISTED", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.SOLD_PENDING_CLAIM });
+      const listing = makeListing({ status: AuctionListingStatus.SOLD_CLAIMED });
       buildService(makeInstance(), makeItem(), listing);
       await expect(service.cancelListing("seller-1", "listing-1")).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -247,14 +257,43 @@ describe("AuctionService", () => {
   // ── buyListing ─────────────────────────────────────────────────────────────
 
   describe("buyListing", () => {
-    it("transitionne le statut a SOLD_PENDING_CLAIM et enregistre l acheteur", async () => {
+    it("transitionne le statut a SOLD_CLAIMED, cree 2 mails systeme et enregistre l acheteur", async () => {
       const listing = makeListing();
       buildService(makeInstance(), makeItem(), listing);
 
       const result = await service.buyListing({ buyerCharacterId: "buyer-1", listingId: "listing-1" });
-      expect(result.status).toBe(AuctionListingStatus.SOLD_PENDING_CLAIM);
+      expect(result.status).toBe(AuctionListingStatus.SOLD_CLAIMED);
       expect(result.buyerCharacterId).toBe("buyer-1");
       expect(economy.transferWithinManager).toHaveBeenCalled();
+      expect(mailService.sendSystemMailWithinManager).toHaveBeenCalledTimes(2);
+      expect(mailService.sendSystemMailWithinManager).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recipientCharacterId: "buyer-1", attachedItemInstanceId: "inst-1" }),
+      );
+      expect(mailService.sendSystemMailWithinManager).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recipientCharacterId: "seller-1", attachedAmountBronze: "500" }),
+      );
+    });
+
+    it("cree le mail acheteur avant la transition AUCTION_TO_MAIL", async () => {
+      const listing = makeListing();
+      buildService(makeInstance(), makeItem(), listing);
+
+      const callOrder: string[] = [];
+      mailService.sendSystemMailWithinManager.mockImplementation(async () => {
+        callOrder.push("mail");
+        return { id: "mail-1" };
+      });
+      itemTransfer.transfer.mockImplementation(async (_mgr, _id, ctx) => {
+        callOrder.push(ctx.transition.type as string);
+        return makeInstance();
+      });
+
+      await service.buyListing({ buyerCharacterId: "buyer-1", listingId: "listing-1" });
+
+      expect(callOrder[0]).toBe("mail");
+      expect(callOrder[1]).toBe("AUCTION_TO_MAIL");
     });
 
     it("refuse si l acheteur est le vendeur", async () => {
@@ -264,7 +303,7 @@ describe("AuctionService", () => {
     });
 
     it("refuse si statut != LISTED (double achat)", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.SOLD_PENDING_CLAIM });
+      const listing = makeListing({ status: AuctionListingStatus.SOLD_CLAIMED });
       buildService(makeInstance(), makeItem(), listing);
       await expect(service.buyListing({ buyerCharacterId: "buyer-1", listingId: "listing-1" })).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -283,73 +322,25 @@ describe("AuctionService", () => {
     });
   });
 
-  // ── claimBuyer ─────────────────────────────────────────────────────────────
-
-  describe("claimBuyer", () => {
-    it("passe le statut a SOLD_CLAIMED et appelle CLAIM_BUYER", async () => {
-      const listing = makeListing({
-        status: AuctionListingStatus.SOLD_PENDING_CLAIM,
-        buyerCharacterId: "buyer-1",
-      });
-      buildService(makeInstance(), makeItem(), listing);
-
-      const result = await service.claimBuyer("buyer-1", "listing-1");
-      expect(result.status).toBe(AuctionListingStatus.SOLD_CLAIMED);
-      expect(itemTransfer.transfer).toHaveBeenCalledWith(
-        expect.anything(),
-        "inst-1",
-        expect.objectContaining({ transition: expect.objectContaining({ type: "CLAIM_BUYER" }) }),
-      );
-    });
-
-    it("refuse si ce n est pas l acheteur", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.SOLD_PENDING_CLAIM, buyerCharacterId: "buyer-1" });
-      buildService(makeInstance(), makeItem(), listing);
-      await expect(service.claimBuyer("autre", "listing-1")).rejects.toBeInstanceOf(BadRequestException);
-    });
-  });
-
-  // ── claimSeller ────────────────────────────────────────────────────────────
-
-  describe("claimSeller", () => {
-    it("retourne CANCELLED_CLAIMED apres annulation", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.CANCELLED_PENDING_CLAIM });
-      buildService(makeInstance(), makeItem(), listing);
-
-      const result = await service.claimSeller("seller-1", "listing-1");
-      expect(result.status).toBe(AuctionListingStatus.CANCELLED_CLAIMED);
-    });
-
-    it("retourne EXPIRED_CLAIMED apres expiration", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.EXPIRED_PENDING_CLAIM });
-      buildService(makeInstance(), makeItem(), listing);
-
-      const result = await service.claimSeller("seller-1", "listing-1");
-      expect(result.status).toBe(AuctionListingStatus.EXPIRED_CLAIMED);
-    });
-
-    it("refuse si ce n est pas le vendeur", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.CANCELLED_PENDING_CLAIM });
-      buildService(makeInstance(), makeItem(), listing);
-      await expect(service.claimSeller("autre", "listing-1")).rejects.toBeInstanceOf(BadRequestException);
-    });
-  });
-
   // ── processExpiredListings ────────────────────────────────────────────────
 
   describe("processExpiredListings", () => {
-    it("passe les annonces LISTED expirees a EXPIRED_PENDING_CLAIM", async () => {
+    it("passe les annonces LISTED expirees a EXPIRED_CLAIMED et cree un courrier vendeur", async () => {
       const listing = makeListing({ endsAt: new Date(Date.now() - 1000) });
       buildService(makeInstance(), makeItem(), listing);
       listingsRepo.find.mockResolvedValue([listing]);
 
       const results = await service.processExpiredListings();
       expect(results.length).toBe(1);
-      expect(results[0].status).toBe(AuctionListingStatus.EXPIRED_PENDING_CLAIM);
+      expect(results[0].status).toBe(AuctionListingStatus.EXPIRED_CLAIMED);
+      expect(mailService.sendSystemMailWithinManager).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ recipientCharacterId: "seller-1", attachedItemInstanceId: "inst-1" }),
+      );
     });
 
     it("ignore les annonces deja achetees entre le batch read et le verrou", async () => {
-      const listing = makeListing({ status: AuctionListingStatus.SOLD_PENDING_CLAIM });
+      const listing = makeListing({ status: AuctionListingStatus.SOLD_CLAIMED });
       buildService(makeInstance(), makeItem(), listing);
       listingsRepo.find.mockResolvedValue([listing]);
 

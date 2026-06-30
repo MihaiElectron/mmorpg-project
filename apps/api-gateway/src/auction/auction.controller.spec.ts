@@ -41,8 +41,6 @@ function makeController(buildingOverrides?: Record<string, unknown> | null) {
     getBuyerPendingListings: jest.fn().mockResolvedValue([]),
     createListing: jest.fn().mockResolvedValue({}),
     buyListing: jest.fn().mockResolvedValue({}),
-    claimBuyer: jest.fn().mockResolvedValue({}),
-    claimSeller: jest.fn().mockResolvedValue({}),
     cancelListing: jest.fn().mockResolvedValue({}),
   };
 
@@ -85,31 +83,6 @@ describe("AuctionController — buildingId obligatoire", () => {
     expect(buildingsService.findBuildingById).toHaveBeenCalledWith("bld-1");
   });
 
-  it("claimBuyer : lève BadRequestException si buildingId absent", async () => {
-    const { ctrl } = makeController();
-    await expect(
-      ctrl.claimBuyer(REQ as any, "lst-1", {} as any),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it("claimBuyer : valide le building si buildingId présent", async () => {
-    const { ctrl, buildingsService } = makeController();
-    await ctrl.claimBuyer(REQ as any, "lst-1", { buildingId: "bld-1" });
-    expect(buildingsService.findBuildingById).toHaveBeenCalledWith("bld-1");
-  });
-
-  it("claimSeller : lève BadRequestException si buildingId absent", async () => {
-    const { ctrl } = makeController();
-    await expect(
-      ctrl.claimSeller(REQ as any, "lst-1", {} as any),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it("claimSeller : valide le building si buildingId présent", async () => {
-    const { ctrl, buildingsService } = makeController();
-    await ctrl.claimSeller(REQ as any, "lst-1", { buildingId: "bld-1" });
-    expect(buildingsService.findBuildingById).toHaveBeenCalledWith("bld-1");
-  });
 });
 
 // ── mauvais buildingType refusé ────────────────────────────────────────────────

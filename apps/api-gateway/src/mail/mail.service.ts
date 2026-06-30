@@ -19,6 +19,10 @@ import {
   MailStatus,
   MAIL_DEFAULT_TTL_DAYS,
 } from './entities/mail-message.entity';
+import { EconomyService } from '../economy/economy.service';
+import { TransactionType } from '../economy/entities/economic-transaction.entity';
+
+export const SYSTEM_SENDER_ID = 'SYSTEM';
 
 const EMPTY_EQUIPPED_SETS = {
   equippedItemIds: new Set<string>(),
@@ -33,9 +37,18 @@ export interface SendMailInput {
   itemInstanceId?: string;
 }
 
+export interface SystemMailInput {
+  recipientCharacterId: string;
+  subject: string;
+  body?: string;
+  attachedItemInstanceId?: string;
+  attachedAmountBronze?: string;
+}
+
 export interface MailMessageDto {
   id: string;
   senderCharacterId: string;
+  senderName: string;
   recipientCharacterId: string;
   subject: string;
   body: string;
@@ -44,6 +57,9 @@ export interface MailMessageDto {
   expiresAt: Date;
   claimedAt: Date | null;
   attachment: InventoryEntryDto | null;
+  attachedAmountBronze: string | null;
+  hasAttachment: boolean;
+  claimed: boolean;
 }
 
 @Injectable()
@@ -57,6 +73,7 @@ export class MailService {
     private readonly items: Repository<Item>,
     private readonly dataSource: DataSource,
     private readonly itemTransfer: ItemTransferService,
+    private readonly economy: EconomyService,
   ) {}
 
   // ── Envoi ─────────────────────────────────────────────────────────────────
@@ -106,9 +123,45 @@ export class MailService {
     });
   }
 
+  // ── Courrier système ──────────────────────────────────────────────────────
+
+  async sendSystemMailWithinManager(
+    manager: EntityManager,
+    input: SystemMailInput,
+  ): Promise<MailMessage> {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + MAIL_DEFAULT_TTL_DAYS * 86400_000);
+    const mail = manager.create(MailMessage, {
+      senderCharacterId: SYSTEM_SENDER_ID,
+      recipientCharacterId: input.recipientCharacterId,
+      subject: input.subject,
+      body: input.body ?? '',
+      attachedItemInstanceId: input.attachedItemInstanceId ?? null,
+      attachedAmountBronze: input.attachedAmountBronze ?? null,
+      status: MailStatus.PENDING,
+      createdAt: now,
+      expiresAt,
+      claimedAt: null,
+    });
+    return manager.save(MailMessage, mail);
+  }
+
   // ── Claim ─────────────────────────────────────────────────────────────────
 
   async claim(recipientCharacterId: string, mailId: string): Promise<void> {
+    // Pré-résolution des wallets hors transaction (pour mails monétaires)
+    const preview = await this.messages.findOne({ where: { id: mailId } });
+    let escrowWalletId: string | null = null;
+    let recipientWalletId: string | null = null;
+    if (preview?.attachedAmountBronze) {
+      const [escrow, recipient] = await Promise.all([
+        this.economy.getOrCreateWallet('system', 'auction_escrow'),
+        this.economy.getOrCreateWallet('character', recipientCharacterId),
+      ]);
+      escrowWalletId = escrow.id;
+      recipientWalletId = recipient.id;
+    }
+
     await this.dataSource.transaction(async (manager) => {
       const mail = await this.lockMessage(manager, mailId);
 
@@ -121,18 +174,27 @@ export class MailService {
       if (mail.expiresAt <= new Date()) {
         throw new BadRequestException('This mail has expired');
       }
-      if (!mail.attachedItemInstanceId) {
-        throw new BadRequestException('This mail has no item attachment to claim');
-      }
 
-      await this.itemTransfer.transfer(manager, mail.attachedItemInstanceId, {
-        requesterId: null,
-        transition: {
-          type: 'CLAIM_MAIL',
-          mailId: mail.id,
-          recipientCharacterId,
-        },
-      });
+      if (mail.attachedItemInstanceId) {
+        await this.itemTransfer.transfer(manager, mail.attachedItemInstanceId, {
+          requesterId: null,
+          transition: {
+            type: 'CLAIM_MAIL',
+            mailId: mail.id,
+            recipientCharacterId,
+          },
+        });
+      } else if (mail.attachedAmountBronze && escrowWalletId && recipientWalletId) {
+        await this.economy.transferWithinManager(manager, {
+          type: TransactionType.AUCTION_SELL,
+          sourceWalletId: escrowWalletId,
+          destinationWalletId: recipientWalletId,
+          amountBronze: BigInt(mail.attachedAmountBronze),
+          correlationId: mail.id,
+        });
+      } else {
+        throw new BadRequestException('This mail has no attachment to claim');
+      }
 
       mail.status = MailStatus.CLAIMED;
       mail.claimedAt = new Date();
@@ -279,6 +341,7 @@ export class MailService {
       return {
         id: mail.id,
         senderCharacterId: mail.senderCharacterId,
+        senderName: mail.senderCharacterId === SYSTEM_SENDER_ID ? 'Système' : mail.senderCharacterId,
         recipientCharacterId: mail.recipientCharacterId,
         subject: mail.subject,
         body: mail.body,
@@ -287,6 +350,9 @@ export class MailService {
         expiresAt: mail.expiresAt,
         claimedAt: mail.claimedAt,
         attachment,
+        attachedAmountBronze: mail.attachedAmountBronze,
+        hasAttachment: mail.attachedItemInstanceId !== null || mail.attachedAmountBronze !== null,
+        claimed: mail.status === MailStatus.CLAIMED,
       };
     });
   }

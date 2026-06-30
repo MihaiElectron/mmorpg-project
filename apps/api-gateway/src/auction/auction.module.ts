@@ -9,6 +9,7 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { Item } from '../items/entities/item.entity';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { EconomyModule } from '../economy/economy.module';
+import { MailModule } from '../mail/mail.module';
 import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
 import { BuildingsModule } from '../buildings/buildings.module';
@@ -19,6 +20,7 @@ import { BuildingsModule } from '../buildings/buildings.module';
     TypeOrmModule.forFeature([AuctionListing, ItemInstance, Item]),
     ItemTransferModule,
     EconomyModule,
+    MailModule,
     CharactersModule,
     WorldModule,
     BuildingsModule,

@@ -16,6 +16,7 @@ import {
   AUCTION_MAX_ACTIVE_LISTINGS,
   AuctionDurationHours,
 } from './entities/auction-listing.entity';
+import { MailService } from '../mail/mail.service';
 
 export interface AuctionListingDto {
   id: string;
@@ -54,6 +55,7 @@ export class AuctionService {
     private readonly dataSource: DataSource,
     private readonly itemTransfer: ItemTransferService,
     private readonly economy: EconomyService,
+    private readonly mailService: MailService,
   ) {}
 
   // ── Lecture ──────────────────────────────────────────────────────────────
@@ -174,8 +176,20 @@ export class AuctionService {
         throw new BadRequestException(`Cannot cancel listing with status ${listing.status}`);
       }
 
-      // L'instance reste LISTED+AUCTION jusqu'au claim vendeur
-      listing.status = AuctionListingStatus.CANCELLED_PENDING_CLAIM;
+      // Courrier système : l'objet est livré dans la boîte aux lettres du vendeur
+      const sellerMail = await this.mailService.sendSystemMailWithinManager(manager, {
+        recipientCharacterId: listing.sellerCharacterId,
+        subject: 'Annonce annulée — objet retourné',
+        body: 'Votre annonce a été annulée. Votre objet vous a été retourné par courrier.',
+        attachedItemInstanceId: listing.itemInstanceId,
+      });
+
+      await this.itemTransfer.transfer(manager, listing.itemInstanceId, {
+        requesterId: null,
+        transition: { type: 'AUCTION_TO_MAIL', listingId: listing.id, mailId: sellerMail.id },
+      });
+
+      listing.status = AuctionListingStatus.CANCELLED_CLAIMED;
       return manager.save(AuctionListing, listing);
     });
   }
@@ -190,9 +204,9 @@ export class AuctionService {
       throw new BadRequestException('Cannot buy your own listing');
     }
 
-    const [buyerWallet, sellerWallet] = await Promise.all([
+    const [buyerWallet, escrowWallet] = await Promise.all([
       this.economy.getOrCreateWallet('character', input.buyerCharacterId),
-      this.economy.getOrCreateWallet('character', previewListing.sellerCharacterId),
+      this.economy.getOrCreateWallet('system', 'auction_escrow'),
     ]);
 
     return this.dataSource.transaction(async (manager) => {
@@ -208,85 +222,39 @@ export class AuctionService {
 
       const price = BigInt(listing.buyoutPriceBronze);
 
-      // Verrou 2 : wallets + transfert monétaire atomique
+      // Verrou 2 : acheteur → escrow
       await this.economy.transferWithinManager(manager, {
         type: TransactionType.AUCTION_BUY,
         sourceWalletId: buyerWallet.id,
-        destinationWalletId: sellerWallet.id,
+        destinationWalletId: escrowWallet.id,
         amountBronze: price,
         correlationId: listing.id,
       });
 
-      // Verrou 3 : ItemInstance (via ItemTransferService.lockInstance)
-      await this.itemTransfer.transfer(manager, listing.itemInstanceId, {
-        requesterId: null,
-        transition: { type: 'SELL_AUCTION', listingId: listing.id },
+      // Mail acheteur (objet) — créé en premier pour obtenir son id
+      const buyerMail = await this.mailService.sendSystemMailWithinManager(manager, {
+        recipientCharacterId: input.buyerCharacterId,
+        subject: 'Achat effectué',
+        body: 'Votre achat est disponible. Réclamez votre objet dans votre boîte aux lettres.',
+        attachedItemInstanceId: listing.itemInstanceId,
       });
 
-      listing.status = AuctionListingStatus.SOLD_PENDING_CLAIM;
-      listing.buyerCharacterId = input.buyerCharacterId;
-      return manager.save(AuctionListing, listing);
-    });
-  }
-
-  // ── Claim acheteur ───────────────────────────────────────────────────────
-
-  async claimBuyer(buyerCharacterId: string, listingId: string): Promise<AuctionListing> {
-    return this.dataSource.transaction(async (manager) => {
-      const listing = await this.lockListing(manager, listingId);
-
-      if (listing.status !== AuctionListingStatus.SOLD_PENDING_CLAIM) {
-        throw new BadRequestException(`Listing is not pending buyer claim (status: ${listing.status})`);
-      }
-      if (listing.buyerCharacterId !== buyerCharacterId) {
-        throw new BadRequestException('Only the buyer can claim this listing');
-      }
-
+      // Verrou 3 : ItemInstance LISTED+AUCTION → IN_MAIL+MAIL(buyerMail)
       await this.itemTransfer.transfer(manager, listing.itemInstanceId, {
-        requesterId: buyerCharacterId,
-        transition: {
-          type: 'CLAIM_BUYER',
-          listingId: listing.id,
-          buyerCharacterId,
-        },
+        requesterId: null,
+        transition: { type: 'AUCTION_TO_MAIL', listingId: listing.id, mailId: buyerMail.id },
+      });
+
+      // Mail vendeur (argent depuis escrow)
+      await this.mailService.sendSystemMailWithinManager(manager, {
+        recipientCharacterId: listing.sellerCharacterId,
+        subject: 'Revenu de vente',
+        body: 'Votre objet a été vendu. Réclamez votre revenu dans votre boîte aux lettres.',
+        attachedAmountBronze: price.toString(),
       });
 
       listing.status = AuctionListingStatus.SOLD_CLAIMED;
-      return manager.save(AuctionListing, listing);
-    });
-  }
-
-  // ── Claim vendeur (après annulation ou expiration) ────────────────────────
-
-  async claimSeller(sellerCharacterId: string, listingId: string): Promise<AuctionListing> {
-    return this.dataSource.transaction(async (manager) => {
-      const listing = await this.lockListing(manager, listingId);
-
-      if (listing.sellerCharacterId !== sellerCharacterId) {
-        throw new BadRequestException('Only the seller can reclaim this listing');
-      }
-      if (
-        listing.status !== AuctionListingStatus.CANCELLED_PENDING_CLAIM &&
-        listing.status !== AuctionListingStatus.EXPIRED_PENDING_CLAIM
-      ) {
-        throw new BadRequestException(`Listing is not pending seller claim (status: ${listing.status})`);
-      }
-
-      await this.itemTransfer.transfer(manager, listing.itemInstanceId, {
-        requesterId: sellerCharacterId,
-        transition: {
-          type: 'RETURN_TO_SELLER',
-          listingId: listing.id,
-          sellerCharacterId,
-        },
-      });
-
-      const nextStatus =
-        listing.status === AuctionListingStatus.CANCELLED_PENDING_CLAIM
-          ? AuctionListingStatus.CANCELLED_CLAIMED
-          : AuctionListingStatus.EXPIRED_CLAIMED;
-
-      listing.status = nextStatus;
+      listing.buyerCharacterId = input.buyerCharacterId;
       return manager.save(AuctionListing, listing);
     });
   }
@@ -322,7 +290,20 @@ export class AuctionService {
       // Idempotence : la liste peut avoir été achetée ou annulée entre le batch read et ici
       if (listing.status !== AuctionListingStatus.LISTED) return null;
 
-      listing.status = AuctionListingStatus.EXPIRED_PENDING_CLAIM;
+      // Objet retourné au vendeur via courrier système
+      const sellerMail = await this.mailService.sendSystemMailWithinManager(manager, {
+        recipientCharacterId: listing.sellerCharacterId,
+        subject: 'Annonce expirée — objet retourné',
+        body: 'Votre annonce a expiré. Votre objet vous a été retourné par courrier.',
+        attachedItemInstanceId: listing.itemInstanceId,
+      });
+
+      await this.itemTransfer.transfer(manager, listing.itemInstanceId, {
+        requesterId: null,
+        transition: { type: 'AUCTION_TO_MAIL', listingId: listing.id, mailId: sellerMail.id },
+      });
+
+      listing.status = AuctionListingStatus.EXPIRED_CLAIMED;
       return manager.save(AuctionListing, listing);
     });
   }

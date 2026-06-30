@@ -10,7 +10,15 @@ type MailEntry = {
   hasAttachment: boolean;
   claimed: boolean;
   createdAt?: string;
+  attachedAmountBronze?: string | null;
 };
+
+function formatBronze(bronze: string): string {
+  const n = Number(bronze);
+  if (n >= 10000) return `${Math.floor(n / 10000)}g ${Math.floor((n % 10000) / 100)}a ${n % 100}b`;
+  if (n >= 100) return `${Math.floor(n / 100)}a ${n % 100}b`;
+  return `${n}b`;
+}
 
 type Props = {
   buildingId: string;
@@ -85,9 +93,14 @@ export default function MailboxWindow({ buildingId, onClose }: Props) {
                 <span className="game-window__mail-sender">{m.senderName ?? "Inconnu"}</span>
                 <span className="game-window__mail-subject">{m.subject ?? "(sans objet)"}</span>
                 {m.hasAttachment && !m.claimed && (
-                  <button className="game-window__action-btn" onClick={() => claimAttachment(m.id)}>
-                    Récupérer
-                  </button>
+                  <>
+                    {m.attachedAmountBronze && (
+                      <span className="game-window__mail-amount">{formatBronze(m.attachedAmountBronze)}</span>
+                    )}
+                    <button className="game-window__action-btn" onClick={() => claimAttachment(m.id)}>
+                      Récupérer
+                    </button>
+                  </>
                 )}
                 {m.claimed && <span className="game-window__badge">Récupéré</span>}
               </li>

@@ -39,6 +39,7 @@ function makeMail(overrides: Partial<MailMessage> = {}): MailMessage {
     subject: "Cadeau",
     body: "",
     attachedItemInstanceId: "inst-1",
+    attachedAmountBronze: null,
     status: MailStatus.PENDING,
     createdAt: new Date(),
     expiresAt: new Date(Date.now() + 86400_000 * 30),
@@ -55,6 +56,7 @@ function makeMailsRepo(mail: MailMessage | null = null, mails: MailMessage[] = [
   };
   return {
     find: jest.fn().mockResolvedValue(mails),
+    findOne: jest.fn().mockResolvedValue(mail),
     findBy: jest.fn().mockResolvedValue([]),
     create: jest.fn((_E: unknown, data: unknown) => ({ ...(data as object) })),
     save: jest.fn(async (_E: unknown, data: unknown) => ({ id: "mail-1", ...(data as object) })),
@@ -107,12 +109,18 @@ function buildService(
     ),
   };
 
+  const economy = {
+    getOrCreateWallet: jest.fn().mockResolvedValue({ id: "wallet-1" }),
+    transferWithinManager: jest.fn().mockResolvedValue({}),
+  };
+
   const service = new MailService(
     mailsRepo as unknown as Repository<MailMessage>,
     instancesRepo as unknown as Repository<ItemInstance>,
     itemsRepo as unknown as Repository<Item>,
     dataSource as unknown as DataSource,
     itemTransfer as unknown as ItemTransferService,
+    economy as any,
   );
 
   return { service, itemTransfer, dataSource, mailsRepo };

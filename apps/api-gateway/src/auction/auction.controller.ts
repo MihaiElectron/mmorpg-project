@@ -116,27 +116,4 @@ export class AuctionController {
     });
   }
 
-  @Post('listings/:id/claim-buyer')
-  async claimBuyer(
-    @Request() req,
-    @Param('id') listingId: string,
-    @Body() body: { buildingId: string },
-  ) {
-    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
-    await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
-    const character = await this.characterService.findFirstByUser(req.user.userId);
-    return this.auctionService.claimBuyer(character.id, listingId);
-  }
-
-  @Post('listings/:id/claim-seller')
-  async claimSeller(
-    @Request() req,
-    @Param('id') listingId: string,
-    @Body() body: { buildingId: string },
-  ) {
-    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
-    await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
-    const character = await this.characterService.findFirstByUser(req.user.userId);
-    return this.auctionService.claimSeller(character.id, listingId);
-  }
 }
