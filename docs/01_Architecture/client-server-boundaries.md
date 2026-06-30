@@ -283,6 +283,60 @@ Not verified:
 - Complete duplicate-execution protection for repeated critical admin commands.
 - Audit or traceability architecture for critical admin operations.
 
+## Runtime / Admin frontier
+
+This section documents the mandatory boundary between runtime player data
+(needed by any connected player) and admin-only data (needed by Studio/DevTools
+only).
+
+### Rule: `/admin/*` routes are Studio/DevTools only
+
+`/admin/*` routes may create, modify, delete, inspect, and diagnose. They must
+not be required by the player client to render or interact with the world.
+
+A player client (`WorldScene`, React panels, game socket handlers) must never
+call a `/admin/*` endpoint. A non-admin user receives 403 silently; there is no
+error UI, no fallback, and the world object is never rendered.
+
+### Rule: runtime world data must be exposed via runtime routes or sockets
+
+Any data needed by `WorldScene` or a player component must be available through
+one of the following:
+
+- A runtime read-only HTTP endpoint (authenticated or public depending on
+  sensitivity).
+- A socket event sent at connection time (example: `get_resources`,
+  `get_creatures`) or pushed by the server (example: `building_update`,
+  `crafting_station_update`).
+
+Affected data categories: buildings on the map, crafting stations, forge,
+resources, creatures, world items, NPCs, interaction points.
+
+### Rule: live player position for admin actions targeting connected players
+
+For any admin action that targets a connected player (teleport to player,
+position inspection, follow, forced movement, distance debug), the position
+source must be:
+
+```text
+ConnectedPlayer.worldX / worldY / mapId   (in-memory, WorldService)
+```
+
+Fallback to the database is acceptable only when the player is offline.
+
+`persistPlayerPosition` is called only on disconnect. Between login and logout,
+the database position is stale by the full distance the player has moved.
+
+Reading `characterRepo.find()` for a connected player returns the login
+position, not the live position.
+
+### Known regressions (to be corrected)
+
+| Regression | Root cause | Correction |
+|---|---|---|
+| Buildings and crafting stations invisible for non-admin players | `WorldScene.loadBuildings()` and `loadCraftingStations()` call `/admin/buildings/world-objects` and `/admin/crafting-stations/world-objects` — admin-only endpoints, 403 for regular players | Expose runtime read-only endpoints; update `WorldScene` fetch URLs |
+| Admin TP to player arrives at wrong position | Admin panel reads character position from `GET /admin/characters` → DB → stale. Player has moved since login | Use `ConnectedPlayer.worldX/worldY` from `WorldService.findPlayerByNameOrId()` when player is connected |
+
 ## Movement boundary
 
 #### Implemented

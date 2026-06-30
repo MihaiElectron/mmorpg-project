@@ -277,6 +277,48 @@ Ne jamais affirmer qu'un build ou un test passe sans l'avoir exécuté.
 | `git add .` ou `git add -A` | Risque d'inclure des fichiers hors scope |
 | Commit sans demande explicite | Contraire au workflow |
 | Réécriture globale d'un module | Nécessite validation humaine |
+| `fetch('/admin/...')` dans `WorldScene` ou un composant joueur | Les routes `/admin/*` sont réservées Studio/DevTools — un joueur non-admin reçoit 403 silencieux. Utiliser un endpoint runtime ou un événement socket. |
+| Position DB pour un joueur connecté | `characterRepo.find()` retourne la position persistée (dernière déconnexion). Pour un joueur connecté, utiliser `ConnectedPlayer.worldX/worldY/mapId` depuis `WorldService`. |
+
+---
+
+## 9. Frontière Runtime / Admin
+
+### Règle fondamentale
+
+Les routes `/admin/*` sont réservées au Studio SDK et aux DevTools. Elles
+peuvent créer, modifier, supprimer, inspecter et diagnostiquer. Elles ne
+doivent **jamais** être nécessaires au client joueur pour rendre ou utiliser
+le monde.
+
+### `WorldScene` ne dépend pas de `/admin/*`
+
+Si `WorldScene` (ou tout composant joueur) consomme une donnée, vérifier avant
+tout appel `fetch` :
+
+1. **L'endpoint est-il sous `/admin/` ?** → Créer un endpoint runtime lecture
+   seule. Ne pas contourner en donnant le rôle admin au joueur.
+2. **La donnée peut-elle venir d'un socket ?** → Préférer le socket (exemple :
+   `get_resources`, `building_update`, `crafting_station_update`).
+3. **La donnée contient-elle des informations sensibles ?** → Filtrer côté
+   serveur avant d'exposer en route publique.
+
+Données concernées : buildings, crafting stations, forge, ressources, créatures,
+PNJ, objets du monde, points d'interaction.
+
+### Position live pour les actions admin
+
+Pour toute action admin ciblant un joueur connecté (téléportation, inspection,
+follow, debug distance, déplacement forcé) :
+
+```text
+Source correcte  : ConnectedPlayer.worldX / worldY / mapId  (en mémoire WorldService)
+Fallback          : characterRepo (DB) — uniquement si le joueur est hors ligne
+À éviter         : characterRepo.find() pour un joueur connecté → position stale
+```
+
+`persistPlayerPosition` n'est appelé qu'à la déconnexion. Entre la connexion
+et la déconnexion, la DB est en retard de l'ensemble des déplacements du joueur.
 
 ---
 

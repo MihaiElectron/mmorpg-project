@@ -191,6 +191,53 @@ deja presentes.
 La documentation technique (`docs/`) est la source de verite pour
 l'architecture. `STATUS.md` decrit uniquement l'etat courant du projet.
 
+## Frontiere Runtime / Admin
+
+**Regle : `WorldScene` ne doit jamais appeler un endpoint `/admin/*`.**
+
+Les routes `/admin/*` sont reservees au Studio SDK et aux DevTools. Elles
+peuvent creer, modifier, supprimer, inspecter et diagnostiquer. Elles ne
+doivent pas etre necessaires au client joueur pour rendre ou utiliser le monde.
+
+Toute donnee necessaire au fonctionnement normal du jeu cote joueur doit etre
+exposee via :
+
+- une route runtime lecture seule (authentifiee ou publique selon besoin) ;
+- ou un evenement socket runtime (ex: `get_resources`, `crafting_station_update`) ;
+- jamais via `/admin/*`.
+
+Exemples concernes : buildings visibles sur la carte, crafting stations / forge,
+ressources, creatures, PNJ, points d'interaction, objets du monde requis par
+`WorldScene`.
+
+Avant d'ajouter un `fetch` dans `WorldScene` ou un composant joueur, verifier :
+
+1. L'endpoint cible est-il sous `/admin/` ? Si oui, creer un endpoint runtime.
+2. Le joueur peut-il recevoir la donnee via socket a la connexion ? Si oui, preferer le socket.
+3. La donnee contient-elle des informations sensibles reservees admin ? Si oui, filtrer cote serveur.
+
+**Regle : pour toute action admin ciblant un joueur connecte, utiliser
+`ConnectedPlayer.worldX/worldY/mapId` comme source de position.**
+
+La DB represente la position persistee (derniere deconnexion), pas la position
+live. Si le joueur est hors ligne, fallback DB acceptable. Si connecte, la DB
+peut etre obsolete de plusieurs minutes de deplacement.
+
+Cas concernes : teleportation vers joueur, inspection position, follow, kick
+avec position contextuelle, debug distance, deplacement force.
+
+Regression connue (a corriger) : `WorldScene.loadBuildings()` et
+`WorldScene.loadCraftingStations()` appellent `/admin/buildings/world-objects`
+et `/admin/crafting-stations/world-objects` — endpoints admin protegés par
+`@Roles(ADMIN)`. Un joueur non-admin recoit 403 et ne voit pas les batiments
+ni la forge. Correction : exposer des endpoints runtime lecture seule.
+
+Regression connue (a corriger) : le panneau admin "TP vers joueur" lit la
+position depuis `GET /admin/characters` (DB) et non depuis `ConnectedPlayer`
+en memoire. L'admin arrive a la derniere position persistee, pas a la position
+live. Correction : utiliser la position live du `ConnectedPlayer` quand le
+joueur est connecte.
+
 ## Architecture Runtime
 
 Le Runtime constitue l'une des fondations principales du projet.
