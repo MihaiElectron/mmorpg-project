@@ -25,6 +25,8 @@ import {
 } from "./adminPanel.shared";
 import RecipesSection from "./RecipesSection";
 import { studioAppearanceRegistry } from "../../studio/sdk/appearanceLibrary";
+import RuntimeStatsPanel from "../DevTools/modules/PlayerRuntime/RuntimeStatsPanel";
+import RuntimeInspectorPanel from "../DevTools/modules/PlayerRuntime/RuntimeInspectorPanel";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -501,11 +503,154 @@ function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onR
   );
 }
 
+// ── PlayerDebugRuntimePanel — runtime stats + modifiers dans l'inspecteur ────
+
+function PlayerDebugRuntimePanel() {
+  return (
+    <div className="admin-panel__debug-runtime">
+      <span className="admin-panel__subsection-label">Debug runtime</span>
+      <RuntimeStatsPanel />
+      <RuntimeInspectorPanel />
+    </div>
+  );
+}
+
+// ── PlayerInventoryPanel — injection d'objets depuis le catalogue ─────────────
+
+type CatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  type: string;
+  objectMode: "STACKABLE" | "INSTANCE";
+  slot?: string | null;
+};
+
+function PlayerInventoryPanel({
+  characterId,
+  items,
+  onResult,
+}: {
+  characterId: string;
+  items: CatalogItem[];
+  onResult: (text: string, ok: boolean) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<CatalogItem | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!search) return [];
+    const q = search.toLowerCase();
+    return items.filter(
+      (it) =>
+        it.name.toLowerCase().includes(q) ||
+        it.category.toLowerCase().includes(q) ||
+        it.type.toLowerCase().includes(q),
+    );
+  }, [items, search]);
+
+  function selectItem(item: CatalogItem) {
+    setSelected(item);
+    setQuantity(1);
+    setSearch("");
+  }
+
+  function clearSelection() {
+    setSelected(null);
+    setSearch("");
+  }
+
+  async function giveItem() {
+    if (!selected) return;
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const qty = selected.objectMode === "STACKABLE" ? Math.max(1, Math.floor(quantity)) : 1;
+    setLoading(true);
+    const result = await ackPromise(socket, "admin:give_item", {
+      characterId,
+      itemId: selected.id,
+      quantity: qty,
+    });
+    setLoading(false);
+    onResult(result.message, result.success);
+    if (result.success) clearSelection();
+  }
+
+  return (
+    <div className="admin-panel__player-inventory">
+      <span className="admin-panel__subsection-label">Inventaire — Ajouter un objet</span>
+      <span className="admin-panel__player-info-hint">Rechercher par nom, catégorie, mode ou slot.</span>
+      {!selected && (
+        <input
+          className="admin-panel__search"
+          type="text"
+          placeholder="Ex : sword, wood, STACKABLE, right-hand…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          {...kbHandlers}
+          spellCheck={false}
+        />
+      )}
+      {!selected && search && (
+        <div className="admin-panel__item-catalog">
+          {filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
+          {filtered.slice(0, 12).map((it) => (
+            <button key={it.id} className="admin-panel__catalog-entry" onClick={() => selectItem(it)}>
+              <span className="admin-panel__catalog-name">{it.name}</span>
+              <span className="admin-panel__catalog-meta">{it.category} · {it.objectMode}{it.slot ? ` · ${it.slot}` : ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div className="admin-panel__give-form">
+          <div className="admin-panel__give-item-info">
+            <span className="admin-panel__give-item-name">{selected.name}</span>
+            <span className="admin-panel__give-item-meta">
+              {selected.category} · {selected.type} · {selected.objectMode}
+              {selected.slot ? ` · slot: ${selected.slot}` : ""}
+            </span>
+            <button className="admin-panel__catalog-clear" onClick={clearSelection} title="Changer d'objet">✕</button>
+          </div>
+          {selected.objectMode === "STACKABLE" && (
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Quantité</span>
+              <input
+                className="admin-panel__template-stat-input"
+                type="number"
+                min={1}
+                step={1}
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                {...kbHandlers}
+              />
+            </label>
+          )}
+          <button className="admin-panel__apply-btn" disabled={loading} onClick={giveItem}>
+            {loading ? "…" : "Donner"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PlayerSection — inspecteur joueurs ────────────────────────────────────────
 
-function PlayerSection({ players, onResult }: { players: any[]; onResult: (text: string, ok: boolean) => void }) {
+function PlayerSection({ players, items, onResult }: { players: any[]; items: CatalogItem[]; onResult: (text: string, ok: boolean) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function togglePlayer(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const filtered = players.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const pag = usePagination(filtered.length);
@@ -560,44 +705,89 @@ function PlayerSection({ players, onResult }: { players: any[]; onResult: (text:
           <div className="admin-panel__template-list">
             {paginated.map((player) => {
               const dk = player.id as string;
-              const hasTp = player.worldX != null && player.worldY != null;
+              const hasPosition = player.worldX != null && player.worldY != null;
+              const isExpanded = expanded.has(dk);
               return (
                 <div key={dk} className="admin-panel__template-item">
-                  <div className="admin-panel__item-header">
+
+                  {/* ── En-tête joueur (cliquable pour déplier) ── */}
+                  <div
+                    className="admin-panel__item-header admin-panel__item-header--clickable"
+                    onClick={() => togglePlayer(dk)}
+                  >
                     <span className="admin-panel__drag-handle" title="Glisser sur la map"
-                      onMouseDown={(e) => startDrag(e, player.name, (worldX, worldY) => {
+                      onMouseDown={(e) => { e.stopPropagation(); startDrag(e, player.name, (worldX, worldY) => {
                         const socket = getSocket();
                         if (!socket?.connected) return;
                         ackPromise(socket, "admin:teleport", { characterId: player.id, worldX: Math.round(worldX), worldY: Math.round(worldY) })
                           .then((r) => onResult(r.message, r.success));
-                      })}>⠿</span>
+                      }); }}>⠿</span>
+                    <span className="admin-panel__section-chevron">{isExpanded ? "▼" : "▶"}</span>
                     <span className="admin-panel__template-name">{player.name}</span>
-                    {hasTp && (
+                    {hasPosition && (
                       <button className="admin-panel__tp-btn"
                         title={`Tp WU (${player.worldX}, ${player.worldY})`}
-                        onClick={() => onTp(player)}>↓ Tp</button>
+                        onClick={(e) => { e.stopPropagation(); onTp(player); }}>↓ Tp</button>
                     )}
                   </div>
 
-                  <span className="admin-panel__subsection-label">Stats</span>
-                  <div className="admin-panel__template-stats">
-                    {PLAYER_STAT_FIELDS.map((f) => (
-                      <label key={f.key} className="admin-panel__template-stat">
-                        <span className="admin-panel__template-stat-label">{f.label}</span>
-                        <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
-                          value={draft.getDisplayField(dk, f.key, player)}
-                          onChange={(v) => draft.onChange(dk, f.key, v)} />
-                      </label>
-                    ))}
-                  </div>
-                  {draft.hasAnyDirty(dk, player) && (
-                    <button className="admin-panel__apply-btn"
-                      disabled={!!draft.saving[dk]} onClick={() => onApply(player)}>
-                      {draft.saving[dk] ? "…" : "Appliquer"}
-                    </button>
-                  )}
+                  {isExpanded && (
+                    <>
+                      {/* ── Informations ── */}
+                      <span className="admin-panel__subsection-label">Informations</span>
+                      <div className="admin-panel__player-info-row">
+                        <span className="admin-panel__player-info-key">Niveau</span>
+                        <span className="admin-panel__player-info-val">{player.level ?? "—"}</span>
+                        <span className="admin-panel__player-info-key">HP</span>
+                        <span className="admin-panel__player-info-val">{player.health ?? "—"} / {player.maxHealth ?? "—"}</span>
+                      </div>
 
-                  <PlayerWalletPanel characterId={dk} onResult={onResult} />
+                      {/* ── Position ── */}
+                      {hasPosition && (
+                        <>
+                          <span className="admin-panel__subsection-label">Position</span>
+                          <div className="admin-panel__player-info-row">
+                            <span className="admin-panel__player-info-key">WU X</span>
+                            <span className="admin-panel__player-info-val">{player.worldX}</span>
+                            <span className="admin-panel__player-info-key">WU Y</span>
+                            <span className="admin-panel__player-info-val">{player.worldY}</span>
+                            {player.mapId != null && <>
+                              <span className="admin-panel__player-info-key">Map</span>
+                              <span className="admin-panel__player-info-val">{player.mapId}</span>
+                            </>}
+                          </div>
+                        </>
+                      )}
+
+                      {/* ── Stats modifiables ── */}
+                      <span className="admin-panel__subsection-label">Stats</span>
+                      <div className="admin-panel__template-stats">
+                        {PLAYER_STAT_FIELDS.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
+                              value={draft.getDisplayField(dk, f.key, player)}
+                              onChange={(v) => draft.onChange(dk, f.key, v)} />
+                          </label>
+                        ))}
+                      </div>
+                      {draft.hasAnyDirty(dk, player) && (
+                        <button className="admin-panel__apply-btn"
+                          disabled={!!draft.saving[dk]} onClick={() => onApply(player)}>
+                          {draft.saving[dk] ? "…" : "Appliquer stats"}
+                        </button>
+                      )}
+
+                      {/* ── Monnaie ── */}
+                      <PlayerWalletPanel characterId={dk} onResult={onResult} />
+
+                      {/* ── Inventaire ── */}
+                      <PlayerInventoryPanel characterId={dk} items={items} onResult={onResult} />
+
+                      {/* ── Debug runtime ── */}
+                      <PlayerDebugRuntimePanel />
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1363,7 +1553,7 @@ export default function AdminPanelWOM() {
         />
       ))}
 
-      <PlayerSection players={sectionData["players"] ?? []} onResult={pushResult} />
+      <PlayerSection players={sectionData["players"] ?? []} items={items} onResult={pushResult} />
 
       <section className="admin-panel__section">
         <div className="admin-panel__dual-header">

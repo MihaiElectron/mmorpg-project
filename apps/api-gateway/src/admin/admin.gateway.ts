@@ -20,6 +20,9 @@ import { getMapRoomId } from '../common/socket-rooms';
 import { toBuildingWorldObject } from '../buildings/adapters/building-world-object.adapter';
 import { EconomyService } from '../economy/economy.service';
 import { TransactionType } from '../economy/entities/economic-transaction.entity';
+import { DataSource } from 'typeorm';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 
 type AddBalancePayload = {
   characterId: string;
@@ -53,6 +56,7 @@ type BuildingCreatePayload = { templateId: string; worldX: number; worldY: numbe
 type BuildingUpdatePayload = { id: string; fields: Record<string, unknown> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
+type GiveItemPayload = { characterId: string; itemId: string; quantity?: number };
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class AdminGateway implements OnGatewayConnection {
@@ -67,7 +71,14 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly buildingsService: BuildingsService,
     private readonly wsAuthService: WsAuthService,
     private readonly economyService: EconomyService,
+    private readonly dataSource: DataSource,
+    private readonly itemMaterializationService: ItemMaterializationService,
   ) {}
+
+  private emitReloadIfConnected(characterId: string): void {
+    const target = this.worldService.getConnectedPlayerByCharacterId(characterId);
+    if (target) this.server.to(target.socketId).emit('character:reload');
+  }
 
   async handleConnection(client: WorldSocket) {
     const auth = await this.wsAuthService.authenticate(client);
@@ -450,6 +461,7 @@ export class AdminGateway implements OnGatewayConnection {
     const updated = await this.adminService.updateCharacter(id, safe as any);
     if (!updated) return { success: false, message: `Personnage "${id}" introuvable.` };
 
+    this.emitReloadIfConnected(id);
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
   }
@@ -552,6 +564,7 @@ export class AdminGateway implements OnGatewayConnection {
       const g = Number(newTotal / 10_000n);
       const s = Number((newTotal % 10_000n) / 100n);
       const b = Number(newTotal % 100n);
+      this.emitReloadIfConnected(characterId);
       const sign = direction === 'credit' ? '+' : direction === 'debit' ? '-' : '=';
       return {
         success: true,
@@ -559,6 +572,51 @@ export class AdminGateway implements OnGatewayConnection {
       };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur économique.' };
+    }
+  }
+
+  @SubscribeMessage('admin:give_item')
+  async onGiveItem(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: GiveItemPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { characterId, itemId, quantity } = payload ?? {};
+    if (!characterId || !itemId) return { success: false, message: 'characterId et itemId requis.' };
+
+    const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
+
+    try {
+      const result = await this.dataSource.transaction(async (manager) => {
+        return this.itemMaterializationService.materialize(
+          manager,
+          [{ itemId, quantity: qty }],
+          {
+            source: ItemInstanceSource.ADMIN,
+            ownerId: characterId,
+            destination: { type: 'INVENTORY', characterId },
+          },
+        );
+      });
+
+      if (result.stacks.length === 0 && result.instances.length === 0) {
+        return { success: false, message: `Item "${itemId}" introuvable dans le catalogue.` };
+      }
+
+      this.emitReloadIfConnected(characterId);
+
+      const total = result.stacks.length + result.instances.length;
+      return {
+        success: true,
+        message: `${total} objet(s) donné(s) à "${character.name}".`,
+        data: result,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de l\'injection.' };
     }
   }
 

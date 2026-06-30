@@ -27,6 +27,8 @@ function makeGateway(wsAuth: Partial<WsAuthService>) {
     {} as unknown as import('../buildings/buildings.service').BuildingsService,
     wsAuth as WsAuthService,
     {} as unknown as import('../economy/economy.service').EconomyService,
+    {} as unknown as import('typeorm').DataSource,
+    {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
   );
 }
 
@@ -107,6 +109,8 @@ describe('AdminGateway — handlers refusent les non-admins', () => {
       {} as unknown as import('../buildings/buildings.service').BuildingsService,
       { authenticate: jest.fn() } as unknown as WsAuthService,
       {} as unknown as import('../economy/economy.service').EconomyService,
+      {} as unknown as import('typeorm').DataSource,
+      {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
     );
     (gateway as any).server = { emit: jest.fn() };
   });
@@ -165,12 +169,14 @@ function makeAddBalanceGateway(overrides: {
 
   const gw = new AdminGateway(
     {} as unknown as CreaturesService,
-    {} as unknown as WorldService,
+    { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null) } as unknown as WorldService,
     adminServiceMock as unknown as AdminService,
     {} as unknown as ResourcesService,
     {} as unknown as import('../buildings/buildings.service').BuildingsService,
     { authenticate: jest.fn() } as unknown as WsAuthService,
     economyServiceMock as unknown as import('../economy/economy.service').EconomyService,
+    {} as unknown as import('typeorm').DataSource,
+    {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
   );
   (gw as any).server = { emit: jest.fn() };
 
@@ -375,6 +381,8 @@ function makeTeleportGateway(opts: {
     {} as unknown as import("../buildings/buildings.service").BuildingsService,
     { authenticate: jest.fn() } as unknown as WsAuthService,
     {} as unknown as import("../economy/economy.service").EconomyService,
+    {} as unknown as import("typeorm").DataSource,
+    {} as unknown as import("../item-materialization/item-materialization.service").ItemMaterializationService,
   );
   (gw as any).server = { to: jest.fn().mockReturnThis(), emit: jest.fn(), except: jest.fn().mockReturnThis() };
   return { gw, worldService, adminService };

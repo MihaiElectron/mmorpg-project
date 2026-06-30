@@ -355,7 +355,7 @@ export default function RuntimeInspectorPanel({ target }: { target?: InspectorTa
         onClick={handleToggle}
       >
         <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        Runtime Inspector — {target?.entityKind === "creature" ? "Créature" : "Joueur"}
+        DEBUG — Modifiers runtime ({target?.entityKind === "creature" ? "Créature" : "Joueur"})
         <button
           className="devtools-world__refresh-btn"
           onClick={handleRefresh}

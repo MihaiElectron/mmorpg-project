@@ -125,7 +125,7 @@ export default function RuntimeStatsPanel() {
         onClick={handleToggle}
       >
         <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        Player Runtime
+        DEBUG — Player Runtime (lecture seule)
         <button className="devtools-world__refresh-btn" onClick={handleRefresh} title="Rafraîchir">
           ↺
         </button>

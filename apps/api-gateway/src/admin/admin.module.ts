@@ -23,6 +23,7 @@ import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { AdminGateway } from './admin.gateway';
 import { EconomyModule } from '../economy/economy.module';
+import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { EconomyModule } from '../economy/economy.module';
     CommonModule,
     BuildingsModule,
     EconomyModule,
+    ItemMaterializationModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

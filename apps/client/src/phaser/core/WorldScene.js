@@ -934,6 +934,10 @@ export default class WorldScene extends Phaser.Scene {
       this.removeWorldItem(payload.id);
     });
 
+    this.socket.on("character:reload", () => {
+      getCharacterStore().getState().loadCharacter();
+    });
+
     this.socket.on("skill_update", (data) => {
       const store = getCharacterStore();
       store.getState().updateSkill(data);
@@ -2091,6 +2095,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("world_items");
       this.socket.off("world_item_spawn");
       this.socket.off("world_item_remove");
+      this.socket.off("character:reload");
       this.socket.off("inventory_update");
       this.socket.off("creature_loot");
       this.socket.off("resource_loot");
