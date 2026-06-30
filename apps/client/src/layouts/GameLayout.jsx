@@ -7,6 +7,7 @@ import CharacterLayout from "../components/CharacterLayout/CharacterLayout";
 import ActionPanel from "../components/ActionPanel/ActionPanel";
 import DevToolsHudButton from "../components/DevTools/DevToolsHudButton";
 import DevToolsFloatingPanel from "../components/DevTools/DevToolsFloatingPanel";
+import WindowManager from "../components/Windows/WindowManager";
 
 export default function GameLayout() {
   return (
@@ -17,6 +18,7 @@ export default function GameLayout() {
 
       <CharacterLayout />
       <ActionPanel />
+      <WindowManager />
       <DevToolsHudButton />
       <DevToolsFloatingPanel />
     </div>

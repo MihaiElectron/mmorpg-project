@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionPanelStore, getActionPanelStore } from "../../store/actionPanel.store";
+import { getWindowManagerStore } from "../../store/windowManager.store";
 import { useCharacterStore } from "../../store/character.store";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
@@ -177,7 +178,7 @@ export default function ActionPanel() {
   // ── Suppression admin ─────────────────────────────────────────────────────
   function handleAdminDelete() {
     const socket = getDevToolsSocket();
-    if (!socket?.connected || !target || target.kind === "crafting_station") return;
+    if (!socket?.connected || !target || target.kind === "crafting_station" || target.kind === "building") return;
 
     const event = target.kind === "creature" ? "admin:delete_creature" : "admin:delete_resource";
     socket.emit(event, { id: target.id }, (res: any) => {
@@ -192,6 +193,16 @@ export default function ActionPanel() {
     // openPanel() can be called from Phaser before React re-renders the component,
     // so the `target` variable captured at render time may refer to the previous item.
     const currentTarget = getActionPanelStore().getState().target;
+
+    if (currentTarget?.kind === "building") {
+      getWindowManagerStore().getState().openWindow(
+        currentTarget.type,
+        currentTarget.id,
+        currentTarget.name,
+      );
+      closePanel();
+      return;
+    }
 
     if (currentTarget?.kind === "crafting_station") {
       setCraftingStation(currentTarget as CraftingStationTarget);
@@ -297,7 +308,7 @@ export default function ActionPanel() {
               {action}
             </button>
           ))}
-          {isAdmin && target.kind !== "crafting_station" && target.kind !== "world_item" && (
+          {isAdmin && target.kind !== "crafting_station" && target.kind !== "building" && target.kind !== "world_item" && (
             <button
               className="action-panel__button action-panel__button--danger"
               onClick={() => handleAdminDelete()}

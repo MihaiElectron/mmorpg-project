@@ -12,10 +12,12 @@ import { CreaturesService } from '../creatures/creatures.service';
 import { WorldService } from '../world/world.service';
 import { AdminService } from './admin.service';
 import { ResourcesService } from '../resources/resources.service';
+import { BuildingsService } from '../buildings/buildings.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
+import { toBuildingWorldObject } from '../buildings/adapters/building-world-object.adapter';
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
 type TeleportPayload = { characterId: string; worldX: number; worldY: number };
@@ -27,6 +29,10 @@ type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
 type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
 type CraftingStationTemplateCreatePayload = { fields: Record<string, unknown> };
 type CraftingStationTemplateUpdatePayload = { id: string; fields: Record<string, unknown> };
+type BuildingTemplateCreatePayload = { fields: Record<string, unknown> };
+type BuildingTemplateUpdatePayload = { id: string; fields: Record<string, unknown> };
+type BuildingCreatePayload = { templateId: string; worldX: number; worldY: number; mapId?: number };
+type BuildingUpdatePayload = { id: string; fields: Record<string, unknown> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 
@@ -40,6 +46,7 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly worldService: WorldService,
     private readonly adminService: AdminService,
     private readonly resourcesService: ResourcesService,
+    private readonly buildingsService: BuildingsService,
     private readonly wsAuthService: WsAuthService,
   ) {}
 
@@ -852,5 +859,114 @@ export class AdminGateway implements OnGatewayConnection {
     if (!deleted) return { success: false, message: `Station "${id}" introuvable.` };
     this.server.emit('crafting_station_update', { id: deleted.id, deleted: true });
     return { success: true, message: `Station "${deleted.template?.key ?? deleted.templateId}" supprimée.`, data: deleted };
+  }
+
+  // ── Buildings ─────────────────────────────────────────────────────────────
+
+  @SubscribeMessage('admin:create_building_template')
+  async onCreateBuildingTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: BuildingTemplateCreatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const fields = payload?.fields ?? {};
+    try {
+      const template = await this.buildingsService.createTemplate(fields as any);
+      return { success: true, message: `Template building "${template.key}" créé.`, data: template };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+  }
+
+  @SubscribeMessage('admin:update_building_template')
+  async onUpdateBuildingTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: BuildingTemplateUpdatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['name', 'textureKey', 'interactionRadiusWU', 'enabled'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (k === 'enabled') safe[k] = v === true || v === 'true';
+      else if (k === 'interactionRadiusWU') safe[k] = Number(v);
+      else safe[k] = v;
+    }
+
+    try {
+      const updated = await this.buildingsService.updateTemplate(id, safe as any);
+      return { success: true, message: `Template building "${updated.key}" mis à jour.`, data: updated };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+  }
+
+  @SubscribeMessage('admin:create_building')
+  async onCreateBuilding(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: BuildingCreatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const { templateId, worldX, worldY, mapId } = payload ?? {};
+    if (!templateId || worldX == null || worldY == null) {
+      return { success: false, message: 'Payload invalide : templateId, worldX, worldY requis.' };
+    }
+
+    try {
+      const building = await this.buildingsService.createBuilding(templateId, worldX, worldY, mapId);
+      const wom = toBuildingWorldObject(building);
+      this.server.to(getMapRoomId(building.mapId)).emit('building_update', wom);
+      return { success: true, message: `Building créé.`, data: wom };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
+    }
+  }
+
+  @SubscribeMessage('admin:update_building')
+  async onUpdateBuilding(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: BuildingUpdatePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const { id, fields } = payload ?? {};
+    if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
+
+    const allowed = ['worldX', 'worldY', 'mapId', 'state'];
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
+      if (k === 'state') safe[k] = v;
+      else safe[k] = Number(v);
+    }
+
+    try {
+      const updated = await this.buildingsService.updateBuilding(id, safe as any);
+      const wom = toBuildingWorldObject(updated);
+      this.server.to(getMapRoomId(updated.mapId)).emit('building_update', wom);
+      return { success: true, message: `Building mis à jour.`, data: wom };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
+    }
+  }
+
+  @SubscribeMessage('admin:delete_building')
+  async onDeleteBuilding(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { id: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const { id } = payload ?? {};
+    if (!id) return { success: false, message: 'Payload invalide : id requis.' };
+
+    try {
+      const deleted = await this.buildingsService.deleteBuilding(id);
+      this.server.to(getMapRoomId(deleted.mapId)).emit('building_update', { id: deleted.id, deleted: true });
+      return { success: true, message: `Building supprimé.`, data: { id: deleted.id } };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la suppression.' };
+    }
   }
 }

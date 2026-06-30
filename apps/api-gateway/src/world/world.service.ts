@@ -583,4 +583,28 @@ export class WorldService implements OnModuleInit {
     }
     return String(value);
   }
+
+  /**
+   * Validates that a character is close enough to an entity to interact with it.
+   * Uses chebyshevDistanceWU (L∞ norm) — the standard for all gameplay range gates.
+   *
+   * Returns null on success, or a rejection reason string.
+   */
+  validateInteraction(
+    character: { worldX: number; worldY: number; mapId: number },
+    target: { worldX: number; worldY: number; mapId: number },
+    interactionRadiusWU: number,
+  ): string | null {
+    if (character.mapId !== target.mapId) {
+      return 'Carte différente.';
+    }
+    const dist = chebyshevDistanceWU(
+      { worldX: character.worldX, worldY: character.worldY },
+      { worldX: target.worldX, worldY: target.worldY },
+    );
+    if (dist > interactionRadiusWU) {
+      return `Trop loin (distance=${dist} WU, rayon=${interactionRadiusWU} WU).`;
+    }
+    return null;
+  }
 }

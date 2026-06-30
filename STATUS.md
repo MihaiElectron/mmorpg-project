@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-29_
+_Dernière mise à jour : 2026-06-28_
 _Branche : main — État : développement local_
 
 ---
@@ -10,6 +10,7 @@ _Branche : main — État : développement local_
 Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté via Socket.IO.
 Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` source de vérité unique).
 **Runtime V2 terminé** : `ItemTransferService` couvre 20 transitions sur 10 domaines, verrou pessimiste systématique.
+**Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
 **Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
 
 ---
@@ -26,8 +27,10 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
 | Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
 | Bank / Mail / Guild / Housing | MVPs Instance-only opérationnels (endpoints REST, pas d'UI en jeu) |
-| Auction | Listing, achat, claim acheteur/vendeur, wallet Economy intégré (pas d'UI en jeu) |
-| DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations, Command Palette, Studio SDK ActionRegistry |
+| Auction | Listing, achat, claim acheteur/vendeur, wallet Economy intégré — `AuctionHouseWindow` (validation distance building) |
+| Mail | Inbox, claim pièce jointe — `MailboxWindow` (validation distance building) |
+| Buildings | `BuildingTemplate`/`Building`, WOM adapter, CRUD admin WS, rendu WorldScene, drag-to-map, WindowManager |
+| DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry |
 | Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 
 ---
@@ -57,6 +60,9 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
 | — | Sprite goblin utilise `textureKey: 'turkey'` en placeholder | Low | contenu |
 | — | `synchronize: true` en dev — migrations TypeORM pour prod non créées | Medium | prod-readiness |
+| — | Buildings MVP — `buildingId` optionnel dans Auction/Mail (pas encore requis) | Medium | Building V2 |
+| — | Building : aucun seed créé, aucune texture réelle — placeholder debug diamond visible seulement | Low | contenu |
+| — | `CraftingRuntimePanel` toujours embarqué dans ActionPanel (devrait passer par WindowManager) | Low | WindowManager V2 |
 
 ---
 
@@ -68,7 +74,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 2. **Combat avancé** — effets, cooldowns, résistances
 3. **Récolte avancée** — skill check, XP, qualité
 4. **Craft avancé** — `craftedBy`, quality, `SkillRuntime` check
-5. **Économie** — UI Auction/Mail en jeu (chantier Building/WOM dédié requis)
+5. **Économie** — UI Auction/Mail en jeu via buildings (WindowManager livré, buildings à créer en DB via AdminPanel)
 6. **Social, Quêtes, IA, Contenu**
 
 **DevTools — Admin WOM** :
@@ -83,7 +89,9 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 - **`ItemMaterializationService`** reçoit toujours un `EntityManager` de l'appelant et n'ouvre jamais sa propre transaction.
 - **`LootService`** est pur et synchrone — `generateLoot()` retourne `LootEntry[]`, `generateLootFromPool()` retourne `LootEntry | null`.
 - **`buildResourceBroadcast`** obligatoire pour tout `resource_update` — sans `type/worldX/worldY/mapId`, le client ne peut pas recréer le sprite après `dead`.
-- **`WorldService.checkInteraction`** est la barrière anti-cheat de distance — toute nouvelle interaction doit la réutiliser.
+- **`WorldService.validateInteraction(char, target, radiusWU)`** est la barrière anti-cheat de distance (chebyshevDistanceWU, L∞) — toute nouvelle interaction doit la réutiliser.
+- **`BuildingsService`** est le seul service autorisé à créer/modifier les `Building` et `BuildingTemplate`. Les contrôleurs Auction/Mail lui délèguent la recherche du building pour valider la proximité.
+- **WindowManager** (`window-manager.store.ts`) est le seul point d'ouverture des fenêtres runtime (Auction, Mailbox, etc.). ActionPanel route uniquement — il ne contient pas la logique métier de ces fenêtres.
 - **Coordonnées** : DB/Runtime = `worldX/worldY/mapId` (WU). Pixel cache `x/y` uniquement dans `ConnectedPlayer` (rendu). Ne jamais persister les pixels Phaser.
 - **`lootPool`** non éditable via socket — `admin:update_resource_template` n'accepte que `defaultRemainingLoots` et `respawnDelayMs`.
 - **Tiled** : format TMJ natif uniquement, tileset inliné dans le TMJ. Aucun convertisseur TMX→JSON.

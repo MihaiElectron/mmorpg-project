@@ -1,7 +1,8 @@
-import { BadRequestException, Controller, Get, Patch, Post, Put, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Controller, Delete, Get, Patch, Post, Put, Param, Body, Query, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreaturesService } from '../creatures/creatures.service';
 import { ResourcesService } from '../resources/resources.service';
+import { BuildingsService } from '../buildings/buildings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -15,6 +16,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly creaturesService: CreaturesService,
     private readonly resourcesService: ResourcesService,
+    private readonly buildingsService: BuildingsService,
   ) {}
 
   @Get('overview')
@@ -187,4 +189,47 @@ export class AdminController {
 
   @Get('crafting-stations/world-objects')
   getCraftingStationWorldObjects() { return this.adminService.getCraftingStationWorldObjects(); }
+
+  // ── Buildings ─────────────────────────────────────────────────────────────
+
+  @Get('building-templates')
+  listBuildingTemplates() { return this.buildingsService.listTemplates(); }
+
+  @Get('building-templates/world-objects')
+  getBuildingTemplateWorldObjects() { return this.buildingsService.getTemplateWorldObjects(); }
+
+  @Post('building-templates')
+  createBuildingTemplate(@Body() body: Record<string, unknown>) {
+    return this.buildingsService.createTemplate(body as any);
+  }
+
+  @Patch('building-templates/:id')
+  updateBuildingTemplate(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.buildingsService.updateTemplate(id, body as any);
+  }
+
+  @Get('buildings')
+  listBuildings(@Query('mapId') mapId?: string) {
+    return this.buildingsService.listBuildings(mapId != null ? Number(mapId) : undefined);
+  }
+
+  @Get('buildings/world-objects')
+  getBuildingWorldObjects(@Query('mapId') mapId?: string) {
+    return this.buildingsService.getBuildingWorldObjects(mapId != null ? Number(mapId) : undefined);
+  }
+
+  @Post('buildings')
+  createBuilding(@Body() body: { templateId: string; worldX: number; worldY: number; mapId?: number }) {
+    return this.buildingsService.createBuilding(body.templateId, body.worldX, body.worldY, body.mapId);
+  }
+
+  @Patch('buildings/:id')
+  updateBuilding(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.buildingsService.updateBuilding(id, body as any);
+  }
+
+  @Delete('buildings/:id')
+  deleteBuilding(@Param('id') id: string) {
+    return this.buildingsService.deleteBuilding(id);
+  }
 }

@@ -55,6 +55,8 @@ type MovementMetrics = {
 
 const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
 const STATION_TYPES = ["forge", "workbench", "sawmill", "alchemy_table", "cooking_station", "tailoring_station", "jewelry_table"];
+const BUILDING_TYPES = ["auction_house", "mailbox", "bank", "guild_hall", "house_door", "teleport", "dungeon_entrance", "shrine"];
+const BUILDING_STATES = ["ACTIVE", "DISABLED", "LOCKED", "UNDER_CONSTRUCTION", "DESTROYED"];
 
 const SKILL_FIELDS = [
   { key: "name",            label: "Nom",       type: "text" as const },
@@ -220,6 +222,39 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getInstanceDeletePayload: (s) => ({ id: s.id }),
     getInstanceInfoLine: (s) => `WU: ${s.worldX}, ${s.worldY}  ·  map:${s.mapId}`,
   },
+  {
+    id: "buildings",
+    title: "Buildings",
+    getGroupKey:  (t) => t.id,
+    getGroupName: (t) => `${t.name} (${t.buildingType})`,
+    groupFields: [
+      { key: "name",                label: "Nom",          type: "text" as const },
+      { key: "textureKey",          label: "Texture",      type: "text" as const },
+      { key: "interactionRadiusWU", label: "Rayon WU",     min: 1 },
+      { key: "enabled",             label: "Actif",        options: ["true", "false"] },
+    ],
+    groupSaveEvent: "admin:update_building_template",
+    getGroupSavePayload: (t, fields) => ({ id: t.id, fields }),
+    dragEvent: "admin:create_building",
+    getDragPayload: (t, worldX, worldY) => ({ templateId: t.id, worldX, worldY, mapId: 1 }),
+    getInstancesForGroup: (buildings, tpl) =>
+      buildings.filter((b) => b.templateId === tpl.id),
+    getInstanceKey:  (b) => b.id,
+    getInstanceName: (b) => b.id.slice(0, 8),
+    getInstanceBadge: (b) => b.state ?? "ACTIVE",
+    instanceFields: [
+      { key: "state",  label: "État",  options: BUILDING_STATES },
+      { key: "worldX", label: "WU X",  min: 0 },
+      { key: "worldY", label: "WU Y",  min: 0 },
+      { key: "mapId",  label: "Map",   min: 1 },
+    ],
+    instanceSaveEvent: "admin:update_building",
+    getInstanceSavePayload: (b, fields) => ({ id: b.id, fields }),
+    getInstanceTpPosition: (b) => (b.worldX != null && b.worldY != null ? { worldX: b.worldX + 256, worldY: b.worldY } : null),
+    instanceDeleteEvent: "admin:delete_building",
+    getInstanceDeletePayload: (b) => ({ id: b.id }),
+    getInstanceInfoLine: (b) => `WU: ${b.worldX}, ${b.worldY}  ·  map:${b.mapId}  ·  ${b.buildingType}`,
+  },
   ];
 }
 
@@ -333,6 +368,32 @@ function wosToCraftingStationInstances(wos: WorldObject[]): any[] {
   }));
 }
 
+function wosToBuildingTemplates(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    key: (wo.metadata.key as string) ?? wo.type,
+    name: (wo.metadata.name as string) ?? wo.type,
+    buildingType: (wo.metadata.buildingType as string) ?? wo.type,
+    textureKey: (wo.metadata.textureKey as string | null) ?? null,
+    interactionRadiusWU: (wo.metadata.interactionRadiusWU as number) ?? 1536,
+    enabled: wo.state === "enabled",
+  }));
+}
+
+function wosToBuildingInstances(wos: WorldObject[]): any[] {
+  return wos.map((wo) => ({
+    id: wo.id,
+    templateId: (wo.metadata.templateId as string) ?? "",
+    templateKey: (wo.metadata.templateKey as string) ?? wo.type,
+    buildingType: (wo.metadata.buildingType as string) ?? wo.type,
+    name: (wo.metadata.name as string) ?? "",
+    mapId: wo.mapId ?? 1,
+    worldX: wo.position?.worldX ?? 0,
+    worldY: wo.position?.worldY ?? 0,
+    state: wo.state ?? "ACTIVE",
+  }));
+}
+
 function formatRespawnAt(raw: string | Date | null | undefined): string | null {
   if (raw == null) return null;
   const d = typeof raw === "string" ? new Date(raw) : raw;
@@ -360,6 +421,15 @@ const NEW_STATION_TEMPLATE_DEFAULT = {
   enabled: true,
 };
 
+const NEW_BUILDING_TEMPLATE_DEFAULT = {
+  key: "",
+  name: "",
+  buildingType: "auction_house",
+  textureKey: "",
+  interactionRadiusWU: 1536,
+  enabled: true,
+};
+
 const EMPTY_MOVEMENT_METRICS: MovementMetrics = {
   totalMoves: 0,
   suspectTeleports: 0,
@@ -375,6 +445,7 @@ export default function AdminPanelWOM() {
     creatures: selectedWO?.category === "creature"   ? selectedWO.id : null,
     resources: selectedWO?.category === "resource" ? selectedWO.id : null,
     craftingStations: selectedWO?.category === "crafting_station" ? selectedWO.id : null,
+    buildings: selectedWO?.category === "building" ? selectedWO.id : null,
   };
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
@@ -395,6 +466,8 @@ export default function AdminPanelWOM() {
   const [newResourceTemplate, setNewResourceTemplate] = useState({ ...NEW_RESOURCE_TEMPLATE_DEFAULT });
   const [newStationTemplateOpen, setNewStationTemplateOpen] = useState(false);
   const [newStationTemplate, setNewStationTemplate] = useState({ ...NEW_STATION_TEMPLATE_DEFAULT });
+  const [newBuildingTemplateOpen, setNewBuildingTemplateOpen] = useState(false);
+  const [newBuildingTemplate, setNewBuildingTemplate] = useState({ ...NEW_BUILDING_TEMPLATE_DEFAULT });
   const [creating, setCreating] = useState(false);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -431,6 +504,12 @@ export default function AdminPanelWOM() {
       ),
       fetchAdmin<WorldObject[]>("/admin/crafting-stations/world-objects", token).then((wos) =>
         setInstanceData((prev) => ({ ...prev, craftingStations: wosToCraftingStationInstances(wos) }))
+      ),
+      fetchAdmin<WorldObject[]>("/admin/building-templates/world-objects", token).then((wos) =>
+        setGroupData((prev) => ({ ...prev, buildings: wosToBuildingTemplates(wos) }))
+      ),
+      fetchAdmin<WorldObject[]>("/admin/buildings/world-objects", token).then((wos) =>
+        setInstanceData((prev) => ({ ...prev, buildings: wosToBuildingInstances(wos) }))
       ),
       // Skills : liste via REST
       fetchAdmin<any[]>("/admin/skill-definitions", token).then((data) =>
@@ -503,15 +582,41 @@ export default function AdminPanelWOM() {
     function onPlayerJoined() { setOverview((prev) => prev ? { ...prev, connectedPlayers: prev.connectedPlayers + 1 } : prev); }
     function onPlayerLeft()   { setOverview((prev) => prev ? { ...prev, connectedPlayers: Math.max(0, prev.connectedPlayers - 1) } : prev); }
 
+    function onBuildingUpdate(data: any) {
+      setInstanceData((prev) => {
+        const list: any[] = prev.buildings ?? [];
+        if (data.deleted) return { ...prev, buildings: list.filter((b) => b.id !== data.id) };
+        const instance = {
+          id: data.id,
+          templateId: data.metadata?.templateId ?? data.templateId ?? "",
+          templateKey: data.metadata?.templateKey ?? data.type ?? "",
+          buildingType: data.metadata?.buildingType ?? data.type ?? "",
+          name: data.metadata?.name ?? "",
+          mapId: data.mapId ?? 1,
+          worldX: data.position?.worldX ?? data.worldX ?? 0,
+          worldY: data.position?.worldY ?? data.worldY ?? 0,
+          state: data.state ?? "ACTIVE",
+        };
+        const idx = list.findIndex((b) => b.id === data.id);
+        if (idx >= 0) {
+          const next = [...list]; next[idx] = { ...next[idx], ...instance };
+          return { ...prev, buildings: next };
+        }
+        return { ...prev, buildings: [...list, instance] };
+      });
+    }
+
     socket.on('creature_update', onCreatureUpdate);
     socket.on('resource_update', onResourceUpdate);
     socket.on('crafting_station_update', onCraftingStationUpdate);
+    socket.on('building_update', onBuildingUpdate);
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_left', onPlayerLeft);
     return () => {
       socket.off('creature_update', onCreatureUpdate);
       socket.off('resource_update', onResourceUpdate);
       socket.off('crafting_station_update', onCraftingStationUpdate);
+      socket.off('building_update', onBuildingUpdate);
       socket.off('player_joined', onPlayerJoined);
       socket.off('player_left', onPlayerLeft);
       if (overviewTimer.current) clearTimeout(overviewTimer.current);
@@ -997,6 +1102,88 @@ export default function AdminPanelWOM() {
                     setGroupData((prev) => ({ ...prev, craftingStations: [...(prev.craftingStations ?? []), result.data as any] }));
                     setNewStationTemplate({ ...NEW_STATION_TEMPLATE_DEFAULT });
                     setNewStationTemplateOpen(false);
+                  }
+                }}>
+                {creating ? "…" : "Créer"}
+              </button>
+            </div>
+          ) : null}
+        />
+      ))}
+
+      {groupedConfigs.filter((cfg) => cfg.id === "buildings").map((cfg) => (
+        <GroupedSection
+          key={cfg.id}
+          config={cfg}
+          groups={groupData[cfg.id] ?? []}
+          instances={instanceData[cfg.id] ?? []}
+          onResult={pushResult}
+          onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
+          highlightId={highlightIds[cfg.id] ?? null}
+          rightHeader={
+            <div className="admin-panel__section-toggle" onClick={() => setNewBuildingTemplateOpen((o) => !o)}>
+              Créer un building
+              <span className="admin-panel__section-chevron">{newBuildingTemplateOpen ? "▼" : "▶"}</span>
+            </div>
+          }
+          rightContent={newBuildingTemplateOpen ? (
+            <div className="admin-panel__template-item">
+              <div className="admin-panel__template-stats">
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Key</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newBuildingTemplate.key}
+                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, key: e.target.value }))}
+                    {...kbHandlers} />
+                  <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Nom</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newBuildingTemplate.name}
+                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, name: e.target.value }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Type</span>
+                  <select className="admin-panel__template-stat-input"
+                    value={newBuildingTemplate.buildingType}
+                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, buildingType: e.target.value }))}
+                    {...kbHandlers}>
+                    {BUILDING_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Texture</span>
+                  <input className="admin-panel__template-stat-input" type="text"
+                    value={newBuildingTemplate.textureKey}
+                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, textureKey: e.target.value }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Rayon WU</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={1}
+                    value={newBuildingTemplate.interactionRadiusWU}
+                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, interactionRadiusWU: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+              </div>
+              <button className="admin-panel__apply-btn" disabled={creating}
+                onClick={async () => {
+                  const socket = getSocket();
+                  if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
+                  setCreating(true);
+                  const fields = {
+                    ...newBuildingTemplate,
+                    textureKey: newBuildingTemplate.textureKey || null,
+                  };
+                  const result = await ackPromise(socket, "admin:create_building_template", { fields });
+                  setCreating(false);
+                  pushResult(result.message, result.success);
+                  if (result.success && result.data) {
+                    setGroupData((prev) => ({ ...prev, buildings: [...(prev.buildings ?? []), result.data as any] }));
+                    setNewBuildingTemplate({ ...NEW_BUILDING_TEMPLATE_DEFAULT });
+                    setNewBuildingTemplateOpen(false);
                   }
                 }}>
                 {creating ? "…" : "Créer"}

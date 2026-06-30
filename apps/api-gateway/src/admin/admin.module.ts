@@ -18,6 +18,7 @@ import { CreaturesModule } from '../creatures/creatures.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { WorldModule } from '../world/world.module';
 import { CommonModule } from '../common/common.module';
+import { BuildingsModule } from '../buildings/buildings.module';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { AdminGateway } from './admin.gateway';
@@ -36,6 +37,7 @@ import { AdminGateway } from './admin.gateway';
     ResourcesModule,
     WorldModule,
     CommonModule,
+    BuildingsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

@@ -84,6 +84,82 @@ const CRAFTING_STATION_LABEL_STYLE = Object.freeze({
   padding: { x: 4, y: 2 },
 });
 
+const BUILDING_WO_CAPABILITIES = Object.freeze([
+  "placement", "persistence", "validation", "interaction",
+]);
+
+const BUILDING_COLORS = Object.freeze({
+  auction_house: 0xf0c040,
+  mailbox: 0x4fc3f7,
+  bank: 0x66bb6a,
+  guild_hall: 0xba68c8,
+  house_door: 0xff8a65,
+  teleport: 0x40c4ff,
+  dungeon_entrance: 0xef5350,
+  shrine: 0xffd54f,
+});
+
+const BUILDING_FALLBACK_COLOR = 0xaaaaaa;
+const BUILDING_SIZE = 26;
+const BUILDING_DEPTH = 11;
+const BUILDING_LABEL_STYLE = Object.freeze({
+  fontFamily: "monospace",
+  fontSize: "11px",
+  color: "#ffffff",
+  backgroundColor: "rgba(0,0,0,0.68)",
+  padding: { x: 4, y: 2 },
+});
+
+function normalizeBuilding(raw) {
+  const metadata = raw.metadata ?? {};
+  const position = raw.position ?? {};
+  const worldX = raw.worldX ?? position.worldX;
+  const worldY = raw.worldY ?? position.worldY;
+  const buildingType = metadata.buildingType ?? raw.type ?? raw.buildingType ?? "unknown";
+
+  return {
+    id: raw.id,
+    templateId: metadata.templateId ?? raw.templateId ?? null,
+    templateKey: metadata.templateKey ?? raw.templateKey ?? buildingType,
+    name: metadata.name ?? raw.name ?? buildingType,
+    buildingType,
+    mapId: raw.mapId ?? 1,
+    worldX,
+    worldY,
+    state: raw.state ?? "ACTIVE",
+    interactionRadiusWU: metadata.interactionRadiusWU ?? raw.interactionRadiusWU ?? 1536,
+    templateEnabled: metadata.templateEnabled ?? raw.templateEnabled ?? true,
+  };
+}
+
+function buildingToWorldObject(building) {
+  const n = normalizeBuilding(building);
+  const hasWU = Number.isFinite(n.worldX) && Number.isFinite(n.worldY);
+  return {
+    kind: "entity",
+    category: "building",
+    id: n.id,
+    type: n.buildingType,
+    mapId: n.mapId ?? null,
+    position: hasWU ? { worldX: n.worldX, worldY: n.worldY } : null,
+    state: n.state,
+    capabilities: BUILDING_WO_CAPABILITIES,
+    metadata: {
+      templateId: n.templateId,
+      templateKey: n.templateKey,
+      name: n.name,
+      buildingType: n.buildingType,
+      interactionRadiusWU: n.interactionRadiusWU,
+      templateEnabled: n.templateEnabled,
+    },
+  };
+}
+
+function buildingActionLabel(building) {
+  const name = building.name || building.buildingType || "bâtiment";
+  return `Ouvrir ${name.replace(/_/g, " ")}`;
+}
+
 function creatureToWorldObject(creature) {
   const hasWU =
     creature.worldX != null && creature.worldY != null && creature.mapId != null;
@@ -278,6 +354,8 @@ export default class WorldScene extends Phaser.Scene {
     this.worldItemData = new Map();
     this.craftingStationDebugObjects = new Map();
     this.craftingStationData = new Map();
+    this.buildingDebugObjects = new Map();
+    this.buildingData = new Map();
     this.resourceOverlayGraphics = null;
     this.resourceOverlayLabels = new Map();
     this.creatureSpawnData = new Map();
@@ -602,6 +680,7 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.loadCraftingStations();
+    this.loadBuildings();
     this.joinWorld();
   }
 
@@ -855,6 +934,11 @@ export default class WorldScene extends Phaser.Scene {
       this.removeWorldItem(payload.id);
     });
 
+    this.socket.on("skill_update", (data) => {
+      const store = getCharacterStore();
+      store.getState().updateSkill(data);
+    });
+
     this.socket.on("inventory_update", (data) => {
       const item = data.item || {};
       const itemId = item.id || data.itemId;
@@ -941,6 +1025,14 @@ export default class WorldScene extends Phaser.Scene {
       this.upsertCraftingStation(station);
     });
 
+    this.socket.on("building_update", (building) => {
+      if (building.deleted) {
+        this.removeBuilding(building.id);
+        return;
+      }
+      this.upsertBuilding(building);
+    });
+
     this.socket.on("current_players", (players) => {
       this.clearRemotePlayers();
       players.forEach((player) => this.upsertRemotePlayer(player));
@@ -1003,6 +1095,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.emit("get_creatures");
       this.socket.emit("get_world_items");
       this.loadCraftingStations();
+      this.loadBuildings();
       this.joinWorld();
     }
   }
@@ -1369,6 +1462,132 @@ export default class WorldScene extends Phaser.Scene {
     } else {
       buildContainer();
     }
+  }
+
+  // ── Buildings render ─────────────────────────────────────────────────────
+
+  loadBuildings() {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) return;
+
+    fetch(`${import.meta.env.VITE_API_URL}/admin/buildings/world-objects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((buildings) => {
+        this.clearBuildings();
+        buildings
+          .map((b) => normalizeBuilding(b))
+          .filter((b) =>
+            b.state === "ACTIVE" &&
+            b.templateEnabled &&
+            Number.isFinite(b.worldX) &&
+            Number.isFinite(b.worldY),
+          )
+          .forEach((b) => this.upsertBuilding(b));
+      })
+      .catch((err) => {
+        console.warn("[BuildingsDebug] fetch failed:", err);
+      });
+  }
+
+  upsertBuilding(rawBuilding) {
+    const building = normalizeBuilding(rawBuilding);
+    if (building.state !== "ACTIVE" || !building.templateEnabled) {
+      this.removeBuilding(building.id);
+      return;
+    }
+    if (!Number.isFinite(building.worldX) || !Number.isFinite(building.worldY)) return;
+
+    const { x, y } = resolveScreen(building);
+    const color = BUILDING_COLORS[building.buildingType] ?? BUILDING_FALLBACK_COLOR;
+    const labelText = building.name || building.buildingType;
+    const existing = this.buildingDebugObjects.get(building.id);
+
+    if (existing) {
+      existing.building = building;
+      existing.diamond.setPosition(x, y);
+      existing.diamond.setFillStyle(color, 0.92);
+      existing.label.setPosition(x, y - 28);
+      existing.label.setText(labelText);
+      this.buildingData.set(building.id, building);
+      return;
+    }
+
+    const diamond = this.add.rectangle(x, y, BUILDING_SIZE, BUILDING_SIZE, color, 0.92);
+    diamond.setStrokeStyle(2, 0x111111, 0.75);
+    diamond.setRotation(Math.PI / 4);
+    diamond.setDepth(BUILDING_DEPTH);
+    diamond.setInteractive(
+      new Phaser.Geom.Rectangle(
+        -BUILDING_SIZE / 2,
+        -BUILDING_SIZE / 2,
+        BUILDING_SIZE,
+        BUILDING_SIZE,
+      ),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    diamond.on("pointerdown", (_pointer, _localX, _localY, event) => {
+      event?.stopPropagation();
+      getActionPanelStore().getState().openPanel(
+        {
+          id: building.id,
+          kind: "building",
+          type: building.buildingType,
+          name: building.name,
+          buildingType: building.buildingType,
+          worldX: building.worldX,
+          worldY: building.worldY,
+          interactionRadiusWU: building.interactionRadiusWU,
+          state: building.state,
+        },
+        [buildingActionLabel(building)],
+      );
+      getDevToolsStore().getState().setSelectedWorldObject(buildingToWorldObject(building));
+    });
+
+    const label = this.add.text(x, y - 28, labelText, BUILDING_LABEL_STYLE);
+    label.setOrigin(0.5, 1);
+    label.setDepth(BUILDING_DEPTH + 1);
+
+    this.buildingDebugObjects.set(building.id, { diamond, label, building });
+    this.buildingData.set(building.id, building);
+
+    this.interactionTargets.push({
+      sprite: diamond,
+      id: building.id,
+      type: building.buildingType,
+      kind: "building",
+      actions: [buildingActionLabel(building)],
+    });
+  }
+
+  removeBuilding(buildingId) {
+    const entry = this.buildingDebugObjects.get(buildingId);
+    if (entry) {
+      entry.diamond.destroy();
+      entry.label.destroy();
+      this.buildingDebugObjects.delete(buildingId);
+    }
+    this.buildingData.delete(buildingId);
+    this.interactionTargets = this.interactionTargets.filter(
+      (t) => t.id !== buildingId,
+    );
+  }
+
+  clearBuildings() {
+    for (const entry of this.buildingDebugObjects.values()) {
+      entry.diamond.destroy();
+      entry.label.destroy();
+    }
+    this.buildingDebugObjects.clear();
+    this.buildingData.clear();
+    this.interactionTargets = this.interactionTargets.filter(
+      (t) => t.kind !== "building",
+    );
   }
 
   // ── Crafting Stations debug render ───────────────────────────────────────
@@ -1880,6 +2099,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("gather_stopped");
       this.socket.off("creature_update");
       this.socket.off("crafting_station_update");
+      this.socket.off("building_update");
       this.socket.off("current_players");
       this.socket.off("world_joined");
       this.socket.off("player_joined");
@@ -1906,6 +2126,7 @@ export default class WorldScene extends Phaser.Scene {
     this.clearResources();
     this.clearWorldItems();
     this.clearCraftingStations();
+    this.clearBuildings();
     destroyHpBar(this.playerHpBar);
     this.playerHpBar = null;
     this.clearCreatures();
