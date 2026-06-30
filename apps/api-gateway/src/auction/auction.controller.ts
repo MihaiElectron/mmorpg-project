@@ -89,6 +89,8 @@ export class AuctionController {
     return this.auctionService.createListing({
       sellerCharacterId: character.id,
       itemInstanceId: dto.itemInstanceId,
+      itemId: dto.itemId,
+      quantity: dto.quantity,
       buyoutPriceBronze: BigInt(dto.buyoutPriceBronze),
       durationHours: dto.durationHours,
     });

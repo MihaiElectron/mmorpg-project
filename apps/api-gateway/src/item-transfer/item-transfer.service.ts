@@ -3,8 +3,12 @@ import { EntityManager } from 'typeorm';
 import {
   ItemInstance,
   ItemInstanceContainerType,
+  ItemInstanceSource,
   ItemInstanceState,
+  ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
+import { Inventory } from '../inventory/entities/inventory.entity';
 
 // ── Intentions métier ─────────────────────────────────────────────────────────
 // Chaque type encode ce que le domaine veut faire, pas l'état cible.
@@ -36,6 +40,13 @@ export type ItemTransition =
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
   transition: ItemTransition;
+}
+
+export interface CreateLotInput {
+  itemId: string;
+  quantity: number;
+  listingId: string;
+  sellerCharacterId: string;
 }
 
 @Injectable()
@@ -96,6 +107,54 @@ export class ItemTransferService {
       case 'TRADE_CANCEL':
         return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
     }
+  }
+
+  /**
+   * Crée un Market Lot à partir du stock Inventory d'un personnage.
+   * Seule voie autorisée pour créer un ItemInstance de type LOT.
+   * Ne crée jamais sa propre transaction — opère dans celle de l'appelant.
+   */
+  async createLot(manager: EntityManager, input: CreateLotInput): Promise<ItemInstance> {
+    // 1. Charger l'item et valider STACKABLE
+    const item = await manager.findOne(Item, { where: { id: input.itemId } });
+    if (!item) throw new NotFoundException(`Item ${input.itemId} not found`);
+    if (item.objectMode !== ObjectMode.STACKABLE) {
+      throw new BadRequestException('Only STACKABLE items can be listed as a market lot');
+    }
+
+    // 2. Verrou pessimiste sur la ligne Inventory
+    const inventory = await manager
+      .getRepository(Inventory)
+      .createQueryBuilder('inv')
+      .setLock('pessimistic_write')
+      .where('inv.characterId = :characterId AND inv.itemId = :itemId', {
+        characterId: input.sellerCharacterId,
+        itemId: input.itemId,
+      })
+      .getOne();
+
+    if (!inventory || inventory.quantity < input.quantity) {
+      throw new BadRequestException('Insufficient inventory');
+    }
+
+    // 3. Décrémenter le stock
+    inventory.quantity -= input.quantity;
+    await manager.save(Inventory, inventory);
+
+    // 4. Créer le LOT ItemInstance
+    const lot = manager.create(ItemInstance, {
+      instanceType: ItemInstanceType.LOT,
+      quantity: input.quantity,
+      itemId: input.itemId,
+      state: ItemInstanceState.LISTED,
+      containerType: ItemInstanceContainerType.AUCTION,
+      containerId: input.listingId,
+      ownerId: input.sellerCharacterId,
+      ownerType: 'character',
+      createdBySource: ItemInstanceSource.MARKET_LOT,
+    });
+
+    return manager.save(ItemInstance, lot);
   }
 
   // ── Lock ───────────────────────────────────────────────────────────────────
@@ -361,6 +420,38 @@ export class ItemTransferService {
     this.validateState(instance, ItemInstanceState.IN_MAIL);
     this.validateContainer(instance, ItemInstanceContainerType.MAIL, transition.mailId);
 
+    if (instance.instanceType === ItemInstanceType.LOT) {
+      // LOT : restituer les unités dans l'Inventory du destinataire, puis détruire le LOT
+      const existing = await manager
+        .getRepository(Inventory)
+        .createQueryBuilder('inv')
+        .setLock('pessimistic_write')
+        .where('inv.characterId = :characterId AND inv.itemId = :itemId', {
+          characterId: transition.recipientCharacterId,
+          itemId: instance.itemId,
+        })
+        .getOne();
+
+      if (existing) {
+        existing.quantity += instance.quantity!;
+        await manager.save(Inventory, existing);
+      } else {
+        const newRow = manager.create(Inventory, {
+          character: { id: transition.recipientCharacterId } as any,
+          item: { id: instance.itemId } as any,
+          quantity: instance.quantity!,
+          equipped: false,
+        });
+        await manager.save(Inventory, newRow);
+      }
+
+      instance.state = ItemInstanceState.DESTROYED;
+      instance.containerType = ItemInstanceContainerType.NONE;
+      instance.containerId = null;
+      return manager.save(ItemInstance, instance);
+    }
+
+    // NORMAL : retour en inventaire du destinataire
     instance.state = ItemInstanceState.AVAILABLE;
     instance.containerType = ItemInstanceContainerType.INVENTORY;
     instance.containerId = transition.recipientCharacterId;

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, LessThanOrEqual, Repository } from 'typeorm';
 import { ItemInstance, ItemInstanceContainerType, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
@@ -33,9 +34,13 @@ export interface AuctionListingDto {
 
 export interface CreateListingInput {
   sellerCharacterId: string;
-  itemInstanceId: string;
   buyoutPriceBronze: bigint;
   durationHours: AuctionDurationHours;
+  // Branche INSTANCE (objectMode === INSTANCE) : fournir itemInstanceId
+  itemInstanceId?: string;
+  // Branche STACKABLE (objectMode === STACKABLE) : fournir itemId + quantity
+  itemId?: string;
+  quantity?: number;
 }
 
 export interface BuyListingInput {
@@ -111,6 +116,24 @@ export class AuctionService {
   async createListing(input: CreateListingInput): Promise<AuctionListing> {
     this.assertPositivePrice(input.buyoutPriceBronze);
 
+    if (input.itemId && input.quantity !== undefined && input.quantity > 0) {
+      return this.createStackableListing(input as CreateListingInput & { itemId: string; quantity: number });
+    }
+
+    if (input.itemInstanceId) {
+      return this.createInstanceListing(input as CreateListingInput & { itemInstanceId: string });
+    }
+
+    throw new BadRequestException(
+      'Either itemInstanceId (INSTANCE) or itemId + quantity > 0 (STACKABLE) must be provided',
+    );
+  }
+
+  // ── Branche INSTANCE ──────────────────────────────────────────────────────
+
+  private async createInstanceListing(
+    input: CreateListingInput & { itemInstanceId: string },
+  ): Promise<AuctionListing> {
     return this.dataSource.transaction(async (manager) => {
       // Pré-lecture de l'instance sans verrou pour résoudre itemId
       const rawInstance = await manager.findOne(ItemInstance, {
@@ -126,16 +149,11 @@ export class AuctionService {
       const item = await manager.findOne(Item, { where: { id: rawInstance.itemId } });
       if (!item) throw new NotFoundException(`Item ${rawInstance.itemId} not found`);
       if (item.objectMode !== ObjectMode.INSTANCE) {
-        throw new BadRequestException('Only INSTANCE items can be listed on the Auction House');
+        throw new BadRequestException('Only INSTANCE items can be listed with an itemInstanceId');
       }
 
       // Limite 20 annonces actives
-      const activeCount = await manager
-        .getRepository(AuctionListing)
-        .count({ where: { sellerCharacterId: input.sellerCharacterId, status: AuctionListingStatus.LISTED } });
-      if (activeCount >= AUCTION_MAX_ACTIVE_LISTINGS) {
-        throw new BadRequestException(`Maximum ${AUCTION_MAX_ACTIVE_LISTINGS} active listings reached`);
-      }
+      await this.assertActiveListingsLimit(manager, input.sellerCharacterId);
 
       const now = new Date();
       const endsAt = new Date(now.getTime() + input.durationHours * 60 * 60 * 1000);
@@ -160,6 +178,52 @@ export class AuctionService {
       });
 
       return savedListing;
+    });
+  }
+
+  // ── Branche STACKABLE ─────────────────────────────────────────────────────
+
+  private async createStackableListing(
+    input: CreateListingInput & { itemId: string; quantity: number },
+  ): Promise<AuctionListing> {
+    return this.dataSource.transaction(async (manager) => {
+      // Valider l'item
+      const item = await manager.findOne(Item, { where: { id: input.itemId } });
+      if (!item) throw new NotFoundException(`Item ${input.itemId} not found`);
+      if (item.objectMode !== ObjectMode.STACKABLE) {
+        throw new BadRequestException('Only STACKABLE items can be listed as a market lot');
+      }
+
+      // Limite 20 annonces actives
+      await this.assertActiveListingsLimit(manager, input.sellerCharacterId);
+
+      const now = new Date();
+      const endsAt = new Date(now.getTime() + input.durationHours * 60 * 60 * 1000);
+
+      // Pré-générer le listingId pour lier atomiquement le LOT et l'AuctionListing
+      const listingId = randomUUID();
+
+      // Créer le LOT (décrémente Inventory, crée ItemInstance)
+      const lot = await this.itemTransfer.createLot(manager, {
+        itemId: input.itemId,
+        quantity: input.quantity,
+        listingId,
+        sellerCharacterId: input.sellerCharacterId,
+      });
+
+      // Créer l'AuctionListing avec l'id pré-généré et itemInstanceId = lot.id
+      const listing = manager.create(AuctionListing, {
+        id: listingId,
+        sellerCharacterId: input.sellerCharacterId,
+        buyerCharacterId: null,
+        itemInstanceId: lot.id,
+        itemId: item.id,
+        buyoutPriceBronze: input.buyoutPriceBronze.toString(),
+        status: AuctionListingStatus.LISTED,
+        startsAt: now,
+        endsAt,
+      });
+      return manager.save(AuctionListing, listing);
     });
   }
 
@@ -319,6 +383,18 @@ export class AuctionService {
       .getOne();
     if (!listing) throw new NotFoundException(`AuctionListing ${listingId} not found`);
     return listing;
+  }
+
+  private async assertActiveListingsLimit(
+    manager: EntityManager,
+    sellerCharacterId: string,
+  ): Promise<void> {
+    const activeCount = await manager
+      .getRepository(AuctionListing)
+      .count({ where: { sellerCharacterId, status: AuctionListingStatus.LISTED } });
+    if (activeCount >= AUCTION_MAX_ACTIVE_LISTINGS) {
+      throw new BadRequestException(`Maximum ${AUCTION_MAX_ACTIVE_LISTINGS} active listings reached`);
+    }
   }
 
   private assertOwner(instance: ItemInstance, characterId: string): void {

@@ -380,4 +380,27 @@ describe("MailService", () => {
       expect(itemTransfer.transfer).not.toHaveBeenCalled();
     });
   });
+
+  // ── claim — branche LOT ───────────────────────────────────────────────────
+
+  describe("claim — LOT", () => {
+    it("appelle CLAIM_MAIL avec le bon recipientCharacterId pour un mail contenant un LOT", async () => {
+      const mail = makeMail({ attachedItemInstanceId: "lot-1" });
+      const { service, itemTransfer } = buildService(null, mail);
+
+      await service.claim("recipient-1", "mail-1");
+
+      expect(itemTransfer.transfer).toHaveBeenCalledWith(
+        expect.anything(),
+        "lot-1",
+        expect.objectContaining({
+          transition: expect.objectContaining({
+            type: "CLAIM_MAIL",
+            mailId: "mail-1",
+            recipientCharacterId: "recipient-1",
+          }),
+        }),
+      );
+    });
+  });
 });

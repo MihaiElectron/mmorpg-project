@@ -4,7 +4,10 @@ import {
   ItemInstance,
   ItemInstanceContainerType,
   ItemInstanceState,
+  ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
+import { Inventory } from '../inventory/entities/inventory.entity';
 import { ItemTransferService, TransferContext } from './item-transfer.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -18,6 +21,8 @@ function makeInstance(overrides: Partial<ItemInstance> = {}): ItemInstance {
     state: ItemInstanceState.AVAILABLE,
     containerType: ItemInstanceContainerType.INVENTORY,
     containerId: "char-1",
+    instanceType: ItemInstanceType.NORMAL,
+    quantity: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -36,6 +41,49 @@ function makeManager(instance: ItemInstance | null) {
     _qb: qb,
   };
   return manager as unknown as jest.Mocked<EntityManager> & { _qb: typeof qb };
+}
+
+// Manager pour createLot (findOne item + getRepository Inventory)
+function makeCreateLotManager(item: Item | null, inventory: Inventory | null) {
+  const invQb = {
+    setLock: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(inventory),
+  };
+  return {
+    findOne: jest.fn().mockResolvedValue(item),
+    getRepository: jest.fn().mockReturnValue({ createQueryBuilder: jest.fn(() => invQb) }),
+    create: jest.fn((_E: unknown, data: unknown) => ({ ...(data as object) })),
+    save: jest.fn().mockImplementation(async (_E: unknown, entity: unknown) => ({
+      id: "lot-uuid",
+      ...(entity as object),
+    })),
+    _invQb: invQb,
+  } as unknown as EntityManager & { _invQb: typeof invQb };
+}
+
+// Manager pour CLAIM_MAIL LOT (lockInstance via ItemInstance repo, puis Inventory repo)
+function makeClaimLotManager(lotInstance: ItemInstance, existingInventory: Inventory | null) {
+  const instanceQb = {
+    setLock: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(lotInstance),
+  };
+  const invQb = {
+    setLock: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(existingInventory),
+  };
+  return {
+    getRepository: jest.fn().mockImplementation((Entity: unknown) => {
+      if (Entity === Inventory) return { createQueryBuilder: jest.fn(() => invQb) };
+      return { createQueryBuilder: jest.fn(() => instanceQb) };
+    }),
+    create: jest.fn((_E: unknown, data: unknown) => ({ ...(data as object) })),
+    save: jest.fn().mockImplementation(async (_E: unknown, entity: unknown) => entity),
+    _instanceQb: instanceQb,
+    _invQb: invQb,
+  } as unknown as EntityManager & { _instanceQb: typeof instanceQb; _invQb: typeof invQb };
 }
 
 // ── Suite principale ──────────────────────────────────────────────────────────
@@ -1128,6 +1176,157 @@ describe("ItemTransferService", () => {
           transition: { type: "TRADE_CANCEL", tradeSessionId: "trade-1" },
         })
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── createLot ──────────────────────────────────────────────────────────────
+
+  describe("createLot()", () => {
+    it("cree un LOT et decremente l Inventory existante", async () => {
+      const item = { id: "item-1", objectMode: ObjectMode.STACKABLE } as Item;
+      const inventory = { id: "inv-1", quantity: 200, character: { id: "char-1" }, item: { id: "item-1" } } as unknown as Inventory;
+      const manager = makeCreateLotManager(item, inventory);
+
+      const result = await service.createLot(manager as unknown as EntityManager, {
+        itemId: "item-1",
+        quantity: 100,
+        listingId: "listing-1",
+        sellerCharacterId: "char-1",
+      });
+
+      expect(manager.save).toHaveBeenCalledTimes(2);
+      expect(inventory.quantity).toBe(100);
+      expect(result).toMatchObject({
+        instanceType: ItemInstanceType.LOT,
+        quantity: 100,
+        itemId: "item-1",
+        containerId: "listing-1",
+      });
+    });
+
+    it("refuse si item introuvable", async () => {
+      const manager = makeCreateLotManager(null, null);
+      await expect(
+        service.createLot(manager as unknown as EntityManager, {
+          itemId: "ghost-item",
+          quantity: 10,
+          listingId: "listing-1",
+          sellerCharacterId: "char-1",
+        })
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("refuse si item non STACKABLE", async () => {
+      const item = { id: "item-1", objectMode: ObjectMode.INSTANCE } as Item;
+      const manager = makeCreateLotManager(item, null);
+      await expect(
+        service.createLot(manager as unknown as EntityManager, {
+          itemId: "item-1",
+          quantity: 10,
+          listingId: "listing-1",
+          sellerCharacterId: "char-1",
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si Inventory absente", async () => {
+      const item = { id: "item-1", objectMode: ObjectMode.STACKABLE } as Item;
+      const manager = makeCreateLotManager(item, null);
+      await expect(
+        service.createLot(manager as unknown as EntityManager, {
+          itemId: "item-1",
+          quantity: 10,
+          listingId: "listing-1",
+          sellerCharacterId: "char-1",
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si Inventory insuffisante", async () => {
+      const item = { id: "item-1", objectMode: ObjectMode.STACKABLE } as Item;
+      const inventory = { id: "inv-1", quantity: 5 } as unknown as Inventory;
+      const manager = makeCreateLotManager(item, inventory);
+      await expect(
+        service.createLot(manager as unknown as EntityManager, {
+          itemId: "item-1",
+          quantity: 10,
+          listingId: "listing-1",
+          sellerCharacterId: "char-1",
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── CLAIM_MAIL LOT ─────────────────────────────────────────────────────────
+
+  describe("transition CLAIM_MAIL — branche LOT", () => {
+    it("fusionne la quantite dans l Inventory existante et detruit le LOT", async () => {
+      const lot = makeInstance({
+        id: "lot-1",
+        instanceType: ItemInstanceType.LOT,
+        quantity: 100,
+        itemId: "item-1",
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-1",
+        ownerId: "seller-1",
+      });
+      const existingInventory = { id: "inv-1", quantity: 50 } as unknown as Inventory;
+      const manager = makeClaimLotManager(lot, existingInventory);
+
+      const result = await service.transfer(manager as unknown as EntityManager, "lot-1", {
+        requesterId: null,
+        transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "buyer-1" },
+      });
+
+      expect(existingInventory.quantity).toBe(150);
+      expect(result.state).toBe(ItemInstanceState.DESTROYED);
+      expect(result.containerType).toBe(ItemInstanceContainerType.NONE);
+      expect(result.containerId).toBeNull();
+    });
+
+    it("cree une nouvelle ligne Inventory si absente et detruit le LOT", async () => {
+      const lot = makeInstance({
+        id: "lot-1",
+        instanceType: ItemInstanceType.LOT,
+        quantity: 50,
+        itemId: "item-1",
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-1",
+      });
+      const manager = makeClaimLotManager(lot, null);
+
+      const result = await service.transfer(manager as unknown as EntityManager, "lot-1", {
+        requesterId: null,
+        transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "buyer-1" },
+      });
+
+      expect(manager.create).toHaveBeenCalledWith(
+        Inventory,
+        expect.objectContaining({ quantity: 50 }),
+      );
+      expect(result.state).toBe(ItemInstanceState.DESTROYED);
+    });
+
+    it("n altere pas le comportement NORMAL (AVAILABLE + INVENTORY)", async () => {
+      const instance = makeInstance({
+        instanceType: ItemInstanceType.NORMAL,
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+        containerId: "mail-1",
+        ownerId: "sender-1",
+      });
+      const manager = makeManager(instance);
+
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "CLAIM_MAIL", mailId: "mail-1", recipientCharacterId: "recipient-1" },
+      });
+
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.ownerId).toBe("recipient-1");
     });
   });
 });

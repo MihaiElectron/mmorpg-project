@@ -97,7 +97,7 @@ function makeManager(
 describe("AuctionService", () => {
   let service: AuctionService;
   let listingsRepo: ReturnType<typeof makeListingsRepo>;
-  let itemTransfer: jest.Mocked<Pick<ItemTransferService, "transfer">>;
+  let itemTransfer: jest.Mocked<Pick<ItemTransferService, "transfer" | "createLot">>;
   let economy: jest.Mocked<Pick<EconomyService, "getOrCreateWallet" | "transferWithinManager">>;
   let mailService: { sendSystemMailWithinManager: jest.Mock };
   let dataSource: { transaction: jest.Mock };
@@ -120,6 +120,7 @@ describe("AuctionService", () => {
         }
         return inst;
       }),
+      createLot: jest.fn().mockResolvedValue({ id: "lot-1", itemId: "item-1", quantity: 100 }),
     };
 
     economy = {
@@ -201,7 +202,7 @@ describe("AuctionService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it("refuse si item.objectMode !== INSTANCE (STACKABLE non listable)", async () => {
+    it("refuse si item.objectMode !== INSTANCE quand itemInstanceId est fourni", async () => {
       buildService(makeInstance(), makeItem(ObjectMode.STACKABLE));
       await expect(
         service.createListing({
@@ -354,5 +355,70 @@ describe("AuctionService", () => {
   it("leve NotFoundException si listing introuvable", async () => {
     buildService(makeInstance(), makeItem(), null);
     await expect(service.cancelListing("seller-1", "ghost-id")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  // ── createListing — branche STACKABLE ────────────────────────────────────
+
+  describe("createListing — STACKABLE", () => {
+    it("cree un LOT et un AuctionListing pour un STACKABLE", async () => {
+      const stackableItem = makeItem(ObjectMode.STACKABLE);
+      buildService(null, stackableItem);
+
+      const result = await service.createListing({
+        sellerCharacterId: "seller-1",
+        itemId: "item-1",
+        quantity: 100,
+        buyoutPriceBronze: 500n,
+        durationHours: 24,
+      });
+
+      expect(itemTransfer.createLot).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          itemId: "item-1",
+          quantity: 100,
+          sellerCharacterId: "seller-1",
+        }),
+      );
+      expect(result.status).toBe(AuctionListingStatus.LISTED);
+      expect(result.itemInstanceId).toBe("lot-1");
+    });
+
+    it("refuse si quantity absent ou 0 pour STACKABLE", async () => {
+      buildService(null, makeItem(ObjectMode.STACKABLE));
+      await expect(
+        service.createListing({
+          sellerCharacterId: "seller-1",
+          itemId: "item-1",
+          quantity: 0,
+          buyoutPriceBronze: 100n,
+          durationHours: 24,
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si item non STACKABLE dans la branche STACKABLE", async () => {
+      buildService(null, makeItem(ObjectMode.INSTANCE));
+      await expect(
+        service.createListing({
+          sellerCharacterId: "seller-1",
+          itemId: "item-1",
+          quantity: 10,
+          buyoutPriceBronze: 100n,
+          durationHours: 24,
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si ni itemInstanceId ni itemId+quantity ne sont fournis", async () => {
+      buildService(makeInstance(), makeItem());
+      await expect(
+        service.createListing({
+          sellerCharacterId: "seller-1",
+          buyoutPriceBronze: 100n,
+          durationHours: 24,
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 });
