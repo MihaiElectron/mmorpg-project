@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-06-30_
+_Dernière mise à jour : 2026-07-01_
 _Branche : main — État : développement local_
 
 ---
@@ -13,6 +13,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 **Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
 **Market Lots implémentés** : objets STACKABLE vendables via l'Auction House — pipeline Inventory → LOT → Auction → Mail → Claim → Inventory validé en base (5 cas + 6 contrôles de sécurité).
 **Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
+**Studio Asset System V1** : `GET /admin/assets/tree` sandboxé, composant `AssetPicker` générique, intégré sur Items/Creatures/Resources/Buildings. `loadTextureIfMissing` helper Phaser pour chargement dynamique sans rebuild.
 
 ---
 
@@ -33,6 +34,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Buildings | `BuildingTemplate`/`Building`, WOM adapter, CRUD admin WS, rendu WorldScene, drag-to-map, WindowManager |
 | Économie joueur | `GET /economy/me/balance` — solde gold/argent/bronze affiché dans le panneau Perso ; admin crédit/débit via `admin:add_balance` (EconomyService, ledger, rôle vérifié) |
 | DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry, Player Inspector (stats, monnaie, injection d'objets) |
+| Studio Asset System | `GET /admin/assets/tree` sandboxé, `AssetPicker` (navigation, aperçu, dimensions, sélection), intégré Items/Creatures/Resources/Buildings, `loadTextureIfMissing` Phaser |
 | Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 
 ---
@@ -109,6 +111,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 - **`character:reload`** : événement socket émis par le serveur vers le socket du personnage concerné après toute mutation admin (`update_character`, `add_balance`, `give_item`). `WorldScene` écoute cet événement et appelle `loadCharacter()`. Réutilisable par tous les domaines (équipement, bank, mail, crafting, level-up, skills, etc.).
 - **`admin:give_item`** : `{ characterId, itemId, quantity? }` — délègue exclusivement à `ItemMaterializationService.materialize()` dans une transaction DataSource. Le serveur détermine automatiquement STACKABLE vs INSTANCE depuis `item.objectMode`. Le Studio ne choisit jamais. Suivi de `character:reload`.
 - **Studio SDK / ItemTemplate** : le Studio manipule uniquement les `ItemTemplate` (catalogue). Les `ItemInstance` sont créées exclusivement par les Runtime Services (`ItemMaterializationService`, `ItemTransferService`). Aucun INSERT direct depuis l'admin.
+- **Studio Asset System** : le Studio stocke toujours des AssetPath publics Vite (`/assets/…`). Les `textureKey` Phaser courtes (`"turkey"`, `"dead_tree"`) sont un détail interne de `PreloadScene`. `GET /admin/assets/tree` est sandboxé dans `apps/client/public/assets/`. `loadTextureIfMissing` (`phaser/utils/textureLoader.js`) gère le chargement dynamique quand `textureKey` est un AssetPath. `resolveAppearanceTexture` retourne les AssetPath tels quels (pas de vérification `isLoaded`).
 
 ---
 

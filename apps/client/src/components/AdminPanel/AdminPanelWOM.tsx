@@ -24,9 +24,9 @@ import {
   EntitySection,
 } from "./adminPanel.shared";
 import RecipesSection from "./RecipesSection";
-import { studioAppearanceRegistry } from "../../studio/sdk/appearanceLibrary";
 import RuntimeStatsPanel from "../DevTools/modules/PlayerRuntime/RuntimeStatsPanel";
 import RuntimeInspectorPanel from "../DevTools/modules/PlayerRuntime/RuntimeInspectorPanel";
+import AssetPicker from "../DevTools/AssetPicker";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -92,8 +92,6 @@ const SKILLS_SECTION_CONFIG: SectionConfig = {
 
 function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[] {
   const skillKeyOptions = ["", ...skillKeys];
-  const creatureTextureOptions = studioAppearanceRegistry.getAppearancesByCategory('creature').map((a) => a.textureKey);
-  const resourceTextureOptions = studioAppearanceRegistry.getAppearancesByCategory('resource').map((a) => a.textureKey);
   return [
   {
     id: "creatures",
@@ -102,7 +100,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupName: (t) => t.name,
     groupFields: [
       { key: "name",             label: "Nom",          type: "text" as const },
-      { key: "textureKey",       label: "Texture",      options: creatureTextureOptions },
+      { key: "textureKey",       label: "Texture",      type: "asset" as const, assetCategory: "bestiary" },
       { key: "baseHealth",       label: "PV",           min: 1 },
       { key: "baseAttack",       label: "ATK",          min: 0 },
       { key: "baseArmor",        label: "ARM",          min: 0 },
@@ -148,7 +146,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
-      { key: "textureKey",            label: "Texture",       options: resourceTextureOptions },
+      { key: "textureKey",            label: "Texture",       type: "asset" as const, assetCategory: "sprites" },
       { key: "defaultRemainingLoots", label: "Loots défaut",  min: 1 },
       { key: "respawnDelayMs",        label: "Respawn (ms)",  min: 1, step: 1000 },
       { key: "gatheringXpReward",     label: "XP récolte",    min: 0 },
@@ -239,7 +237,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupName: (t) => `${t.name} (${t.buildingType})`,
     groupFields: [
       { key: "name",                label: "Nom",          type: "text" as const },
-      { key: "textureKey",          label: "Texture",      type: "text" as const },
+      { key: "textureKey",          label: "Texture",      type: "asset" as const, assetCategory: "buildings" },
       { key: "interactionRadiusWU", label: "Rayon WU",     min: 1 },
       { key: "enabled",             label: "Actif",        options: ["true", "false"] },
     ],
@@ -1207,21 +1205,11 @@ export default function AdminPanelWOM() {
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Texture</span>
-                  <select className="admin-panel__template-stat-input"
+                  <AssetPicker
                     value={newCreature.textureKey}
-                    onChange={(e) => setNewCreature((prev) => ({ ...prev, textureKey: e.target.value }))}
-                    {...kbHandlers}>
-                    {studioAppearanceRegistry.getAppearancesByCategory('creature').map((a) => (
-                      <option key={a.key} value={a.textureKey}>{a.name} ({a.textureKey})</option>
-                    ))}
-                  </select>
-                  {studioAppearanceRegistry.getPreviewSrc(newCreature.textureKey) && (
-                    <img
-                      className="admin-panel__texture-preview"
-                      src={studioAppearanceRegistry.getPreviewSrc(newCreature.textureKey)!}
-                      alt={newCreature.textureKey}
-                    />
-                  )}
+                    onChange={(path) => setNewCreature((prev) => ({ ...prev, textureKey: path }))}
+                    category="bestiary"
+                  />
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">PV</span>
@@ -1308,21 +1296,11 @@ export default function AdminPanelWOM() {
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Texture</span>
-                  <select className="admin-panel__template-stat-input"
+                  <AssetPicker
                     value={newResourceTemplate.textureKey}
-                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, textureKey: e.target.value }))}
-                    {...kbHandlers}>
-                    {studioAppearanceRegistry.getAppearancesByCategory('resource').map((a) => (
-                      <option key={a.key} value={a.textureKey}>{a.name} ({a.textureKey})</option>
-                    ))}
-                  </select>
-                  {studioAppearanceRegistry.getPreviewSrc(newResourceTemplate.textureKey) && (
-                    <img
-                      className="admin-panel__texture-preview"
-                      src={studioAppearanceRegistry.getPreviewSrc(newResourceTemplate.textureKey)!}
-                      alt={newResourceTemplate.textureKey}
-                    />
-                  )}
+                    onChange={(path) => setNewResourceTemplate((prev) => ({ ...prev, textureKey: path }))}
+                    category="sprites"
+                  />
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Loots défaut</span>
@@ -1515,10 +1493,11 @@ export default function AdminPanelWOM() {
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Texture</span>
-                  <input className="admin-panel__template-stat-input" type="text"
+                  <AssetPicker
                     value={newBuildingTemplate.textureKey}
-                    onChange={(e) => setNewBuildingTemplate((prev) => ({ ...prev, textureKey: e.target.value }))}
-                    {...kbHandlers} />
+                    onChange={(path) => setNewBuildingTemplate((prev) => ({ ...prev, textureKey: path }))}
+                    category="buildings"
+                  />
                 </label>
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Rayon WU</span>

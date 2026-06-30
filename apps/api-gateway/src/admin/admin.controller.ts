@@ -67,6 +67,11 @@ export class AdminController {
     return updated;
   }
 
+  // ── Assets ───────────────────────────────────────────────────────────────
+
+  @Get('assets/tree')
+  getAssetTree() { return this.adminService.getAssetTree(); }
+
   // ── Joueurs ───────────────────────────────────────────────────────────────
 
   @Get('characters')

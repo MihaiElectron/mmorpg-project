@@ -32,6 +32,7 @@ import {
   getTileDiamondPoints,
 } from "../utils/walkabilityOverlay";
 import { resolveAppearanceTexture } from "../../studio/sdk/appearanceLibrary";
+import { loadTextureIfMissing } from "../utils/textureLoader";
 
 const MOVEMENT_KEYS = new Set([
   "ArrowLeft",
@@ -1360,29 +1361,33 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const textureKey = resolveAppearanceTexture({
+    const resolvedKey = resolveAppearanceTexture({
       appearanceKey: resource.type,
       textureKey: resource.textureKey,
       fallbackTextureKey: "dead_tree",
       isLoaded: (key) => this.textures.exists(key),
     });
-    const sprite = this.add.image(x, y, textureKey);
-    sprite.setDepth(10);
-    sprite.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
-      Phaser.Geom.Rectangle.Contains
-    );
 
-    this.resourceSprites.set(resource.id, sprite);
-    this.resourceData.set(resource.id, resource);
-    this.interactionTargets.push({
-      sprite,
-      id: resource.id,
-      type: resource.type,
-      kind: "resource",
-      actions: ["ramasser"],
+    const buildSprite = (textureKey) => {
+      if (this.resourceSprites.has(resource.id)) return;
+      const sprite = this.add.image(x, y, textureKey);
+      sprite.setDepth(10);
+      sprite.setInteractive(
+        new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
+        Phaser.Geom.Rectangle.Contains
+      );
+      this.resourceSprites.set(resource.id, sprite);
+      this.resourceData.set(resource.id, resource);
+      this.interactionTargets.push({
+        sprite, id: resource.id, type: resource.type, kind: "resource", actions: ["ramasser"],
+      });
+      this.redrawResourceOverlay();
+    };
+
+    loadTextureIfMissing(this, resolvedKey, {
+      fallbackKey: "dead_tree",
+      onReady: buildSprite,
     });
-    this.redrawResourceOverlay();
   }
 
   renderWorldItems(worldItems) {
@@ -1521,51 +1526,59 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const diamond = this.add.rectangle(x, y, BUILDING_SIZE, BUILDING_SIZE, color, 0.92);
-    diamond.setStrokeStyle(2, 0x111111, 0.75);
-    diamond.setRotation(Math.PI / 4);
-    diamond.setDepth(BUILDING_DEPTH);
-    diamond.setInteractive(
-      new Phaser.Geom.Rectangle(
-        -BUILDING_SIZE / 2,
-        -BUILDING_SIZE / 2,
-        BUILDING_SIZE,
-        BUILDING_SIZE,
-      ),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    diamond.on("pointerdown", (_pointer, _localX, _localY, event) => {
+    const onPointerDown = (_pointer, _localX, _localY, event) => {
       event?.stopPropagation();
       getActionPanelStore().getState().openPanel(
         {
-          id: building.id,
-          kind: "building",
-          type: building.buildingType,
-          name: building.name,
-          buildingType: building.buildingType,
-          worldX: building.worldX,
-          worldY: building.worldY,
-          interactionRadiusWU: building.interactionRadiusWU,
-          state: building.state,
+          id: building.id, kind: "building", type: building.buildingType,
+          name: building.name, buildingType: building.buildingType,
+          worldX: building.worldX, worldY: building.worldY,
+          interactionRadiusWU: building.interactionRadiusWU, state: building.state,
         },
         [buildingActionLabel(building)],
       );
       getDevToolsStore().getState().setSelectedWorldObject(buildingToWorldObject(building));
-    });
+    };
 
-    const label = this.add.text(x, y - 28, labelText, BUILDING_LABEL_STYLE);
-    label.setOrigin(0.5, 1);
-    label.setDepth(BUILDING_DEPTH + 1);
+    const buildVisual = (textureKey) => {
+      if (this.buildingDebugObjects.has(building.id)) return;
 
-    this.buildingDebugObjects.set(building.id, { diamond, label, building });
-    this.buildingData.set(building.id, building);
+      let visual;
+      if (textureKey && this.textures.exists(textureKey)) {
+        visual = this.add.image(x, y, textureKey);
+        visual.setDepth(BUILDING_DEPTH);
+        visual.setInteractive(
+          new Phaser.Geom.Rectangle(0, 0, visual.width, visual.height),
+          Phaser.Geom.Rectangle.Contains,
+        );
+      } else {
+        visual = this.add.rectangle(x, y, BUILDING_SIZE, BUILDING_SIZE, color, 0.92);
+        visual.setStrokeStyle(2, 0x111111, 0.75);
+        visual.setRotation(Math.PI / 4);
+        visual.setDepth(BUILDING_DEPTH);
+        visual.setInteractive(
+          new Phaser.Geom.Rectangle(-BUILDING_SIZE / 2, -BUILDING_SIZE / 2, BUILDING_SIZE, BUILDING_SIZE),
+          Phaser.Geom.Rectangle.Contains,
+        );
+      }
+      visual.on("pointerdown", onPointerDown);
 
-    this.interactionTargets.push({
-      sprite: diamond,
-      id: building.id,
-      type: building.buildingType,
-      kind: "building",
-      actions: [buildingActionLabel(building)],
+      const label = this.add.text(x, y - 28, labelText, BUILDING_LABEL_STYLE);
+      label.setOrigin(0.5, 1);
+      label.setDepth(BUILDING_DEPTH + 1);
+
+      this.buildingDebugObjects.set(building.id, { diamond: visual, label, building });
+      this.buildingData.set(building.id, building);
+      this.interactionTargets.push({
+        sprite: visual, id: building.id, type: building.buildingType,
+        kind: "building", actions: [buildingActionLabel(building)],
+      });
+    };
+
+    const textureKey = building.textureKey ?? null;
+    loadTextureIfMissing(this, textureKey, {
+      fallbackKey: null,
+      onReady: buildVisual,
     });
   }
 

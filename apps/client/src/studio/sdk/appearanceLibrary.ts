@@ -155,6 +155,9 @@ export function resolveAppearanceTexture({
     if (fromRegistry !== undefined) return fromRegistry;
   }
   if (textureKey) {
+    // AssetPath public — retourné tel quel (le caller doit avoir appelé loadTextureIfMissing)
+    if (textureKey.startsWith('/assets/')) return textureKey;
+    // textureKey Phaser legacy
     if (!isLoaded || isLoaded(textureKey)) return textureKey;
   }
   return fallbackTextureKey;

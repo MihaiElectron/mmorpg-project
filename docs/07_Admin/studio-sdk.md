@@ -730,3 +730,90 @@ simulation préalable et la confirmation explicite.
 - [DevTools — Architecture](devtools-architecture.md)
 - [Project Philosophy](../10_AI/project-philosophy.md)
 - [Domain Map](../00_Project/domains.md)
+
+---
+
+## Studio Asset System — Règles fondamentales
+
+_Ajouté : 2026-07-01 — Studio Asset System V1_
+
+### Règle : Le Studio manipule toujours des AssetPath publics
+
+Le Studio (DevTools, AdminPanel, toute UI admin) manipule exclusivement des
+chemins publics Vite au format :
+
+```
+/assets/<sous-dossier>/<fichier>.<ext>
+```
+
+Exemples valides :
+```
+/assets/bestiary/turkey_32.png
+/assets/sprites/dead_tree.png
+/assets/images/items/wooden_stick.png
+/assets/sprites/buildings/comptoire.webp
+```
+
+Ces chemins sont :
+- Servis statiquement par Vite depuis `apps/client/public/`
+- Utilisés directement comme `src` dans les balises `<img>`
+- Stockés tels quels en base de données dans les champs `textureKey` et `image`
+- Utilisés par Phaser comme clé ET comme URL de chargement dynamique
+
+### Règle : Les textureKey Phaser sont un détail interne du moteur
+
+Le moteur Phaser (`PreloadScene`, `WorldScene`) décide seul :
+- Quelle clé utiliser dans son cache de textures
+- Si une texture doit être préchargée (`PreloadScene`) ou chargée dynamiquement
+- Comment résoudre une clé via `resolveAppearanceTexture`
+
+Le Studio ne manipule jamais directement une `textureKey` Phaser courte comme
+`"turkey"` ou `"dead_tree"`. Ces clés sont des détails internes de `PreloadScene`.
+
+### Règle : AssetPath est la clé Phaser pour les assets dynamiques
+
+Quand `textureKey` contient un chemin `/assets/…`, Phaser l'utilise comme clé
+ET comme URL de chargement. Le helper `loadTextureIfMissing` gère la transition :
+
+```javascript
+// apps/client/src/phaser/utils/textureLoader.js
+loadTextureIfMissing(scene, "/assets/bestiary/turkey_32.png", {
+  fallbackKey: "dead_tree",
+  onReady: (key) => scene.add.image(x, y, key),
+});
+```
+
+### Règle : Sandbox AssetPicker
+
+L'API `GET /admin/assets/tree` est sandboxée strictement dans
+`apps/client/public/assets/`. Le backend valide chaque chemin via
+`path.resolve` et vérifie `startsWith(ASSET_ROOT)`. Aucun fichier hors
+de cette racine ne peut être exposé.
+
+Extensions autorisées : `png`, `webp`, `jpg`, `jpeg`, `gif`, `json`, `tsx`, `tmj`.
+
+### Arborescence cible des assets
+
+```
+/assets/
+├── bestiary/       → Créatures (textureKey)
+├── images/items/   → Items (image)
+├── maps/           → Tilemaps, tilesets (non sélectionnables dans AssetPicker)
+├── player/         → Sprites joueur (non sélectionnables dans AssetPicker)
+└── sprites/
+    ├── buildings/  → Buildings (textureKey)
+    └── …           → Ressources, décors (textureKey)
+```
+
+### AssetPicker — API du composant
+
+```tsx
+<AssetPicker
+  value="/assets/bestiary/turkey_32.png"  // AssetPath actuel
+  onChange={(path) => setValue(path)}      // Callback — toujours un AssetPath
+  category="bestiary"                      // Dossier pré-ouvert
+/>
+```
+
+Utilisable partout : Items, Buildings, Creatures, Resources, Recipes, Skills,
+Buffs, NPC portraits, Projectiles, Effects, Animations, Sons — sans réécriture.

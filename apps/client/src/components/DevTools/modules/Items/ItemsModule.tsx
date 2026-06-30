@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import AssetPicker from "../../AssetPicker";
 import { createItem, fetchItems, fetchItemUsageStats, updateItem } from "./itemEditorApi";
 import {
   ALL_FILTER,
@@ -259,11 +260,10 @@ export default function ItemsModule() {
           </label>
           <label className="item-editor__field">
             <span className="item-editor__label">Image</span>
-            <input
-              className="item-editor__input"
+            <AssetPicker
               value={createDraft.image}
-              onChange={(e) => updateCreateDraft("image", e.target.value)}
-              placeholder="/assets/images/items/new_item.png"
+              onChange={(path) => updateCreateDraft("image", path)}
+              category="images"
             />
           </label>
           <button
@@ -427,11 +427,10 @@ export default function ItemsModule() {
 
                 <label className="item-editor__field">
                   <span className="item-editor__label">Image</span>
-                  <input
-                    className="item-editor__input"
+                  <AssetPicker
                     value={draft.image}
-                    onChange={(e) => updateDraft("image", e.target.value)}
-                    placeholder="/assets/images/items/wooden_stick.png"
+                    onChange={(path) => updateDraft("image", path)}
+                    category="images"
                   />
                 </label>
 

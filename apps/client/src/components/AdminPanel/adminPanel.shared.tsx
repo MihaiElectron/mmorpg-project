@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import AssetPicker from "../DevTools/AssetPicker";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
 import { screenToWorldWU } from "../../phaser/utils/worldCoordinates";
@@ -14,7 +15,9 @@ export type FieldDef = {
   /** Labels lisibles parallèles à `options` (même index). Si absent, affiche la valeur brute. */
   optionLabels?: string[];
   /** Rendu comme <input type="text"> — dirty détecté par comparaison de chaînes. */
-  type?: 'text';
+  type?: 'text' | 'asset';
+  /** Dossier cible du picker (ex: "items", "sprites", "bestiary"). Requis si type === 'asset'. */
+  assetCategory?: string;
 };
 
 export type ConsoleLine = { text: string; ok: boolean };
@@ -270,6 +273,16 @@ export function StatField({ def, dirty, value, onChange }: StatFieldProps) {
           </option>
         ))}
       </select>
+    );
+  }
+  if (def.type === 'asset') {
+    return (
+      <AssetPicker
+        value={value}
+        onChange={onChange}
+        category={def.assetCategory}
+        className={dirty ? "is-dirty" : ""}
+      />
     );
   }
   if (def.type === 'text') {

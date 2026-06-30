@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import * as fs from 'fs';
+import * as nodePath from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, MoreThan, In } from 'typeorm';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
@@ -28,6 +30,15 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toCreatureWorldObject, CreatureWorldObject } from '../creatures/adapters/creature-world-object.adapter';
 import { toCreatureSpawnWorldObject, CreatureSpawnWorldObject } from '../creatures/adapters/creature-spawn-world-object.adapter';
+
+export interface AssetNode {
+  name: string;
+  type: 'file' | 'directory';
+  path: string;
+  size?: number;
+  mime?: string;
+  children?: AssetNode[];
+}
 
 interface LootPoolEntryPatch {
   itemId: string;
@@ -80,6 +91,72 @@ export class AdminService {
     private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
   ) {}
+
+  // ── Assets — sandbox filesystem ──────────────────────────────────────────
+
+  // Remontée depuis __dirname jusqu'à trouver apps/client/public/assets.
+  // Robuste quelle que soit la profondeur réelle de __dirname au runtime (ts-node vs dist).
+  private static readonly ASSET_ROOT = (() => {
+    let dir = __dirname;
+    for (let i = 0; i < 12; i++) {
+      const candidate = nodePath.join(dir, 'apps', 'client', 'public', 'assets');
+      if (fs.existsSync(candidate)) return candidate;
+      const parent = nodePath.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return nodePath.resolve(__dirname, '../../../../apps/client/public/assets');
+  })();
+
+  private static readonly ALLOWED_EXTENSIONS = new Set([
+    '.png', '.webp', '.jpg', '.jpeg', '.gif', '.json', '.tsx', '.tmj',
+  ]);
+
+  private static readonly MIME_MAP: Record<string, string> = {
+    '.png': 'image/png', '.webp': 'image/webp',
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.json': 'application/json', '.tsx': 'text/xml', '.tmj': 'application/json',
+  };
+
+  getAssetTree(): AssetNode[] {
+    if (!fs.existsSync(AdminService.ASSET_ROOT)) {
+      throw new Error(
+        `ASSET_ROOT introuvable : ${AdminService.ASSET_ROOT} — vérifier __dirname au démarrage.`,
+      );
+    }
+    return this.buildAssetTree(AdminService.ASSET_ROOT, '/assets');
+  }
+
+  private buildAssetTree(absDir: string, publicPrefix: string): AssetNode[] {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(absDir, { withFileTypes: true }); }
+    catch { return []; }
+
+    const nodes: AssetNode[] = [];
+    for (const entry of entries) {
+      const absPath = nodePath.join(absDir, entry.name);
+      const resolved = nodePath.resolve(absPath);
+      if (!resolved.startsWith(AdminService.ASSET_ROOT + nodePath.sep) &&
+          resolved !== AdminService.ASSET_ROOT) {
+        throw new ForbiddenException('Accès hors sandbox interdit.');
+      }
+
+      const publicPath = `${publicPrefix}/${entry.name}`;
+      if (entry.isDirectory()) {
+        nodes.push({ name: entry.name, type: 'directory', path: publicPath,
+          children: this.buildAssetTree(absPath, publicPath) });
+      } else if (entry.isFile()) {
+        const ext = nodePath.extname(entry.name).toLowerCase();
+        if (!AdminService.ALLOWED_EXTENSIONS.has(ext)) continue;
+        const size = fs.statSync(absPath).size;
+        nodes.push({ name: entry.name, type: 'file', path: publicPath,
+          size, mime: AdminService.MIME_MAP[ext] ?? 'application/octet-stream' });
+      }
+    }
+    return nodes.sort((a, b) =>
+      a.type !== b.type ? (a.type === 'directory' ? -1 : 1) : a.name.localeCompare(b.name),
+    );
+  }
 
   // ── Debug movement authority ────────────────────────────────────────────────
 
