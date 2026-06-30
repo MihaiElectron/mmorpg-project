@@ -44,11 +44,10 @@ export class MailController {
     if (!building.template.enabled) {
       throw new BadRequestException(`Le template building est désactivé.`);
     }
-    const charPos = {
-      worldX: character.worldX ?? 0,
-      worldY: character.worldY ?? 0,
-      mapId: character.mapId ?? 1,
-    };
+    const livePlayer = this.worldService.getConnectedPlayerByCharacterId(character.id);
+    const charPos = livePlayer
+      ? { worldX: livePlayer.worldX, worldY: livePlayer.worldY, mapId: livePlayer.mapId }
+      : { worldX: character.worldX ?? 0, worldY: character.worldY ?? 0, mapId: character.mapId ?? 1 };
     const buildingPos = { worldX: building.worldX, worldY: building.worldY, mapId: building.mapId };
     const error = this.worldService.validateInteraction(charPos, buildingPos, building.template.interactionRadiusWU);
     if (error) throw new BadRequestException(`Trop loin de la boîte aux lettres : ${error}`);

@@ -34,6 +34,7 @@ function makeController(buildingOverrides?: Record<string, unknown> | null) {
   };
   const worldService = {
     validateInteraction: jest.fn().mockReturnValue(null),
+    getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
   };
   const mailService = {
     listInbox: jest.fn().mockResolvedValue([]),
