@@ -75,6 +75,7 @@ export default function MailboxWindow({ buildingId, onClose }: Props) {
         prev.map((m) => (m.id === mailId ? { ...m, claimed: true } : m)),
       );
       setResult("Pièce jointe récupérée.");
+      (window as any).__GLOBAL_CHARACTER_STORE__?.getState?.().loadCharacter?.();
     } else {
       setResult((body as any).message ?? `Erreur ${res.status}`);
     }
