@@ -235,13 +235,16 @@ Buy rules:
 - buyer has sufficient available `balanceBronze`;
 - request replay or double click is idempotent or rejected cleanly.
 
-Successful purchase result:
+Successful purchase result (implemented V2 — mailbox delivery):
 
 - listing leaves `Listed`;
-- buyer currency is debited in bronze;
-- seller is credited immediately in bronze in the same Economy transaction;
-- item remains locked and becomes manually claimable by the buyer;
-- listing enters `SoldPendingClaim` until buyer item claim succeeds;
+- buyer currency is debited in bronze and transferred to the `auction_escrow` system wallet;
+- a system mail is created for the buyer containing the purchased item (`AUCTION_TO_MAIL` transition: LISTED+AUCTION → IN_MAIL+MAIL);
+- a system mail is created for the seller containing the amount in bronze (`attachedAmountBronze`);
+- listing enters `SoldClaimed` immediately (no intermediate pending state);
+- seller claims their proceeds by collecting the money mail from the Mailbox;
+- buyer claims the item by collecting the item mail from the Mailbox;
+- when the seller claims the money mail, the `auction_escrow` wallet is debited and the seller wallet is credited (`AUCTION_SELL` transaction);
 - all ledger/audit rows are persisted.
 
 ### 2.9 Transactional Transfer
@@ -279,13 +282,12 @@ Cancellation rules:
 - listing has no accepted purchase in progress;
 - cancellation request is idempotent or rejected after state change.
 
-Cancellation result:
+Cancellation result (implemented V2 — mailbox delivery):
 
-- listing enters `CancelledPendingClaim`;
-- listed item remains locked until seller claim succeeds;
+- a system mail is created for the seller containing the item (`AUCTION_TO_MAIL` transition: LISTED+AUCTION → IN_MAIL+MAIL);
+- listing enters `CancelledClaimed` immediately (no intermediate pending state);
 - listing is removed from public browse results;
-- item becomes recoverable by seller through the claim path;
-- listing can later enter `CancelledClaimed` and then `Archived`.
+- seller recovers the item via Mailbox claim.
 
 ### 2.11 Expiration
 
@@ -309,47 +311,53 @@ Expiration rules:
   expiration processing;
 - expiration racing with purchase has one winning state transition.
 
-Expiration result:
+Expiration result (implemented V2 — mailbox delivery):
 
-- unsold listing enters `ExpiredPendingClaim`;
-- item remains locked until seller claim succeeds;
+- a system mail is created for the seller containing the item (`AUCTION_TO_MAIL` transition: LISTED+AUCTION → IN_MAIL+MAIL);
+- listing enters `ExpiredClaimed` immediately (no intermediate pending state);
 - listing is removed from public active browse results;
+- seller recovers the item via Mailbox claim;
 - history remains inspectable.
 
 ### 2.12 Claim Unsold Item
 
-The seller recovers the listed item after cancellation or expiration.
+The seller recovers the listed item after cancellation or expiration via the Mailbox.
 
-Claim rules:
+This section describes the V2 mailbox delivery path. `ExpiredPendingClaim` and
+`CancelledPendingClaim` are no longer created by the implementation — items go
+directly to a system mail when the listing is cancelled or expires.
 
-- actor is the seller or audited admin support path;
-- listing is `ExpiredPendingClaim` or `CancelledPendingClaim`;
-- item still exists in listing escrow;
-- seller inventory has capacity, or the item remains in a claim box with a
-  clear error;
-- claim is exactly-once.
+Claim path (implemented V2):
 
-Claim result:
+- seller opens the Mailbox window at a Mailbox building (proximity required);
+- a system mail from `SYSTEM` is present in the inbox with the item attached;
+- seller claims the mail attachment;
+- the item transitions from IN_MAIL to AVAILABLE+INVENTORY (seller);
+- mail status becomes `CLAIMED`.
 
-- item returns to seller active inventory or approved storage;
-- item lock is released;
-- listing enters `ExpiredClaimed` or `CancelledClaimed`;
-- listing can be archived.
+Known debt: if the system mail expires before the seller claims it, the item
+returns to the sender (`SYSTEM`), which has no inventory. This edge case is
+documented as a known gap (Mailbox expiration policy for system mails — future
+work).
 
 ### 2.13 Sale Proceeds
 
 Seller proceeds are bronze-only.
 
-MVP 1 credits the seller immediately when the purchase is accepted. There is no
-manual seller proceeds claim in MVP 1.
+Implemented V2: seller proceeds are delivered via a system mail with `attachedAmountBronze`.
+The seller must collect this mail from a Mailbox building (proximity required).
 
 Rules:
 
-- seller payout is completed in the purchase transaction;
-- payout amount is `buyoutPriceBronze`;
-- `SoldPendingClaim` represents buyer item claim only;
-- audit records seller payout in bronze;
-- a buyer item claim retry never credits the seller again.
+- buyer payment (`buyoutPriceBronze`) is transferred to the `auction_escrow` system wallet atomically in the purchase transaction (`AUCTION_BUY`);
+- a system money mail is created for the seller containing `attachedAmountBronze`;
+- the seller claims the money mail from the Mailbox; at that point the `auction_escrow` wallet is debited and the seller wallet is credited (`AUCTION_SELL`);
+- audit records both transfers in the ledger;
+- a money mail claim is exactly-once; double claim is rejected.
+
+Known debt: if the seller money mail expires before claim, the `attachedAmountBronze`
+amount remains blocked in the `auction_escrow` wallet with no automatic return to
+the seller. This is documented as a known gap (Auction MVP 2).
 
 ## 3. Out of Scope for MVP 1
 
@@ -380,30 +388,38 @@ Explicitly excluded:
 
 ### 4.1 State Definitions
 
-| State | Meaning | Publicly buyable | Terminal |
-|---|---|---:|---:|
-| Listed | Active fixed-price listing with item locked | Yes | No |
-| SoldPendingClaim | Purchase accepted; seller credited; buyer item claim pending | No | No |
-| SoldClaimed | Buyer item claim resolved | No | Yes before archive |
-| ExpiredPendingClaim | Listing expired unsold; seller must reclaim item | No | No |
-| ExpiredClaimed | Expired item returned to seller | No | Yes before archive |
-| CancelledPendingClaim | Seller/admin cancellation accepted; seller must reclaim item | No | No |
-| CancelledClaimed | Cancelled item returned to seller | No | Yes before archive |
-| Archived | Hidden from active views, retained for audit | No | Yes |
+| State | Meaning | Publicly buyable | Terminal | Notes |
+|---|---|---:|---:|---|
+| Listed | Active fixed-price listing with item locked | Yes | No | |
+| SoldPendingClaim | (Deprecated) Purchase accepted; item pending buyer claim | No | No | No longer created by V2 implementation |
+| SoldClaimed | Purchase complete; item and proceeds delivered via Mailbox | No | Yes before archive | Set immediately in V2 |
+| ExpiredPendingClaim | (Deprecated) Listing expired; item pending seller claim | No | No | No longer created by V2 implementation |
+| ExpiredClaimed | Listing expired; item sent to seller via Mailbox | No | Yes before archive | Set immediately in V2 |
+| CancelledPendingClaim | (Deprecated) Listing cancelled; item pending seller claim | No | No | No longer created by V2 implementation |
+| CancelledClaimed | Listing cancelled; item sent to seller via Mailbox | No | Yes before archive | Set immediately in V2 |
+| Archived | Hidden from active views, retained for audit | No | Yes | |
 
 `Draft` may exist as a future UI-only preparation concept, but it is not a
 persisted MVP 1 auction state.
+
+The `*PendingClaim` states remain in the status enum for database compatibility
+but are never set by the V2 implementation. All item and money distribution goes
+through `MailService` system mails.
 
 ### 4.2 State Transition Rules
 
 - Only `Listed` can be purchased.
 - Only `Listed` can be cancelled by seller.
 - Only `Listed` can expire.
-- `SoldPendingClaim` cannot return to `Listed`.
-- `ExpiredPendingClaim` cannot be purchased.
-- `CancelledPendingClaim` cannot be purchased.
-- claimed states cannot be claimed again.
+- Purchase transitions `Listed` → `SoldClaimed` (V2: direct, via mailbox pipeline).
+- Cancellation transitions `Listed` → `CancelledClaimed` (V2: direct, via mailbox pipeline).
+- Expiration transitions `Listed` → `ExpiredClaimed` (V2: direct, via mailbox pipeline).
+- Claimed states cannot be claimed again.
 - `Archived` cannot re-enter active market states.
+
+V2 note: The `*PendingClaim` intermediate states are bypassed. `Listed` transitions
+directly to the final claimed state in one atomic transaction that also creates
+the system mail(s).
 
 ## 5. Permissions
 
@@ -414,8 +430,8 @@ Can:
 - create a listing with owned tradable item;
 - inspect own active and historical listings;
 - cancel own `Listed` listing if no purchase or expiration has won the state;
-- claim unsold item after cancellation or expiration;
-- see enough audit status to understand pending claims.
+- receive a system mail with the item after cancellation or expiration (Mailbox claim required);
+- receive a system mail with the sale proceeds after a successful purchase (Mailbox claim required).
 
 Cannot:
 
@@ -432,7 +448,7 @@ Can:
 - browse, search, filter, and sort active visible listings;
 - inspect public listing details;
 - buy an eligible `Listed` listing if funds and inventory rules pass;
-- claim purchased item if the selected delivery model uses buyer claim;
+- receive a system mail with the purchased item (Mailbox claim required);
 - inspect own purchase history.
 
 Cannot:
@@ -661,50 +677,51 @@ Seller inventory
                 └── Market browse/search/filter/sort
 ```
 
-### 11.2 Purchase Flow
+### 11.2 Purchase Flow (V2 — Mailbox delivery)
 
 ```text
 Buyer intention
 └── Server loads Listed listing
-    └── Lock listing + item + accounts
+    └── Lock listing + item + wallets
         ├── Reject stale / expired / insufficient funds
-        └── Economy transfer in bronze
-            ├── Debit buyer balanceBronze
-            ├── Credit seller balanceBronze immediately
-            └── Keep item locked for buyer claim
-                └── SoldPendingClaim
-                    └── Buyer claims item
-                        └── SoldClaimed
-                            └── Archived
+        └── Atomic transaction
+            ├── Debit buyer wallet -> auction_escrow wallet (AUCTION_BUY)
+            ├── Create system mail for buyer (attachedItemInstanceId)
+            ├── AUCTION_TO_MAIL: LISTED+AUCTION -> IN_MAIL+MAIL(buyerMailId)
+            ├── Create system money mail for seller (attachedAmountBronze)
+            └── listing -> SoldClaimed
+                ├── Buyer claims Mailbox mail -> item in inventory (CLAIM_MAIL)
+                └── Seller claims Mailbox money mail -> AUCTION_SELL: escrow -> seller wallet
 ```
 
-### 11.3 Expiration Flow
+### 11.3 Expiration / Cancellation Flow (V2 — Mailbox delivery)
 
 ```text
-Persisted endsAt reached
-└── Server reconciliation
-    └── Lock listing + item escrow
+Persisted endsAt reached (or seller cancels)
+└── Server reconciliation / cancel handler
+    └── Lock listing + item
         ├── Already sold/cancelled/archived -> no effect
         └── Unsold listing
-            └── ExpiredPendingClaim
-                └── Seller claims item
-                    └── ExpiredClaimed
-                        └── Archived
+            └── Atomic transaction
+                ├── Create system mail for seller (attachedItemInstanceId)
+                ├── AUCTION_TO_MAIL: LISTED+AUCTION -> IN_MAIL+MAIL(sellerMailId)
+                └── listing -> ExpiredClaimed (or CancelledClaimed)
+                    └── Seller claims Mailbox mail -> item in inventory (CLAIM_MAIL)
 ```
 
-### 11.4 State Machine
+### 11.4 State Machine (V2)
 
 ```text
 Listed
-├── SoldPendingClaim
-│   └── SoldClaimed
-│       └── Archived
-├── ExpiredPendingClaim
-│   └── ExpiredClaimed
-│       └── Archived
-└── CancelledPendingClaim
-    └── CancelledClaimed
-        └── Archived
+├── SoldClaimed (direct — via mailbox pipeline)
+│   └── Archived
+├── ExpiredClaimed (direct — via mailbox pipeline)
+│   └── Archived
+└── CancelledClaimed (direct — via mailbox pipeline)
+    └── Archived
+
+Deprecated (enum present, never created by V2 implementation):
+  SoldPendingClaim, ExpiredPendingClaim, CancelledPendingClaim
 ```
 
 ## 12. Open Questions

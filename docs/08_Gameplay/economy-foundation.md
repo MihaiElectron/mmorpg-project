@@ -257,8 +257,8 @@ Initial and future-compatible transaction types:
 |---|---|---|
 | `LOOT` | System source -> Character Wallet | Monetary loot reward |
 | `QUEST` | System source -> Character Wallet | Quest reward |
-| `AUCTION_BUY` | Buyer Wallet -> seller or escrow flow | Buyer payment for listing |
-| `AUCTION_SELL` | Auction sale flow -> Seller Wallet | Seller proceeds |
+| `AUCTION_BUY` | Buyer Wallet -> `auction_escrow` system wallet | Buyer payment; escrow holds funds until seller claims money mail |
+| `AUCTION_SELL` | `auction_escrow` system wallet -> Seller Wallet | Seller proceeds claimed via Mailbox money mail |
 | `AUCTION_REFUND` | Auction escrow/hold -> Character Wallet | Future bid or failed purchase refund |
 | `NPC_BUY` | Character Wallet -> NPC/system | Player buys from NPC |
 | `NPC_SELL` | NPC/system -> Character Wallet | Player sells to NPC |

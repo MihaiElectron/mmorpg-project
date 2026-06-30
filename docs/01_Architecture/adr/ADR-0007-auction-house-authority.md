@@ -9,7 +9,7 @@
 - Date proposed: 2026-06-26
 - Date accepted: 2026-06-30
 - Approved by: Project owner
-- Approval reference: Auction MVP 1 implemented — create listing, buyout, cancel, expiration scheduler, claim buyer/seller, AuctionHouseWindow, building proximity validation
+- Approval reference: Auction MVP 1 implemented — create listing, item escrow (LISTED+AUCTION), buyout via mailbox pipeline (2 system mails + escrow wallet), cancel → seller mail, expiration → seller mail, AuctionHouseWindow (Browse / My listings / Sell), building proximity validation (chebyshevDistanceWU)
 - Depends on: docs/01_Architecture/adr/README.md, docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md
 - Used by: Project owner, developers, repository-aware coding agents
 - Supersedes: None
