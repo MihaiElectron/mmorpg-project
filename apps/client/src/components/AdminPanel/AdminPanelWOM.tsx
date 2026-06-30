@@ -438,6 +438,67 @@ const EMPTY_MOVEMENT_METRICS: MovementMetrics = {
   mapMismatch: 0,
 };
 
+// ── EconomySection ────────────────────────────────────────────────────────────
+
+function EconomySection({ characters, onResult }: { characters: any[]; onResult: (text: string, ok: boolean) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [characterId, setCharacterId] = useState("");
+  const [amountBronze, setAmountBronze] = useState(100);
+  const [loading, setLoading] = useState(false);
+
+  async function send(direction: "credit" | "debit") {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    if (!characterId) { onResult("Sélectionner un personnage.", false); return; }
+    const amount = Math.floor(amountBronze);
+    if (amount <= 0) { onResult("Le montant doit être positif.", false); return; }
+    setLoading(true);
+    const result = await ackPromise(socket, "admin:add_balance", { characterId, amountBronze: amount, direction });
+    setLoading(false);
+    onResult(result.message, result.success);
+  }
+
+  return (
+    <section className="admin-panel__section">
+      <div className="admin-panel__section-toggle" onClick={() => setIsOpen((o) => !o)}>
+        <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+        Économie
+      </div>
+      {isOpen && (
+        <div className="admin-panel__template-item">
+          <div className="admin-panel__template-stats">
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Personnage</span>
+              <select className="admin-panel__template-stat-input" value={characterId}
+                onChange={(e) => setCharacterId(e.target.value)} {...kbHandlers}>
+                <option value="">— choisir —</option>
+                {characters.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Bronze</span>
+              <input className="admin-panel__template-stat-input" type="number" min={1} step={1}
+                value={amountBronze}
+                onChange={(e) => setAmountBronze(Number(e.target.value))}
+                {...kbHandlers} />
+            </label>
+          </div>
+          <div className="admin-panel__button-row">
+            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => send("credit")}>
+              {loading ? "…" : "Créditer"}
+            </button>
+            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => send("debit")}>
+              {loading ? "…" : "Débiter"}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
@@ -1201,6 +1262,8 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
         />
       ))}
+
+      <EconomySection characters={sectionData["players"] ?? []} onResult={pushResult} />
 
       <section className="admin-panel__section">
         <div className="admin-panel__dual-header">

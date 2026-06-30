@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import CharacterLayer from "../CharacterLayer/CharacterLayer";
 import Inventory from "../Inventory/Inventory";
 import SkillsTab from "./SkillsTab";
@@ -14,8 +14,14 @@ const TABS = [
 export default function CharacterLayout() {
   const isOpen = useCharacterStore((s) => s.isOpen);
   const toggleOpen = useCharacterStore((s) => s.toggleOpen);
+  const balance = useCharacterStore((s) => s.balance);
+  const loadBalance = useCharacterStore((s) => s.loadBalance);
 
   const [activeTab, setActiveTab] = useState("perso");
+
+  useEffect(() => {
+    if (isOpen && activeTab === "perso") loadBalance();
+  }, [isOpen, activeTab]);
 
   function handleTabClick(tab) {
     if (!isOpen) {
@@ -46,6 +52,13 @@ export default function CharacterLayout() {
         <>
           <div className="character-layout__content">
             <CharacterLayer />
+            {balance && (
+              <div className="character-layout__balance">
+                {balance.gold > 0 && <span className="character-layout__balance-gold">{balance.gold}g</span>}
+                {(balance.gold > 0 || balance.silver > 0) && <span className="character-layout__balance-silver">{balance.silver}a</span>}
+                <span className="character-layout__balance-bronze">{balance.bronze}b</span>
+              </div>
+            )}
           </div>
           <div className="character-layout__inventory">
             <Inventory />

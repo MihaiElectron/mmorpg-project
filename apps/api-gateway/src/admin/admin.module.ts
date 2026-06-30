@@ -22,6 +22,7 @@ import { BuildingsModule } from '../buildings/buildings.module';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { AdminGateway } from './admin.gateway';
+import { EconomyModule } from '../economy/economy.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AdminGateway } from './admin.gateway';
     WorldModule,
     CommonModule,
     BuildingsModule,
+    EconomyModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

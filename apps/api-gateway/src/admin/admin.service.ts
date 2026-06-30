@@ -153,6 +153,10 @@ export class AdminService {
     return this.characterRepo.find({ order: { name: 'ASC' } });
   }
 
+  findCharacterById(id: string): Promise<Character | null> {
+    return this.characterRepo.findOne({ where: { id } });
+  }
+
   async updateCharacter(
     id: string,
     fields: Partial<Pick<Character, 'level' | 'health' | 'maxHealth' | 'attack' | 'defense'>>,

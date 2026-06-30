@@ -30,6 +30,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Auction | Listing, achat → 2 mails système (acheteur+vendeur), wallet Economy + escrow `auction_escrow` — `AuctionHouseWindow` (validation distance building) |
 | Mail | Inbox, claim pièce jointe ou argent, courrier système (sender `SYSTEM`) — `MailboxWindow` (validation distance building) |
 | Buildings | `BuildingTemplate`/`Building`, WOM adapter, CRUD admin WS, rendu WorldScene, drag-to-map, WindowManager |
+| Économie joueur | `GET /economy/me/balance` — solde gold/argent/bronze affiché dans le panneau Perso ; admin crédit/débit via `admin:add_balance` (EconomyService, ledger, rôle vérifié) |
 | DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry |
 | Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 

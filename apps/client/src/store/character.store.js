@@ -9,11 +9,12 @@ const storeLogic = (set, get) => ({
   inventory: [],
   equipment: {},
   skills: [],
+  balance: null,
 
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),
-  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [] }),
+  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [], balance: null }),
   toggleOpen: () => {
     set((s) => ({ isOpen: !s.isOpen }));
   },
@@ -94,6 +95,21 @@ const storeLogic = (set, get) => ({
       }
       return { skills };
     });
+  },
+
+  loadBalance: async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/economy/me/balance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ balance: data });
+    } catch {
+      // balance non critique, on ignore silencieusement
+    }
   },
 
   loadSkills: async () => {

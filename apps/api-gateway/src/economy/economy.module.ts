@@ -4,9 +4,15 @@ import { Wallet } from './entities/wallet.entity';
 import { EconomicTransaction } from './entities/economic-transaction.entity';
 import { LedgerEntry } from './entities/ledger-entry.entity';
 import { EconomyService } from './economy.service';
+import { EconomyController } from './economy.controller';
+import { CharactersModule } from '../characters/characters.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet, EconomicTransaction, LedgerEntry])],
+  imports: [
+    TypeOrmModule.forFeature([Wallet, EconomicTransaction, LedgerEntry]),
+    CharactersModule,
+  ],
+  controllers: [EconomyController],
   providers: [EconomyService],
   exports: [EconomyService],
 })

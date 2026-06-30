@@ -18,6 +18,10 @@ import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { toBuildingWorldObject } from '../buildings/adapters/building-world-object.adapter';
+import { EconomyService } from '../economy/economy.service';
+import { TransactionType } from '../economy/entities/economic-transaction.entity';
+
+type AddBalancePayload = { characterId: string; amountBronze: number; direction: 'credit' | 'debit' };
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
 type TeleportPayload = { characterId: string; worldX: number; worldY: number };
@@ -48,6 +52,7 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly resourcesService: ResourcesService,
     private readonly buildingsService: BuildingsService,
     private readonly wsAuthService: WsAuthService,
+    private readonly economyService: EconomyService,
   ) {}
 
   async handleConnection(client: WorldSocket) {
@@ -409,6 +414,54 @@ export class AdminGateway implements OnGatewayConnection {
 
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
+  }
+
+  @SubscribeMessage('admin:add_balance')
+  async onAddBalance(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: AddBalancePayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { characterId, amountBronze, direction } = payload ?? {};
+    if (!characterId) return { success: false, message: 'characterId requis.' };
+    if (!Number.isFinite(amountBronze)) return { success: false, message: 'amountBronze invalide.' };
+    if (direction !== 'credit' && direction !== 'debit') return { success: false, message: 'direction doit être "credit" ou "debit".' };
+
+    const amount = BigInt(Math.floor(amountBronze));
+    if (amount <= 0n) return { success: false, message: 'Le montant doit être strictement positif.' };
+    if (amount > 1_000_000_000n) return { success: false, message: 'Montant trop élevé (max 1 000 000 000 bronze).' };
+
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
+
+    const wallet = await this.economyService.getOrCreateWallet('character', characterId);
+
+    try {
+      if (direction === 'credit') {
+        await this.economyService.credit({
+          type: TransactionType.ADMIN,
+          destinationWalletId: wallet.id,
+          amountBronze: amount,
+          actorId: client.data.userId,
+        });
+      } else {
+        await this.economyService.debit({
+          type: TransactionType.ADMIN,
+          sourceWalletId: wallet.id,
+          amountBronze: amount,
+          actorId: client.data.userId,
+        });
+      }
+      const refreshed = await this.economyService.getOrCreateWallet('character', characterId);
+      const sign = direction === 'credit' ? '+' : '-';
+      return {
+        success: true,
+        message: `${character.name} : ${sign}${amount} bronze → solde ${refreshed.balanceBronze} bronze.`,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur économique.' };
+    }
   }
 
   @SubscribeMessage('admin:create_creature_template')

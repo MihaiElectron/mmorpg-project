@@ -787,6 +787,13 @@
     }
   }
 
+  // ── Rangée de boutons ────────────────────────────────────────────────────
+  &__button-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
   // ── Chargement / erreur ───────────────────────────────────────────────────
   &__loading,
   &__empty {

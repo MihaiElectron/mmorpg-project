@@ -609,12 +609,15 @@ Allowed DevTools actions:
 - inspect transactions;
 - inspect ledger entries;
 - search and filter audit history;
-- trigger approved support resolution commands if future implementation defines
-  them.
+- admin credit/debit via `admin:add_balance` socket event — routed through
+  `EconomyService.credit()` / `EconomyService.debit()`, which create a proper
+  `EconomicTransaction` (type `ADMIN`) and `LedgerEntry`; implemented in
+  `AdminGateway.onAddBalance`. Server verifies admin role, character existence,
+  positive amount (≤ 1 000 000 000 bronze) before delegating.
 
 Forbidden DevTools behavior:
 
-- direct balance edits;
+- direct balance edits (mutating `wallet.balanceBronze` outside EconomyService);
 - direct ledger edits;
 - hidden currency creation;
 - hidden currency deletion;
@@ -754,7 +757,55 @@ Critical flows to test first:
 - admin correction with audit;
 - reversal of an applied support transaction.
 
-## 11. Diagrams
+## 11. Implemented Endpoints
+
+### 11.1 Player Balance
+
+```
+GET /economy/me/balance
+Authorization: Bearer <jwt>
+```
+
+Response:
+
+```json
+{
+  "balanceBronze": "12345",
+  "gold": 1,
+  "silver": 23,
+  "bronze": 45
+}
+```
+
+Rules:
+- Authenticated user only.
+- `characterId` resolved server-side from JWT — never trusted from client.
+- `getOrCreateWallet('character', characterId)` creates the wallet on first call.
+- Displayed in CharacterLayout onglet "Perso" (gold/silver/bronze).
+
+### 11.2 Admin Credit/Debit
+
+Socket event: `admin:add_balance`
+
+Payload:
+
+```json
+{
+  "characterId": "<uuid>",
+  "amountBronze": 1000,
+  "direction": "credit"
+}
+```
+
+Rules:
+- Admin role required (verified server-side from JWT, not from payload).
+- Character existence verified before wallet lookup.
+- Amount must be > 0 and ≤ 1 000 000 000 bronze.
+- Routes through `EconomyService.credit()` / `EconomyService.debit()`.
+- Creates `EconomicTransaction` (type `ADMIN`) and `LedgerEntry` — fully auditable.
+- Returns `{ success, message }` with new balance.
+
+## 12. Diagrams
 
 ### 11.1 Loot
 

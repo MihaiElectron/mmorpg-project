@@ -78,4 +78,17 @@
     overflow-y: auto;
     @include m.panel-section;
   }
+
+  &__balance {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  &__balance-gold   { color: vars.$color-text-gold; }
+  &__balance-silver { color: #c0c0c0; }
+  &__balance-bronze { color: #cd7f32; }
 }
