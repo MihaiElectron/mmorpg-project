@@ -21,6 +21,7 @@ import { CraftingResult } from './entities/crafting-result.entity';
 import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
 import { CraftingStation } from './entities/crafting-station.entity';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import type { LootEntry } from '../world/loot.service';
 
 // ─── Seed definitions ─────────────────────────────────────────────────────────
@@ -493,7 +494,7 @@ export class CraftingService implements OnModuleInit {
         .map(([itemId, quantity]) => ({ itemId, quantity }));
       if (lootEntries.length > 0) {
         await this.itemMaterialization.materialize(manager, lootEntries, {
-          source: 'CRAFT',
+          source: ItemInstanceSource.CRAFT,
           destination: { type: 'INVENTORY', characterId },
           ownerId: characterId,
         });

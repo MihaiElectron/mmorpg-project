@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Stable
+- Decision status: Accepted
 - Owner: Project
 - Last updated: 2026-06-30
 - Date proposed: 2026-06-30
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-06-30
+- Approved by: Project owner
+- Approval reference: Phase 1 implémentée — commit fdb57bf (ItemInstanceType, ItemInstanceSource, migration SQL)
 - Depends on:
   - docs/01_Architecture/adr/ADR-0007-auction-house-authority.md
   - docs/01_Architecture/adr/ADR-0010-object-runtime-model.md

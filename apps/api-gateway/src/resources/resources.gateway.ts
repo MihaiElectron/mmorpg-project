@@ -22,6 +22,7 @@ import { WUPositionRecord } from '../common/world-position.adapter';
 import { chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 
 interface InteractResourcePayload {
   targetId: string;
@@ -198,7 +199,7 @@ export class ResourcesGateway
     try {
       matResult = await this.dataSource.transaction(async (manager) => {
         return this.itemMaterialization.materialize(manager, lootEntries, {
-          source: 'LOOT',
+          source: ItemInstanceSource.LOOT,
           destination: { type: 'INVENTORY', characterId },
           ownerId: characterId,
         });

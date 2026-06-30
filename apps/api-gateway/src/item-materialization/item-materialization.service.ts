@@ -5,20 +5,19 @@ import { Inventory } from '../inventory/entities/inventory.entity';
 import {
   ItemInstance,
   ItemInstanceContainerType,
+  ItemInstanceSource,
   ItemInstanceState,
   ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
 import { WorldItem, WorldItemState } from '../world-items/entities/world-item.entity';
 import type { LootEntry } from '../world/loot.service';
 
-export type MaterializationSource =
-  | 'LOOT'
-  | 'CRAFT'
-  | 'QUEST'
-  | 'VENDOR'
-  | 'ADMIN'
-  | 'EVENT'
-  | 'CHEST';
+// Sources légales pour ItemMaterializationService — sous-ensemble de ItemInstanceSource.
+// MARKET_LOT et MIGRATION ne passent jamais par ce service.
+export type MaterializationSource = Exclude<
+  ItemInstanceSource,
+  ItemInstanceSource.MARKET_LOT | ItemInstanceSource.MIGRATION
+>;
 
 export type MaterializeDestination =
   | { type: 'INVENTORY'; characterId: string }

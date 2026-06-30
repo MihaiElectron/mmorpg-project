@@ -2,6 +2,7 @@ import { ItemMaterializationService } from './item-materialization.service';
 import { ObjectMode } from '../items/entities/item.entity';
 import {
   ItemInstanceContainerType,
+  ItemInstanceSource,
   ItemInstanceState,
   ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
@@ -23,7 +24,7 @@ function makeItem(overrides: Partial<{ id: string; category: string; objectMode:
 
 function makeContext(destination: MaterializeContext["destination"]): MaterializeContext {
   return {
-    source: 'LOOT',
+    source: ItemInstanceSource.LOOT,
     destination,
     ownerId: 'char-1',
   };

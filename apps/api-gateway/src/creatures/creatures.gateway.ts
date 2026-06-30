@@ -14,6 +14,7 @@ import { CreaturesService, isAttackFailure } from './creatures.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { WorldItemService } from '../world-items/world-item.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
@@ -93,7 +94,7 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
       try {
         const matResult = await this.dataSource.transaction(async (manager) => {
           return this.itemMaterialization.materialize(manager, result.loot!, {
-            source: 'LOOT',
+            source: ItemInstanceSource.LOOT,
             destination: {
               type: 'WORLD',
               worldX: result.dto.worldX ?? 0,

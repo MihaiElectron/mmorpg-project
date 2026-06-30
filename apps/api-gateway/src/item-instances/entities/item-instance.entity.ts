@@ -7,8 +7,9 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ItemInstanceType } from '../enums/item-instance-type.enum';
+import { ItemInstanceSource } from '../enums/item-instance-source.enum';
 
-export { ItemInstanceType };
+export { ItemInstanceType, ItemInstanceSource };
 
 export enum ItemInstanceState {
   AVAILABLE = 'AVAILABLE',
@@ -67,7 +68,7 @@ export class ItemInstance {
   containerId: string | null;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
-  createdBySource: string | null;
+  createdBySource: ItemInstanceSource | null;
 
   @Column({ type: 'varchar', length: 10, default: ItemInstanceType.NORMAL })
   instanceType: ItemInstanceType;
