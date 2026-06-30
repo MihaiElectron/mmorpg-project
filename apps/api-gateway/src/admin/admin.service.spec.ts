@@ -68,6 +68,7 @@ describe('AdminService resources', () => {
     };
     worldService = {
       getConnectedCount: jest.fn().mockReturnValue(0),
+      getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
       getMovementMetrics: jest.fn().mockReturnValue({
         totalMoves: 12,
         suspectTeleports: 1,
@@ -1071,5 +1072,68 @@ describe('createResourceTemplate', () => {
   it('refuse un skillKey inexistant dans SkillDefinition', async () => {
     skillDefinitionRepo.findOne.mockResolvedValue(null);
     await expect(service.createResourceTemplate({ type: 'my_node', skillKey: 'unknown_skill' })).rejects.toThrow(BadRequestException);
+  });
+
+  // ── getCharacters — position live ─────────────────────────────────────────────
+
+  describe('getCharacters — enrichissement position ConnectedPlayer', () => {
+    const makeChar = (id: string, x: number, y: number, m: number) =>
+      ({ id, name: `char-${id}`, worldX: x, worldY: y, mapId: m } as any);
+
+    beforeEach(() => {
+      (service as any).characterRepo = {
+        find: jest.fn().mockResolvedValue([
+          makeChar("char-online",  1024, 2048, 1),
+          makeChar("char-offline", 3072, 4096, 1),
+        ]),
+      };
+      (service as any).worldService = {
+        getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
+      };
+    });
+
+    it("joueur connecté — utilise la position live ConnectedPlayer", async () => {
+      (service as any).worldService.getConnectedPlayerByCharacterId.mockImplementation((id: string) => {
+        if (id === "char-online") return { worldX: 9999, worldY: 8888, mapId: 2 };
+        return null;
+      });
+
+      const result = await service.getCharacters();
+      const online = result.find((c: any) => c.id === "char-online")!;
+
+      expect(online.worldX).toBe(9999);
+      expect(online.worldY).toBe(8888);
+      expect(online.mapId).toBe(2);
+    });
+
+    it("joueur hors ligne — conserve la position DB", async () => {
+      const result = await service.getCharacters();
+      const offline = result.find((c: any) => c.id === "char-offline")!;
+
+      expect(offline.worldX).toBe(3072);
+      expect(offline.worldY).toBe(4096);
+      expect(offline.mapId).toBe(1);
+    });
+
+    it("format de réponse inchangé — les autres champs restent intacts", async () => {
+      (service as any).worldService.getConnectedPlayerByCharacterId.mockImplementation((id: string) => {
+        if (id === "char-online") return { worldX: 100, worldY: 200, mapId: 1 };
+        return null;
+      });
+
+      const result = await service.getCharacters();
+      const online = result.find((c: any) => c.id === "char-online")!;
+
+      expect(online.id).toBe("char-online");
+      expect(online.name).toBe("char-char-online");
+    });
+
+    it("appelle getConnectedPlayerByCharacterId pour chaque personnage", async () => {
+      await service.getCharacters();
+
+      const ws = (service as any).worldService;
+      expect(ws.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("char-online");
+      expect(ws.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("char-offline");
+    });
   });
 });

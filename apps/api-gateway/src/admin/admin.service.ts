@@ -149,8 +149,17 @@ export class AdminService {
 
   // ── Joueurs ───────────────────────────────────────────────────────────────
 
-  getCharacters(): Promise<Character[]> {
-    return this.characterRepo.find({ order: { name: 'ASC' } });
+  async getCharacters(): Promise<Character[]> {
+    const characters = await this.characterRepo.find({ order: { name: 'ASC' } });
+    for (const char of characters) {
+      const live = this.worldService.getConnectedPlayerByCharacterId(char.id);
+      if (live) {
+        char.worldX = live.worldX;
+        char.worldY = live.worldY;
+        char.mapId = live.mapId;
+      }
+    }
+    return characters;
   }
 
   findCharacterById(id: string): Promise<Character | null> {
