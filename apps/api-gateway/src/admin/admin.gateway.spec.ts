@@ -24,6 +24,7 @@ function makeGateway(wsAuth: Partial<WsAuthService>) {
     {} as unknown as WorldService,
     {} as unknown as AdminService,
     {} as unknown as ResourcesService,
+    {} as unknown as import('../buildings/buildings.service').BuildingsService,
     wsAuth as WsAuthService,
   );
 }
@@ -102,6 +103,7 @@ describe('AdminGateway — handlers refusent les non-admins', () => {
       worldService as unknown as WorldService,
       adminService as unknown as AdminService,
       {} as unknown as ResourcesService,
+      {} as unknown as import('../buildings/buildings.service').BuildingsService,
       { authenticate: jest.fn() } as unknown as WsAuthService,
     );
     (gateway as any).server = { emit: jest.fn() };
