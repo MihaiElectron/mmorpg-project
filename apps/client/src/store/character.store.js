@@ -83,6 +83,19 @@ const storeLogic = (set, get) => ({
     }
   },
 
+  updateSkill: (skillData) => {
+    set((state) => {
+      const skills = [...(state.skills || [])];
+      const index = skills.findIndex((s) => s.key === skillData.key);
+      if (index > -1) {
+        skills[index] = { ...skills[index], ...skillData };
+      } else {
+        skills.push(skillData);
+      }
+      return { skills };
+    });
+  },
+
   loadSkills: async () => {
     try {
       const token = localStorage.getItem("token");

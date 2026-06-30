@@ -245,7 +245,13 @@ export class ResourcesGateway
     const xpReward = template?.gatheringXpReward ?? 0;
     if (xpSkillKey && xpReward > 0) {
       try {
-        await this.skills.addXp(characterId, xpSkillKey, xpReward);
+        const updatedSkill = await this.skills.addXp(characterId, xpSkillKey, xpReward);
+        client.emit('skill_update', {
+          key: xpSkillKey,
+          level: updatedSkill.level,
+          xp: updatedSkill.xp,
+          nextLevelXp: this.skills.getNextLevelXp(updatedSkill.skillDefinition, updatedSkill.level),
+        });
       } catch (err) {
         console.warn(`[ResourcesGateway] XP récolte ignorée pour ${characterId}: ${(err as Error).message}`);
       }

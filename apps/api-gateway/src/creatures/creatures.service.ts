@@ -73,6 +73,7 @@ export type AttackSuccess = {
   attackerId: string;
   riposte?: { damage: number; characterHealth: number };
   loot?: LootEntry[];
+  skillUpdate?: { key: string; level: number; xp: number; nextLevelXp: number };
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -532,10 +533,17 @@ export class CreaturesService implements OnModuleInit {
     // XP de combat accordée uniquement au kill confirmé serveur.
     // characterId provient du paramètre, jamais du client.
     let loot: LootEntry[] | undefined;
+    let skillUpdate: AttackSuccess['skillUpdate'];
     if (creature.health === 0) {
       const skillKey = resolveCombatSkill(character.equipment ?? []);
       try {
-        await this.skills.addXp(characterId, skillKey, KILL_XP);
+        const updated = await this.skills.addXp(characterId, skillKey, KILL_XP);
+        skillUpdate = {
+          key: skillKey,
+          level: updated.level,
+          xp: updated.xp,
+          nextLevelXp: this.skills.getNextLevelXp(updated.skillDefinition, updated.level),
+        };
       } catch (err) {
         console.warn(`[CreaturesService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
       }
@@ -555,7 +563,7 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, skillUpdate };
   }
 
   private resolveAttackRange(character: Character): number {
