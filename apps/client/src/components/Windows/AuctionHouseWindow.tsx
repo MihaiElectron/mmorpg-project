@@ -138,6 +138,7 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
     const res = await fetch(`${API}/auction/listings/${listingId}/claim-buyer`, {
       method: "POST",
       headers: authHeaders(),
+      body: JSON.stringify({ buildingId }),
     });
     if (res.ok) {
       setPurchases((prev) => prev.filter((p) => p.id !== listingId));
@@ -152,6 +153,7 @@ export default function AuctionHouseWindow({ buildingId, onClose }: Props) {
     const res = await fetch(`${API}/auction/listings/${listingId}/claim-seller`, {
       method: "POST",
       headers: authHeaders(),
+      body: JSON.stringify({ buildingId }),
     });
     if (res.ok) {
       loadMine();

@@ -56,7 +56,8 @@ export class MailController {
 
   @Get('inbox')
   async listInbox(@Request() req, @Query('buildingId') buildingId?: string) {
-    if (buildingId) await this.validateBuildingAccess(req.user.userId, buildingId);
+    if (!buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, buildingId);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.mailService.listInbox(character.id);
   }
@@ -68,8 +69,9 @@ export class MailController {
   }
 
   @Post('send')
-  async send(@Request() req, @Body() dto: SendMailDto & { buildingId?: string }) {
-    if (dto.buildingId) await this.validateBuildingAccess(req.user.userId, dto.buildingId);
+  async send(@Request() req, @Body() dto: SendMailDto & { buildingId: string }) {
+    if (!dto.buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, dto.buildingId);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.mailService.send({
       senderCharacterId: character.id,
@@ -85,9 +87,10 @@ export class MailController {
   async claim(
     @Request() req,
     @Param('id') mailId: string,
-    @Body() body: { buildingId?: string },
+    @Body() body: { buildingId: string },
   ) {
-    if (body?.buildingId) await this.validateBuildingAccess(req.user.userId, body.buildingId);
+    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, body.buildingId);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     await this.mailService.claim(character.id, mailId);
   }

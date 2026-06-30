@@ -667,3 +667,41 @@ describe('WorldService.onModuleInit — seed RespawnPoint (P7-A)', () => {
     expect(created).toHaveLength(0);
   });
 });
+
+// ─── validateInteraction ─────────────────────────────────────────────────────
+
+describe("WorldService.validateInteraction", () => {
+  const svc = makeService();
+
+  const building = { worldX: 1000, worldY: 1000, mapId: 1 };
+  const radius = 2048;
+
+  it("retourne null si le personnage est à portée sur la même carte", () => {
+    const char = { worldX: 1100, worldY: 1000, mapId: 1 };
+    expect(svc.validateInteraction(char, building, radius)).toBeNull();
+  });
+
+  it("retourne un message si la carte est différente (mapId mismatch)", () => {
+    const char = { worldX: 1000, worldY: 1000, mapId: 2 };
+    const result = svc.validateInteraction(char, building, radius);
+    expect(result).not.toBeNull();
+    expect(result).toContain("Carte différente");
+  });
+
+  it("retourne un message si le personnage est trop loin (L∞ norm)", () => {
+    const char = { worldX: 5000, worldY: 1000, mapId: 1 };
+    const result = svc.validateInteraction(char, building, radius);
+    expect(result).not.toBeNull();
+    expect(result).toContain("Trop loin");
+  });
+
+  it("accepte un personnage exactement à la limite du rayon", () => {
+    const char = { worldX: 1000 + radius, worldY: 1000, mapId: 1 };
+    expect(svc.validateInteraction(char, building, radius)).toBeNull();
+  });
+
+  it("refuse un personnage d'un WU au-delà du rayon", () => {
+    const char = { worldX: 1000 + radius + 1, worldY: 1000, mapId: 1 };
+    expect(svc.validateInteraction(char, building, radius)).not.toBeNull();
+  });
+});

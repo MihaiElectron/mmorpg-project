@@ -60,7 +60,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
 | — | Sprite goblin utilise `textureKey: 'turkey'` en placeholder | Low | contenu |
 | — | `synchronize: true` en dev — migrations TypeORM pour prod non créées | Medium | prod-readiness |
-| — | Buildings MVP — `buildingId` optionnel dans Auction/Mail (pas encore requis) | Medium | Building V2 |
+| — | Auction → Mailbox non lié — claim acheteur ne passe pas par le Mail (voulu, MVP 1) | Low | Auction MVP 2 |
 | — | Building : aucun seed créé, aucune texture réelle — placeholder debug diamond visible seulement | Low | contenu |
 | — | `CraftingRuntimePanel` toujours embarqué dans ActionPanel (devrait passer par WindowManager) | Low | WindowManager V2 |
 
@@ -91,6 +91,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 - **`buildResourceBroadcast`** obligatoire pour tout `resource_update` — sans `type/worldX/worldY/mapId`, le client ne peut pas recréer le sprite après `dead`.
 - **`WorldService.validateInteraction(char, target, radiusWU)`** est la barrière anti-cheat de distance (chebyshevDistanceWU, L∞) — toute nouvelle interaction doit la réutiliser.
 - **`BuildingsService`** est le seul service autorisé à créer/modifier les `Building` et `BuildingTemplate`. Les contrôleurs Auction/Mail lui délèguent la recherche du building pour valider la proximité.
+- **`buildingId` obligatoire** sur toute mutation Auction (createListing, buyListing, claimBuyer, claimSeller) et Mail (inbox, send, claim). Le serveur valide type, état ACTIVE, template.enabled et distance WU avant toute action sensible. `GET /auction/listings`, `GET /auction/listings/mine`, `GET /auction/listings/pending-as-buyer`, `DELETE /auction/listings/:id` et `GET /mail/sent` restent publics sans contrainte de proximité.
 - **WindowManager** (`window-manager.store.ts`) est le seul point d'ouverture des fenêtres runtime (Auction, Mailbox, etc.). ActionPanel route uniquement — il ne contient pas la logique métier de ces fenêtres.
 - **Coordonnées** : DB/Runtime = `worldX/worldY/mapId` (WU). Pixel cache `x/y` uniquement dans `ConnectedPlayer` (rendu). Ne jamais persister les pixels Phaser.
 - **`lootPool`** non éditable via socket — `admin:update_resource_template` n'accepte que `defaultRemainingLoots` et `respawnDelayMs`.

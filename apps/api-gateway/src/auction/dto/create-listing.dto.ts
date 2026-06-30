@@ -1,8 +1,11 @@
-import { IsIn, IsInt, IsPositive, IsString, IsUUID, Max } from 'class-validator';
+import { IsIn, IsInt, IsPositive, IsUUID, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AUCTION_ALLOWED_DURATIONS_HOURS, AuctionDurationHours } from '../entities/auction-listing.entity';
 
 export class CreateListingDto {
+  @IsUUID()
+  buildingId: string;
+
   @IsUUID()
   itemInstanceId: string;
 

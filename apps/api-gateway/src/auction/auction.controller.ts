@@ -83,11 +83,9 @@ export class AuctionController {
   @Post('listings')
   async createListing(
     @Request() req,
-    @Body() dto: CreateListingDto & { buildingId?: string },
+    @Body() dto: CreateListingDto,
   ) {
-    if (dto.buildingId) {
-      await this.validateBuildingAccess(req.user.userId, dto.buildingId, BuildingType.AUCTION_HOUSE);
-    }
+    await this.validateBuildingAccess(req.user.userId, dto.buildingId, BuildingType.AUCTION_HOUSE);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.auctionService.createListing({
       sellerCharacterId: character.id,
@@ -107,11 +105,10 @@ export class AuctionController {
   async buyListing(
     @Request() req,
     @Param('id') listingId: string,
-    @Body() body: { buildingId?: string },
+    @Body() body: { buildingId: string },
   ) {
-    if (body?.buildingId) {
-      await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
-    }
+    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.auctionService.buyListing({
       buyerCharacterId: character.id,
@@ -120,13 +117,25 @@ export class AuctionController {
   }
 
   @Post('listings/:id/claim-buyer')
-  async claimBuyer(@Request() req, @Param('id') listingId: string) {
+  async claimBuyer(
+    @Request() req,
+    @Param('id') listingId: string,
+    @Body() body: { buildingId: string },
+  ) {
+    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.auctionService.claimBuyer(character.id, listingId);
   }
 
   @Post('listings/:id/claim-seller')
-  async claimSeller(@Request() req, @Param('id') listingId: string) {
+  async claimSeller(
+    @Request() req,
+    @Param('id') listingId: string,
+    @Body() body: { buildingId: string },
+  ) {
+    if (!body?.buildingId) throw new BadRequestException('buildingId est obligatoire.');
+    await this.validateBuildingAccess(req.user.userId, body.buildingId, BuildingType.AUCTION_HOUSE);
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.auctionService.claimSeller(character.id, listingId);
   }
