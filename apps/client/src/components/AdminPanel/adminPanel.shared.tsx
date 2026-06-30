@@ -29,6 +29,7 @@ export type SectionConfig = {
   getName: (item: any) => string;
   fields: FieldDef[];
   getTpPosition?: (item: any) => { worldX: number; worldY: number } | null;
+  getTpCharacterId?: (item: any) => string | null;
   dragEvent?: string;
   getDragPayload?: (item: any, worldX: number, worldY: number) => object;
 };
@@ -316,7 +317,11 @@ export function EntitySection({ config, items, onResult, embedded = false }: Ent
     if (!pos) return;
     const characterId = getAdminCharacterId();
     if (!characterId) { onResult("Personnage introuvable.", false); return; }
-    const result = await ackPromise(socket, "admin:teleport", { characterId, worldX: pos.worldX, worldY: pos.worldY });
+    const targetCharacterId = config.getTpCharacterId?.(item) ?? undefined;
+    const payload = targetCharacterId
+      ? { characterId, targetCharacterId }
+      : { characterId, worldX: pos.worldX, worldY: pos.worldY };
+    const result = await ackPromise(socket, "admin:teleport", payload);
     onResult(result.message, result.success);
   }
 

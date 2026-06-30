@@ -275,6 +275,7 @@ const SECTION_CONFIGS: SectionConfig[] = [
       { key: "defense",   label: "DEF",    min: 0 },
     ],
     getTpPosition: (c) => c.worldX != null && c.worldY != null ? { worldX: c.worldX, worldY: c.worldY } : null,
+    getTpCharacterId: (c) => c.id ?? null,
     dragEvent: "admin:teleport",
     getDragPayload: (c, worldX, worldY) => ({ characterId: c.id, worldX, worldY }),
   },

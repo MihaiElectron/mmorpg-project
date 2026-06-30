@@ -263,3 +263,154 @@ describe("AdminGateway — admin:add_balance", () => {
     expect(result.message).toMatch(/insuffisant/i);
   });
 });
+
+// ─── admin:teleport ───────────────────────────────────────────────────────────
+
+function makeTeleportGateway(opts: {
+  adminPlayer?: object | null;
+  targetPlayer?: object | null;
+  dbChar?: object | null;
+  teleportResult?: object | null;
+}) {
+  const worldService = {
+    findPlayerByNameOrId: jest.fn().mockReturnValue(
+      opts.adminPlayer !== undefined
+        ? opts.adminPlayer
+        : { characterId: "admin-char-1", name: "Admin" }
+    ),
+    getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(
+      opts.targetPlayer !== undefined ? opts.targetPlayer : null
+    ),
+    teleportCharacter: jest.fn().mockResolvedValue(
+      opts.teleportResult !== undefined
+        ? opts.teleportResult
+        : { characterId: "admin-char-1", name: "Admin" }
+    ),
+  };
+  const adminService = {
+    findCharacterById: jest.fn().mockResolvedValue(
+      opts.dbChar !== undefined ? opts.dbChar : null
+    ),
+  };
+  const gw = new AdminGateway(
+    {} as unknown as CreaturesService,
+    worldService as unknown as WorldService,
+    adminService as unknown as AdminService,
+    {} as unknown as ResourcesService,
+    {} as unknown as import("../buildings/buildings.service").BuildingsService,
+    { authenticate: jest.fn() } as unknown as WsAuthService,
+    {} as unknown as import("../economy/economy.service").EconomyService,
+  );
+  (gw as any).server = { to: jest.fn().mockReturnThis(), emit: jest.fn(), except: jest.fn().mockReturnThis() };
+  return { gw, worldService, adminService };
+}
+
+const ADMIN_CLIENT = makeClient({ role: "admin" });
+
+describe("admin:teleport — targetCharacterId (TP vers joueur)", () => {
+  it("cible connectée — utilise la position live ConnectedPlayer", async () => {
+    const { gw, worldService } = makeTeleportGateway({
+      targetPlayer: { worldX: 9000, worldY: 8000, mapId: 1 },
+    });
+
+    const result = await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+      targetCharacterId: "target-char-1",
+    });
+
+    expect(worldService.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("target-char-1");
+    expect(worldService.teleportCharacter).toHaveBeenCalledWith("admin-char-1", 9000, 8000, expect.anything());
+    expect(result.success).toBe(true);
+  });
+
+  it("cible hors ligne — fallback DB", async () => {
+    const { gw, worldService, adminService } = makeTeleportGateway({
+      targetPlayer: null,
+      dbChar: { worldX: 3000, worldY: 4000, mapId: 1 },
+    });
+
+    const result = await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+      targetCharacterId: "target-char-1",
+    });
+
+    expect(worldService.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("target-char-1");
+    expect(adminService.findCharacterById).toHaveBeenCalledWith("target-char-1");
+    expect(worldService.teleportCharacter).toHaveBeenCalledWith("admin-char-1", 3000, 4000, expect.anything());
+    expect(result.success).toBe(true);
+  });
+
+  it("cible introuvable (ni live ni DB) — retourne erreur", async () => {
+    const { gw, worldService } = makeTeleportGateway({
+      targetPlayer: null,
+      dbChar: null,
+    });
+
+    const result = await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+      targetCharacterId: "ghost-char",
+    });
+
+    expect(worldService.teleportCharacter).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/introuvable/i);
+  });
+
+  it("position live prioritaire sur worldX/worldY stale envoyés", async () => {
+    const { gw, worldService } = makeTeleportGateway({
+      targetPlayer: { worldX: 9999, worldY: 8888, mapId: 1 },
+    });
+
+    await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+      targetCharacterId: "target-char-1",
+      worldX: 1,
+      worldY: 1,
+    });
+
+    // worldX/worldY stale ignorés — position live utilisée
+    expect(worldService.teleportCharacter).toHaveBeenCalledWith("admin-char-1", 9999, 8888, expect.anything());
+  });
+});
+
+describe("admin:teleport — coordonnées explicites (TP vers point)", () => {
+  it("TP vers point — utilise worldX/worldY fournis", async () => {
+    const { gw, worldService } = makeTeleportGateway({});
+
+    const result = await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+      worldX: 5000,
+      worldY: 6000,
+    });
+
+    expect(worldService.getConnectedPlayerByCharacterId).not.toHaveBeenCalled();
+    expect(worldService.teleportCharacter).toHaveBeenCalledWith("admin-char-1", 5000, 6000, expect.anything());
+    expect(result.success).toBe(true);
+  });
+
+  it("TP vers point — manque worldX/worldY → erreur", async () => {
+    const { gw, worldService } = makeTeleportGateway({});
+
+    const result = await (gw as any).onTeleport(ADMIN_CLIENT, {
+      characterId: "admin-char-1",
+    });
+
+    expect(worldService.teleportCharacter).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/worldX/i);
+  });
+
+  it("refuse si role != admin", async () => {
+    const { gw, worldService } = makeTeleportGateway({});
+    const userClient = makeClient({ role: "user" });
+
+    const result = await (gw as any).onTeleport(userClient, {
+      characterId: "admin-char-1",
+      worldX: 0,
+      worldY: 0,
+    });
+
+    expect(worldService.teleportCharacter).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+  });
+});

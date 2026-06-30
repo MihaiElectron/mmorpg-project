@@ -24,7 +24,12 @@ import { TransactionType } from '../economy/entities/economic-transaction.entity
 type AddBalancePayload = { characterId: string; amountBronze: number; direction: 'credit' | 'debit' };
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
-type TeleportPayload = { characterId: string; worldX: number; worldY: number };
+type TeleportPayload = {
+  characterId: string;
+  targetCharacterId?: string;
+  worldX?: number;
+  worldY?: number;
+};
 type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
 type MoveCreaturePayload = { creatureId: string; worldX: number; worldY: number };
@@ -101,19 +106,43 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: 'Non autorisé.' };
     }
 
-    const { characterId: rawId, worldX, worldY } = payload ?? {};
-    if (!rawId || typeof worldX !== 'number' || typeof worldY !== 'number') {
-      return { success: false, message: 'Payload invalide : characterId, worldX, worldY requis.' };
+    const { characterId: rawId, targetCharacterId, worldX: rawWorldX, worldY: rawWorldY } = payload ?? {};
+    if (!rawId) {
+      return { success: false, message: 'Payload invalide : characterId requis.' };
     }
 
-    const resolved = this.worldService.findPlayerByNameOrId(rawId);
-    if (!resolved) {
-      return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
+    const admin = this.worldService.findPlayerByNameOrId(rawId);
+    if (!admin) {
+      return { success: false, message: `Admin "${rawId}" introuvable ou non connecté.` };
     }
 
-    const player = await this.worldService.teleportCharacter(resolved.characterId, worldX, worldY, this.server);
+    let worldX: number;
+    let worldY: number;
+
+    if (targetCharacterId) {
+      const target = this.worldService.getConnectedPlayerByCharacterId(targetCharacterId);
+      if (target) {
+        worldX = target.worldX;
+        worldY = target.worldY;
+      } else {
+        const dbChar = await this.adminService.findCharacterById(targetCharacterId);
+        if (!dbChar) {
+          return { success: false, message: `Joueur cible "${targetCharacterId}" introuvable.` };
+        }
+        worldX = dbChar.worldX;
+        worldY = dbChar.worldY;
+      }
+    } else {
+      if (typeof rawWorldX !== 'number' || typeof rawWorldY !== 'number') {
+        return { success: false, message: 'Payload invalide : worldX et worldY requis si targetCharacterId absent.' };
+      }
+      worldX = rawWorldX;
+      worldY = rawWorldY;
+    }
+
+    const player = await this.worldService.teleportCharacter(admin.characterId, worldX, worldY, this.server);
     if (!player) {
-      return { success: false, message: `Joueur "${rawId}" introuvable ou non connecté.` };
+      return { success: false, message: `Admin "${rawId}" introuvable ou non connecté.` };
     }
 
     return {
