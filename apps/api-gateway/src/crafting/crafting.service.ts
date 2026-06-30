@@ -20,6 +20,10 @@ import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
 import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
 import { CraftingStation } from './entities/crafting-station.entity';
+import {
+  toCraftingStationWorldObject,
+  CraftingStationWorldObject,
+} from './adapters/crafting-station-world-object.adapter';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import type { LootEntry } from '../world/loot.service';
@@ -220,6 +224,8 @@ export class CraftingService implements OnModuleInit {
     private readonly resultRepo: Repository<CraftingResult>,
     @InjectRepository(CraftingStationTemplate)
     private readonly stationTemplateRepo: Repository<CraftingStationTemplate>,
+    @InjectRepository(CraftingStation)
+    private readonly stationRepo: Repository<CraftingStation>,
     private readonly dataSource: DataSource,
     private readonly skillsService: SkillsService,
     private readonly worldService: WorldService,
@@ -635,6 +641,16 @@ export class CraftingService implements OnModuleInit {
     }
 
     return nearest.station;
+  }
+
+  async getCraftingStationWorldObjects(mapId?: number): Promise<CraftingStationWorldObject[]> {
+    const where = mapId != null ? { mapId } : undefined;
+    const stations = await this.stationRepo.find({
+      where,
+      relations: ['template'],
+      order: { mapId: 'ASC', worldX: 'ASC', worldY: 'ASC' },
+    });
+    return stations.map(toCraftingStationWorldObject);
   }
 
   private craftingStationException(body: CraftingStationErrorBody): BadRequestException {

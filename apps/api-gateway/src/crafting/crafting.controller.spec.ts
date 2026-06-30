@@ -95,6 +95,7 @@ describe('CraftingController', () => {
   beforeEach(async () => {
     craftingService = {
       craft: jest.fn(),
+      getCraftingStationWorldObjects: jest.fn(),
     };
 
     characterService = {
@@ -226,5 +227,18 @@ describe('CraftingController', () => {
     expect(result.skill.xpGained).toBe(10);
     expect(result.consumed).toEqual([{ itemId: 'item-iron_ore', quantity: 3 }]);
     expect(result.produced).toEqual([{ itemId: 'item-iron_bar', quantity: 1 }]);
+  });
+
+  it("stations/world-objects appelle getCraftingStationWorldObjects sans mapId", async () => {
+    craftingService.getCraftingStationWorldObjects.mockResolvedValue([]);
+    const result = await controller.getStationWorldObjects(undefined);
+    expect(craftingService.getCraftingStationWorldObjects).toHaveBeenCalledWith(undefined);
+    expect(result).toEqual([]);
+  });
+
+  it("stations/world-objects convertit mapId string en number", async () => {
+    craftingService.getCraftingStationWorldObjects.mockResolvedValue([]);
+    await controller.getStationWorldObjects("1");
+    expect(craftingService.getCraftingStationWorldObjects).toHaveBeenCalledWith(1);
   });
 });

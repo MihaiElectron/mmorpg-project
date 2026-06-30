@@ -65,7 +65,6 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | Mail monétaire expiré — l'argent reste bloqué dans le wallet `auction_escrow` (pas de retour vendeur automatique) | Medium | Auction MVP 2 |
 | — | Building : aucun seed créé, aucune texture réelle — placeholder debug diamond visible seulement | Low | contenu |
 | — | `CraftingRuntimePanel` toujours embarqué dans ActionPanel (devrait passer par WindowManager) | Low | WindowManager V2 |
-| — | `WorldScene.loadBuildings()` et `loadCraftingStations()` appellent `/admin/buildings/world-objects` et `/admin/crafting-stations/world-objects` — endpoints admin-only (`@Roles(ADMIN)`) : les joueurs non-admin reçoivent 403, bâtiments et forge invisibles | High | fix(world): exposer les endpoints runtime lecture seule |
 | — | Panneau admin "TP vers joueur" lit la position depuis `GET /admin/characters` (DB) et non depuis `ConnectedPlayer` en mémoire — l'admin arrive à la position de login, pas à la position live | Medium | fix(admin): utiliser ConnectedPlayer pour la position live |
 
 ---

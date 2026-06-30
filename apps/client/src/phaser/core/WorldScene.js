@@ -1470,7 +1470,7 @@ export default class WorldScene extends Phaser.Scene {
     const token = localStorage.getItem("token") ?? "";
     if (!token) return;
 
-    fetch(`${import.meta.env.VITE_API_URL}/admin/buildings/world-objects`, {
+    fetch(`${import.meta.env.VITE_API_URL}/buildings/world-objects`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -1596,7 +1596,7 @@ export default class WorldScene extends Phaser.Scene {
     const token = localStorage.getItem("token") ?? "";
     if (!token) return;
 
-    fetch(`${import.meta.env.VITE_API_URL}/admin/crafting-stations/world-objects`, {
+    fetch(`${import.meta.env.VITE_API_URL}/crafting/stations/world-objects`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {

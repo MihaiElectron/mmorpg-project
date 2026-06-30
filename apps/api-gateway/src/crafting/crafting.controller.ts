@@ -112,6 +112,13 @@ export class CraftingController {
    * - whitelist + forbidNonWhitelisted rejette tout champ inconnu du DTO
    * - quantity bornée à [1, 99] par le DTO
    */
+  @Get('stations/world-objects')
+  getStationWorldObjects(@Query('mapId') mapId?: string) {
+    return this.craftingService.getCraftingStationWorldObjects(
+      mapId != null ? Number(mapId) : undefined,
+    );
+  }
+
   @Post('craft')
   async craft(@Request() req, @Body() dto: CraftRequestDto): Promise<CraftResult> {
     const character = await this.characterService.findFirstByUser(req.user.userId);
