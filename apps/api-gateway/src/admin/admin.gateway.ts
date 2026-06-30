@@ -21,7 +21,16 @@ import { toBuildingWorldObject } from '../buildings/adapters/building-world-obje
 import { EconomyService } from '../economy/economy.service';
 import { TransactionType } from '../economy/entities/economic-transaction.entity';
 
-type AddBalancePayload = { characterId: string; amountBronze: number; direction: 'credit' | 'debit' };
+type AddBalancePayload = {
+  characterId: string;
+  /** Montant en bronze pur (rétrocompatibilité). */
+  amountBronze?: number;
+  /** Montant ou solde cible exprimé en or / argent / bronze. */
+  gold?: number;
+  silver?: number;
+  bronze?: number;
+  direction: 'credit' | 'debit' | 'set';
+};
 
 type SpawnPayload = { templateKey: string; worldX: number; worldY: number };
 type TeleportPayload = {
@@ -445,6 +454,27 @@ export class AdminGateway implements OnGatewayConnection {
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
   }
 
+  @SubscribeMessage('admin:get_wallet')
+  async onGetWallet(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { characterId: string },
+  ): Promise<CmdResult & { gold?: number; silver?: number; bronze?: number }> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+    const { characterId } = payload ?? {};
+    if (!characterId) return { success: false, message: 'characterId requis.' };
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) return { success: false, message: `Personnage introuvable.` };
+    const wallet = await this.economyService.getOrCreateWallet('character', characterId);
+    const total = BigInt(wallet.balanceBronze);
+    return {
+      success: true,
+      message: 'OK',
+      gold:   Number(total / 10_000n),
+      silver: Number((total % 10_000n) / 100n),
+      bronze: Number(total % 100n),
+    };
+  }
+
   @SubscribeMessage('admin:add_balance')
   async onAddBalance(
     @ConnectedSocket() client: WorldSocket,
@@ -452,14 +482,29 @@ export class AdminGateway implements OnGatewayConnection {
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
 
-    const { characterId, amountBronze, direction } = payload ?? {};
+    const { characterId, amountBronze, gold, silver, bronze, direction } = payload ?? {};
     if (!characterId) return { success: false, message: 'characterId requis.' };
-    if (!Number.isFinite(amountBronze)) return { success: false, message: 'amountBronze invalide.' };
-    if (direction !== 'credit' && direction !== 'debit') return { success: false, message: 'direction doit être "credit" ou "debit".' };
+    if (direction !== 'credit' && direction !== 'debit' && direction !== 'set') {
+      return { success: false, message: 'direction doit être "credit", "debit" ou "set".' };
+    }
 
-    const amount = BigInt(Math.floor(amountBronze));
-    if (amount <= 0n) return { success: false, message: 'Le montant doit être strictement positif.' };
-    if (amount > 1_000_000_000n) return { success: false, message: 'Montant trop élevé (max 1 000 000 000 bronze).' };
+    // Résolution du montant total en bronze
+    let totalBronze: bigint;
+    if (typeof gold === 'number' || typeof silver === 'number' || typeof bronze === 'number') {
+      const g = Math.floor(gold ?? 0);
+      const s = Math.floor(silver ?? 0);
+      const b = Math.floor(bronze ?? 0);
+      if (g < 0 || s < 0 || b < 0) return { success: false, message: 'Les valeurs or, argent et bronze doivent être positives ou nulles.' };
+      totalBronze = BigInt(g) * 10_000n + BigInt(s) * 100n + BigInt(b);
+    } else if (typeof amountBronze === 'number' && Number.isFinite(amountBronze)) {
+      totalBronze = BigInt(Math.floor(amountBronze));
+    } else {
+      return { success: false, message: 'Montant invalide : fournir gold/silver/bronze ou amountBronze.' };
+    }
+
+    if (direction !== 'set' && totalBronze <= 0n) return { success: false, message: 'Le montant doit être strictement positif.' };
+    if (totalBronze < 0n) return { success: false, message: 'Le solde cible ne peut pas être négatif.' };
+    if (totalBronze > 1_000_000_000n) return { success: false, message: 'Montant trop élevé (max 1 000 000 000 bronze).' };
 
     const character = await this.adminService.findCharacterById(characterId);
     if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
@@ -471,22 +516,46 @@ export class AdminGateway implements OnGatewayConnection {
         await this.economyService.credit({
           type: TransactionType.ADMIN,
           destinationWalletId: wallet.id,
-          amountBronze: amount,
+          amountBronze: totalBronze,
           actorId: client.data.userId,
         });
-      } else {
+      } else if (direction === 'debit') {
         await this.economyService.debit({
           type: TransactionType.ADMIN,
           sourceWalletId: wallet.id,
-          amountBronze: amount,
+          amountBronze: totalBronze,
           actorId: client.data.userId,
         });
+      } else {
+        // set : calculer le delta et créditer ou débiter
+        const current = BigInt(wallet.balanceBronze);
+        const delta = totalBronze - current;
+        if (delta > 0n) {
+          await this.economyService.credit({
+            type: TransactionType.ADMIN,
+            destinationWalletId: wallet.id,
+            amountBronze: delta,
+            actorId: client.data.userId,
+          });
+        } else if (delta < 0n) {
+          await this.economyService.debit({
+            type: TransactionType.ADMIN,
+            sourceWalletId: wallet.id,
+            amountBronze: -delta,
+            actorId: client.data.userId,
+          });
+        }
       }
+
       const refreshed = await this.economyService.getOrCreateWallet('character', characterId);
-      const sign = direction === 'credit' ? '+' : '-';
+      const newTotal = BigInt(refreshed.balanceBronze);
+      const g = Number(newTotal / 10_000n);
+      const s = Number((newTotal % 10_000n) / 100n);
+      const b = Number(newTotal % 100n);
+      const sign = direction === 'credit' ? '+' : direction === 'debit' ? '-' : '=';
       return {
         success: true,
-        message: `${character.name} : ${sign}${amount} bronze → solde ${refreshed.balanceBronze} bronze.`,
+        message: `${character.name} : ${sign}${totalBronze} bronze → solde ${g}g ${s}a ${b}b.`,
       };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur économique.' };

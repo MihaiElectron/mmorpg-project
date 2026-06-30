@@ -262,6 +262,81 @@ describe("AdminGateway — admin:add_balance", () => {
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/insuffisant/i);
   });
+
+  it("gold/silver/bronze convertis en bronze total : 1g 2a 3b = 10203 bronze", async () => {
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", gold: 1, silver: 2, bronze: 3, direction: "credit" },
+    );
+    expect(result.success).toBe(true);
+    expect(economyServiceMock.credit).toHaveBeenCalledWith(
+      expect.objectContaining({ amountBronze: 10203n }),
+    );
+  });
+
+  it("set solde supérieur au solde actuel → crédite le delta", async () => {
+    // wallet initial = 5000, target = 8000 → credit 3000
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", amountBronze: 8000, direction: "set" },
+    );
+    expect(result.success).toBe(true);
+    expect(economyServiceMock.credit).toHaveBeenCalledWith(
+      expect.objectContaining({ amountBronze: 3000n }),
+    );
+    expect(economyServiceMock.debit).not.toHaveBeenCalled();
+  });
+
+  it("set solde inférieur au solde actuel → débite le delta", async () => {
+    // wallet initial = 5000, target = 2000 → debit 3000
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", amountBronze: 2000, direction: "set" },
+    );
+    expect(result.success).toBe(true);
+    expect(economyServiceMock.debit).toHaveBeenCalledWith(
+      expect.objectContaining({ amountBronze: 3000n }),
+    );
+    expect(economyServiceMock.credit).not.toHaveBeenCalled();
+  });
+
+  it("set solde égal au solde actuel → aucune mutation", async () => {
+    // wallet initial = 5000, target = 5000 → no-op
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", amountBronze: 5000, direction: "set" },
+    );
+    expect(result.success).toBe(true);
+    expect(economyServiceMock.credit).not.toHaveBeenCalled();
+    expect(economyServiceMock.debit).not.toHaveBeenCalled();
+  });
+
+  it("montants négatifs refusés", async () => {
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", gold: -1, silver: 0, bronze: 0, direction: "credit" },
+    );
+    expect(result.success).toBe(false);
+    expect(economyServiceMock.credit).not.toHaveBeenCalled();
+  });
+
+  it("direction set à 0 — solde à zéro → débite tout", async () => {
+    // wallet initial = 5000, target = 0 → debit 5000
+    const { gw, economyServiceMock } = makeAddBalanceGateway();
+    const result = await (gw as any).onAddBalance(
+      makeClient({ role: "admin", userId: "admin-1" }),
+      { characterId: "char-1", amountBronze: 0, direction: "set" },
+    );
+    expect(result.success).toBe(true);
+    expect(economyServiceMock.debit).toHaveBeenCalledWith(
+      expect.objectContaining({ amountBronze: 5000n }),
+    );
+  });
 });
 
 // ─── admin:teleport ───────────────────────────────────────────────────────────

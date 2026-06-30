@@ -4,14 +4,22 @@ import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import { type WorldObject } from "../DevTools/types/worldObject.types";
 import {
+  type FieldDef,
   type GroupedSectionConfig,
   type SectionConfig,
   type ConsoleLine,
   type InstanceAction,
+  ITEMS_PER_PAGE,
   fetchAdmin,
   ackPromise,
   getSocket,
+  getAdminCharacterId,
   kbHandlers,
+  useDraft,
+  usePagination,
+  PaginationControls,
+  StatField,
+  startDrag,
   GroupedSection,
   EntitySection,
 } from "./adminPanel.shared";
@@ -258,27 +266,14 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   ];
 }
 
-const SECTION_CONFIGS: SectionConfig[] = [
-  {
-    id: "players",
-    title: "Joueurs",
-    fetchPath: "/admin/characters",
-    saveEvent: "admin:update_character",
-    getEntityKey: (c) => c.id,
-    getDisplayKey: (c) => c.id,
-    getName: (c) => c.name,
-    fields: [
-      { key: "level",     label: "Niv",    min: 1 },
-      { key: "health",    label: "HP",     min: 0 },
-      { key: "maxHealth", label: "HP max", min: 1 },
-      { key: "attack",    label: "ATK",    min: 0 },
-      { key: "defense",   label: "DEF",    min: 0 },
-    ],
-    getTpPosition: (c) => c.worldX != null && c.worldY != null ? { worldX: c.worldX, worldY: c.worldY } : null,
-    getTpCharacterId: (c) => c.id ?? null,
-    dragEvent: "admin:teleport",
-    getDragPayload: (c, worldX, worldY) => ({ characterId: c.id, worldX, worldY }),
-  },
+// ── Champs stats joueur ───────────────────────────────────────────────────────
+
+const PLAYER_STAT_FIELDS: FieldDef[] = [
+  { key: "level",     label: "Niv",    min: 1 },
+  { key: "health",    label: "HP",     min: 0 },
+  { key: "maxHealth", label: "HP max", min: 1 },
+  { key: "attack",    label: "ATK",    min: 0 },
+  { key: "defense",   label: "DEF",    min: 0 },
 ];
 
 // ── Adapters WOM → formes legacy ──────────────────────────────────────────────
@@ -439,62 +434,175 @@ const EMPTY_MOVEMENT_METRICS: MovementMetrics = {
   mapMismatch: 0,
 };
 
-// ── EconomySection ────────────────────────────────────────────────────────────
+// ── PlayerWalletPanel — monnaie intégrée dans l'inspecteur joueur ────────────
 
-function EconomySection({ characters, onResult }: { characters: any[]; onResult: (text: string, ok: boolean) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [characterId, setCharacterId] = useState("");
-  const [amountBronze, setAmountBronze] = useState(100);
+function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onResult: (text: string, ok: boolean) => void }) {
+  const [gold, setGold] = useState(0);
+  const [silver, setSilver] = useState(0);
+  const [bronze, setBronze] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
-  async function send(direction: "credit" | "debit") {
+  async function fetchBalance() {
+    const socket = getSocket();
+    if (!socket?.connected) return;
+    setFetching(true);
+    const res = await ackPromise(socket, "admin:get_wallet", { characterId });
+    setFetching(false);
+    if (res.success) {
+      setGold((res as any).gold ?? 0);
+      setSilver((res as any).silver ?? 0);
+      setBronze((res as any).bronze ?? 0);
+    }
+  }
+
+  useEffect(() => { fetchBalance(); }, [characterId]);
+
+  async function save() {
     const socket = getSocket();
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    if (!characterId) { onResult("Sélectionner un personnage.", false); return; }
-    const amount = Math.floor(amountBronze);
-    if (amount <= 0) { onResult("Le montant doit être positif.", false); return; }
+    const g = Math.floor(gold);
+    const s = Math.floor(silver);
+    const b = Math.floor(bronze);
+    if (g < 0 || s < 0 || b < 0) { onResult("Les valeurs doivent être positives ou nulles.", false); return; }
     setLoading(true);
-    const result = await ackPromise(socket, "admin:add_balance", { characterId, amountBronze: amount, direction });
+    const result = await ackPromise(socket, "admin:add_balance", { characterId, gold: g, silver: s, bronze: b, direction: "set" });
     setLoading(false);
     onResult(result.message, result.success);
+    if (result.success) await fetchBalance();
+  }
+
+  const busy = loading || fetching;
+
+  return (
+    <div className="admin-panel__player-wallet">
+      <span className="admin-panel__subsection-label">Monnaie{fetching ? " …" : ""}</span>
+      <div className="admin-panel__template-stats">
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Or</span>
+          <input className="admin-panel__template-stat-input" type="number" min={0} step={1}
+            value={gold} onChange={(e) => setGold(Number(e.target.value))} disabled={busy} {...kbHandlers} />
+        </label>
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Argent</span>
+          <input className="admin-panel__template-stat-input" type="number" min={0} step={1}
+            value={silver} onChange={(e) => setSilver(Number(e.target.value))} disabled={busy} {...kbHandlers} />
+        </label>
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Bronze</span>
+          <input className="admin-panel__template-stat-input" type="number" min={0} step={1}
+            value={bronze} onChange={(e) => setBronze(Number(e.target.value))} disabled={busy} {...kbHandlers} />
+        </label>
+      </div>
+      <div className="admin-panel__button-row">
+        <button className="admin-panel__apply-btn" disabled={busy} onClick={save}>{loading ? "…" : "Enregistrer le solde"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── PlayerSection — inspecteur joueurs ────────────────────────────────────────
+
+function PlayerSection({ players, onResult }: { players: any[]; onResult: (text: string, ok: boolean) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = players.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const pag = usePagination(filtered.length);
+  const paginated = filtered.slice((pag.page - 1) * ITEMS_PER_PAGE, pag.page * ITEMS_PER_PAGE);
+
+  useEffect(() => { pag.goToPage(1); }, [search]);
+
+  const draft = useDraft(PLAYER_STAT_FIELDS);
+
+  async function onTp(player: any) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const characterId = getAdminCharacterId();
+    if (!characterId) { onResult("Personnage introuvable.", false); return; }
+    const result = await ackPromise(socket, "admin:teleport", { characterId, targetCharacterId: player.id });
+    onResult(result.message, result.success);
+  }
+
+  async function onApply(player: any) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const dk = player.id as string;
+    const dirtyFields = draft.collectDirty(dk, player);
+    if (!Object.keys(dirtyFields).length) return;
+    draft.setSaving((prev) => ({ ...prev, [dk]: true }));
+    const result = await ackPromise(socket, "admin:update_character", { id: player.id, fields: dirtyFields });
+    draft.setSaving((prev) => ({ ...prev, [dk]: false }));
+    onResult(result.message, result.success);
+    if (result.success) { Object.assign(player, dirtyFields); draft.clearDraft(dk); }
   }
 
   return (
     <section className="admin-panel__section">
-      <div className="admin-panel__section-toggle" onClick={() => setIsOpen((o) => !o)}>
-        <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-        Économie
+      <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
+        <span className="admin-panel__section-toggle">
+          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
+          Joueurs
+        </span>
+        {isOpen && <PaginationControls {...pag} />}
       </div>
+
       {isOpen && (
-        <div className="admin-panel__template-item">
-          <div className="admin-panel__template-stats">
-            <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">Personnage</span>
-              <select className="admin-panel__template-stat-input" value={characterId}
-                onChange={(e) => setCharacterId(e.target.value)} {...kbHandlers}>
-                <option value="">— choisir —</option>
-                {characters.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="admin-panel__template-stat">
-              <span className="admin-panel__template-stat-label">Bronze</span>
-              <input className="admin-panel__template-stat-input" type="number" min={1} step={1}
-                value={amountBronze}
-                onChange={(e) => setAmountBronze(Number(e.target.value))}
-                {...kbHandlers} />
-            </label>
+        <>
+          <input className="admin-panel__search" type="text"
+            placeholder="Filtrer joueurs…"
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()} {...kbHandlers} spellCheck={false} />
+
+          {players.length === 0 && <p className="admin-panel__loading">Chargement…</p>}
+          {players.length > 0 && filtered.length === 0 && <p className="admin-panel__loading">Aucun résultat.</p>}
+
+          <div className="admin-panel__template-list">
+            {paginated.map((player) => {
+              const dk = player.id as string;
+              const hasTp = player.worldX != null && player.worldY != null;
+              return (
+                <div key={dk} className="admin-panel__template-item">
+                  <div className="admin-panel__item-header">
+                    <span className="admin-panel__drag-handle" title="Glisser sur la map"
+                      onMouseDown={(e) => startDrag(e, player.name, (worldX, worldY) => {
+                        const socket = getSocket();
+                        if (!socket?.connected) return;
+                        ackPromise(socket, "admin:teleport", { characterId: player.id, worldX: Math.round(worldX), worldY: Math.round(worldY) })
+                          .then((r) => onResult(r.message, r.success));
+                      })}>⠿</span>
+                    <span className="admin-panel__template-name">{player.name}</span>
+                    {hasTp && (
+                      <button className="admin-panel__tp-btn"
+                        title={`Tp WU (${player.worldX}, ${player.worldY})`}
+                        onClick={() => onTp(player)}>↓ Tp</button>
+                    )}
+                  </div>
+
+                  <span className="admin-panel__subsection-label">Stats</span>
+                  <div className="admin-panel__template-stats">
+                    {PLAYER_STAT_FIELDS.map((f) => (
+                      <label key={f.key} className="admin-panel__template-stat">
+                        <span className="admin-panel__template-stat-label">{f.label}</span>
+                        <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
+                          value={draft.getDisplayField(dk, f.key, player)}
+                          onChange={(v) => draft.onChange(dk, f.key, v)} />
+                      </label>
+                    ))}
+                  </div>
+                  {draft.hasAnyDirty(dk, player) && (
+                    <button className="admin-panel__apply-btn"
+                      disabled={!!draft.saving[dk]} onClick={() => onApply(player)}>
+                      {draft.saving[dk] ? "…" : "Appliquer"}
+                    </button>
+                  )}
+
+                  <PlayerWalletPanel characterId={dk} onResult={onResult} />
+                </div>
+              );
+            })}
           </div>
-          <div className="admin-panel__button-row">
-            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => send("credit")}>
-              {loading ? "…" : "Créditer"}
-            </button>
-            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => send("debit")}>
-              {loading ? "…" : "Débiter"}
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </section>
   );
@@ -1255,16 +1363,7 @@ export default function AdminPanelWOM() {
         />
       ))}
 
-      {SECTION_CONFIGS.map((cfg) => (
-        <EntitySection
-          key={cfg.id}
-          config={cfg}
-          items={sectionData[cfg.id] ?? []}
-          onResult={pushResult}
-        />
-      ))}
-
-      <EconomySection characters={sectionData["players"] ?? []} onResult={pushResult} />
+      <PlayerSection players={sectionData["players"] ?? []} onResult={pushResult} />
 
       <section className="admin-panel__section">
         <div className="admin-panel__dual-header">

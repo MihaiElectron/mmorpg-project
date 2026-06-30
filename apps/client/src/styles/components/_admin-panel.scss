@@ -794,6 +794,24 @@
     margin-top: 8px;
   }
 
+  // ── Inspecteur joueur — sous-sections ────────────────────────────────────
+  &__subsection-label {
+    display: block;
+    font-size: 0.68rem;
+    color: vars.$color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 6px;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 6px;
+  }
+
+  &__player-wallet {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   // ── Chargement / erreur ───────────────────────────────────────────────────
   &__loading,
   &__empty {
