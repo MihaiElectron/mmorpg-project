@@ -5,6 +5,8 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { Item } from '../items/entities/item.entity';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { CharactersModule } from '../characters/characters.module';
+import { WorldModule } from '../world/world.module';
+import { BuildingsModule } from '../buildings/buildings.module';
 import { MailService } from './mail.service';
 import { MailController } from './mail.controller';
 
@@ -13,6 +15,8 @@ import { MailController } from './mail.controller';
     TypeOrmModule.forFeature([MailMessage, ItemInstance, Item]),
     ItemTransferModule,
     CharactersModule,
+    WorldModule,
+    BuildingsModule,
   ],
   providers: [MailService],
   controllers: [MailController],

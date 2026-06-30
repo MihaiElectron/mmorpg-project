@@ -17,6 +17,19 @@ import {
   AuctionDurationHours,
 } from './entities/auction-listing.entity';
 
+export interface AuctionListingDto {
+  id: string;
+  itemId: string;
+  itemName: string;
+  itemImage: string;
+  buyoutPriceBronze: string;
+  status: AuctionListingStatus;
+  sellerCharacterId: string;
+  buyerCharacterId: string | null;
+  endsAt: Date;
+  createdAt: Date;
+}
+
 export interface CreateListingInput {
   sellerCharacterId: string;
   itemInstanceId: string;
@@ -45,17 +58,49 @@ export class AuctionService {
 
   // ── Lecture ──────────────────────────────────────────────────────────────
 
-  async getActiveListings(): Promise<AuctionListing[]> {
-    return this.listings.find({
+  async getActiveListings(): Promise<AuctionListingDto[]> {
+    const rows = await this.listings.find({
       where: { status: AuctionListingStatus.LISTED },
       order: { createdAt: 'DESC' },
     });
+    return this.enrichListings(rows);
   }
 
-  async getSellerListings(sellerCharacterId: string): Promise<AuctionListing[]> {
-    return this.listings.find({
+  async getSellerListings(sellerCharacterId: string): Promise<AuctionListingDto[]> {
+    const rows = await this.listings.find({
       where: { sellerCharacterId },
       order: { createdAt: 'DESC' },
+    });
+    return this.enrichListings(rows);
+  }
+
+  async getBuyerPendingListings(buyerCharacterId: string): Promise<AuctionListingDto[]> {
+    const rows = await this.listings.find({
+      where: { buyerCharacterId, status: AuctionListingStatus.SOLD_PENDING_CLAIM },
+      order: { updatedAt: 'DESC' },
+    });
+    return this.enrichListings(rows);
+  }
+
+  private async enrichListings(rows: AuctionListing[]): Promise<AuctionListingDto[]> {
+    if (rows.length === 0) return [];
+    const itemIds = [...new Set(rows.map((r) => r.itemId))];
+    const items = await this.items.findByIds(itemIds);
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    return rows.map((r) => {
+      const item = itemMap.get(r.itemId);
+      return {
+        id: r.id,
+        itemId: r.itemId,
+        itemName: item?.name ?? r.itemId,
+        itemImage: item?.image ?? '',
+        buyoutPriceBronze: r.buyoutPriceBronze,
+        status: r.status,
+        sellerCharacterId: r.sellerCharacterId,
+        buyerCharacterId: r.buyerCharacterId,
+        endsAt: r.endsAt,
+        createdAt: r.createdAt,
+      };
     });
   }
 
