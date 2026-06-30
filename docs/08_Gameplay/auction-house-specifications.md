@@ -2,34 +2,43 @@
 
 ## Metadata
 
-- Status: Draft
+- Status: Implemented
 - Owner: Project
-- Last updated: 2026-06-27
-- Depends on: docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md, docs/01_Architecture/adr/ADR-0007-auction-house-authority.md, docs/08_Gameplay/settlement-specifications.md, docs/08_Gameplay/settlement-mvp-slicing.md
+- Last updated: 2026-06-30
+- Depends on: docs/01_Architecture/adr/ADR-0006-economy-transaction-model.md, docs/01_Architecture/adr/ADR-0007-auction-house-authority.md, docs/01_Architecture/adr/ADR-0013-market-lots.md, docs/08_Gameplay/settlement-specifications.md, docs/08_Gameplay/settlement-mvp-slicing.md
 - Used by: Project owner, game design, developers, repository-aware coding agents
 
 ## Scope
 
-This document defines the functional specification for the Auction House before
-implementation of Auction MVP 1.
-
-It is documentation only. It does not define database migrations, TypeORM
-entities, NestJS services, controllers, DTOs, frontend components, DevTools
-panels, Socket.IO payloads, or Runtime code.
+This document defines the functional specification for the Auction House (MVP 1
++ Market Lots extension).
 
 Auction MVP 1 is fixed-price only. Timed ascending auctions, bids, taxes,
 Treasury, mandatory buildings, multi-city markets, and advanced UI are future
 work.
 
-MVP 1 decisions:
+MVP 1 decisions (implemented):
 
 - no persisted `Draft`; listing creation is atomic;
 - fixed-price listings use `buyoutPriceBronze` only;
-- seller is credited immediately in bronze during the purchase transaction;
-- buyer receives the purchased item through manual claim;
+- seller is credited via mail system after purchase;
+- buyer receives the purchased item through manual claim in Mailbox;
 - supported durations are 24h, 48h, and 72h;
 - a player can have at most 20 active listings;
-- only non-stackable item instances are supported.
+- INSTANCE items listed by `itemInstanceId`; STACKABLE items listed by `itemId + quantity` (Market Lots, ADR-0013).
+
+## Market Lots (ADR-0013, implemented 2026-06-30)
+
+STACKABLE items (objectMode = STACKABLE) are sold via temporary `ItemInstance`
+objects of type LOT. A LOT is created atomically by decrementing
+`Inventory.quantity` and exists only in LISTED → IN_MAIL states before being
+DESTROYED at claim time (crediting Inventory).
+
+The pipeline is identical to the INSTANCE pipeline: Auction → Mail → Claim.
+No parallel architecture was introduced.
+
+For schema constraints and runtime validation protocol, see:
+`docs/06_Database/market-lots-runtime-validation.md`
 
 ## 1. Vision
 
