@@ -32,7 +32,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Mail | Inbox, claim pièce jointe ou argent, courrier système (sender `SYSTEM`) — `MailboxWindow` (validation distance building) |
 | Buildings | `BuildingTemplate`/`Building`, WOM adapter, CRUD admin WS, rendu WorldScene, drag-to-map, WindowManager |
 | Économie joueur | `GET /economy/me/balance` — solde gold/argent/bronze affiché dans le panneau Perso ; admin crédit/débit via `admin:add_balance` (EconomyService, ledger, rôle vérifié) |
-| DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry |
+| DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry, Player Inspector (stats, monnaie, injection d'objets) |
 | Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 
 ---
@@ -104,6 +104,11 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 - **`lootPool`** non éditable via socket — `admin:update_resource_template` n'accepte que `defaultRemainingLoots` et `respawnDelayMs`.
 - **Tiled** : format TMJ natif uniquement, tileset inliné dans le TMJ. Aucun convertisseur TMX→JSON.
 - **Socket** : singleton créé dans `WorldPage.jsx`, partagé via `window.game.socket`. Stores Zustand = singletons `window.__GLOBAL_*_STORE__`.
+- **Équipement ItemInstance** : `POST /inventory/:characterId/equip-instance/:instanceId` vérifie que `character.userId === req.user.userId` avant toute transaction — un joueur ne peut pas équiper sur le personnage d'un autre compte. `ItemTransferService.applyEquip` refuse explicitement tout `instanceType !== NORMAL` (`Cannot equip a LOT item instance`).
+- **Stats Equipment** : `Character.baseAttack`/`baseDefense` = stats permanentes (jamais modifiées par l'équipement). `Character.attack`/`defense` = stats finales calculées. `recalculateEquipmentStats(manager, characterId)` (`characters/equipment-stats.helper.ts`) applique `finalAttack = baseAttack + Σ item.attack` après chaque equip/unequip, dans la même transaction. Le frontend reçoit les stats à jour via `GET /characters/me`.
+- **`character:reload`** : événement socket émis par le serveur vers le socket du personnage concerné après toute mutation admin (`update_character`, `add_balance`, `give_item`). `WorldScene` écoute cet événement et appelle `loadCharacter()`. Réutilisable par tous les domaines (équipement, bank, mail, crafting, level-up, skills, etc.).
+- **`admin:give_item`** : `{ characterId, itemId, quantity? }` — délègue exclusivement à `ItemMaterializationService.materialize()` dans une transaction DataSource. Le serveur détermine automatiquement STACKABLE vs INSTANCE depuis `item.objectMode`. Le Studio ne choisit jamais. Suivi de `character:reload`.
+- **Studio SDK / ItemTemplate** : le Studio manipule uniquement les `ItemTemplate` (catalogue). Les `ItemInstance` sont créées exclusivement par les Runtime Services (`ItemMaterializationService`, `ItemTransferService`). Aucun INSERT direct depuis l'admin.
 
 ---
 
