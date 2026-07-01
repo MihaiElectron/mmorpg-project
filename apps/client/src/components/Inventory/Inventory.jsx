@@ -10,16 +10,52 @@ import {
   isValidWorldDrop,
 } from "./inventoryWorldDrop";
 
+const SLOT_COUNT = 18;
+
 export default function Inventory() {
   const inventory = useCharacterStore((s) => s.inventory);
   const equipItem = useCharacterStore((s) => s.equipItem);
+  const unequipItem = useCharacterStore((s) => s.unequipItem);
+  const setDragEquipSource = useCharacterStore((s) => s.setDragEquipSource);
+  const clearDragEquipSource = useCharacterStore((s) => s.clearDragEquipSource);
+
   const [draggedEntry, setDraggedEntry] = useState(null);
+  const [draggedSlotIndex, setDraggedSlotIndex] = useState(null);
+  const [dragOverSlotIndex, setDragOverSlotIndex] = useState(null);
+  const [dragOverInventory, setDragOverInventory] = useState(false);
   const [pendingDrop, setPendingDrop] = useState(null);
   const [dropQty, setDropQty] = useState(1);
+  // slotMap[i] = inventory entry id | null — persiste le tri dans la session
+  const [slotMap, setSlotMap] = useState(() => new Array(SLOT_COUNT).fill(null));
   const qtyInputRef = useRef(null);
 
   const safeInventory = Array.isArray(inventory) ? inventory : [];
-  const inventorySlots = Array.from({ length: 18 }, (_, i) => i);
+
+  // Resync slotMap quand l'inventaire change (equip/unequip/loot) :
+  // conserve les positions existantes, place les nouvelles entrées dans les slots libres.
+  useEffect(() => {
+    setSlotMap((prev) => {
+      const next = new Array(SLOT_COUNT).fill(null);
+      const placed = new Set();
+      prev.forEach((id, i) => {
+        if (id && safeInventory.some((inv) => inv.id === id)) {
+          next[i] = id;
+          placed.add(id);
+        }
+      });
+      safeInventory.forEach((inv) => {
+        if (!placed.has(inv.id)) {
+          const free = next.indexOf(null);
+          if (free !== -1) next[free] = inv.id;
+        }
+      });
+      return next;
+    });
+  }, [inventory]);
+
+  const displaySlots = slotMap.map((id) =>
+    id ? (safeInventory.find((inv) => inv.id === id) ?? null) : null,
+  );
 
   useEffect(() => {
     if (pendingDrop) {
@@ -27,6 +63,7 @@ export default function Inventory() {
     }
   }, [pendingDrop]);
 
+  // Listeners window pour le drop vers le monde — actifs seulement pendant un drag inventaire
   useEffect(() => {
     if (!draggedEntry) return undefined;
 
@@ -56,6 +93,9 @@ export default function Inventory() {
 
     function handleDragEnd() {
       setDraggedEntry(null);
+      setDraggedSlotIndex(null);
+      setDragOverSlotIndex(null);
+      clearDragEquipSource();
     }
 
     window.addEventListener("dragover", handleDragOver);
@@ -69,15 +109,90 @@ export default function Inventory() {
     };
   }, [draggedEntry]);
 
-  function handleDragStart(event, inv) {
+  // ── Drag depuis un slot inventaire ────────────────────────────────────────
+
+  function handleDragStart(event, inv, slotIndex) {
     if (!inv?.item?.id || inv.quantity < 1) {
       event.preventDefault();
       return;
     }
+    const payload = JSON.stringify({
+      instanceId: inv.instanceId ?? null,
+      itemId: inv.item.id,
+      itemSlot: inv.item.slot ?? null,
+    });
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-inventory-item", inv.item.id);
+    event.dataTransfer.setData("application/x-inventory-item", payload);
     setDraggedEntry(inv);
+    setDraggedSlotIndex(slotIndex);
+    setDragEquipSource({ type: "inventory", itemSlot: inv.item.slot ?? null, instanceId: inv.instanceId ?? null });
   }
+
+  // ── Drop inventaire → inventaire (réorganisation) ─────────────────────────
+
+  function handleSlotDragOver(event, slotIndex) {
+    if (!event.dataTransfer.types.includes("application/x-inventory-item")) return;
+    if (draggedSlotIndex === slotIndex) return;
+    event.preventDefault();
+    event.stopPropagation(); // empêche le handler world-drop window
+    event.dataTransfer.dropEffect = "move";
+    setDragOverSlotIndex(slotIndex);
+  }
+
+  function handleSlotDragLeave(event) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setDragOverSlotIndex(null);
+    }
+  }
+
+  function handleSlotDrop(event, toIndex) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverSlotIndex(null);
+    const fromIndex = draggedSlotIndex;
+    if (fromIndex === null || fromIndex === toIndex) return;
+    setSlotMap((prev) => {
+      const next = [...prev];
+      [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+      return next;
+    });
+    setDraggedEntry(null);
+    setDraggedSlotIndex(null);
+    clearDragEquipSource();
+  }
+
+  // ── Drop équipement → inventaire (déséquiper par drag) ────────────────────
+
+  function handleInventoryDragOver(event) {
+    if (event.dataTransfer.types.includes("application/x-equipment-slot")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDragOverInventory(true);
+    }
+  }
+
+  function handleInventoryDragLeave(event) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setDragOverInventory(false);
+    }
+  }
+
+  async function handleInventoryDrop(event) {
+    setDragOverInventory(false);
+    if (!event.dataTransfer.types.includes("application/x-equipment-slot")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const raw = event.dataTransfer.getData("application/x-equipment-slot");
+    if (!raw) return;
+    try {
+      const { slot } = JSON.parse(raw);
+      if (slot) await unequipItem(slot);
+    } catch (e) {
+      console.error("[Inventory] equipment drop parse error", e);
+    }
+  }
+
+  // ── Drop vers le monde (modal quantité) ───────────────────────────────────
 
   async function confirmDrop() {
     if (!pendingDrop) return;
@@ -103,18 +218,32 @@ export default function Inventory() {
   }
 
   return (
-    <div className="inventory-section">
+    <div
+      className={`inventory-section${dragOverInventory ? " inventory-section--drag-over" : ""}`}
+      onDragOver={handleInventoryDragOver}
+      onDragLeave={handleInventoryDragLeave}
+      onDrop={handleInventoryDrop}
+    >
       <div className="inventory-grid">
-        {inventorySlots.map((slotIndex) => {
-          const inv = safeInventory[slotIndex];
+        {displaySlots.map((inv, slotIndex) => {
           const item = inv?.item;
+          const isDragging = draggedSlotIndex === slotIndex;
+          const isDropTarget = dragOverSlotIndex === slotIndex && !isDragging;
 
           return (
             <div
               key={slotIndex}
-              className={`inventory-slot${item ? " inventory-slot--filled" : ""}${draggedEntry?.id === inv?.id ? " inventory-slot--dragging" : ""}`}
+              className={[
+                "inventory-slot",
+                item ? "inventory-slot--filled" : "",
+                isDragging ? "inventory-slot--dragging" : "",
+                isDropTarget ? "inventory-slot--drop-target" : "",
+              ].filter(Boolean).join(" ")}
               draggable={Boolean(item)}
-              onDragStart={(event) => handleDragStart(event, inv)}
+              onDragStart={(event) => handleDragStart(event, inv, slotIndex)}
+              onDragOver={(event) => handleSlotDragOver(event, slotIndex)}
+              onDragLeave={handleSlotDragLeave}
+              onDrop={(event) => handleSlotDrop(event, slotIndex)}
               onDoubleClick={() => inv && equipItem(inv.id)}
               title={
                 item

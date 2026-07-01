@@ -8,7 +8,7 @@
 
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -17,6 +17,12 @@ import { Item } from '../items/entities/item.entity';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { recalculateEquipmentStats } from '../characters/equipment-stats.helper';
+
+const SLOT_PAIRS: [string, string][] = [
+  ['left-earring', 'right-earring'],
+  ['left-ring', 'right-ring'],
+  ['left-bracelet', 'right-bracelet'],
+];
 
 @Injectable()
 export class InventoryService {
@@ -119,8 +125,10 @@ export class InventoryService {
       if (!item) throw new NotFoundException('Item not found');
       if (!item.slot) throw new BadRequestException('Item has no slot defined');
 
+      const targetSlot = await this.resolveEquipSlot(manager, characterId, item.slot);
+
       const existing = await manager.findOne(CharacterEquipment, {
-        where: { characterId, slot: item.slot },
+        where: { characterId, slot: targetSlot },
       });
       if (existing) {
         if (existing.itemInstanceId) {
@@ -137,13 +145,13 @@ export class InventoryService {
             await manager.save(Inventory, oldInv);
           }
         }
-        await manager.delete(CharacterEquipment, { characterId, slot: item.slot });
+        await manager.delete(CharacterEquipment, { characterId, slot: targetSlot });
       }
 
       const equipment = manager.create(CharacterEquipment, {
         characterId,
         itemId: item.id,
-        slot: item.slot,
+        slot: targetSlot,
         itemInstanceId: rawInstance.id,
       });
       await manager.save(CharacterEquipment, equipment);
@@ -156,6 +164,20 @@ export class InventoryService {
       await recalculateEquipmentStats(manager, characterId);
       return equipped;
     });
+  }
+
+  private async resolveEquipSlot(
+    manager: EntityManager,
+    characterId: string,
+    itemSlot: string,
+  ): Promise<string> {
+    const pair = SLOT_PAIRS.find((p) => p.includes(itemSlot));
+    if (!pair) return itemSlot;
+    for (const slot of pair) {
+      const occupied = await manager.findOne(CharacterEquipment, { where: { characterId, slot } });
+      if (!occupied) return slot;
+    }
+    return pair[0];
   }
 
   // ---------------------------------------------------------------------------

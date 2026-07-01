@@ -10,11 +10,14 @@ const storeLogic = (set, get) => ({
   equipment: {},
   skills: [],
   balance: null,
+  dragEquipSource: null,
 
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),
-  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [], balance: null }),
+  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [], balance: null, dragEquipSource: null }),
+  setDragEquipSource: (source) => set({ dragEquipSource: source }),
+  clearDragEquipSource: () => set({ dragEquipSource: null }),
   toggleOpen: () => {
     set((s) => ({ isOpen: !s.isOpen }));
   },
@@ -65,7 +68,7 @@ const storeLogic = (set, get) => ({
       const data = await res.json();
       const equipmentMap = {};
       data.equipment?.forEach((eq) => {
-        if (eq.slot && eq.item) equipmentMap[eq.slot] = eq.item;
+        if (eq.slot && eq.item) equipmentMap[eq.slot] = { ...eq.item, instanceId: eq.itemInstanceId ?? null };
       });
       const inventory = (data.inventory || [])
         .filter((inv) => !inv.equipped)
@@ -165,10 +168,9 @@ const storeLogic = (set, get) => ({
       const token = localStorage.getItem("token");
       const character = get().character;
       if (!token || !character) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${character.id}/unequip`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory/${character.id}/unequip/${encodeURIComponent(slot)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ slot }),
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) await get().loadCharacter();
     } catch (err) {

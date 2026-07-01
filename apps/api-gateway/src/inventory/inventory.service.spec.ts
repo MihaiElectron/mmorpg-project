@@ -520,6 +520,101 @@ describe("InventoryService.equipItemInstance — Equipment Runtime V2", () => {
   });
 });
 
+describe("InventoryService.equipItemInstance — auto-slot earring/ring/bracelet", () => {
+  const characterId = "char-1";
+  const earringItem = makeItem({
+    id: "earring-1",
+    type: "accessory",
+    category: "earring",
+    slot: "left-earring" as any,
+  });
+
+  it("equipe left-earring quand les deux slots sont libres", async () => {
+    const instance = makeInstance({ itemId: earringItem.id });
+    const equippedInstance = makeInstance({ id: instance.id, state: ItemInstanceState.EQUIPPED });
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(equippedInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance)     // rawInstance
+        .mockResolvedValueOnce(earringItem)  // Item
+        .mockResolvedValueOnce(null)         // resolveEquipSlot: left-earring libre
+        .mockResolvedValueOnce(null),        // existing CharacterEquipment (left-earring)
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+      create: jest.fn((_, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
+
+    expect(manager.save).toHaveBeenCalledWith(
+      CharacterEquipment,
+      expect.objectContaining({ slot: "left-earring" }),
+    );
+  });
+
+  it("equipe right-earring si left-earring est occupe", async () => {
+    const instance = makeInstance({ itemId: earringItem.id });
+    const equippedInstance = makeInstance({ id: instance.id, state: ItemInstanceState.EQUIPPED });
+    const existingLeft = { characterId, itemId: earringItem.id, slot: "left-earring", itemInstanceId: "old-left" };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(equippedInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance)      // rawInstance
+        .mockResolvedValueOnce(earringItem)   // Item
+        .mockResolvedValueOnce(existingLeft)  // resolveEquipSlot: left-earring occupe
+        .mockResolvedValueOnce(null)          // resolveEquipSlot: right-earring libre
+        .mockResolvedValueOnce(null),         // existing CharacterEquipment (right-earring)
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+      create: jest.fn((_, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
+
+    expect(manager.save).toHaveBeenCalledWith(
+      CharacterEquipment,
+      expect.objectContaining({ slot: "right-earring" }),
+    );
+  });
+
+  it("echange left-earring si les deux slots sont occupes (swap pair[0])", async () => {
+    const instance = makeInstance({ itemId: earringItem.id });
+    const equippedInstance = makeInstance({ id: instance.id, state: ItemInstanceState.EQUIPPED });
+    const existingLeft = { characterId, itemId: earringItem.id, slot: "left-earring", itemInstanceId: "old-left" };
+    const existingRight = { characterId, itemId: earringItem.id, slot: "right-earring", itemInstanceId: "old-right" };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(equippedInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance)       // rawInstance
+        .mockResolvedValueOnce(earringItem)    // Item
+        .mockResolvedValueOnce(existingLeft)   // resolveEquipSlot: left-earring occupe
+        .mockResolvedValueOnce(existingRight)  // resolveEquipSlot: right-earring occupe
+        .mockResolvedValueOnce(existingLeft),  // existing CharacterEquipment (left-earring = pair[0])
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+      create: jest.fn((_, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
+
+    expect(itemTransfer.transfer).toHaveBeenNthCalledWith(
+      1, manager, "old-left",
+      expect.objectContaining({ transition: { type: "UNEQUIP", characterId } }),
+    );
+    expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot: "left-earring" });
+    expect(manager.save).toHaveBeenCalledWith(
+      CharacterEquipment,
+      expect.objectContaining({ slot: "left-earring" }),
+    );
+  });
+});
+
 describe("InventoryService.unequipItem — chemin INSTANCE", () => {
   const characterId = "char-1";
   const slot = "weapon";

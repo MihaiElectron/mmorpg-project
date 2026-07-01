@@ -328,6 +328,12 @@ Réorganisation locale. Pas de transition `ItemInstance` — uniquement un
 réordonnancement de présentation côté client. Aucun appel serveur nécessaire sauf
 si une swap entre bags distincts implique une mutation de `containerId`.
 
+**V1 — session-local** : un `slotMap[18]` (tableau d'ids) maintenu dans
+`Inventory.jsx` préserve le tri pendant la session. Résynchronisation conservative
+au `loadCharacter` : les positions connues sont conservées, les nouvelles entrées
+sont placées dans les premiers slots libres. Le tri ne survivra pas à un rechargement
+de page. La persistance serveur (ADR-0015 `InventorySlot`) est planifiée.
+
 ### Inventaire → Slot d'équipement
 
 ```
@@ -348,7 +354,7 @@ Serveur : émet character:reload → Client actualise snapshot
 ```
 Client : drag depuis slot vers Inventory, ou double-clic sur slot
     ↓
-Client : POST /inventory/:characterId/unequip-instance/:instanceId
+Client : POST /inventory/:characterId/unequip/:slot
     ↓
 Serveur : ItemTransferService.transition(UNEQUIP)
     ↓
@@ -584,23 +590,28 @@ l'équipement ou les stats :
 
 ## Plan de migration
 
-### Phase 1 — Equipment UX (prochaine priorité)
+### Phase 1 — Equipment UX ✓ Implémenté (2026-07-01)
 
 **Objectif** : l'expérience d'équipement est complète et correcte pour l'utilisateur
 final, sur le chemin `ItemInstance` uniquement.
 
 Périmètre :
-- Interface d'équipement en jeu (panneau personnage, drag-and-drop, slots visuels)
-- Auto-swap (deux transitions atomiques sous verrou pessimiste)
-- Auto-slot pour earring, ring, bracelet
-- `character:reload` émis systématiquement après equip/unequip
-- Validation du slot compatible (`Item.slot === target`)
-- Affichage des stats avant/après équipement dans l'UI (delta)
+- ✓ Drag inventaire → slot d'équipement (`POST /inventory/:id/equip-instance/:instanceId`)
+- ✓ Drag slot d'équipement → inventaire (`POST /inventory/:id/unequip/:slot`)
+- ✓ Double-clic equip/unequip (existant, corrigé)
+- ✓ Auto-slot pour earring, ring, bracelet (`resolveEquipSlot` côté serveur)
+- ✓ Auto-swap : si slot cible occupé, l'ancienne instance est UNEQUIP'd dans la même transaction
+- ✓ Réorganisation inventaire ↔ inventaire (session-local, `slotMap`)
+- ✓ Feedback visuel : slots vert (compatible vide), orange (swap), rouge (incompatible)
+- ✓ Fix store : `equipment` map conserve `instanceId` ; `unequipItem` utilise le bon endpoint
+- ✓ 3 nouveaux tests backend (auto-slot : libre, partiellement occupé, tous occupés)
+- ⏳ Affichage des stats avant/après équipement dans l'UI (delta) — reporté Phase 3
+- ⏳ `character:reload` socket côté serveur — à brancher quand le socket runtime est câblé
 
 Prérequis : aucun. S'appuie sur le pipeline `ItemInstance` existant.
 
-Fin de phase : un joueur peut équiper, déséquiper, et swapper des items via
-l'interface en jeu. Le runtime snapshot reflète les changements.
+Fin de phase : un joueur peut équiper, déséquiper, swapper et réorganiser ses items
+via l'interface en jeu.
 
 ---
 
@@ -945,9 +956,13 @@ endpoint `POST /characters/:id/equip`) en dehors de la migration de suppression
 - Faut-il un `EquipmentPrerequisiteService` distinct pour vérifier les prérequis
   (level, skill, faction) avant equip, ou cette logique est-elle dans
   `ItemTransferService.applyEquip` directement ?
-- L'auto-slot pour les types multi-emplacements (ring, earring, bracelet) est-il
+- ~~L'auto-slot pour les types multi-emplacements (ring, earring, bracelet) est-il
   géré côté serveur (décision opaque pour le client) ou le client doit-il spécifier
-  explicitement le slot gauche/droit dans le payload ?
+  explicitement le slot gauche/droit dans le payload ?~~
+  **Résolu — V1** : géré côté serveur via `resolveEquipSlot()` (`InventoryService`).
+  Le client soumet uniquement l'`instanceId`. Le serveur choisit le premier slot libre
+  de la paire (`left` avant `right`) ; si les deux sont occupés, swap sur `pair[0]`.
+  Le client peut préciser un slot cible dans une version future.
 
 ---
 
