@@ -10,6 +10,10 @@ import { CreatureTemplate } from '../creatures/entities/creature-template.entity
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
+import { WorldItem } from '../world-items/entities/world-item.entity';
+import { AuctionListing } from '../auction/entities/auction-listing.entity';
+import { MailMessage } from '../mail/entities/mail-message.entity';
+import { Character } from '../characters/entities/character.entity';
 
 @Module({
   imports: [
@@ -22,6 +26,10 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
       CraftingIngredient,
       CraftingResult,
       ItemInstance,
+      WorldItem,
+      AuctionListing,
+      MailMessage,
+      Character,
     ]),
   ],
   controllers: [ItemController],

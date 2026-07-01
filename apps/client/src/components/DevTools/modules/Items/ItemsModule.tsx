@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AssetPicker from "../../AssetPicker";
+import ItemMaintenancePanel from "./ItemMaintenancePanel";
 import { createItem, fetchItems, fetchItemUsageStats, updateItem } from "./itemEditorApi";
 import {
   ALL_FILTER,
@@ -81,6 +82,7 @@ export default function ItemsModule() {
   const [usageStatus, setUsageStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -110,6 +112,7 @@ export default function ItemsModule() {
   useEffect(() => {
     setDraft(selectedItem ? draftFromItem(selectedItem) : emptyDraft());
     setMessage(null);
+    setMaintenanceOpen(false);
   }, [selectedItem?.id]);
 
   useEffect(() => {
@@ -684,6 +687,13 @@ export default function ItemsModule() {
                     </span>
                   )}
                   <button
+                    className="item-editor__save item-editor__save--ghost"
+                    type="button"
+                    onClick={() => setMaintenanceOpen((v) => !v)}
+                  >
+                    {maintenanceOpen ? "Fermer maintenance" : "Usages / Maintenance"}
+                  </button>
+                  <button
                     className="item-editor__save"
                     type="button"
                     onClick={handleSave}
@@ -692,6 +702,18 @@ export default function ItemsModule() {
                     {saving ? "…" : "Sauver"}
                   </button>
                 </div>
+
+                {maintenanceOpen && (
+                  <ItemMaintenancePanel
+                    itemId={selectedItem.id}
+                    itemName={selectedItem.name}
+                    onChanged={async () => {
+                      const refreshed = await fetchItems();
+                      setItems(refreshed);
+                      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
+                    }}
+                  />
+                )}
               </>
             ) : (
               <p className="item-editor__status">Aucun item sélectionné.</p>

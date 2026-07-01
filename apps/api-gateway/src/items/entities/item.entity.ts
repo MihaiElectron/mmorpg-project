@@ -71,6 +71,14 @@ export class Item {
   objectMode: ObjectMode;
 
   /**
+   * Template actif ou non. Un template desactive reste en base (references
+   * historiques preservees) mais ne doit plus etre propose a la creation
+   * d'instances/stacks. Utilise par la maintenance DevTools.
+   */
+  @Column({ type: 'boolean', default: true })
+  enabled: boolean;
+
+  /**
    * Relation avec l'équipement des personnages
    * Un item peut être équipé par plusieurs personnages
    */

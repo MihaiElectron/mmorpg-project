@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, In, Repository } from 'typeorm';
 import { Item, ObjectMode } from './entities/item.entity';
@@ -12,6 +12,10 @@ import { CreatureTemplate } from '../creatures/entities/creature-template.entity
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 import { ItemInstance, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
+import { WorldItem, WorldItemState } from '../world-items/entities/world-item.entity';
+import { AuctionListing, AuctionListingStatus } from '../auction/entities/auction-listing.entity';
+import { MailMessage, MailStatus } from '../mail/entities/mail-message.entity';
+import { Character } from '../characters/entities/character.entity';
 
 /** Items de loot et de craft garantis présents en DB au démarrage. */
 export const LOOT_ITEM_SEEDS: (Pick<
@@ -94,6 +98,76 @@ export interface ItemUsageStats {
   }>;
 }
 
+export interface InventoryStackLine {
+  id: string;
+  characterId: string | null;
+  characterName: string | null;
+  quantity: number;
+  equipped: boolean;
+}
+
+export interface ItemInstanceBreakdown {
+  instanceType: string;
+  state: string;
+  containerType: string;
+  count: number;
+}
+
+export interface ItemInstanceLine {
+  id: string;
+  instanceType: string;
+  state: string;
+  containerType: string;
+  ownerId: string | null;
+}
+
+/** Nombre max d'instances individuelles listees dans le rapport (garde-fou payload). */
+export const MAINTENANCE_INSTANCE_LINES_LIMIT = 100;
+
+/**
+ * Detail par categorie du compteur totalReferences.
+ * Chaque categorie est une reference distincte au meme template :
+ * une epee equipee peut compter a la fois en instance active ET en equipement.
+ */
+export interface ItemReferenceBreakdown {
+  inventoryStacks: number;
+  activeItemInstances: number;
+  equipped: number;
+  worldItems: number;
+  auctionListings: number;
+  mailAttachments: number;
+  lootPoolRefs: number;
+  recipeRefs: number;
+}
+
+export interface ItemMaintenanceReport {
+  template: {
+    id: string;
+    name: string;
+    type: string;
+    category: string;
+    objectMode: string;
+    enabled: boolean;
+  };
+  inventory: {
+    stackCount: number;
+    stacks: InventoryStackLine[];
+  };
+  instances: {
+    total: number;
+    activeTotal: number; // hors DESTROYED/ARCHIVED
+    breakdown: ItemInstanceBreakdown[];
+    lines: ItemInstanceLine[]; // instances actives individuelles (limitees)
+    linesTruncated: boolean;
+  };
+  equippedCount: number;
+  worldItemsCount: number;
+  auctionListingsCount: number;
+  attachedMailsCount: number;
+  references: ItemReferenceBreakdown; // detail par categorie de totalReferences
+  totalReferences: number; // 0 => template supprimable
+}
+
 @Injectable()
 export class ItemService implements OnModuleInit {
   constructor(
@@ -113,6 +187,14 @@ export class ItemService implements OnModuleInit {
     private readonly craftingResultRepo: Repository<CraftingResult>,
     @InjectRepository(ItemInstance)
     private readonly instanceRepo: Repository<ItemInstance>,
+    @InjectRepository(WorldItem)
+    private readonly worldItemRepo: Repository<WorldItem>,
+    @InjectRepository(AuctionListing)
+    private readonly auctionListingRepo: Repository<AuctionListing>,
+    @InjectRepository(MailMessage)
+    private readonly mailMessageRepo: Repository<MailMessage>,
+    @InjectRepository(Character)
+    private readonly characterRepo: Repository<Character>,
   ) {}
 
   async onModuleInit() {
@@ -395,6 +477,266 @@ export class ItemService implements OnModuleInit {
       byId.set(row.id, row);
     }
     return Array.from(byId.values());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Maintenance DevTools
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Rapport complet des references d'un item a travers tous les domaines.
+   * Sert de base a toutes les operations de maintenance (suppression stack,
+   * destruction instance, desactivation/suppression template).
+   */
+  async getMaintenanceReport(itemId: string): Promise<ItemMaintenanceReport> {
+    const item = await this.findOne(itemId);
+
+    const [
+      stacks,
+      instanceRows,
+      instanceLines,
+      equippedCount,
+      worldItemsCount,
+      auctionListingsCount,
+      attachedMailsCount,
+      usageStats,
+    ] = await Promise.all([
+      this.getInventoryStackLines(itemId),
+      this.getInstanceBreakdown(itemId),
+      this.getActiveInstanceLines(itemId),
+      this.equipmentRepo.count({ where: { itemId } }),
+      this.worldItemRepo.count({
+        where: { itemId, state: In([WorldItemState.SPAWNED]) },
+      }),
+      this.countActiveAuctionListings(itemId),
+      this.countAttachedMails(itemId),
+      this.getUsageStats(itemId),
+    ]);
+
+    const instancesTotal = instanceRows.reduce((sum, r) => sum + r.count, 0);
+    const terminalStates: string[] = [
+      ItemInstanceState.DESTROYED,
+      ItemInstanceState.ARCHIVED,
+    ];
+    const activeInstances = instanceRows
+      .filter((r) => !terminalStates.includes(r.state))
+      .reduce((sum, r) => sum + r.count, 0);
+
+    const references: ItemReferenceBreakdown = {
+      inventoryStacks: stacks.length,
+      activeItemInstances: activeInstances,
+      equipped: equippedCount,
+      worldItems: worldItemsCount,
+      auctionListings: auctionListingsCount,
+      mailAttachments: attachedMailsCount,
+      lootPoolRefs:
+        usageStats.usedInResourceLootPools.length +
+        usageStats.usedInCreatureLootPools.length,
+      recipeRefs:
+        usageStats.usedInCraftRecipesOutput.length +
+        usageStats.usedInCraftRecipesIngredient.length,
+    };
+
+    const totalReferences =
+      references.inventoryStacks +
+      references.activeItemInstances +
+      references.equipped +
+      references.worldItems +
+      references.auctionListings +
+      references.mailAttachments +
+      references.lootPoolRefs +
+      references.recipeRefs;
+
+    return {
+      template: {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        category: item.category,
+        objectMode: item.objectMode,
+        enabled: item.enabled,
+      },
+      inventory: { stackCount: stacks.length, stacks },
+      instances: {
+        total: instancesTotal,
+        activeTotal: activeInstances,
+        breakdown: instanceRows,
+        lines: instanceLines,
+        linesTruncated: instanceLines.length >= MAINTENANCE_INSTANCE_LINES_LIMIT,
+      },
+      equippedCount,
+      worldItemsCount,
+      auctionListingsCount,
+      attachedMailsCount,
+      references,
+      totalReferences,
+    };
+  }
+
+  private async getInventoryStackLines(itemId: string): Promise<InventoryStackLine[]> {
+    const rows = await this.inventoryRepo
+      .createQueryBuilder('inv')
+      .leftJoin('inv.character', 'character')
+      .select('inv.id', 'id')
+      .addSelect('inv.quantity', 'quantity')
+      .addSelect('inv.equipped', 'equipped')
+      .addSelect('character.id', 'characterId')
+      .addSelect('character.name', 'characterName')
+      .where('inv."itemId" = :itemId', { itemId })
+      .orderBy('character.name', 'ASC')
+      .getRawMany<{
+        id: string;
+        quantity: number;
+        equipped: boolean;
+        characterId: string | null;
+        characterName: string | null;
+      }>();
+
+    return rows.map((r) => ({
+      id: r.id,
+      characterId: r.characterId ?? null,
+      characterName: r.characterName ?? null,
+      quantity: Number(r.quantity),
+      equipped: Boolean(r.equipped),
+    }));
+  }
+
+  private async getInstanceBreakdown(itemId: string): Promise<ItemInstanceBreakdown[]> {
+    const rows = await this.instanceRepo
+      .createQueryBuilder('inst')
+      .select('inst.instanceType', 'instanceType')
+      .addSelect('inst.state', 'state')
+      .addSelect('inst.containerType', 'containerType')
+      .addSelect('COUNT(inst.id)', 'count')
+      .where('inst.itemId = :itemId', { itemId })
+      .groupBy('inst.instanceType')
+      .addGroupBy('inst.state')
+      .addGroupBy('inst.containerType')
+      .orderBy('inst.instanceType', 'ASC')
+      .addOrderBy('inst.state', 'ASC')
+      .getRawMany<{ instanceType: string; state: string; containerType: string; count: string }>();
+
+    return rows.map((r) => ({
+      instanceType: r.instanceType,
+      state: r.state,
+      containerType: r.containerType,
+      count: Number(r.count),
+    }));
+  }
+
+  private async getActiveInstanceLines(itemId: string): Promise<ItemInstanceLine[]> {
+    const rows = await this.instanceRepo
+      .createQueryBuilder('inst')
+      .select(['inst.id', 'inst.instanceType', 'inst.state', 'inst.containerType', 'inst.ownerId'])
+      .where('inst.itemId = :itemId', { itemId })
+      .andWhere('inst.state NOT IN (:...terminal)', {
+        terminal: [ItemInstanceState.DESTROYED, ItemInstanceState.ARCHIVED],
+      })
+      .orderBy('inst.updatedAt', 'DESC')
+      .take(MAINTENANCE_INSTANCE_LINES_LIMIT)
+      .getMany();
+
+    return rows.map((r) => ({
+      id: r.id,
+      instanceType: r.instanceType,
+      state: r.state,
+      containerType: r.containerType,
+      ownerId: r.ownerId ?? null,
+    }));
+  }
+
+  private async countActiveAuctionListings(itemId: string): Promise<number> {
+    const terminal: string[] = [
+      AuctionListingStatus.SOLD_CLAIMED,
+      AuctionListingStatus.EXPIRED_CLAIMED,
+      AuctionListingStatus.CANCELLED_CLAIMED,
+      AuctionListingStatus.ARCHIVED,
+    ];
+    return this.auctionListingRepo
+      .createQueryBuilder('listing')
+      .where('listing.itemId = :itemId', { itemId })
+      .andWhere('listing.status NOT IN (:...terminal)', { terminal })
+      .getCount();
+  }
+
+  private async countAttachedMails(itemId: string): Promise<number> {
+    // item_instance.id est uuid, mail_message.attachedItemInstanceId est varchar.
+    // Cast explicite ::text pour eviter "operator does not exist: uuid = character varying".
+    return this.mailMessageRepo
+      .createQueryBuilder('mail')
+      .innerJoin(ItemInstance, 'inst', 'inst.id::text = mail."attachedItemInstanceId"')
+      .where('inst.itemId = :itemId', { itemId })
+      .andWhere('mail.status = :status', { status: MailStatus.PENDING })
+      .getCount();
+  }
+
+  /**
+   * Supprime une ligne inventory precise (nettoyage stack legacy).
+   * Refuse si equipped=true. Transaction. Retourne le characterId proprietaire
+   * pour permettre a l'appelant d'emettre character:reload.
+   */
+  async deleteInventoryStack(inventoryId: string): Promise<{ characterId: string | null; itemName: string }> {
+    return this.repo.manager.transaction(async (manager) => {
+      // Verrou pessimiste sur la seule ligne inventory. Postgres interdit
+      // FOR UPDATE combine a un LEFT JOIN ("cannot be applied to the nullable
+      // side of an outer join"), donc on ne joint pas ici : les relations
+      // character/item sont chargees separement apres le verrou.
+      const row = await manager
+        .getRepository(Inventory)
+        .createQueryBuilder('inv')
+        .setLock('pessimistic_write')
+        .where('inv.id = :inventoryId', { inventoryId })
+        .getOne();
+
+      if (!row) throw new NotFoundException(`Stack inventory ${inventoryId} introuvable.`);
+      if (row.equipped) {
+        throw new BadRequestException('Stack equipe : desequiper avant suppression.');
+      }
+
+      const detailed = await manager.getRepository(Inventory).findOne({
+        where: { id: inventoryId },
+        relations: ['character', 'item'],
+      });
+      const characterId = detailed?.character?.id ?? null;
+      const itemName = detailed?.item?.name ?? 'inconnu';
+
+      await manager.remove(Inventory, row);
+      return { characterId, itemName };
+    });
+  }
+
+  /**
+   * Desactive un template (enabled=false). Ne supprime jamais physiquement.
+   */
+  async disableItemTemplate(itemId: string): Promise<Item> {
+    const item = await this.findOne(itemId);
+    if (!item.enabled) return item;
+    item.enabled = false;
+    return this.repo.save(item);
+  }
+
+  /**
+   * Supprime physiquement un template UNIQUEMENT si zero reference partout.
+   * Sinon leve BadRequestException detaillant les references bloquantes.
+   */
+  async deleteItemTemplate(itemId: string): Promise<{ name: string }> {
+    const report = await this.getMaintenanceReport(itemId);
+    if (report.totalReferences > 0) {
+      const parts: string[] = [];
+      if (report.inventory.stackCount > 0) parts.push(`${report.inventory.stackCount} stack(s) inventory`);
+      if (report.instances.activeTotal > 0) parts.push(`${report.instances.activeTotal} instance(s) active(s)`);
+      if (report.equippedCount > 0) parts.push(`${report.equippedCount} equipement(s)`);
+      if (report.worldItemsCount > 0) parts.push(`${report.worldItemsCount} objet(s) au sol`);
+      if (report.auctionListingsCount > 0) parts.push(`${report.auctionListingsCount} vente(s) auction`);
+      if (report.attachedMailsCount > 0) parts.push(`${report.attachedMailsCount} mail(s) attache(s)`);
+      throw new ConflictException(
+        `Template reference (${parts.join(', ')}) : suppression interdite. Nettoyer les references d'abord.`,
+      );
+    }
+    const item = await this.findOne(itemId);
+    const name = item.name;
+    await this.repo.remove(item);
+    return { name };
   }
 
   async remove(id: string): Promise<void> {

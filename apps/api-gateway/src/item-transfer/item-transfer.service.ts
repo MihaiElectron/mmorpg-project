@@ -35,7 +35,8 @@ export type ItemTransition =
   | { type: 'AUCTION_TO_MAIL'; listingId: string; mailId: string }
   | { type: 'TRADE_LOCK'; tradeSessionId: string }
   | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
-  | { type: 'TRADE_CANCEL'; tradeSessionId: string };
+  | { type: 'TRADE_CANCEL'; tradeSessionId: string }
+  | { type: 'ADMIN_DESTROY' };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -106,7 +107,39 @@ export class ItemTransferService {
         return this.applyTradeCommit(manager, instance, transition);
       case 'TRADE_CANCEL':
         return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
+      case 'ADMIN_DESTROY':
+        return this.applyAdminDestroy(manager, instance);
     }
+  }
+
+  /**
+   * Destruction administrative d'une ItemInstance (maintenance DevTools).
+   * Marque DESTROYED plutot qu'un hard delete (tracabilite preservee).
+   * Refuse une instance encore active dans un flux metier : EQUIPPED,
+   * LISTED (auction) ou IN_MAIL — l'admin doit d'abord resoudre ce flux.
+   */
+  private async applyAdminDestroy(
+    manager: EntityManager,
+    instance: ItemInstance,
+  ): Promise<ItemInstance> {
+    const blocked: ItemInstanceState[] = [
+      ItemInstanceState.EQUIPPED,
+      ItemInstanceState.LISTED,
+      ItemInstanceState.IN_MAIL,
+    ];
+    if (blocked.includes(instance.state)) {
+      throw new BadRequestException(
+        `Impossible de detruire une instance a l'etat ${instance.state} : resoudre d'abord le flux metier (equip/auction/mail).`,
+      );
+    }
+    if (instance.state === ItemInstanceState.DESTROYED) {
+      throw new BadRequestException('Instance deja detruite.');
+    }
+
+    instance.state = ItemInstanceState.DESTROYED;
+    instance.containerType = ItemInstanceContainerType.NONE;
+    instance.containerId = null;
+    return manager.save(ItemInstance, instance);
   }
 
   /**

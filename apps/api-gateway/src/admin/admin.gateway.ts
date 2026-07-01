@@ -23,6 +23,8 @@ import { TransactionType } from '../economy/entities/economic-transaction.entity
 import { DataSource } from 'typeorm';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
+import { ItemService } from '../items/item.service';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 type AddBalancePayload = {
   characterId: string;
@@ -73,6 +75,8 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly economyService: EconomyService,
     private readonly dataSource: DataSource,
     private readonly itemMaterializationService: ItemMaterializationService,
+    private readonly itemService: ItemService,
+    private readonly itemTransferService: ItemTransferService,
   ) {}
 
   private emitReloadIfConnected(characterId: string): void {
@@ -617,6 +621,105 @@ export class AdminGateway implements OnGatewayConnection {
       };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de l\'injection.' };
+    }
+  }
+
+  // ── Item Maintenance ───────────────────────────────────────────────────────
+
+  @SubscribeMessage('admin:item_usage_report')
+  async onItemUsageReport(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { itemId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { itemId } = payload ?? {};
+    if (!itemId) return { success: false, message: 'Payload invalide : itemId requis.' };
+
+    try {
+      const report = await this.itemService.getMaintenanceReport(itemId);
+      return { success: true, message: 'OK', data: report };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors du rapport.' };
+    }
+  }
+
+  @SubscribeMessage('admin:delete_inventory_stack')
+  async onDeleteInventoryStack(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { inventoryId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { inventoryId } = payload ?? {};
+    if (!inventoryId) return { success: false, message: 'Payload invalide : inventoryId requis.' };
+
+    try {
+      const { characterId, itemName } = await this.itemService.deleteInventoryStack(inventoryId);
+      if (characterId) this.emitReloadIfConnected(characterId);
+      return { success: true, message: `Stack "${itemName}" supprimée.` };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la suppression.' };
+    }
+  }
+
+  @SubscribeMessage('admin:delete_item_instance')
+  async onDeleteItemInstance(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { itemInstanceId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { itemInstanceId } = payload ?? {};
+    if (!itemInstanceId) return { success: false, message: 'Payload invalide : itemInstanceId requis.' };
+
+    try {
+      const instance = await this.dataSource.transaction((manager) =>
+        this.itemTransferService.transfer(manager, itemInstanceId, {
+          requesterId: null,
+          transition: { type: 'ADMIN_DESTROY' },
+        }),
+      );
+      if (instance.ownerId) this.emitReloadIfConnected(instance.ownerId);
+      return { success: true, message: `Instance "${itemInstanceId}" détruite (DESTROYED).` };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la destruction.' };
+    }
+  }
+
+  @SubscribeMessage('admin:disable_item_template')
+  async onDisableItemTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { itemId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { itemId } = payload ?? {};
+    if (!itemId) return { success: false, message: 'Payload invalide : itemId requis.' };
+
+    try {
+      const item = await this.itemService.disableItemTemplate(itemId);
+      return { success: true, message: `Template "${item.name}" désactivé.`, data: item };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la désactivation.' };
+    }
+  }
+
+  @SubscribeMessage('admin:delete_item_template')
+  async onDeleteItemTemplate(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { itemId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { itemId } = payload ?? {};
+    if (!itemId) return { success: false, message: 'Payload invalide : itemId requis.' };
+
+    try {
+      const { name } = await this.itemService.deleteItemTemplate(itemId);
+      return { success: true, message: `Template "${name}" supprimé.` };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la suppression.' };
     }
   }
 

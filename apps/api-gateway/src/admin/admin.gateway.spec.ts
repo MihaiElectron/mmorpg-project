@@ -29,6 +29,8 @@ function makeGateway(wsAuth: Partial<WsAuthService>) {
     {} as unknown as import('../economy/economy.service').EconomyService,
     {} as unknown as import('typeorm').DataSource,
     {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
+    {} as unknown as import('../items/item.service').ItemService,
+    {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
   );
 }
 
@@ -111,6 +113,8 @@ describe('AdminGateway — handlers refusent les non-admins', () => {
       {} as unknown as import('../economy/economy.service').EconomyService,
       {} as unknown as import('typeorm').DataSource,
       {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
+      {} as unknown as import('../items/item.service').ItemService,
+      {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
     );
     (gateway as any).server = { emit: jest.fn() };
   });
@@ -177,6 +181,8 @@ function makeAddBalanceGateway(overrides: {
     economyServiceMock as unknown as import('../economy/economy.service').EconomyService,
     {} as unknown as import('typeorm').DataSource,
     {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
+    {} as unknown as import('../items/item.service').ItemService,
+    {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
   );
   (gw as any).server = { emit: jest.fn() };
 
@@ -383,6 +389,8 @@ function makeTeleportGateway(opts: {
     {} as unknown as import("../economy/economy.service").EconomyService,
     {} as unknown as import("typeorm").DataSource,
     {} as unknown as import("../item-materialization/item-materialization.service").ItemMaterializationService,
+    {} as unknown as import("../items/item.service").ItemService,
+    {} as unknown as import("../item-transfer/item-transfer.service").ItemTransferService,
   );
   (gw as any).server = { to: jest.fn().mockReturnThis(), emit: jest.fn(), except: jest.fn().mockReturnThis() };
   return { gw, worldService, adminService };

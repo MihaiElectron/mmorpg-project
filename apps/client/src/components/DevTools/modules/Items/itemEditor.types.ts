@@ -106,6 +106,68 @@ export interface ItemUsageRef {
   name?: string;
 }
 
+export interface InventoryStackLine {
+  id: string;
+  characterId: string | null;
+  characterName: string | null;
+  quantity: number;
+  equipped: boolean;
+}
+
+export interface ItemInstanceBreakdown {
+  instanceType: string;
+  state: string;
+  containerType: string;
+  count: number;
+}
+
+export interface ItemInstanceLine {
+  id: string;
+  instanceType: string;
+  state: string;
+  containerType: string;
+  ownerId: string | null;
+}
+
+export interface ItemReferenceBreakdown {
+  inventoryStacks: number;
+  activeItemInstances: number;
+  equipped: number;
+  worldItems: number;
+  auctionListings: number;
+  mailAttachments: number;
+  lootPoolRefs: number;
+  recipeRefs: number;
+}
+
+export interface ItemMaintenanceReport {
+  template: {
+    id: string;
+    name: string;
+    type: string;
+    category: string;
+    objectMode: string;
+    enabled: boolean;
+  };
+  inventory: {
+    stackCount: number;
+    stacks: InventoryStackLine[];
+  };
+  instances: {
+    total: number;
+    activeTotal: number;
+    breakdown: ItemInstanceBreakdown[];
+    lines: ItemInstanceLine[];
+    linesTruncated: boolean;
+  };
+  equippedCount: number;
+  worldItemsCount: number;
+  auctionListingsCount: number;
+  attachedMailsCount: number;
+  references: ItemReferenceBreakdown;
+  totalReferences: number;
+}
+
 export interface ItemUsageStats {
   itemId: string;
   totalQuantityServer: number;

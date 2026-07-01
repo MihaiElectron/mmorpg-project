@@ -1340,4 +1340,82 @@ describe("ItemTransferService", () => {
       expect(result.ownerId).toBe("recipient-1");
     });
   });
+
+  // ── ADMIN_DESTROY ────────────────────────────────────────────────────────────
+
+  describe("transition ADMIN_DESTROY", () => {
+    it("marque AVAILABLE → DESTROYED + containerType NONE", async () => {
+      const instance = makeInstance({ state: ItemInstanceState.AVAILABLE });
+      const manager = makeManager(instance);
+
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "ADMIN_DESTROY" },
+      });
+
+      expect(result.state).toBe(ItemInstanceState.DESTROYED);
+      expect(result.containerType).toBe(ItemInstanceContainerType.NONE);
+      expect(result.containerId).toBeNull();
+    });
+
+    it("refuse de detruire une instance EQUIPPED", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeManager(instance);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "ADMIN_DESTROY" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse de detruire une instance LISTED (auction)", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.LISTED,
+        containerType: ItemInstanceContainerType.AUCTION,
+      });
+      const manager = makeManager(instance);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "ADMIN_DESTROY" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse de detruire une instance IN_MAIL", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.IN_MAIL,
+        containerType: ItemInstanceContainerType.MAIL,
+      });
+      const manager = makeManager(instance);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "ADMIN_DESTROY" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse de detruire une instance deja DESTROYED", async () => {
+      const instance = makeInstance({
+        state: ItemInstanceState.DESTROYED,
+        containerType: ItemInstanceContainerType.NONE,
+      });
+      const manager = makeManager(instance);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "ADMIN_DESTROY" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });
