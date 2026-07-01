@@ -1,4 +1,6 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { ObjectMode } from '../entities/item.entity';
+import { EquipmentSlot } from '../../characters/dto/equip-item.dto';
 
 export class CreateItemDto {
   @IsString()
@@ -16,9 +18,21 @@ export class CreateItemDto {
 
   @IsNumber()
   @IsOptional()
-  attack: number;
+  attack?: number;
 
   @IsNumber()
   @IsOptional()
-  defense: number;
+  defense?: number;
+
+  @IsNumber()
+  @IsOptional()
+  range?: number;
+
+  @IsEnum(EquipmentSlot)
+  @IsOptional()
+  slot?: EquipmentSlot;
+
+  @IsEnum(ObjectMode)
+  @IsOptional()
+  objectMode?: ObjectMode;
 }

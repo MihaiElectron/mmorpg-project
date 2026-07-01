@@ -147,7 +147,14 @@ const storeLogic = (set, get) => ({
           body: JSON.stringify({ itemId: invEntry.item.id }),
         });
       }
-      if (res.ok) await get().loadCharacter();
+      if (res.ok) {
+        await get().loadCharacter();
+      } else {
+        let msg = `Équipement impossible (HTTP ${res.status})`;
+        try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
+        console.error("[CharacterStore] equipItem failed:", msg);
+        alert(msg);
+      }
     } catch (err) {
       console.error("[CharacterStore] equipItem error:", err);
     }

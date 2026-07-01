@@ -9,6 +9,7 @@ import { ResourceTemplate } from '../resources/entities/resource-template.entity
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CraftingResult } from '../crafting/entities/crafting-result.entity';
       CreatureTemplate,
       CraftingIngredient,
       CraftingResult,
+      ItemInstance,
     ]),
   ],
   controllers: [ItemController],

@@ -10,6 +10,7 @@ import {
 import { Item, ObjectMode } from './entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
+import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
@@ -98,6 +99,9 @@ describe('ItemService', () => {
   let craftingResultRepo: {
     createQueryBuilder: jest.Mock;
   };
+  let instanceRepo: {
+    count: jest.Mock;
+  };
 
   beforeEach(async () => {
     repo = {
@@ -132,6 +136,9 @@ describe('ItemService', () => {
     craftingResultRepo = {
       createQueryBuilder: jest.fn(),
     };
+    instanceRepo = {
+      count: jest.fn().mockResolvedValue(0),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -157,6 +164,10 @@ describe('ItemService', () => {
         {
           provide: getRepositoryToken(CraftingResult),
           useValue: craftingResultRepo,
+        },
+        {
+          provide: getRepositoryToken(ItemInstance),
+          useValue: instanceRepo,
         },
       ],
     }).compile();
@@ -220,10 +231,16 @@ describe('ItemService', () => {
     });
 
     it('ne duplique pas les items déjà présents', async () => {
-      // Chaque seed retourne un item avec image + objectMode identiques → aucun dirty
+      // Chaque seed retourne un item avec tous les champs identiques → aucun dirty
       for (const seed of LOOT_ITEM_SEEDS) {
         repo.findOne.mockResolvedValueOnce(
-          makeItem({ image: seed.image ?? null, objectMode: seed.objectMode }),
+          makeItem({
+            image: seed.image ?? null,
+            objectMode: seed.objectMode,
+            slot: seed.slot ?? null,
+            attack: seed.attack ?? null,
+            defense: seed.defense ?? null,
+          }),
         );
       }
       await service.onModuleInit();
@@ -257,7 +274,7 @@ describe('ItemService', () => {
         .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // iron_bar présent
         .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // basic_handle présent
         .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.STACKABLE }))                                                  // rough_blade présent
-        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.INSTANCE }));                                                  // basic_sword présent
+        .mockResolvedValueOnce(makeItem({ objectMode: ObjectMode.INSTANCE, slot: 'right-hand' as any, attack: 5, defense: 0 })); // basic_sword présent
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
     });
@@ -429,6 +446,54 @@ describe('ItemService', () => {
           image: '/assets/images/items/wooden_stick.png',
         }),
       );
+    });
+
+    it("refuse de changer objectMode si des instances runtime existent", async () => {
+      const item = makeItem({ objectMode: ObjectMode.INSTANCE });
+      repo.findOne.mockResolvedValue(item);
+      instanceRepo.count.mockResolvedValue(2);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(0);
+
+      await expect(
+        service.update("item-uuid-1", { objectMode: ObjectMode.STACKABLE }),
+      ).rejects.toThrow("Cannot change objectMode");
+    });
+
+    it("refuse de changer objectMode si des stacks inventory existent", async () => {
+      const item = makeItem({ objectMode: ObjectMode.STACKABLE });
+      repo.findOne.mockResolvedValue(item);
+      instanceRepo.count.mockResolvedValue(0);
+      inventoryRepo.count.mockResolvedValue(5);
+      equipmentRepo.count.mockResolvedValue(0);
+
+      await expect(
+        service.update("item-uuid-1", { objectMode: ObjectMode.INSTANCE }),
+      ).rejects.toThrow("Cannot change objectMode");
+    });
+
+    it("refuse de changer objectMode si l'item est équipé en legacy character_equipment", async () => {
+      const item = makeItem({ objectMode: ObjectMode.STACKABLE });
+      repo.findOne.mockResolvedValue(item);
+      instanceRepo.count.mockResolvedValue(0);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(1);
+
+      await expect(
+        service.update("item-uuid-1", { objectMode: ObjectMode.INSTANCE }),
+      ).rejects.toThrow("Cannot change objectMode");
+    });
+
+    it("autorise le changement de objectMode si aucune donnée runtime", async () => {
+      const item = makeItem({ objectMode: ObjectMode.INSTANCE });
+      repo.findOne.mockResolvedValue(item);
+      instanceRepo.count.mockResolvedValue(0);
+      inventoryRepo.count.mockResolvedValue(0);
+      equipmentRepo.count.mockResolvedValue(0);
+
+      await expect(
+        service.update("item-uuid-1", { objectMode: ObjectMode.STACKABLE }),
+      ).resolves.toMatchObject({ objectMode: ObjectMode.STACKABLE });
     });
   });
 

@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, In, Repository } from 'typeorm';
 import { Item, ObjectMode } from './entities/item.entity';
+import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { Inventory } from '../inventory/entities/inventory.entity';
@@ -10,12 +11,13 @@ import { ResourceTemplate } from '../resources/entities/resource-template.entity
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
+import { ItemInstance, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
 
 /** Items de loot et de craft garantis présents en DB au démarrage. */
-export const LOOT_ITEM_SEEDS: Pick<
+export const LOOT_ITEM_SEEDS: (Pick<
   Item,
   'name' | 'type' | 'category' | 'image' | 'objectMode'
->[] = [
+> & Partial<Pick<Item, 'slot' | 'attack' | 'defense'>>)[] = [
   // ── Loot resources ───────────────────────────────────────────────────────
   {
     name: 'Bâton de bois',
@@ -59,6 +61,9 @@ export const LOOT_ITEM_SEEDS: Pick<
     category: 'basic_sword',
     image: null,
     objectMode: ObjectMode.INSTANCE,
+    slot: EquipmentSlot.RIGHT_HAND,
+    attack: 5,
+    defense: 0,
   },
 ];
 
@@ -105,6 +110,8 @@ export class ItemService implements OnModuleInit {
     private readonly craftingIngredientRepo: Repository<CraftingIngredient>,
     @InjectRepository(CraftingResult)
     private readonly craftingResultRepo: Repository<CraftingResult>,
+    @InjectRepository(ItemInstance)
+    private readonly instanceRepo: Repository<ItemInstance>,
   ) {}
 
   async onModuleInit() {
@@ -124,6 +131,9 @@ export class ItemService implements OnModuleInit {
         let dirty = false;
         if (!exists.image && seed.image) { exists.image = seed.image; dirty = true; }
         if (exists.objectMode !== seed.objectMode) { exists.objectMode = seed.objectMode; dirty = true; }
+        if (seed.slot !== undefined && exists.slot !== seed.slot) { exists.slot = seed.slot; dirty = true; }
+        if (seed.attack !== undefined && exists.attack !== seed.attack) { exists.attack = seed.attack; dirty = true; }
+        if (seed.defense !== undefined && exists.defense !== seed.defense) { exists.defense = seed.defense; dirty = true; }
         if (dirty) await this.repo.save(exists);
       }
     }
@@ -211,8 +221,37 @@ export class ItemService implements OnModuleInit {
 
   async update(id: string, dto: UpdateItemDto): Promise<Item> {
     const entity = await this.findOne(id);
+    if (dto.objectMode !== undefined && dto.objectMode !== entity.objectMode) {
+      await this.assertObjectModeChangeable(id);
+    }
     Object.assign(entity, dto);
     return this.repo.save(entity);
+  }
+
+  /**
+   * Centralise toutes les validations empêchant une migration d'objectMode.
+   * Lève ConflictException si au moins une référence active existe.
+   *
+   * Tables couvertes : item_instance (instances non-terminales), inventory (stacks),
+   * character_equipment (équipement legacy direct par itemId).
+   *
+   * Toute nouvelle table contenant une référence active vers Item
+   * (vendor_item, quest_reward, crafting_recipe_ingredient, loot_pool_item, etc.)
+   * devra être ajoutée ici.
+   */
+  private async assertObjectModeChangeable(itemId: string): Promise<void> {
+    const [instances, stacks, equipped] = await Promise.all([
+      this.instanceRepo.count({
+        where: { itemId, state: Not(In([ItemInstanceState.DESTROYED, ItemInstanceState.ARCHIVED])) },
+      }),
+      this.inventoryRepo.count({ where: { item: { id: itemId } } }),
+      this.equipmentRepo.count({ where: { itemId } }),
+    ]);
+    if (instances > 0 || stacks > 0 || equipped > 0) {
+      throw new ConflictException(
+        'Cannot change objectMode of an item already used by runtime data.',
+      );
+    }
   }
 
   async getUsageStats(id: string): Promise<ItemUsageStats> {
