@@ -1,13 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { CreaturesService, resolveCombatSkill } from './creatures.service';
+import { CreaturesService } from './creatures.service';
 import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
-import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
-import { EquipmentSlot } from '../characters/dto/equip-item.dto';
-import { SkillsService } from '../skills/skills.service';
+import { ProgressionService } from '../progression/progression.service';
 import { WorldService } from '../world/world.service';
 import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
@@ -34,6 +33,7 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     aggroRadius: 50,
     fleeThresholdPct: 75,
     lootPool: null,
+    killCharacterXpReward: 0,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -78,40 +78,6 @@ function makeCharacter(overrides: Partial<Character> = {}): Partial<Character> {
 // Suite
 // ---------------------------------------------------------------------------
 
-// Helper : équipement ranged factice
-function makeRangedEquipment(category: string): CharacterEquipment {
-  return {
-    slot: EquipmentSlot.RANGED_WEAPON,
-    item: { category } as any,
-  } as CharacterEquipment;
-}
-
-// Helper : équipement mêlée factice
-function makeMeleeEquipment(): CharacterEquipment {
-  return {
-    slot: EquipmentSlot.RIGHT_HAND,
-    item: { type: 'weapon', category: 'sword' } as any,
-  } as CharacterEquipment;
-}
-
-describe('resolveCombatSkill', () => {
-  it('retourne two_handed sans équipement', () => {
-    expect(resolveCombatSkill([])).toBe('two_handed');
-  });
-
-  it('retourne bow pour une arme à distance non-crossbow', () => {
-    expect(resolveCombatSkill([makeRangedEquipment('bow')])).toBe('bow');
-  });
-
-  it('retourne crossbow pour une arme à distance catégorie crossbow', () => {
-    expect(resolveCombatSkill([makeRangedEquipment('crossbow')])).toBe('crossbow');
-  });
-
-  it('retourne two_handed pour une arme de mêlée RIGHT_HAND', () => {
-    expect(resolveCombatSkill([makeMeleeEquipment()])).toBe('two_handed');
-  });
-});
-
 describe('CreaturesService', () => {
   let service: CreaturesService;
   let debugRegistry: RuntimeDebugRegistry;
@@ -119,7 +85,8 @@ describe('CreaturesService', () => {
   let characterRepository: Record<string, jest.Mock>;
   let templateRepository: Record<string, jest.Mock>;
   let spawnRepository: Record<string, jest.Mock>;
-  let skillsService: Record<string, jest.Mock>;
+  let progressionService: Record<string, jest.Mock>;
+  let mockDataSource: { transaction: jest.Mock };
 
   beforeEach(async () => {
     creatureRepository = {
@@ -150,8 +117,11 @@ describe('CreaturesService', () => {
       update: jest.fn().mockResolvedValue({}),
       create: jest.fn().mockImplementation((a) => a),
     };
-    skillsService = {
-      addXp: jest.fn().mockResolvedValue({ level: 1, xp: 10 }),
+    progressionService = {
+      applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 10, nextLevelXp: 100, leveledUp: false }),
+    };
+    mockDataSource = {
+      transaction: jest.fn().mockImplementation(async (fn: (manager: any) => any) => fn({})),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -162,7 +132,8 @@ describe('CreaturesService', () => {
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
-        { provide: SkillsService, useValue: skillsService },
+        { provide: ProgressionService, useValue: progressionService },
+        { provide: DataSource, useValue: mockDataSource },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -380,61 +351,49 @@ describe('CreaturesService', () => {
       expect(result).toEqual({ success: false, error: 'Attack on cooldown' });
     });
 
-    it('accorde XP two_handed au kill sans équipement', async () => {
+    it("accorde XP personnage au kill si killCharacterXpReward > 0", async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const template = makeTemplate({ killCharacterXpReward: 20 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'two_handed', 10);
+      expect(progressionService.applyCharacterXpInTx).toHaveBeenCalledWith("char-1", 20, "COMBAT", expect.any(Object));
       jest.useRealTimers();
     });
 
-    it('accorde XP bow pour une arme à distance (catégorie bow)', async () => {
+    it("n'accorde pas XP si killCharacterXpReward = 0", async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
+      const template = makeTemplate({ killCharacterXpReward: 0 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
-      const equipment = [makeRangedEquipment('bow')];
-      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'bow', 10);
+      expect(progressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
       jest.useRealTimers();
     });
 
-    it('accorde XP crossbow pour une arme catégorie crossbow', async () => {
-      jest.useFakeTimers();
-      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
-      (service as any).liveCreatures.set(creature.id, creature);
-      const equipment = [makeRangedEquipment('crossbow')];
-      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
-
-      await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
-
-      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'crossbow', 10);
-      jest.useRealTimers();
-    });
-
-    it("n'accorde pas XP si l'creature survit", async () => {
-      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+    it("n'accorde pas XP personnage si l'creature survit", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(makeTemplate({ killCharacterXpReward: 20 })) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.addXp).not.toHaveBeenCalled();
+      expect(progressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
     });
 
-    it("n'accorde pas XP si l'creature est déjà mort", async () => {
+    it("n'accorde pas XP personnage si l'creature est déjà mort", async () => {
       const creature = makeCreature({ state: 'dead' });
       (service as any).liveCreatures.set(creature.id, creature);
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.addXp).not.toHaveBeenCalled();
+      expect(progressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
     });
 
     // ── Loot ──────────────────────────────────────────────────────────────────
@@ -497,15 +456,16 @@ describe('CreaturesService', () => {
       jest.useRealTimers();
     });
 
-    it('utilise le characterId serveur (paramètre), pas une donnée client', async () => {
+    it('utilise le characterId serveur (parametre), pas une donnee client', async () => {
       jest.useFakeTimers();
-      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 1 });
+      const template = makeTemplate({ killCharacterXpReward: 10 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 1, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment: [] }));
 
       await service.attack(creature.id, 'server-resolved-char-id', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.addXp).toHaveBeenCalledWith('server-resolved-char-id', expect.any(String), expect.any(Number));
+      expect(progressionService.applyCharacterXpInTx).toHaveBeenCalledWith("server-resolved-char-id", expect.any(Number), expect.any(String), expect.any(Object));
       jest.useRealTimers();
     });
 
@@ -936,7 +896,8 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
-        { provide: SkillsService, useValue: { addXp: jest.fn() } },
+        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
+        { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -1083,7 +1044,8 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: getRepositoryToken(CreatureSpawn), useValue: { findOne: jest.fn().mockResolvedValue(null), find: jest.fn().mockResolvedValue([]), save: jest.fn(), update: jest.fn(), create: jest.fn().mockImplementation((a) => a) } },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
-        { provide: SkillsService, useValue: { addXp: jest.fn() } },
+        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
+        { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
       ],

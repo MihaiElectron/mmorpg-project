@@ -49,4 +49,8 @@ export class CreatureTemplate {
 
   @Column({ type: 'jsonb', nullable: true, name: 'loot_pool', default: null })
   lootPool: any[] | null;
+
+  /** XP globale accordée au personnage à chaque kill de cette créature. 0 = pas d'XP. */
+  @Column('int', { default: 0, name: 'kill_character_xp_reward' })
+  killCharacterXpReward: number;
 }

@@ -8,7 +8,7 @@ import { CreaturesService } from './creatures.service';
 import { Character } from '../characters/entities/character.entity';
 import { CommonModule } from '../common/common.module';
 import { WorldModule } from '../world/world.module';
-import { SkillsModule } from '../skills/skills.module';
+import { ProgressionModule } from '../progression/progression.module';
 import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.module';
 import { LootService } from '../world/loot.service';
 import { WorldItemsModule } from '../world-items/world-items.module';
@@ -19,7 +19,7 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
     TypeOrmModule.forFeature([Creature, CreatureTemplate, CreatureSpawn, Character]),
     CommonModule,
     WorldModule,
-    SkillsModule,
+    ProgressionModule,
     CreatureRuntimeModule,
     WorldItemsModule,
     ItemMaterializationModule,

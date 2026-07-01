@@ -941,6 +941,10 @@ export default class WorldScene extends Phaser.Scene {
       getCharacterStore().getState().loadCharacter();
     });
 
+    this.socket.on("character_xp_update", (data) => {
+      getCharacterStore().getState().applyCharacterXpUpdate(data);
+    });
+
     this.socket.on("skill_update", (data) => {
       const store = getCharacterStore();
       store.getState().updateSkill(data);

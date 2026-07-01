@@ -18,6 +18,7 @@ import { InventoryProjectionService } from '../inventory/projection/inventory-pr
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { ProgressionService } from '../progression/progression.service';
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
@@ -38,6 +39,7 @@ export class CharacterService {
     private readonly dataSource: DataSource,
     private readonly inventoryProjection: InventoryProjectionService,
     private readonly itemTransfer: ItemTransferService,
+    private readonly progression: ProgressionService,
   ) {}
 
   /**
@@ -90,7 +92,8 @@ export class CharacterService {
     });
     if (!character) throw new NotFoundException(`No character found for user ${userId}`);
     const inventory = await this.inventoryProjection.project(character.id);
-    return Object.assign(character, { inventory });
+    const nextLevelXp = await this.progression.getNextLevelXp(character.level);
+    return Object.assign(character, { inventory, nextLevelXp });
   }
 
   /**

@@ -87,6 +87,10 @@ const storeLogic = (set, get) => ({
     }
   },
 
+  applyCharacterXpUpdate: ({ level, experience, nextLevelXp }) => {
+    set((s) => s.character ? { character: { ...s.character, level, experience, nextLevelXp } } : {});
+  },
+
   updateSkill: (skillData) => {
     set((state) => {
       const skills = [...(state.skills || [])];

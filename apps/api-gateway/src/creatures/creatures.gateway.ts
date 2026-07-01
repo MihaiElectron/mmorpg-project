@@ -78,8 +78,8 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
 
     client.emit('creature_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
     this.server.to(getMapRoomId(result.dto.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', result.dto);
-    if (result.skillUpdate) {
-      client.emit('skill_update', result.skillUpdate);
+    if (result.characterXpUpdate) {
+      client.emit('character_xp_update', result.characterXpUpdate);
     }
 
     if (result.riposte) {
