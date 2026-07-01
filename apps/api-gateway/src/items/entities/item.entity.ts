@@ -46,6 +46,14 @@ export class Item {
   range: number;
 
   /**
+   * Type d'arme utilisé par le Runtime pour résoudre le skill associé.
+   * Exemples : 'bow', 'crossbow', 'two_handed_sword', 'two_handed_axe'.
+   * null = item sans skill d'arme associé.
+   */
+  @Column({ nullable: true })
+  weaponType: string | null;
+
+  /**
    * Slot où l'item peut être équipé
    * Utilise l'enum EquipmentSlot pour la cohérence frontend / backend / DB
    */

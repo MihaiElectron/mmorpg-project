@@ -7,4 +7,5 @@ export const ItemSeed = {
   attack: 5,
   defense: 0,
   objectMode: ObjectMode.INSTANCE,
+  weaponType: 'two_handed_sword',
 };

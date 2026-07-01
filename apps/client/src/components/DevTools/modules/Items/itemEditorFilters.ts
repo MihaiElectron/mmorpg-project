@@ -47,6 +47,7 @@ export function draftFromItem(item: ItemCatalogEntry): ItemEditorDraft {
     attack: item.attack != null ? String(item.attack) : "",
     defense: item.defense != null ? String(item.defense) : "",
     range: item.range != null ? String(item.range) : "",
+    weaponType: item.weaponType ?? "",
   };
 }
 
@@ -76,10 +77,13 @@ export function buildItemPatch(
   if (nextCategory !== item.category) patch.category = nextCategory;
   if (nextImage !== (item.image ?? "")) patch.image = nextImage;
   if (nextObjectMode !== (item.objectMode ?? "STACKABLE")) patch.objectMode = nextObjectMode;
+  const nextWeaponType = draft.weaponType.trim() || null;
+
   if (nextSlot !== (item.slot ?? null)) patch.slot = nextSlot;
   if (nextAttack !== (item.attack ?? null)) patch.attack = nextAttack;
   if (nextDefense !== (item.defense ?? null)) patch.defense = nextDefense;
   if (nextRange !== (item.range ?? null)) patch.range = nextRange;
+  if (nextWeaponType !== (item.weaponType ?? null)) patch.weaponType = nextWeaponType;
 
   return patch;
 }
@@ -109,6 +113,8 @@ export function buildItemCreateInput(
   if (defense != null) input.defense = defense;
   const range = parseNum(draft.range);
   if (range != null) input.range = range;
+  const weaponType = draft.weaponType.trim() || null;
+  if (weaponType) input.weaponType = weaponType;
 
   return input;
 }

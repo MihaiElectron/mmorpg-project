@@ -10,6 +10,18 @@ import { EntityManager, Repository } from 'typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
 import { PlayerSkill } from './entities/player-skill.entity';
 
+export interface SkillUpdatePayload {
+  skillDefinitionKey: string;
+  key: string;
+  name: string;
+  category: string;
+  enabled: boolean;
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  leveledUp: boolean;
+}
+
 const DEFAULT_SKILLS: Pick<
   SkillDefinition,
   'key' | 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'
@@ -204,6 +216,38 @@ export class SkillsService implements OnModuleInit {
       }
       throw error;
     }
+  }
+
+  /**
+   * Point d'entrée unifié pour tous les domaines Runtime.
+   * Trouve ou crée le PlayerSkill, applique l'XP, retourne le payload socket.
+   * Doit être appelé dans une transaction ouverte par l'appelant.
+   */
+  async applySkillXpInTx(
+    characterId: string,
+    skillKey: string,
+    xpAmount: number,
+    manager: EntityManager,
+  ): Promise<SkillUpdatePayload> {
+    const skillDef = await manager.findOne(SkillDefinition, { where: { key: skillKey } });
+    if (!skillDef) throw new NotFoundException(`Skill "${skillKey}" introuvable`);
+    if (!skillDef.enabled) throw new BadRequestException(`Skill "${skillKey}" désactivé`);
+
+    const playerSkill = await this.getOrCreatePlayerSkillInTx(characterId, skillDef, manager);
+    const levelBefore = playerSkill.level;
+    const updated = await this.applyXpInTx(playerSkill, xpAmount, skillDef, manager);
+
+    return {
+      skillDefinitionKey: skillKey,
+      key: skillKey,
+      name: skillDef.name,
+      category: skillDef.category,
+      enabled: skillDef.enabled,
+      level: updated.level,
+      xp: updated.xp,
+      nextLevelXp: this.getNextLevelXp(skillDef, updated.level),
+      leveledUp: updated.level > levelBefore,
+    };
   }
 
   /**

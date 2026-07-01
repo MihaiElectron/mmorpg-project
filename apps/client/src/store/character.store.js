@@ -92,13 +92,17 @@ const storeLogic = (set, get) => ({
   },
 
   updateSkill: (skillData) => {
+    const resolvedKey = skillData.key || skillData.skillDefinitionKey;
+    if (!resolvedKey) return;
+    const normalized = { ...skillData, key: resolvedKey };
     set((state) => {
       const skills = [...(state.skills || [])];
-      const index = skills.findIndex((s) => s.key === skillData.key);
+      const index = skills.findIndex((s) => s.key === resolvedKey);
       if (index > -1) {
-        skills[index] = { ...skills[index], ...skillData };
+        skills[index] = { ...skills[index], ...normalized };
       } else {
-        skills.push(skillData);
+        if (!normalized.name || !normalized.category) return { skills };
+        skills.push(normalized);
       }
       return { skills };
     });

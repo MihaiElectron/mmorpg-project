@@ -14,7 +14,8 @@ type SkillEntry = {
 
 const CATEGORY_ORDER = ["gathering", "crafting", "combat", "social", "leadership", "general"];
 
-function categoryLabel(cat: string): string {
+function categoryLabel(cat: string | undefined): string {
+  if (!cat) return "Divers";
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 }
 

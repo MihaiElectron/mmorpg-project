@@ -17,7 +17,7 @@ import { ItemInstance, ItemInstanceState } from '../item-instances/entities/item
 export const LOOT_ITEM_SEEDS: (Pick<
   Item,
   'name' | 'type' | 'category' | 'image' | 'objectMode'
-> & Partial<Pick<Item, 'slot' | 'attack' | 'defense'>>)[] = [
+> & Partial<Pick<Item, 'slot' | 'attack' | 'defense' | 'weaponType'>>)[] = [
   // ── Loot resources ───────────────────────────────────────────────────────
   {
     name: 'Bâton de bois',
@@ -64,6 +64,7 @@ export const LOOT_ITEM_SEEDS: (Pick<
     slot: EquipmentSlot.RIGHT_HAND,
     attack: 5,
     defense: 0,
+    weaponType: 'two_handed_sword',
   },
 ];
 
@@ -134,6 +135,7 @@ export class ItemService implements OnModuleInit {
         if (seed.slot !== undefined && exists.slot !== seed.slot) { exists.slot = seed.slot; dirty = true; }
         if (seed.attack !== undefined && exists.attack !== seed.attack) { exists.attack = seed.attack; dirty = true; }
         if (seed.defense !== undefined && exists.defense !== seed.defense) { exists.defense = seed.defense; dirty = true; }
+        if (seed.weaponType !== undefined && exists.weaponType !== seed.weaponType) { exists.weaponType = seed.weaponType; dirty = true; }
         if (dirty) await this.repo.save(exists);
       }
     }

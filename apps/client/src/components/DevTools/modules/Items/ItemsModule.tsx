@@ -16,7 +16,7 @@ import type {
   ItemUsageRef,
   ItemUsageStats,
 } from "./itemEditor.types";
-import { EQUIPMENT_SLOTS, ITEM_CATEGORIES_BY_TYPE, ITEM_TYPES, OBJECT_MODES } from "./itemEditor.types";
+import { EQUIPMENT_SLOTS, ITEM_CATEGORIES_BY_TYPE, ITEM_TYPES, OBJECT_MODES, WEAPON_TYPES } from "./itemEditor.types";
 import "./ItemsModule.scss";
 
 function shortId(id: string): string {
@@ -24,7 +24,7 @@ function shortId(id: string): string {
 }
 
 function emptyDraft(): ItemEditorDraft {
-  return { name: "", type: "", category: "", image: "", objectMode: "STACKABLE", slot: "", attack: "", defense: "", range: "" };
+  return { name: "", type: "", category: "", image: "", objectMode: "STACKABLE", slot: "", attack: "", defense: "", range: "", weaponType: "" };
 }
 
 function hasGameplayUsage(stats: ItemUsageStats | null): boolean {
@@ -235,6 +235,9 @@ export default function ItemsModule() {
       <datalist id="item-types-list">
         {ITEM_TYPES.map((t) => <option key={t} value={t} />)}
       </datalist>
+      <datalist id="weapon-types-list">
+        {WEAPON_TYPES.map((w) => <option key={w} value={w} />)}
+      </datalist>
 
       {createOpen && (
         <form
@@ -329,6 +332,16 @@ export default function ItemsModule() {
               value={createDraft.range}
               onChange={(e) => updateCreateDraft("range", e.target.value)}
               placeholder=""
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Type d&apos;arme</span>
+            <input
+              className="item-editor__input"
+              list="weapon-types-list"
+              value={createDraft.weaponType}
+              onChange={(e) => updateCreateDraft("weaponType", e.target.value)}
+              placeholder="— aucun —"
             />
           </label>
           <button
@@ -559,6 +572,17 @@ export default function ItemsModule() {
                     value={draft.range}
                     onChange={(e) => updateDraft("range", e.target.value)}
                     placeholder=""
+                  />
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">Type d&apos;arme</span>
+                  <input
+                    className="item-editor__input"
+                    list="weapon-types-list"
+                    value={draft.weaponType}
+                    onChange={(e) => updateDraft("weaponType", e.target.value)}
+                    placeholder="— aucun —"
                   />
                 </label>
 

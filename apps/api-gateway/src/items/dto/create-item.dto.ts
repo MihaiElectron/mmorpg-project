@@ -28,6 +28,10 @@ export class CreateItemDto {
   @IsOptional()
   range?: number;
 
+  @IsString()
+  @IsOptional()
+  weaponType?: string | null;
+
   @IsEnum(EquipmentSlot)
   @IsOptional()
   slot?: EquipmentSlot;

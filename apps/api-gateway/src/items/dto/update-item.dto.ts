@@ -32,6 +32,10 @@ export class UpdateItemDto {
   range?: number;
 
   @IsOptional()
+  @IsString()
+  weaponType?: string | null;
+
+  @IsOptional()
   @IsEnum(EquipmentSlot)
   slot?: EquipmentSlot;
 

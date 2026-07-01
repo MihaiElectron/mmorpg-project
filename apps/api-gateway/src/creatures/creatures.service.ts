@@ -11,6 +11,9 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
+import { SkillsService, SkillUpdatePayload } from '../skills/skills.service';
+import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
+import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
@@ -71,6 +74,7 @@ export type AttackSuccess = {
   riposte?: { damage: number; characterHealth: number };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
+  skillUpdate?: SkillUpdatePayload;
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -80,12 +84,20 @@ export function isAttackFailure(result: AttackResult): result is AttackFailure {
 }
 
 /**
- * Résout le skill de combat à créditer depuis l'équipement du personnage.
- * - RANGED_WEAPON catégorie 'crossbow' → 'crossbow'
- * - RANGED_WEAPON autre → 'bow'
- * - arme de mêlée RIGHT_HAND / LEFT_HAND → 'two_handed'
- * - sans arme → 'two_handed' (fallback temporaire Phase 1)
+ * Résolution weaponType → skillDefinitionKey (Phase 2b : two_handed, bow, crossbow).
+ * Seules les armes avec un weaponType référencé ici génèrent de l'XP skill.
+ *
+ * Temporaire : cette table est destinée à migrer vers une config Studio
+ * (champ weaponType sur ItemTemplate + table de correspondance SkillDefinition).
+ * Ne pas ajouter de nouveaux types ici sans ADR ou note de dette.
  */
+const COMBAT_WEAPON_SKILL_MAP: Record<string, string> = {
+  two_handed_sword: 'two_handed',
+  two_handed_axe: 'two_handed',
+  bow: 'bow',
+  crossbow: 'crossbow',
+};
+
 @Injectable()
 export class CreaturesService implements OnModuleInit {
   private readonly lastAttackAt = new Map<string, number>();
@@ -105,6 +117,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
     private readonly progression: ProgressionService,
+    private readonly skillsService: SkillsService,
     private readonly dataSource: DataSource,
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
@@ -518,21 +531,51 @@ export class CreaturesService implements OnModuleInit {
     }
     await this.creatureRepository.save(creature);
 
-    // XP de combat accordée uniquement au kill confirmé serveur.
+    // Transaction unique : Character XP (au kill) + Skill XP (au hit).
     // characterId provient du paramètre, jamais du client.
     let loot: LootEntry[] | undefined;
     let characterXpUpdate: CharacterXpResult | undefined;
-    if (creature.health === 0) {
-      if (template.killCharacterXpReward > 0) {
-        try {
-          characterXpUpdate = await this.dataSource.transaction((manager) =>
-            this.progression.applyCharacterXpInTx(characterId, template.killCharacterXpReward, ProgressionSource.COMBAT, manager),
-          );
-        } catch (err) {
-          console.warn(`[CreaturesService] XP personnage ignorée pour ${characterId}: ${(err as Error).message}`);
-        }
-      }
+    let skillUpdate: SkillUpdatePayload | undefined;
 
+    const skillKey = this.resolveCombatSkillKey(character);
+    const skillContext = skillKey
+      ? this.buildCombatSkillXpContext(skillKey, damage, character, template)
+      : null;
+    const skillXpResult = skillContext ? calculateSkillXp(skillContext) : null;
+
+    const hasCharXp = creature.health === 0 && template.killCharacterXpReward > 0;
+
+    if (hasCharXp || skillXpResult) {
+      try {
+        const txResult = await this.dataSource.transaction(async (manager) => {
+          let charXp: CharacterXpResult | undefined;
+          if (hasCharXp) {
+            charXp = await this.progression.applyCharacterXpInTx(
+              characterId,
+              template.killCharacterXpReward,
+              ProgressionSource.COMBAT,
+              manager,
+            );
+          }
+          let skillXp: SkillUpdatePayload | undefined;
+          if (skillXpResult) {
+            skillXp = await this.skillsService.applySkillXpInTx(
+              characterId,
+              skillXpResult.skillDefinitionKey,
+              skillXpResult.xpAmount,
+              manager,
+            );
+          }
+          return { charXp, skillXp };
+        });
+        characterXpUpdate = txResult.charXp;
+        skillUpdate = txResult.skillXp;
+      } catch (err) {
+        console.warn(`[CreaturesService] Récompenses ignorées pour ${characterId}: ${(err as Error).message}`);
+      }
+    }
+
+    if (creature.health === 0) {
       const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
       if (generated.length > 0) loot = generated;
     }
@@ -548,7 +591,47 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate, skillUpdate };
+  }
+
+  private resolveCombatSkillKey(character: Character): string | null {
+    const equipment = character.equipment ?? [];
+    const ranged = equipment.find(
+      (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
+    );
+    if (ranged?.item?.weaponType) return COMBAT_WEAPON_SKILL_MAP[ranged.item.weaponType] ?? null;
+    const melee = equipment.find(
+      (eq) =>
+        ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
+          (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
+        eq.item?.type === 'weapon',
+    );
+    if (melee?.item?.weaponType) return COMBAT_WEAPON_SKILL_MAP[melee.item.weaponType] ?? null;
+    return null;
+  }
+
+  private buildCombatSkillXpContext(
+    skillKey: string,
+    damage: number,
+    character: Character,
+    template: CreatureTemplate,
+  ): SkillXpContext {
+    return {
+      skillDefinitionKey: skillKey,
+      domain: 'combat' as SkillDomain,
+      action: 'attack_hit',
+      success: true,
+      difficulty: Math.max(1, Math.round(template.baseHealth / 10)),
+      quality: null,
+      characterLevel: character.level ?? 1,
+      skillLevel: 1,
+      duration: null,
+      damage,
+      blockedDamage: null,
+      healedAmount: null,
+      buffs: [],
+      debuffs: [],
+    };
   }
 
   private resolveAttackRange(character: Character): number {

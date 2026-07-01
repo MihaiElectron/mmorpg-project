@@ -39,6 +39,13 @@ export const ITEM_CATEGORIES_BY_TYPE: Record<string, string[]> = {
   misc: [],
 };
 
+export const WEAPON_TYPES = [
+  "two_handed_sword",
+  "two_handed_axe",
+  "bow",
+  "crossbow",
+] as const;
+
 export interface ItemCatalogEntry {
   id: string;
   name: string;
@@ -50,6 +57,7 @@ export interface ItemCatalogEntry {
   attack: number | null;
   defense: number | null;
   range: number | null;
+  weaponType: string | null;
 }
 
 export interface ItemEditorDraft {
@@ -62,6 +70,7 @@ export interface ItemEditorDraft {
   attack: string;
   defense: string;
   range: string;
+  weaponType: string;
 }
 
 export type ItemEditorPatch = Partial<{
@@ -74,9 +83,10 @@ export type ItemEditorPatch = Partial<{
   attack: number | null;
   defense: number | null;
   range: number | null;
+  weaponType: string | null;
 }>;
 
-export type ItemCreateInput = Omit<ItemEditorPatch, "slot" | "attack" | "defense" | "range"> & {
+export type ItemCreateInput = Omit<ItemEditorPatch, "slot" | "attack" | "defense" | "range" | "weaponType"> & {
   name: string;
   type: string;
   category: string;
@@ -86,6 +96,7 @@ export type ItemCreateInput = Omit<ItemEditorPatch, "slot" | "attack" | "defense
   attack?: number;
   defense?: number;
   range?: number;
+  weaponType?: string | null;
 };
 
 export interface ItemUsageRef {
