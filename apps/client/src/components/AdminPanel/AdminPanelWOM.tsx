@@ -107,9 +107,27 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "aggroRadius",      label: "Aggro",        min: 0 },
       { key: "fleeThresholdPct", label: "Fuite%",       min: 0 },
       { key: "respawnDelayMs",   label: "Respawn (ms)", min: 1, step: 1000 },
+      { key: "_prog_section", label: "Progression au kill", type: "divider" as const, hint: "Un seul skill cible par créature dans cette phase." },
+      { key: "killCharacterXpReward", label: "XP personnage", min: 0 },
+      { key: "killSkillDefinitionKey", label: "Skill récompensé", options: skillKeyOptions },
+      {
+        key: "killSkillXpReward",
+        label: "XP skill",
+        min: 0,
+        labelFn: (_group: any, draftVals: Record<string, string>) => {
+          const sk = draftVals.killSkillDefinitionKey ?? _group.killSkillDefinitionKey ?? "";
+          return sk ? `XP pour ${sk}` : "XP pour aucun skill";
+        },
+      },
     ],
     groupSaveEvent: "admin:update_template",
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
+    getGroupInfoLine: (t) => {
+      const pool = (t as any).lootPool;
+      if (!Array.isArray(pool) || pool.length === 0) return null;
+      const entries = pool.map((e: any) => `${e.itemId} ×${e.minQty ?? 1}-${e.maxQty ?? 1} (${Math.round((e.probability ?? 1) * 100)}%)`);
+      return `Loot (lecture seule) : ${entries.join("  |  ")}`;
+    },
     dragEvent: "admin:spawn",
     getDragPayload: (t, worldX, worldY) => ({ templateKey: t.key, worldX, worldY }),
     getInstancesForGroup: (creatures, template) =>
@@ -635,6 +653,134 @@ function PlayerInventoryPanel({
   );
 }
 
+// ── PlayerSkillsPanel — skills dans l'inspecteur joueur ──────────────────────
+
+type SkillRow = { key: string; level: number; xp: number; nextLevelXp: number };
+
+function PlayerSkillsPanel({ characterId, onResult }: { characterId: string; onResult: (text: string, ok: boolean) => void }) {
+  const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [xpInput, setXpInput] = useState<Record<string, number>>({});
+  const [levelInput, setLevelInput] = useState<Record<string, number>>({});
+  const [xpDirectInput, setXpDirectInput] = useState<Record<string, number>>({});
+
+  async function fetchSkills() {
+    const token = localStorage.getItem("token") ?? "";
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/${characterId}/skills-admin`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        // Fallback : endpoint /characters/me/skills si pas de route admin dédiée
+        const res2 = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/skills`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res2.ok) setSkills(await res2.json());
+        return;
+      }
+      setSkills(await res.json());
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => { fetchSkills(); }, [characterId]);
+
+  async function giveXp(skillKey: string) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const amount = Math.floor(xpInput[skillKey] ?? 0);
+    if (amount <= 0) { onResult("Montant XP invalide.", false); return; }
+    setLoading(true);
+    const result = await ackPromise(socket, "admin:give_xp", { characterId, skillKey, amount });
+    setLoading(false);
+    onResult(result.message, result.success);
+    if (result.success) {
+      setSkills((prev) => prev.map((s) => s.key === skillKey && result.data
+        ? { ...s, level: (result.data as any).level, xp: (result.data as any).xp, nextLevelXp: (result.data as any).nextLevelXp }
+        : s));
+      setXpInput((prev) => ({ ...prev, [skillKey]: 0 }));
+    }
+  }
+
+  async function setLevel(skillKey: string) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const level = Math.floor(levelInput[skillKey] ?? 1);
+    if (level < 1) { onResult("Niveau invalide.", false); return; }
+    setLoading(true);
+    const result = await ackPromise(socket, "admin:set_skill", { characterId, skillKey, level });
+    setLoading(false);
+    onResult(result.message, result.success);
+    if (result.success && result.data) {
+      setSkills((prev) => prev.map((s) => s.key === skillKey
+        ? { ...s, level: (result.data as any).level, xp: (result.data as any).xp, nextLevelXp: (result.data as any).nextLevelXp }
+        : s));
+    }
+  }
+
+  async function setXpDirect(skillKey: string) {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const xp = Math.floor(xpDirectInput[skillKey] ?? 0);
+    if (xp < 0) { onResult("XP invalide.", false); return; }
+    setLoading(true);
+    const result = await ackPromise(socket, "admin:set_skill", { characterId, skillKey, xp });
+    setLoading(false);
+    onResult(result.message, result.success);
+    if (result.success && result.data) {
+      setSkills((prev) => prev.map((s) => s.key === skillKey
+        ? { ...s, level: (result.data as any).level, xp: (result.data as any).xp, nextLevelXp: (result.data as any).nextLevelXp }
+        : s));
+    }
+  }
+
+  if (skills.length === 0) return (
+    <div className="admin-panel__player-wallet">
+      <span className="admin-panel__subsection-label">Skills — aucun skill enregistré</span>
+    </div>
+  );
+
+  return (
+    <div className="admin-panel__player-wallet">
+      <span className="admin-panel__subsection-label">Skills</span>
+      {skills.map((s) => (
+        <div key={s.key} className="admin-panel__player-skill-row">
+          <div className="admin-panel__player-info-row">
+            <span className="admin-panel__player-info-key">{s.key}</span>
+            <span className="admin-panel__player-info-val">niv. {s.level}</span>
+            <span className="admin-panel__player-info-val">{s.xp} / {s.nextLevelXp === Infinity ? "MAX" : s.nextLevelXp} XP</span>
+          </div>
+          <div className="admin-panel__template-stats" style={{ marginTop: 4 }}>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">+XP</span>
+              <input className="admin-panel__template-stat-input" type="number" min={1} step={1}
+                value={xpInput[s.key] ?? 0}
+                onChange={(e) => setXpInput((prev) => ({ ...prev, [s.key]: Number(e.target.value) }))}
+                disabled={loading} {...kbHandlers} />
+            </label>
+            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => giveXp(s.key)}>+XP</button>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">Niveau</span>
+              <input className="admin-panel__template-stat-input" type="number" min={1} step={1}
+                value={levelInput[s.key] ?? s.level}
+                onChange={(e) => setLevelInput((prev) => ({ ...prev, [s.key]: Number(e.target.value) }))}
+                disabled={loading} {...kbHandlers} />
+            </label>
+            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => setLevel(s.key)}>Déf. niv.</button>
+            <label className="admin-panel__template-stat">
+              <span className="admin-panel__template-stat-label">XP directe</span>
+              <input className="admin-panel__template-stat-input" type="number" min={0} step={1}
+                value={xpDirectInput[s.key] ?? s.xp}
+                onChange={(e) => setXpDirectInput((prev) => ({ ...prev, [s.key]: Number(e.target.value) }))}
+                disabled={loading} {...kbHandlers} />
+            </label>
+            <button className="admin-panel__apply-btn" disabled={loading} onClick={() => setXpDirect(s.key)}>Déf. XP</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── PlayerSection — inspecteur joueurs ────────────────────────────────────────
 
 function PlayerSection({ players, items, onResult }: { players: any[]; items: CatalogItem[]; onResult: (text: string, ok: boolean) => void }) {
@@ -782,6 +928,9 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
                       {/* ── Inventaire ── */}
                       <PlayerInventoryPanel characterId={dk} items={items} onResult={onResult} />
 
+                      {/* ── Skills ── */}
+                      <PlayerSkillsPanel characterId={dk} onResult={onResult} />
+
                       {/* ── Debug runtime ── */}
                       <PlayerDebugRuntimePanel />
                     </>
@@ -847,7 +996,13 @@ export default function AdminPanelWOM() {
       ),
       // Créatures : templates via REST, instances via WOM
       fetchAdmin<any[]>("/admin/templates", token).then((data) =>
-        setGroupData((prev) => ({ ...prev, creatures: data }))
+        setGroupData((prev) => ({
+          ...prev,
+          creatures: data.map((t) => ({
+            ...t,
+            killSkillDefinitionKey: t.killSkillDefinition?.key ?? "",
+          })),
+        }))
       ),
       fetchAdmin<WorldObject[]>("/admin/creatures/world-objects", token).then((wos) =>
         setInstanceData((prev) => ({ ...prev, creatures: wosToCreatureInstances(wos) }))

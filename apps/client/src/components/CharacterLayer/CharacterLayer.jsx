@@ -108,7 +108,7 @@ export default function CharacterLayer() {
       <div className="character-layer-header">
         <div className="character-layer-header__name">{character.name}</div>
         <div className="character-layer-header__stats">
-          Niveau {character.level} | PV: {character.health} / {character.maxHealth}
+          Niveau {character.level} | PV: {character.health} / {character.maxHealth} | XP: {character.experience ?? 0} / {character.nextLevelXp ?? "—"}
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.modu
 import { LootService } from '../world/loot.service';
 import { WorldItemsModule } from '../world-items/world-items.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
+import { ProgressionModule } from '../progression/progression.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
     CreatureRuntimeModule,
     WorldItemsModule,
     ItemMaterializationModule,
+    ProgressionModule,
   ],
   providers: [CreaturesGateway, CreaturesService, LootService],
   exports: [CreaturesService],

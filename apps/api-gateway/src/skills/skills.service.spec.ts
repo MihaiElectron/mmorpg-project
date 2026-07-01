@@ -316,6 +316,35 @@ describe('SkillsService', () => {
       expect(result.xp).toBe(42);
       expect(playerSkillRepo.save).not.toHaveBeenCalled();
     });
+
+    it("retourne toujours skillDefinition défini sur l'entité sauvegardée", async () => {
+      const def = makeSkillDef();
+      const ps = makePlayerSkill({ level: 1, xp: 0 });
+      skillDefRepo.findOne.mockResolvedValue(def);
+      playerSkillRepo.findOne.mockResolvedValue(ps);
+      // TypeORM save peut ne pas retourner la relation — on simule ce cas
+      playerSkillRepo.save.mockImplementation(async (x) => ({ ...x, skillDefinition: undefined }));
+
+      const result = await service.addXp('char-1', 'crafting', 50);
+
+      expect(result.skillDefinition).toBe(def);
+    });
+
+    it("premier gain d'XP crée le PlayerSkill et le retourne avec skillDefinition", async () => {
+      const def = makeSkillDef();
+      const fresh = makePlayerSkill({ level: 1, xp: 0 });
+      skillDefRepo.findOne.mockResolvedValue(def);
+      // Premier findOne → absent, création
+      playerSkillRepo.findOne.mockResolvedValue(null);
+      playerSkillRepo.create.mockReturnValue(fresh);
+      // Retourne une copie pour éviter les mutations entre les deux appels save
+      playerSkillRepo.save.mockImplementation(async (x: PlayerSkill) => ({ ...x }));
+
+      const result = await service.addXp('char-1', 'smithing', 10);
+
+      expect(result.skillDefinition).toBe(def);
+      expect(result.xp).toBe(10);
+    });
   });
 
   // ─── getOrCreatePlayerSkillInTx ──────────────────────────────────────────

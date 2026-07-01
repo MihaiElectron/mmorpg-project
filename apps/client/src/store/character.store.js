@@ -100,6 +100,10 @@ const storeLogic = (set, get) => ({
     });
   },
 
+  applyCharacterXpUpdate: ({ level, experience, nextLevelXp }) => {
+    set((s) => s.character ? { character: { ...s.character, level, experience, nextLevelXp } } : {});
+  },
+
   loadBalance: async () => {
     try {
       const token = localStorage.getItem("token");
