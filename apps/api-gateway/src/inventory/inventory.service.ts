@@ -241,10 +241,12 @@ export class InventoryService {
       await manager.delete(CharacterEquipment, { characterId, slot });
 
       if (equipment.itemInstanceId) {
-        return this.itemTransfer.transfer(manager, equipment.itemInstanceId, {
+        const instance = await this.itemTransfer.transfer(manager, equipment.itemInstanceId, {
           requesterId: characterId,
           transition: { type: 'UNEQUIP', characterId },
         });
+        await recalculateEquipmentStats(manager, characterId);
+        return instance;
       }
 
       const inv = await manager.findOne(Inventory, {
@@ -253,7 +255,9 @@ export class InventoryService {
       });
       if (!inv) throw new NotFoundException('Inventory row not found for equipped item');
       inv.equipped = false;
-      return manager.save(Inventory, inv);
+      const saved = await manager.save(Inventory, inv);
+      await recalculateEquipmentStats(manager, characterId);
+      return saved;
     });
   }
 

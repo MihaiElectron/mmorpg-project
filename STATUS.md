@@ -35,6 +35,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Économie joueur | `GET /economy/me/balance` — solde gold/argent/bronze affiché dans le panneau Perso ; admin crédit/débit via `admin:add_balance` (EconomyService, ledger, rôle vérifié) |
 | DevTools | AdminPanelWOM, drag-to-map, overlays Resources/Creatures/Stations/Buildings, Command Palette, Studio SDK ActionRegistry, Player Inspector (stats, monnaie, injection d'objets) |
 | Studio Asset System | `GET /admin/assets/tree` sandboxé, `AssetPicker` (navigation, aperçu, dimensions, sélection), intégré Items/Creatures/Resources/Buildings, `loadTextureIfMissing` Phaser |
+| Equipment UX Phase 1 | Drag inventaire → slot, drag slot → inventaire, double-clic equip/unequip, auto-slot earring/ring/bracelet (serveur), auto-swap atomique, feedback visuel vert/orange/rouge, réorganisation inventaire session-local (`slotMap`), `recalculateEquipmentStats` sur equip et unequip, 30 tests backend |
 | Terrain | Tilemap isométrique grass 64×64, pathfinding NavGrid A\* |
 
 ---

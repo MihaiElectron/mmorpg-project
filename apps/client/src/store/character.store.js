@@ -172,7 +172,14 @@ const storeLogic = (set, get) => ({
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) await get().loadCharacter();
+      if (res.ok) {
+        await get().loadCharacter();
+      } else {
+        let msg = `Déséquipement impossible (HTTP ${res.status})`;
+        try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
+        console.error("[CharacterStore] unequipItem failed:", msg);
+        alert(msg);
+      }
     } catch (err) {
       console.error("[CharacterStore] unequipItem error:", err);
     }

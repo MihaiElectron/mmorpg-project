@@ -642,6 +642,30 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     expect(result).toBe(availInstance);
   });
 
+  it("recalcule les stats apres UNEQUIP (epee retrait: attaque revient a la base)", async () => {
+    const instance = makeInstance({ state: ItemInstanceState.EQUIPPED, containerType: ItemInstanceContainerType.EQUIPMENT });
+    const availInstance = makeInstance({ state: ItemInstanceState.AVAILABLE, containerType: ItemInstanceContainerType.INVENTORY });
+    const equipment = { characterId, itemId: "sword-1", slot, itemInstanceId: instance.id } as CharacterEquipment;
+    const characterBase = { id: characterId, baseAttack: 10, baseDefense: 5 };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(availInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(equipment)      // CharacterEquipment
+        .mockResolvedValueOnce(characterBase), // Character pour recalc
+      find: jest.fn().mockResolvedValue([]),   // aucun item equipe apres unequip
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.unequipItem(characterId, slot);
+
+    expect(manager.update).toHaveBeenCalledWith(
+      Character, { id: characterId }, { attack: 10, defense: 5 },
+    );
+  });
+
   it("leve NotFoundException si l instance est introuvable (transfer leve NotFoundException)", async () => {
     const equipment = { characterId, itemId: "sword-1", slot, itemInstanceId: "ghost-inst" } as CharacterEquipment;
     const itemTransfer = { transfer: jest.fn().mockRejectedValue(new NotFoundException("ItemInstance ghost-inst not found")) };
@@ -654,5 +678,63 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     const service = makeEquipService({ dataSource, itemTransfer });
 
     await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe("InventoryService.equipItemInstance — auto-slot ring et bracelet", () => {
+  const characterId = "char-1";
+
+  it("equipe left-ring si les deux slots sont libres", async () => {
+    const ringItem = makeItem({ id: "ring-1", type: "accessory", category: "ring", slot: "left-ring" as any });
+    const instance = makeInstance({ itemId: ringItem.id });
+    const equippedInstance = makeInstance({ id: instance.id, state: ItemInstanceState.EQUIPPED });
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(equippedInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance)   // rawInstance
+        .mockResolvedValueOnce(ringItem)   // Item
+        .mockResolvedValueOnce(null)       // resolveEquipSlot: left-ring libre
+        .mockResolvedValueOnce(null),      // existing CharacterEquipment
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+      create: jest.fn((_, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
+
+    expect(manager.save).toHaveBeenCalledWith(
+      CharacterEquipment,
+      expect.objectContaining({ slot: "left-ring" }),
+    );
+  });
+
+  it("equipe right-bracelet si left-bracelet est occupe", async () => {
+    const braceletItem = makeItem({ id: "brac-1", type: "accessory", category: "bracelet", slot: "left-bracelet" as any });
+    const instance = makeInstance({ itemId: braceletItem.id });
+    const equippedInstance = makeInstance({ id: instance.id, state: ItemInstanceState.EQUIPPED });
+    const existingLeft = { characterId, itemId: braceletItem.id, slot: "left-bracelet", itemInstanceId: "old-brac" };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(equippedInstance) };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance)      // rawInstance
+        .mockResolvedValueOnce(braceletItem)  // Item
+        .mockResolvedValueOnce(existingLeft)  // resolveEquipSlot: left occupe
+        .mockResolvedValueOnce(null)          // resolveEquipSlot: right libre
+        .mockResolvedValueOnce(null),         // existing CharacterEquipment (right-bracelet)
+      save: jest.fn(async (_, v) => v),
+      delete: jest.fn(),
+      create: jest.fn((_, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+
+    await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
+
+    expect(manager.save).toHaveBeenCalledWith(
+      CharacterEquipment,
+      expect.objectContaining({ slot: "right-bracelet" }),
+    );
   });
 });
