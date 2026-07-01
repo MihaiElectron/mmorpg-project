@@ -526,6 +526,8 @@ export default class WorldScene extends Phaser.Scene {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
 
+      getDevToolsStore().getState().setDevToolsFocused(false);
+
       pushDebugEvent({
         source: "WorldScene",
         type: "pointerdown",

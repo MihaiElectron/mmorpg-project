@@ -63,6 +63,7 @@ export default function DevToolsFloatingPanel() {
   const panelPosition = useDevToolsStore((s) => s.panelPosition);
   const panelSize = useDevToolsStore((s) => s.panelSize);
   const setDevToolsOpen = useDevToolsStore((s) => s.setDevToolsOpen);
+  const setDevToolsFocused = useDevToolsStore((s) => s.setDevToolsFocused);
   const setPanelPosition = useDevToolsStore((s) => s.setPanelPosition);
   const setPanelSize = useDevToolsStore((s) => s.setPanelSize);
   const dragRef = useRef({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 });
@@ -140,7 +141,7 @@ export default function DevToolsFloatingPanel() {
   }
 
   return (
-    <section ref={panelRef} className="devtools-floating-panel" aria-label="DevTools panel">
+    <section ref={panelRef} className="devtools-floating-panel" aria-label="DevTools panel" onPointerDown={() => setDevToolsFocused(true)}>
       {RESIZE_CORNERS.map((corner) => (
         <span
           key={corner}

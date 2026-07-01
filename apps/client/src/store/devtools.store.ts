@@ -58,6 +58,12 @@ const storeLogic = (set, get) => ({
 
   setConsoleActive: (active: boolean) => set({ isConsoleActive: active }),
 
+  // ── Focus panneau DevTools ────────────────────────────────────────────────────
+  // true quand le dernier pointerdown était dans le panneau DevTools (pas sur le canvas).
+  isDevToolsFocused: false,
+
+  setDevToolsFocused: (focused: boolean) => set({ isDevToolsFocused: focused }),
+
   addToHistory: (cmd: string) => {
     const prev = get().commandHistory;
     if (prev[0] === cmd) return;

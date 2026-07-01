@@ -259,7 +259,8 @@ export default class PlayerController {
     let vx = 0;
     let vy = 0;
 
-    if (!getDevToolsStore().getState().isConsoleActive) {
+    const devToolsState = getDevToolsStore().getState();
+    if (!devToolsState.isConsoleActive && !devToolsState.isDevToolsFocused) {
       if (this.cursors.left.isDown) vx = -speed;
       if (this.cursors.right.isDown) vx = speed;
       if (this.cursors.up.isDown) vy = -speed;
