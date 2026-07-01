@@ -882,6 +882,15 @@ export default function AdminPanelWOM() {
     Promise.all(fetches).catch(() => setError("Impossible de charger les données admin."));
   }, [token]);
 
+  useEffect(() => {
+    function onItemsChanged() {
+      if (!token) return;
+      fetchAdmin<any[]>("/admin/items", token).then(setItems).catch(() => {});
+    }
+    window.addEventListener("devtools:items-changed", onItemsChanged);
+    return () => window.removeEventListener("devtools:items-changed", onItemsChanged);
+  }, [token]);
+
   const overviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function scheduleOverviewRefresh() {
