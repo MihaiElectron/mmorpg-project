@@ -21,7 +21,7 @@ export default function CharacterLayout() {
 
   useEffect(() => {
     if (isOpen && activeTab === "perso") loadBalance();
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, loadBalance]);
 
   function handleTabClick(tab) {
     if (!isOpen) {
