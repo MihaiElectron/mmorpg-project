@@ -16,6 +16,7 @@ import type {
   ItemUsageRef,
   ItemUsageStats,
 } from "./itemEditor.types";
+import { EQUIPMENT_SLOTS, ITEM_CATEGORIES_BY_TYPE, ITEM_TYPES, OBJECT_MODES } from "./itemEditor.types";
 import "./ItemsModule.scss";
 
 function shortId(id: string): string {
@@ -23,7 +24,7 @@ function shortId(id: string): string {
 }
 
 function emptyDraft(): ItemEditorDraft {
-  return { name: "", type: "", category: "", image: "" };
+  return { name: "", type: "", category: "", image: "", objectMode: "STACKABLE", slot: "", attack: "", defense: "", range: "" };
 }
 
 function hasGameplayUsage(stats: ItemUsageStats | null): boolean {
@@ -175,6 +176,7 @@ export default function ItemsModule() {
       setCreateDraft(emptyDraft());
       setCreateOpen(false);
       setMessage("Item créé.");
+      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erreur création.");
     } finally {
@@ -194,6 +196,7 @@ export default function ItemsModule() {
       setSelectedId(updated.id);
       setDraft(draftFromItem(updated));
       setMessage("Item sauvegardé.");
+      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erreur sauvegarde.");
     } finally {
@@ -229,6 +232,10 @@ export default function ItemsModule() {
         </button>
       </div>
 
+      <datalist id="item-types-list">
+        {ITEM_TYPES.map((t) => <option key={t} value={t} />)}
+      </datalist>
+
       {createOpen && (
         <form
           className="item-editor__create-form"
@@ -246,6 +253,7 @@ export default function ItemsModule() {
             <span className="item-editor__label">Type</span>
             <input
               className="item-editor__input"
+              list="item-types-list"
               value={createDraft.type}
               onChange={(e) => updateCreateDraft("type", e.target.value)}
             />
@@ -254,9 +262,15 @@ export default function ItemsModule() {
             <span className="item-editor__label">Category</span>
             <input
               className="item-editor__input"
+              list="item-categories-list-create"
               value={createDraft.category}
               onChange={(e) => updateCreateDraft("category", e.target.value)}
             />
+            <datalist id="item-categories-list-create">
+              {(ITEM_CATEGORIES_BY_TYPE[createDraft.type] ?? []).map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </label>
           <label className="item-editor__field">
             <span className="item-editor__label">Image</span>
@@ -264,6 +278,57 @@ export default function ItemsModule() {
               value={createDraft.image}
               onChange={(path) => updateCreateDraft("image", path)}
               category="images"
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">objectMode</span>
+            <select
+              className="item-editor__input"
+              value={createDraft.objectMode}
+              onChange={(e) => updateCreateDraft("objectMode", e.target.value)}
+            >
+              {OBJECT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Slot</span>
+            <select
+              className="item-editor__input"
+              value={createDraft.slot}
+              onChange={(e) => updateCreateDraft("slot", e.target.value)}
+            >
+              <option value="">— aucun —</option>
+              {EQUIPMENT_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Attack</span>
+            <input
+              className="item-editor__input item-editor__input--num"
+              type="number"
+              value={createDraft.attack}
+              onChange={(e) => updateCreateDraft("attack", e.target.value)}
+              placeholder="0"
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Defense</span>
+            <input
+              className="item-editor__input item-editor__input--num"
+              type="number"
+              value={createDraft.defense}
+              onChange={(e) => updateCreateDraft("defense", e.target.value)}
+              placeholder="0"
+            />
+          </label>
+          <label className="item-editor__field">
+            <span className="item-editor__label">Range</span>
+            <input
+              className="item-editor__input item-editor__input--num"
+              type="number"
+              value={createDraft.range}
+              onChange={(e) => updateCreateDraft("range", e.target.value)}
+              placeholder=""
             />
           </label>
           <button
@@ -411,6 +476,7 @@ export default function ItemsModule() {
                   <span className="item-editor__label">Type</span>
                   <input
                     className="item-editor__input"
+                    list="item-types-list"
                     value={draft.type}
                     onChange={(e) => updateDraft("type", e.target.value)}
                   />
@@ -420,9 +486,15 @@ export default function ItemsModule() {
                   <span className="item-editor__label">Category</span>
                   <input
                     className="item-editor__input"
+                    list="item-categories-list-edit"
                     value={draft.category}
                     onChange={(e) => updateDraft("category", e.target.value)}
                   />
+                  <datalist id="item-categories-list-edit">
+                    {(ITEM_CATEGORIES_BY_TYPE[draft.type] ?? []).map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
                 </label>
 
                 <label className="item-editor__field">
@@ -431,6 +503,62 @@ export default function ItemsModule() {
                     value={draft.image}
                     onChange={(path) => updateDraft("image", path)}
                     category="images"
+                  />
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">objectMode</span>
+                  <select
+                    className="item-editor__input"
+                    value={draft.objectMode}
+                    onChange={(e) => updateDraft("objectMode", e.target.value)}
+                  >
+                    {OBJECT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">Slot</span>
+                  <select
+                    className="item-editor__input"
+                    value={draft.slot}
+                    onChange={(e) => updateDraft("slot", e.target.value)}
+                  >
+                    <option value="">— aucun —</option>
+                    {EQUIPMENT_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">Attack</span>
+                  <input
+                    className="item-editor__input item-editor__input--num"
+                    type="number"
+                    value={draft.attack}
+                    onChange={(e) => updateDraft("attack", e.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">Defense</span>
+                  <input
+                    className="item-editor__input item-editor__input--num"
+                    type="number"
+                    value={draft.defense}
+                    onChange={(e) => updateDraft("defense", e.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+
+                <label className="item-editor__field">
+                  <span className="item-editor__label">Range</span>
+                  <input
+                    className="item-editor__input item-editor__input--num"
+                    type="number"
+                    value={draft.range}
+                    onChange={(e) => updateDraft("range", e.target.value)}
+                    placeholder=""
                   />
                 </label>
 
