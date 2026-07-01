@@ -24,7 +24,6 @@ import { AdminController } from './admin.controller';
 import { AdminGateway } from './admin.gateway';
 import { EconomyModule } from '../economy/economy.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
-import { SkillsModule } from '../skills/skills.module';
 
 @Module({
   imports: [
@@ -43,7 +42,6 @@ import { SkillsModule } from '../skills/skills.module';
     BuildingsModule,
     EconomyModule,
     ItemMaterializationModule,
-    SkillsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

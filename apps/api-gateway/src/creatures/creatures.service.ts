@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
@@ -11,7 +11,6 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { SkillsService } from '../skills/skills.service';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
@@ -20,12 +19,14 @@ import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, C
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
-import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
 
 const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
 // Portée mêlée pour attack() en WU — temporaire (legacyRadiusToWU(60) = 960)
 const MELEE_RANGE_WU = 960;
 
+// XP accordée au kill — valeur temporaire Phase 1.
+// Phase 2 : dériver du CreatureTemplate ou d'une FormulaDefinition.
+const KILL_XP = 10;
 const RANGED_RANGE_DEFAULT = 300;
 const ATTACK_COOLDOWN_MS = 700;
 const AUTO_ATTACK_COOLDOWN_MS = 1500;
@@ -72,8 +73,7 @@ export type AttackSuccess = {
   attackerId: string;
   riposte?: { damage: number; characterHealth: number };
   loot?: LootEntry[];
-  skillUpdate?: { key: string; level: number; xp: number; nextLevelXp: number; leveledUp: boolean };
-  characterXpUpdate?: CharacterXpResult;
+  skillUpdate?: { key: string; level: number; xp: number; nextLevelXp: number };
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -120,8 +120,6 @@ export class CreaturesService implements OnModuleInit {
     private readonly skills: SkillsService,
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
-    private readonly dataSource: DataSource,
-    private readonly progression: ProgressionService,
   ) {}
 
   async onModuleInit() {
@@ -523,74 +521,35 @@ export class CreaturesService implements OnModuleInit {
     const damage = Math.max(attack - derived.defenseTotal, 1);
 
     creature.health = Math.max(creature.health - damage, 0);
-    const isDead = creature.health === 0;
-
-    let respawnDelay = 0;
-    if (isDead) {
+    if (creature.health === 0) {
       creature.state = 'dead';
       this.patrolStates.delete(creature.id);
-      respawnDelay = creature.respawnDelayMs ?? creature.spawn.respawnDelayMs ?? creature.spawn.template.respawnDelayMs;
-      creature.respawnAt = new Date(Date.now() + respawnDelay);
+      const delay = creature.respawnDelayMs ?? creature.spawn.respawnDelayMs ?? creature.spawn.template.respawnDelayMs;
+      creature.respawnAt = new Date(Date.now() + delay);
+      setTimeout(() => this.respawnCreature(creature.id), delay);
     }
+    await this.creatureRepository.save(creature);
 
     // XP de combat accordée uniquement au kill confirmé serveur.
     // characterId provient du paramètre, jamais du client.
-    // La sauvegarde de l'état créature et le crédit XP sont atomiques.
     let loot: LootEntry[] | undefined;
     let skillUpdate: AttackSuccess['skillUpdate'];
-    let characterXpUpdate: CharacterXpResult | undefined;
-
-    if (isDead) {
-      const skillXpAmount = template.killSkillXpReward;
-      const characterXpAmount = template.killCharacterXpReward;
-
+    if (creature.health === 0) {
+      const skillKey = resolveCombatSkill(character.equipment ?? []);
       try {
-        await this.dataSource.transaction(async (manager) => {
-          await manager.save(Creature, creature);
-
-          if (skillXpAmount > 0) {
-            let skillDef: SkillDefinition | null = null;
-            if (template.killSkillDefinitionId) {
-              skillDef = await manager.findOne(SkillDefinition, { where: { id: template.killSkillDefinitionId } });
-            } else {
-              const skillKey = resolveCombatSkill(character.equipment ?? []);
-              skillDef = await manager.findOne(SkillDefinition, { where: { key: skillKey } });
-            }
-            if (skillDef && skillDef.enabled) {
-              const playerSkill = await this.skills.getOrCreatePlayerSkillInTx(characterId, skillDef, manager);
-              const previousLevel = playerSkill.level;
-              const updated = await this.skills.applyXpInTx(playerSkill, skillXpAmount, skillDef, manager);
-              skillUpdate = {
-                key: skillDef.key,
-                level: updated.level,
-                xp: updated.xp,
-                nextLevelXp: this.skills.getNextLevelXp(skillDef, updated.level),
-                leveledUp: updated.level > previousLevel,
-              };
-            }
-          }
-
-          if (characterXpAmount > 0) {
-            characterXpUpdate = await this.progression.applyCharacterXpInTx(
-              characterId,
-              characterXpAmount,
-              ProgressionSource.COMBAT,
-              manager,
-            );
-          }
-        });
+        const updated = await this.skills.addXp(characterId, skillKey, KILL_XP);
+        skillUpdate = {
+          key: skillKey,
+          level: updated.level,
+          xp: updated.xp,
+          nextLevelXp: this.skills.getNextLevelXp(updated.skillDefinition, updated.level),
+        };
       } catch (err) {
-        console.warn(`[CreaturesService] Kill transaction échouée pour ${characterId}: ${(err as Error).message}`);
-        // Rollback en mémoire partiel : la créature reste morte mais l'XP n'est pas crédité.
-        // Le respawn se déroulera normalement car creature.state est déjà 'dead' en mémoire.
+        console.warn(`[CreaturesService] XP combat ignorée pour ${characterId}: ${(err as Error).message}`);
       }
-
-      setTimeout(() => this.respawnCreature(creature.id), respawnDelay);
 
       const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
       if (generated.length > 0) loot = generated;
-    } else {
-      await this.creatureRepository.save(creature);
     }
 
     let riposte: { damage: number; characterHealth: number } | undefined;
@@ -604,7 +563,7 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, skillUpdate, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, skillUpdate };
   }
 
   private resolveAttackRange(character: Character): number {

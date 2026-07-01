@@ -13,7 +13,6 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 **Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
 **Market Lots implémentés** : objets STACKABLE vendables via l'Auction House — pipeline Inventory → LOT → Auction → Mail → Claim → Inventory validé en base (5 cas + 6 contrôles de sécurité).
 **Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
-**Skills & Rewards Phase 1.5** : `killCharacterXpReward` / `killSkillXpReward` / `killSkillDefinitionId` (FK) sur `CreatureTemplate` — XP personnage via `ProgressionService` + `GameConfig` singleton, `character_xp_update` socket, XP affichée dans le panneau personnage, DevTools Creature section "Progression au kill" avec label dynamique. Convention transversale documentée dans ADR-0016.
 **Studio Asset System V1** : `GET /admin/assets/tree` sandboxé, composant `AssetPicker` générique, intégré sur Items/Creatures/Resources/Buildings. `loadTextureIfMissing` helper Phaser pour chargement dynamique sans rebuild.
 
 ---
@@ -26,7 +25,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Récolte | Timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
 | Loot | Hybrid STACKABLE/INSTANCE — `ItemMaterializationService` 4 chemins |
 | Crafting | Stations placées en WU, validation distance serveur, ActionPanel → craft |
-| Skills joueur | Niveau, XP, nextLevelXp par skill — onglet panneau personnage ; XP combat transactionnel, `leveledUp` dans `skill_update`, DevTools give_xp/set_skill |
+| Skills joueur | Niveau, XP, nextLevelXp par skill — onglet panneau personnage |
 | Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
 | Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
 | Bank / Mail / Guild / Housing | MVPs Instance-only opérationnels (endpoints REST, pas d'UI en jeu) |

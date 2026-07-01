@@ -159,9 +159,7 @@ export class SkillsService implements OnModuleInit {
     playerSkill.level = level;
     playerSkill.xp = xp;
 
-    const saved = await this.playerSkillRepo.save(playerSkill);
-    saved.skillDefinition = skillDef;
-    return saved;
+    return this.playerSkillRepo.save(playerSkill);
   }
 
   // ---------------------------------------------------------------------------

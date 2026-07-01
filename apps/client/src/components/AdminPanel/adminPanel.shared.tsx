@@ -15,17 +15,9 @@ export type FieldDef = {
   /** Labels lisibles parallèles à `options` (même index). Si absent, affiche la valeur brute. */
   optionLabels?: string[];
   /** Rendu comme <input type="text"> — dirty détecté par comparaison de chaînes. */
-  type?: 'text' | 'asset' | 'divider';
+  type?: 'text' | 'asset';
   /** Dossier cible du picker (ex: "items", "sprites", "bestiary"). Requis si type === 'asset'. */
   assetCategory?: string;
-  /**
-   * Label dynamique pour les champs dont le libellé dépend d'un autre champ du même groupe.
-   * Reçoit l'objet groupe et les valeurs draft en cours.
-   * Prioritaire sur `label` si défini.
-   */
-  labelFn?: (group: any, draftValues: Record<string, string>) => string;
-  /** Note courte affichée sous le séparateur `divider`. */
-  hint?: string;
 };
 
 export type ConsoleLine = { text: string; ok: boolean };
@@ -634,25 +626,14 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
 
                     {config.groupFields.length > 0 && (
                       <div className="admin-panel__template-stats">
-                        {config.groupFields.map((f) => {
-                          if (f.type === 'divider') {
-                            return (
-                              <div key={f.key} className="admin-panel__stat-divider">
-                                <span className="admin-panel__stat-divider-label">{f.label}</span>
-                                {f.hint && <span className="admin-panel__stat-divider-hint">{f.hint}</span>}
-                              </div>
-                            );
-                          }
-                          const effectiveLabel = f.labelFn?.(group, groupDraft.drafts[gk] ?? {}) ?? f.label;
-                          return (
-                            <label key={f.key} className="admin-panel__template-stat">
-                              <span className="admin-panel__template-stat-label">{effectiveLabel}</span>
-                              <StatField def={f} dirty={groupDraft.isDirty(gk, f.key, group)}
-                                value={groupDraft.getDisplayField(gk, f.key, group)}
-                                onChange={(v) => groupDraft.onChange(gk, f.key, v)} />
-                            </label>
-                          );
-                        })}
+                        {config.groupFields.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={groupDraft.isDirty(gk, f.key, group)}
+                              value={groupDraft.getDisplayField(gk, f.key, group)}
+                              onChange={(v) => groupDraft.onChange(gk, f.key, v)} />
+                          </label>
+                        ))}
                       </div>
                     )}
 

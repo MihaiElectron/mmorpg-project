@@ -12,7 +12,6 @@ import { Inventory } from '../inventory/entities/inventory.entity';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SkillsModule } from '../skills/skills.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
-import { ProgressionModule } from '../progression/progression.module';
 
 @Module({
   imports: [
@@ -21,7 +20,6 @@ import { ProgressionModule } from '../progression/progression.module';
     InventoryModule,
     SkillsModule,
     ItemTransferModule,
-    ProgressionModule,
   ],
   controllers: [CharacterController],
   providers: [CharacterService],

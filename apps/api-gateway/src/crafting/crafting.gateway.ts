@@ -65,15 +65,6 @@ export class CraftingGateway {
       const character = await this.characterService.findFirstByUser(client.data.userId);
       const result = await this.craftingService.craft(character.id, recipeId, quantity);
       client.emit('craft:result', { success: true, data: result });
-      if (result.skill && result.skill.key) {
-        client.emit('skill_update', {
-          key: result.skill.key,
-          level: result.skill.newLevel,
-          xp: result.skill.newXp,
-          nextLevelXp: result.skill.nextLevelXp,
-          leveledUp: result.skill.newLevel > result.skill.previousLevel,
-        });
-      }
       return { success: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Erreur inconnue';

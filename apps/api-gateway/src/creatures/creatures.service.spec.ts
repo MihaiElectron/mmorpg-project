@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreaturesService, resolveCombatSkill } from './creatures.service';
 import { Creature } from './entities/creature.entity';
@@ -9,43 +8,10 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { SkillsService } from '../skills/skills.service';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
-import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { WorldService } from '../world/world.service';
 import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
-import { ProgressionService } from '../progression/progression.service';
-
-function makeSkillDef(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
-  return {
-    id: "def-1",
-    key: "two_handed",
-    name: "Two-Handed",
-    category: "combat",
-    maxLevel: 100,
-    baseXpPerLevel: 100,
-    xpCurveExponent: 1.5,
-    enabled: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  } as SkillDefinition;
-}
-
-function makePlayerSkill(overrides: Partial<PlayerSkill> = {}): PlayerSkill {
-  return {
-    id: "ps-1",
-    characterId: "char-1",
-    skillDefinitionId: "def-1",
-    level: 1,
-    xp: 0,
-    skillDefinition: makeSkillDef(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  } as PlayerSkill;
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,10 +34,6 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     aggroRadius: 50,
     fleeThresholdPct: 75,
     lootPool: null,
-    killSkillXpReward: 10,
-    killCharacterXpReward: 0,
-    killSkillDefinitionId: null,
-    killSkillDefinition: null,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -190,19 +152,6 @@ describe('CreaturesService', () => {
     };
     skillsService = {
       addXp: jest.fn().mockResolvedValue({ level: 1, xp: 10 }),
-      getOrCreatePlayerSkillInTx: jest.fn().mockResolvedValue(makePlayerSkill({ level: 1, xp: 0 })),
-      applyXpInTx: jest.fn().mockImplementation(async (ps: PlayerSkill) => { ps.xp = 10; return ps; }),
-      getNextLevelXp: jest.fn().mockReturnValue(100),
-    };
-
-    const mockManager = {
-      save: jest.fn().mockImplementation(async (_entity: unknown, obj: unknown) => obj ?? _entity),
-      findOne: jest.fn().mockImplementation(async (_entity: unknown, opts: { where?: { key?: string } } = {}) =>
-        makeSkillDef({ key: opts?.where?.key ?? 'two_handed' }),
-      ),
-    };
-    const mockDataSource = {
-      transaction: jest.fn().mockImplementation(async (callback: (m: typeof mockManager) => Promise<unknown>) => callback(mockManager)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -214,8 +163,6 @@ describe('CreaturesService', () => {
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: SkillsService, useValue: skillsService },
-        { provide: DataSource, useValue: mockDataSource },
-        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) } },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -433,7 +380,7 @@ describe('CreaturesService', () => {
       expect(result).toEqual({ success: false, error: 'Attack on cooldown' });
     });
 
-    it('accorde XP two_handed au kill sans équipement via transaction', async () => {
+    it('accorde XP two_handed au kill sans équipement', async () => {
       jest.useFakeTimers();
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
@@ -441,36 +388,33 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).toHaveBeenCalledWith('char-1', expect.objectContaining({ key: 'two_handed' }), expect.any(Object));
-      expect(skillsService.applyXpInTx).toHaveBeenCalledWith(expect.any(Object), 10, expect.objectContaining({ key: 'two_handed' }), expect.any(Object));
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'two_handed', 10);
       jest.useRealTimers();
     });
 
-    it('accorde XP bow pour une arme à distance (catégorie bow) via transaction', async () => {
+    it('accorde XP bow pour une arme à distance (catégorie bow)', async () => {
       jest.useFakeTimers();
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       const equipment = [makeRangedEquipment('bow')];
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
-      skillsService.getOrCreatePlayerSkillInTx.mockResolvedValue(makePlayerSkill({ level: 1, xp: 0 }));
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).toHaveBeenCalledWith('char-1', expect.objectContaining({ key: 'bow' }), expect.any(Object));
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'bow', 10);
       jest.useRealTimers();
     });
 
-    it('accorde XP crossbow pour une arme catégorie crossbow via transaction', async () => {
+    it('accorde XP crossbow pour une arme catégorie crossbow', async () => {
       jest.useFakeTimers();
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });
       (service as any).liveCreatures.set(creature.id, creature);
       const equipment = [makeRangedEquipment('crossbow')];
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 50, equipment }));
-      skillsService.getOrCreatePlayerSkillInTx.mockResolvedValue(makePlayerSkill({ level: 1, xp: 0 }));
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).toHaveBeenCalledWith('char-1', expect.objectContaining({ key: 'crossbow' }), expect.any(Object));
+      expect(skillsService.addXp).toHaveBeenCalledWith('char-1', 'crossbow', 10);
       jest.useRealTimers();
     });
 
@@ -481,7 +425,7 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).not.toHaveBeenCalled();
+      expect(skillsService.addXp).not.toHaveBeenCalled();
     });
 
     it("n'accorde pas XP si l'creature est déjà mort", async () => {
@@ -490,7 +434,7 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).not.toHaveBeenCalled();
+      expect(skillsService.addXp).not.toHaveBeenCalled();
     });
 
     // ── Loot ──────────────────────────────────────────────────────────────────
@@ -561,7 +505,7 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, 'server-resolved-char-id', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.getOrCreatePlayerSkillInTx).toHaveBeenCalledWith('server-resolved-char-id', expect.any(Object), expect.any(Object));
+      expect(skillsService.addXp).toHaveBeenCalledWith('server-resolved-char-id', expect.any(String), expect.any(Number));
       jest.useRealTimers();
     });
 
@@ -992,9 +936,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
-        { provide: SkillsService, useValue: { addXp: jest.fn(), getOrCreatePlayerSkillInTx: jest.fn(), applyXpInTx: jest.fn(), getNextLevelXp: jest.fn().mockReturnValue(100) } },
-        { provide: DataSource, useValue: { transaction: jest.fn().mockImplementation(async (cb: (m: unknown) => Promise<unknown>) => cb({ save: jest.fn().mockImplementation(async (_: unknown, o: unknown) => o), findOne: jest.fn().mockResolvedValue(makeSkillDef()) })) } },
-        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) } },
+        { provide: SkillsService, useValue: { addXp: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -1141,9 +1083,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: getRepositoryToken(CreatureSpawn), useValue: { findOne: jest.fn().mockResolvedValue(null), find: jest.fn().mockResolvedValue([]), save: jest.fn(), update: jest.fn(), create: jest.fn().mockImplementation((a) => a) } },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
-        { provide: SkillsService, useValue: { addXp: jest.fn(), getOrCreatePlayerSkillInTx: jest.fn(), applyXpInTx: jest.fn(), getNextLevelXp: jest.fn().mockReturnValue(100) } },
-        { provide: DataSource, useValue: { transaction: jest.fn().mockImplementation(async (cb: (m: unknown) => Promise<unknown>) => cb({ save: jest.fn().mockImplementation(async (_: unknown, o: unknown) => o), findOne: jest.fn().mockResolvedValue(makeSkillDef()) })) } },
-        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) } },
+        { provide: SkillsService, useValue: { addXp: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
       ],

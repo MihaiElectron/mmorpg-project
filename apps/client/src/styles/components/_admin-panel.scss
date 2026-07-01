@@ -986,33 +986,6 @@
   }
 }
 
-// ── Stat section divider ─────────────────────────────────────────────────────
-.admin-panel__stat-divider {
-  flex-basis: 100%;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-
-  &-label {
-    font-size: 0.65rem;
-    color: vars.$color-text-disabled;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    white-space: nowrap;
-  }
-
-  &-hint {
-    font-size: 0.63rem;
-    font-style: italic;
-    color: vars.$color-text-muted;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-}
-
 // ── Info line (lecture seule) ─────────────────────────────────────────────────
 .admin-panel__info-line {
   margin: 2px 0 0;

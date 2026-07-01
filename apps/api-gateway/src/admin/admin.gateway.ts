@@ -23,9 +23,6 @@ import { TransactionType } from '../economy/entities/economic-transaction.entity
 import { DataSource } from 'typeorm';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
-import { SkillsService } from '../skills/skills.service';
-import { PlayerSkill } from '../skills/entities/player-skill.entity';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 
 type AddBalancePayload = {
   characterId: string;
@@ -76,7 +73,6 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly economyService: EconomyService,
     private readonly dataSource: DataSource,
     private readonly itemMaterializationService: ItemMaterializationService,
-    private readonly skillsService: SkillsService,
   ) {}
 
   private emitReloadIfConnected(characterId: string): void {
@@ -190,16 +186,14 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: 'Payload invalide : key et fields requis.' };
     }
 
-    const numericAllowed = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs', 'killSkillXpReward', 'killCharacterXpReward'];
+    const numericAllowed = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs'];
     const stringAllowed = ['name', 'textureKey'];
-    const skillDefKeyField = 'killSkillDefinitionKey';
-    const allAllowed = [...numericAllowed, ...stringAllowed, skillDefKeyField];
-    const safeFields: Record<string, number | string | null> = {};
+    const allAllowed = [...numericAllowed, ...stringAllowed];
+    const safeFields: Record<string, number | string> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allAllowed.includes(k)) {
         return { success: false, message: `Champ "${k}" non modifiable.` };
       }
-      if (k === skillDefKeyField) continue; // résolution async après la boucle
       if (stringAllowed.includes(k)) {
         if (typeof v !== 'string' || String(v).trim() === '') {
           return { success: false, message: `"${k}" doit être une chaîne non vide.` };
@@ -215,21 +209,6 @@ export class AdminGateway implements OnGatewayConnection {
           return { success: false, message: `Valeur invalide pour "${k}" : doit être >= 0.` };
         }
         safeFields[k] = n;
-      }
-    }
-
-    if (skillDefKeyField in fields) {
-      const keyVal = (fields as any)[skillDefKeyField];
-      if (keyVal === '' || keyVal == null) {
-        safeFields['killSkillDefinitionId'] = null;
-      } else if (typeof keyVal === 'string') {
-        const sd = await this.dataSource.getRepository(SkillDefinition).findOne({ where: { key: keyVal } });
-        if (!sd) {
-          return { success: false, message: `SkillDefinition "${keyVal}" introuvable.` };
-        }
-        safeFields['killSkillDefinitionId'] = sd.id;
-      } else {
-        return { success: false, message: '"killSkillDefinitionKey" doit être une chaîne.' };
       }
     }
 
@@ -1177,101 +1156,6 @@ export class AdminGateway implements OnGatewayConnection {
       const wom = toBuildingWorldObject(updated);
       this.server.to(getMapRoomId(updated.mapId)).emit('building_update', wom);
       return { success: true, message: `Building mis à jour.`, data: wom };
-    } catch (err: any) {
-      return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
-    }
-  }
-
-  @SubscribeMessage('admin:give_xp')
-  async onGiveXp(
-    @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { characterId: string; skillKey: string; amount: number },
-  ): Promise<CmdResult> {
-    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
-
-    const { characterId, skillKey, amount } = payload ?? {};
-    if (!characterId || !skillKey) return { success: false, message: 'characterId et skillKey requis.' };
-    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
-      return { success: false, message: 'amount doit être un entier positif ou nul.' };
-    }
-    if (amount > 1_000_000) return { success: false, message: 'amount trop élevé (max 1 000 000).' };
-
-    const character = await this.adminService.findCharacterById(characterId);
-    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
-
-    try {
-      const updated = await this.skillsService.addXp(characterId, skillKey, Math.floor(amount));
-      const nextLevelXp = this.skillsService.getNextLevelXp(updated.skillDefinition, updated.level);
-      const target = this.worldService.getConnectedPlayerByCharacterId(characterId);
-      if (target) {
-        this.server.to(target.socketId).emit('skill_update', {
-          key: skillKey,
-          level: updated.level,
-          xp: updated.xp,
-          nextLevelXp,
-          leveledUp: false,
-        });
-      }
-      return {
-        success: true,
-        message: `+${Math.floor(amount)} XP ${skillKey} → "${character.name}" (niveau ${updated.level}).`,
-        data: { key: skillKey, level: updated.level, xp: updated.xp, nextLevelXp },
-      };
-    } catch (err: any) {
-      return { success: false, message: err?.message ?? 'Erreur lors du crédit XP.' };
-    }
-  }
-
-  @SubscribeMessage('admin:set_skill')
-  async onSetSkill(
-    @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: { characterId: string; skillKey: string; level?: number; xp?: number },
-  ): Promise<CmdResult> {
-    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
-
-    const { characterId, skillKey, level, xp } = payload ?? {};
-    if (!characterId || !skillKey) return { success: false, message: 'characterId et skillKey requis.' };
-    if (level !== undefined && (typeof level !== 'number' || !Number.isFinite(level) || level < 1)) {
-      return { success: false, message: 'level doit être un entier >= 1.' };
-    }
-    if (xp !== undefined && (typeof xp !== 'number' || !Number.isFinite(xp) || xp < 0)) {
-      return { success: false, message: 'xp doit être un entier >= 0.' };
-    }
-
-    const character = await this.adminService.findCharacterById(characterId);
-    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
-
-    try {
-      const playerSkill = await this.skillsService.getOrCreatePlayerSkill(characterId, skillKey);
-
-      const skillDef = playerSkill.skillDefinition;
-      if (!skillDef) throw new Error(`SkillDefinition introuvable pour "${skillKey}".`);
-
-      if (level !== undefined) {
-        playerSkill.level = Math.min(Math.floor(level), skillDef.maxLevel);
-      }
-      if (xp !== undefined) {
-        playerSkill.xp = Math.floor(xp);
-      }
-
-      const saved = await this.dataSource.getRepository(PlayerSkill).save(playerSkill);
-      const nextLevelXp = this.skillsService.getNextLevelXp(skillDef, saved.level);
-
-      const target = this.worldService.getConnectedPlayerByCharacterId(characterId);
-      if (target) {
-        this.server.to(target.socketId).emit('skill_update', {
-          key: skillKey,
-          level: saved.level,
-          xp: saved.xp,
-          nextLevelXp,
-          leveledUp: false,
-        });
-      }
-      return {
-        success: true,
-        message: `Skill ${skillKey} de "${character.name}" → niveau ${saved.level}, xp ${saved.xp}.`,
-        data: { key: skillKey, level: saved.level, xp: saved.xp, nextLevelXp },
-      };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
     }
