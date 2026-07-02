@@ -13,7 +13,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { Character } from '../characters/entities/character.entity';
-import { Item } from '../items/entities/item.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { recalculateEquipmentStats } from '../characters/equipment-stats.helper';
@@ -189,6 +189,14 @@ export class InventoryService {
     const item = await this.itemRepository.findOne({ where: { id: itemId } });
     if (!item) throw new NotFoundException(`Item ${itemId} not found`);
     if (!item.slot) throw new BadRequestException('Item has no slot defined');
+    // Un item INSTANCE ne doit jamais passer par le chemin legacy (par itemId) :
+    // il créerait un CharacterEquipment sans itemInstanceId et laisserait
+    // l'ItemInstance non transitionnée (desync EQUIPPED/AVAILABLE).
+    if (item.objectMode === ObjectMode.INSTANCE) {
+      throw new BadRequestException(
+        'Cet item est de type INSTANCE : utiliser equip-instance (POST /inventory/:characterId/equip-instance/:instanceId).',
+      );
+    }
 
     return this.dataSource.transaction(async (manager) => {
       // Retire l'équipement existant dans ce slot (s'il y en a un)

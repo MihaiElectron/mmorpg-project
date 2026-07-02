@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getCharacterStore } from "./character.store";
 
 const VITE_API_URL = "http://localhost:3000";
 
@@ -262,5 +263,78 @@ describe("character.store — updateSkill", () => {
     expect(getState().skills[0].name).toBe("Mining");
     expect(getState().skills[0].category).toBe("gathering");
     expect(getState().skills[0].level).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// equipItem — choix endpoint instance vs legacy + garde INSTANCE sans instanceId
+// ---------------------------------------------------------------------------
+
+describe("character.store — equipItem (choix endpoint)", () => {
+  let store;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorageMock.getItem.mockReturnValue("test-token");
+    store = getCharacterStore();
+    store.setState({ character: { id: "char-1" }, inventory: [], equipment: {} });
+  });
+
+  it("appelle equip-instance quand l'entrée a un instanceId (item INSTANCE)", async () => {
+    const entry = {
+      id: "inst-1",
+      instanceId: "inst-1",
+      quantity: 1,
+      equipped: false,
+      item: { id: "earring-2", name: "Earring +2", objectMode: "INSTANCE" },
+    };
+    store.setState({ inventory: [entry] });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await store.getState().equipItem("inst-1");
+
+    // Premier appel = l'équipement (les suivants = loadCharacter).
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).toContain("/equip-instance/inst-1");
+    expect(url).not.toContain("/characters/char-1/equip");
+  });
+
+  it("refuse le legacy et alerte si item INSTANCE sans instanceId (projection invalide)", async () => {
+    const entry = {
+      id: "inv-legacy",
+      instanceId: null,
+      quantity: 1,
+      equipped: false,
+      item: { id: "earring", name: "earring", objectMode: "INSTANCE" },
+    };
+    store.setState({ inventory: [entry] });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const alertMock = vi.fn();
+    vi.stubGlobal("alert", alertMock);
+
+    await store.getState().equipItem("inv-legacy");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(alertMock).toHaveBeenCalledWith("InstanceId manquant — projection invalide");
+  });
+
+  it("utilise le legacy pour un item STACKABLE sans instanceId", async () => {
+    const entry = {
+      id: "inv-stack",
+      instanceId: null,
+      quantity: 3,
+      equipped: false,
+      item: { id: "sword-legacy", name: "Épée", objectMode: "STACKABLE" },
+    };
+    store.setState({ inventory: [entry] });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await store.getState().equipItem("inv-stack");
+
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).toContain("/characters/char-1/equip");
   });
 });

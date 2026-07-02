@@ -140,26 +140,44 @@ describe("InventoryProjectionService", () => {
     expect(itemRepo.findBy).not.toHaveBeenCalled();
   });
 
-  it("retourne une instance equippee avec equipped = true depuis CharacterEquipment", async () => {
-    const instance = {
-      id: "inst-eq",
+  it("exclut une instance EQUIPPED de la projection inventaire (query INVENTORY only)", async () => {
+    // Le repo n est interroge que sur le container INVENTORY : une instance
+    // EQUIPPED (container EQUIPMENT) n est jamais renvoyee par la query.
+    inventoryRepo.find.mockResolvedValue([]);
+    instanceRepo.find.mockResolvedValue([]);
+    equipmentRepo.find.mockResolvedValue([
+      { characterId: "char-1", itemId: "item-1", itemInstanceId: "inst-eq", slot: "weapon" },
+    ] as CharacterEquipment[]);
+
+    const result = await service.project("char-1");
+
+    expect(result).toHaveLength(0);
+    // La query instance ne cible que le container INVENTORY.
+    const whereArg = (instanceRepo.find as jest.Mock).mock.calls[0][0].where;
+    expect(whereArg).toEqual([
+      { ownerId: "char-1", containerType: ItemInstanceContainerType.INVENTORY },
+    ]);
+  });
+
+  it("filet de securite : exclut une instance orpheline EQUIPPED sans lien CharacterEquipment (repro earring)", async () => {
+    // Cas exact du bug : instance EQUIPPED mais aucune ligne CharacterEquipment.
+    // Meme si une telle instance remontait (state incoherent), elle ne doit
+    // jamais apparaitre comme objet disponible en inventaire.
+    const orphan = {
+      id: "earring-orphan",
       itemId: "item-1",
       ownerId: "char-1",
       containerType: ItemInstanceContainerType.EQUIPMENT,
       state: ItemInstanceState.EQUIPPED,
     } as ItemInstance;
-    const equipment = [
-      { characterId: "char-1", itemId: "item-1", itemInstanceId: "inst-eq", slot: "weapon" },
-    ] as CharacterEquipment[];
     inventoryRepo.find.mockResolvedValue([]);
-    instanceRepo.find.mockResolvedValue([instance]);
-    equipmentRepo.find.mockResolvedValue(equipment);
+    instanceRepo.find.mockResolvedValue([orphan]);
+    equipmentRepo.find.mockResolvedValue([]);
     itemRepo.findBy.mockResolvedValue([item1]);
 
     const result = await service.project("char-1");
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ id: "inst-eq", quantity: 1, equipped: true });
+    expect(result).toHaveLength(0);
   });
 
   it("retourne stacks et instances melanges dans l ordre stacks d abord", async () => {

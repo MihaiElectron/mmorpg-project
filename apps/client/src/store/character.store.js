@@ -145,6 +145,15 @@ const storeLogic = (set, get) => ({
       if (!token || !character) return;
       const invEntry = get().inventory.find(i => i.id === inventoryIdOrItemId || i.item?.id === inventoryIdOrItemId);
       if (!invEntry) return;
+      // Garde : un item INSTANCE doit toujours porter un instanceId. S'il manque,
+      // c'est une projection/donnée invalide. On refuse le chemin legacy (par itemId)
+      // qui corromprait l'état (CharacterEquipment sans itemInstanceId).
+      if (invEntry.item?.objectMode === "INSTANCE" && !invEntry.instanceId) {
+        const msg = "InstanceId manquant — projection invalide";
+        console.error("[CharacterStore] equipItem:", msg, invEntry);
+        alert(msg);
+        return;
+      }
       let res;
       if (invEntry.instanceId) {
         res = await fetch(

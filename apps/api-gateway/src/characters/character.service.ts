@@ -8,7 +8,7 @@ import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
-import { Item } from '../items/entities/item.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto, EquipmentSlot } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
@@ -124,6 +124,14 @@ export class CharacterService {
       where: { id: dto.itemId },
     });
     if (!item) throw new NotFoundException(`Item ${dto.itemId} not found`);
+    // Un item INSTANCE ne doit jamais passer par le chemin legacy (par itemId) :
+    // il créerait un CharacterEquipment sans itemInstanceId et laisserait
+    // l'ItemInstance non transitionnée (desync EQUIPPED/AVAILABLE).
+    if (item.objectMode === ObjectMode.INSTANCE) {
+      throw new BadRequestException(
+        'Cet item est de type INSTANCE : utiliser equip-instance (POST /inventory/:characterId/equip-instance/:instanceId).',
+      );
+    }
 
     let finalSlot: EquipmentSlot;
     if (dto.slot) {

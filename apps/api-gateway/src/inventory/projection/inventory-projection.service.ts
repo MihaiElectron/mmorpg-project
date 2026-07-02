@@ -35,10 +35,13 @@ export class InventoryProjectionService {
         where: { character: { id: characterId } },
         relations: ['item'],
       }),
+      // Seules les instances réellement en inventaire sont projetées.
+      // Une instance EQUIPPED vit dans le container EQUIPMENT et ne doit
+      // jamais apparaître comme objet disponible : la re-équiper leverait
+      // "state should be AVAILABLE but is EQUIPPED".
       this.instanceRepository.find({
         where: [
           { ownerId: characterId, containerType: ItemInstanceContainerType.INVENTORY },
-          { ownerId: characterId, containerType: ItemInstanceContainerType.EQUIPMENT },
         ],
       }),
       this.equipmentRepository.find({ where: { characterId } }),
@@ -46,8 +49,12 @@ export class InventoryProjectionService {
 
     const sets = buildEquippedSets(equipment);
 
+    // Filet de sécurité : exclut explicitement tout état non disponible en
+    // inventaire (EQUIPPED, DESTROYED, ARCHIVED) même si le containerType
+    // serait incohérent avec le state.
     const activeInstances = instances.filter(
       (i) =>
+        i.state !== ItemInstanceState.EQUIPPED &&
         i.state !== ItemInstanceState.DESTROYED &&
         i.state !== ItemInstanceState.ARCHIVED,
     );

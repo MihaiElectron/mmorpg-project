@@ -6,7 +6,7 @@ import { CharacterEquipment } from '../characters/entities/character-equipment.e
 import { Character } from '../characters/entities/character.entity';
 import { InventoryService } from './inventory.service';
 import { Inventory } from './entities/inventory.entity';
-import { Item } from '../items/entities/item.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
 import {
   ItemInstance,
   ItemInstanceContainerType,
@@ -291,6 +291,17 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
     });
 
     await expect(service.equipItem(characterId, weaponItem.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("refuse le chemin legacy pour un item INSTANCE (doit passer par equip-instance)", async () => {
+    // Un item INSTANCE via equip legacy creerait un CharacterEquipment sans
+    // itemInstanceId et laisserait l ItemInstance non transitionnee (desync).
+    const instanceItem = makeItem({ id: "earring-2", type: "accessory", category: "earring", slot: "left-earring" as any, objectMode: ObjectMode.INSTANCE });
+    const service = makeEquipService({
+      itemRepo: { findOne: jest.fn().mockResolvedValue(instanceItem), findOneBy: jest.fn() },
+    });
+
+    await expect(service.equipItem(characterId, instanceItem.id)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
