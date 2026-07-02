@@ -348,13 +348,16 @@ export class AdminGateway implements OnGatewayConnection {
     // en DB mais retirées de la surface admin. gatheringDifficulty est un INPUT
     // (0–100) qui influence le Skill XP via le Runtime, jamais une valeur d'XP.
     const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward', 'gatheringDifficulty'];
-    const allowed = [...numericFields, 'textureKey'];
-    const safe: Record<string, number | string | null> = {};
+    const allowed = [...numericFields, 'textureKey', 'lootPool'];
+    const safe: Record<string, unknown> = {};
 
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
 
-      if (k === 'textureKey') {
+      if (k === 'lootPool') {
+        // Tableau (ou null) transmis tel quel — validé par AdminService.validateLootPool.
+        safe.lootPool = v;
+      } else if (k === 'textureKey') {
         if (typeof v !== 'string' || (v as string).trim() === '') {
           return { success: false, message: 'textureKey doit être une chaîne non vide.' };
         }
@@ -389,6 +392,7 @@ export class AdminGateway implements OnGatewayConnection {
     if (safe.gatherCharacterXpReward  !== undefined) parts.push(`xp perso → ${updated.gatherCharacterXpReward}`);
     if (safe.gatheringDifficulty      !== undefined) parts.push(`difficulté → ${updated.gatheringDifficulty}`);
     if (safe.textureKey               !== undefined) parts.push(`texture → ${updated.textureKey}`);
+    if (safe.lootPool                 !== undefined) parts.push(`loot pool → ${Array.isArray(updated.lootPool) ? updated.lootPool.length : 0} entrée(s)`);
     return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
 
@@ -404,7 +408,9 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: 'Payload invalide : type, worldX, worldY requis.' };
 
     const resource = await this.adminService.createResource(type, worldX, worldY);
-    this.server.to(getMapRoomId(resource.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.resourcesService.buildResourceBroadcast(resource));
+    // Passe la textureKey du template : sans elle, le client retombe sur dead_tree.
+    const template = await this.resourcesService.getTemplate(type);
+    this.server.to(getMapRoomId(resource.mapId ?? DEFAULT_MAP_ID)).emit('resource_update', this.resourcesService.buildResourceBroadcast(resource, template?.textureKey));
     return {
       success: true,
       message: `Ressource "${type}" créée en WU (${Math.round(worldX)}, ${Math.round(worldY)}). ID: ${resource.id}`,
@@ -795,6 +801,9 @@ export class AdminGateway implements OnGatewayConnection {
     for (const [k, v] of Object.entries(fields)) {
       if (numericFields.includes(k)) {
         safe[k] = Number(v);
+      } else if (k === 'lootPool') {
+        // Tableau transmis tel quel — validé par AdminService.validateLootPool.
+        safe[k] = v;
       } else {
         safe[k] = v != null ? String(v) : '';
       }

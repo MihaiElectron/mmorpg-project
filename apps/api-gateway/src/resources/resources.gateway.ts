@@ -348,7 +348,9 @@ export class ResourcesGateway
   }
 
   private async sendResources(client: WorldSocket) {
-    const resources = await this.resources.findAll();
+    // findAllWithTextureKey enrichit chaque resource avec la textureKey de son
+    // template : sans ça le client retombe sur le fallback dead_tree.
+    const resources = await this.resources.findAllWithTextureKey();
     client.emit('resources', resources);
   }
 }

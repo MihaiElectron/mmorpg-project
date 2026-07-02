@@ -181,7 +181,8 @@ export function useDraft(fields: FieldDef[]) {
     const draft = drafts[dk]?.[field];
     if (draft === undefined || draft === "") return false;
     const def = fields.find((f) => f.key === field);
-    if (def?.options || def?.type === 'text') return draft !== String(item[field] ?? "");
+    // asset = chemin d'AssetPath (chaîne) : comparaison de chaînes, jamais numérique.
+    if (def?.options || def?.type === 'text' || def?.type === 'asset') return draft !== String(item[field] ?? "");
     return Number(draft) !== Number(item[field]);
   }
 
@@ -202,7 +203,8 @@ export function useDraft(fields: FieldDef[]) {
     for (const f of fields) {
       if (!isDirty(dk, f.key, item)) continue;
       const raw = drafts[dk]?.[f.key] ?? "";
-      if (f.options || f.type === 'text') {
+      // asset (textureKey) et text/options sont sauvegardés comme chaînes.
+      if (f.options || f.type === 'text' || f.type === 'asset') {
         result[f.key] = raw;
       } else {
         const val = Number(raw);
@@ -443,6 +445,10 @@ type GroupedSectionProps = {
   highlightId?: string | null;
   rightHeader?: React.ReactNode;
   rightContent?: React.ReactNode;
+  /** Contenu rendu en haut du panneau ouvert, sous l'en-tête (ex: bouton Créer + formulaire). */
+  topContent?: React.ReactNode;
+  /** Contenu additionnel rendu dans chaque groupe déplié (ex: éditeur lootPool). */
+  renderGroupExtra?: (group: any) => React.ReactNode;
 };
 
 function InstanceActionButton({ action, inst, onResult }: { action: InstanceAction; inst: any; onResult: (text: string, ok: boolean) => void }) {
@@ -468,7 +474,7 @@ function InstanceActionButton({ action, inst, onResult }: { action: InstanceActi
   );
 }
 
-export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId, rightHeader, rightContent }: GroupedSectionProps) {
+export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId, rightHeader, rightContent, topContent, renderGroupExtra }: GroupedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -597,6 +603,8 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
 
       {isOpen && (
         <>
+          {topContent}
+
           <input className="admin-panel__search" type="text"
             placeholder={`Filtrer ${config.title.toLowerCase()}…`}
             value={search} onChange={(e) => setSearch(e.target.value)}
@@ -650,6 +658,12 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                       return info ? <p className="admin-panel__info-line">{info}</p> : null;
                     })()}
                   </div>
+
+                  {/* Contenu additionnel (ex: éditeur loot pool) — toujours visible
+                      avec les champs du groupe, pas gaté par le dépliage des instances. */}
+                  {renderGroupExtra && (
+                    <div className="admin-panel__group-extra">{renderGroupExtra(group)}</div>
+                  )}
 
                   {isExpanded && (
                     <div className="admin-panel__instance-list">
