@@ -95,10 +95,129 @@ export type CraftingServerError = {
   requiredRadiusWU?: number;
 };
 
-export function buildCraftRequestPayload(recipeId: string): { recipeId: string; quantity: 1 } {
-  return { recipeId, quantity: 1 };
+/** Borne serveur (CraftRequestDto @Max(99)). */
+export const CRAFT_MAX_QUANTITY = 99;
+
+export function buildCraftRequestPayload(
+  recipeId: string,
+  quantity = 1,
+): { recipeId: string; quantity: number } {
+  const bounded = Math.max(1, Math.min(CRAFT_MAX_QUANTITY, Math.floor(quantity) || 1));
+  return { recipeId, quantity: bounded };
 }
 
+/** Ligne d'inventaire minimale telle qu'exposée par character.store. */
+export type InventoryLike = {
+  item?: { id?: string | null } | null;
+  quantity?: number | null;
+};
+
+/** Somme des quantités possédées pour un itemId (STACKABLE et INSTANCE confondus). */
+export function countOwned(inventory: InventoryLike[] | null | undefined, itemId: string): number {
+  if (!inventory) return 0;
+  let total = 0;
+  for (const row of inventory) {
+    if (row?.item?.id === itemId) total += Number(row.quantity ?? 0);
+  }
+  return total;
+}
+
+/** Détail d'un ingrédient face à l'inventaire du joueur. */
+export type IngredientAvailability = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  owned: number;
+  required: number;
+  enough: boolean;
+};
+
+/**
+ * Disponibilité des ingrédients pour `quantity` crafts, calculée uniquement
+ * depuis l'inventaire déjà chargé. Aucun appel serveur.
+ */
+export function ingredientAvailability(
+  recipe: AvailableCraftingRecipe,
+  inventory: InventoryLike[] | null | undefined,
+  quantity: number,
+): IngredientAvailability[] {
+  const q = Math.max(1, Math.floor(quantity) || 1);
+  return recipe.ingredients.map((ing) => {
+    const owned = countOwned(inventory, ing.itemId);
+    const required = ing.requiredQuantity * q;
+    return {
+      itemId: ing.itemId,
+      itemName: ing.itemName || ing.itemId,
+      itemImage: ing.itemImage ?? null,
+      owned,
+      required,
+      enough: owned >= required,
+    };
+  });
+}
+
+/**
+ * Nombre maximum de crafts réalisables avec l'inventaire courant.
+ * Sans ingrédient : borne serveur. Sinon min(⌊possédé/requis⌋) borné à 99.
+ */
+export function computeMaxCraftable(
+  recipe: AvailableCraftingRecipe,
+  inventory: InventoryLike[] | null | undefined,
+): number {
+  if (recipe.ingredients.length === 0) return CRAFT_MAX_QUANTITY;
+  let max = CRAFT_MAX_QUANTITY;
+  for (const ing of recipe.ingredients) {
+    const owned = countOwned(inventory, ing.itemId);
+    const perCraft = ing.requiredQuantity > 0 ? Math.floor(owned / ing.requiredQuantity) : 0;
+    if (perCraft < max) max = perCraft;
+  }
+  return Math.max(0, Math.min(CRAFT_MAX_QUANTITY, max));
+}
+
+/** Produit "face" d'une recette (premier résultat) pour une UI orientée produit. */
+export function recipeProduct(recipe: AvailableCraftingRecipe): CraftingRecipeResult | null {
+  return recipe.results[0] ?? null;
+}
+
+/** Libellé produit : nom de l'item output, sinon nom de la recette. */
+export function recipeProductLabel(recipe: AvailableCraftingRecipe): string {
+  return recipeProduct(recipe)?.itemName || recipe.name;
+}
+
+/**
+ * Recherche instantanée sur le nom du produit, la catégorie de recette et la
+ * catégorie/le type de l'item produit. Query vide → toujours vrai.
+ */
+export function matchesRecipeQuery(recipe: AvailableCraftingRecipe, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const product = recipeProduct(recipe);
+  const haystack = [
+    recipeProductLabel(recipe),
+    recipe.name,
+    recipe.category,
+    product?.itemCategory ?? "",
+    recipe.requiredSkillKey,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+/** Temps de craft (ms) → libellé secondes lisible, pour une durée unitaire ou totale. */
+export function formatCraftSeconds(craftTimeMs: number, quantity = 1): string {
+  const totalMs = Math.max(0, craftTimeMs) * Math.max(1, Math.floor(quantity) || 1);
+  if (totalMs <= 0) return "instantané";
+  const seconds = totalMs / 1000;
+  const rounded = seconds >= 10 ? Math.round(seconds) : Math.round(seconds * 10) / 10;
+  return `${rounded} s`;
+}
+
+/**
+ * Recettes visibles pour une station : règle métier stricte, stationType exact.
+ * Les recettes non-craftables (ingrédients manquants) restent visibles — c'est
+ * le bouton Fabriquer qui est désactivé côté UI, jamais la liste qui les filtre.
+ */
 export function filterRecipesForStation(
   recipes: AvailableCraftingRecipe[],
   stationType: string | null | undefined,

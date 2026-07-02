@@ -315,4 +315,261 @@
       border: 1px solid rgba(207, 126, 126, 0.35);
     }
   }
+
+  // ── Craft produit-first ───────────────────────────────────────────────────
+  &__craft-search {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 0.82rem;
+    padding: 5px 8px;
+    outline: none;
+
+    &:focus {
+      border-color: vars.$color-metal-silver;
+    }
+
+    &::placeholder {
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  &__craft-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  &__craft-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid transparent;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    padding: 5px 8px;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    &.is-selected {
+      border-color: vars.$color-text-gold;
+      background: rgba(255, 211, 126, 0.1);
+    }
+  }
+
+  &__craft-list-img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  &__craft-list-name {
+    font-size: 0.85rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__craft-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 10px;
+  }
+
+  &__craft-product {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__craft-product-img {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+  }
+
+  &__craft-product-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  &__craft-product-name {
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: vars.$color-text-gold;
+  }
+
+  &__craft-product-desc {
+    font-size: 0.78rem;
+    color: vars.$color-text-muted;
+    line-height: 1.35;
+  }
+
+  &__craft-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    margin: 0;
+
+    div {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    dt {
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: vars.$color-text-disabled;
+    }
+
+    dd {
+      margin: 0;
+      font-size: 0.8rem;
+      color: vars.$color-text-primary;
+      line-height: 1.3;
+    }
+  }
+
+  &__craft-meta-future {
+    color: vars.$color-text-muted;
+    font-style: italic;
+  }
+
+  &__craft-section-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: vars.$color-text-muted;
+  }
+
+  &__craft-ingredients {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__craft-ing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+
+    &--ok {
+      color: #7ecf7e;
+    }
+
+    &--missing {
+      color: #cf7e7e;
+    }
+  }
+
+  &__craft-ing-mark {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+  }
+
+  &__craft-ing-img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  &__craft-ing-count {
+    font-variant-numeric: tabular-nums;
+    font-family: 'Courier New', Courier, monospace;
+    flex-shrink: 0;
+  }
+
+  &__craft-ing-name {
+    color: vars.$color-text-primary;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__craft-qty {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__craft-qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__craft-qty-btn {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-primary;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  &__craft-qty-input {
+    width: 64px;
+    background: vars.$panel-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-magic-amber;
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 4px 6px;
+    outline: none;
+
+    &:focus {
+      border-color: vars.$color-metal-silver;
+    }
+  }
+
+  &__craft-maxinfo {
+    font-size: 0.74rem;
+    color: vars.$color-text-muted;
+  }
+
+  &__craft-submit {
+    margin-top: 2px;
+  }
 }
