@@ -21,6 +21,10 @@ const RESIZE_CORNERS: ResizeCorner[] = [
   "top-right",
   "bottom-left",
   "bottom-right",
+  "top",
+  "bottom",
+  "left",
+  "right",
 ];
 
 function updatePanelRule(

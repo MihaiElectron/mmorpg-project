@@ -75,34 +75,76 @@
 
   &__resize {
     display: block;
-    height: 14px;
     position: absolute;
-    width: 14px;
-    z-index: 2;
+    z-index: 3;
+  }
+
+  // Corners — larger square grab zone, above the edges (z 3 > z 2).
+  &__resize--top-left,
+  &__resize--top-right,
+  &__resize--bottom-left,
+  &__resize--bottom-right {
+    height: 18px;
+    width: 18px;
   }
 
   &__resize--top-left {
     cursor: nwse-resize;
-    left: -4px;
-    top: -4px;
+    left: -6px;
+    top: -6px;
   }
 
   &__resize--top-right {
     cursor: nesw-resize;
-    right: -4px;
-    top: -4px;
+    right: -6px;
+    top: -6px;
   }
 
   &__resize--bottom-left {
-    bottom: -4px;
+    bottom: -6px;
     cursor: nesw-resize;
-    left: -4px;
+    left: -6px;
   }
 
   &__resize--bottom-right {
-    bottom: -4px;
+    bottom: -6px;
     cursor: nwse-resize;
-    right: -4px;
+    right: -6px;
+  }
+
+  // Edges — full-side grab bands with a generous margin.
+  &__resize--top,
+  &__resize--bottom {
+    cursor: ns-resize;
+    height: 10px;
+    left: 12px;
+    right: 12px;
+    z-index: 2;
+  }
+
+  &__resize--left,
+  &__resize--right {
+    cursor: ew-resize;
+    top: 12px;
+    bottom: 12px;
+    width: 10px;
+    z-index: 2;
+  }
+
+  &__resize--top {
+    top: -6px;
+  }
+
+  &__resize--bottom {
+    bottom: -6px;
+  }
+
+  &__resize--left {
+    left: -6px;
+  }
+
+  &__resize--right {
+    right: -6px;
   }
 
   &__header {

@@ -1,4 +1,12 @@
-export type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type ResizeCorner =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "top"
+  | "bottom"
+  | "left"
+  | "right";
 
 export type PanelSize = { width: number; height: number };
 export type PanelPosition = { x: number; y: number };
@@ -40,17 +48,23 @@ export function calculatePanelResize(
   const dy = pointerY - start.startY;
   const fromLeft = start.corner.includes("left");
   const fromTop = start.corner.includes("top");
+  const affectsHorizontal = fromLeft || start.corner.includes("right");
+  const affectsVertical = fromTop || start.corner.includes("bottom");
 
-  const width = clamp(
-    start.originWidth + (fromLeft ? -dx : dx),
-    bounds.minWidth,
-    bounds.maxWidth,
-  );
-  const height = clamp(
-    start.originHeight + (fromTop ? -dy : dy),
-    bounds.minHeight,
-    bounds.maxHeight,
-  );
+  const width = affectsHorizontal
+    ? clamp(
+        start.originWidth + (fromLeft ? -dx : dx),
+        bounds.minWidth,
+        bounds.maxWidth,
+      )
+    : start.originWidth;
+  const height = affectsVertical
+    ? clamp(
+        start.originHeight + (fromTop ? -dy : dy),
+        bounds.minHeight,
+        bounds.maxHeight,
+      )
+    : start.originHeight;
 
   return {
     position: {
