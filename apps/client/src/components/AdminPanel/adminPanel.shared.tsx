@@ -407,7 +407,7 @@ export function EntitySection({ config, items, onResult, embedded = false }: Ent
               {draft.hasAnyDirty(dk, item) && (
                 <button className="admin-panel__apply-btn"
                   disabled={!!draft.saving[dk]} onClick={() => onApply(item)}>
-                  {draft.saving[dk] ? "…" : "Appliquer"}
+                  {draft.saving[dk] ? "…" : "Save"}
                 </button>
               )}
             </div>
@@ -650,7 +650,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                     {groupDraft.hasAnyDirty(gk, group) && (
                       <button className="admin-panel__apply-btn"
                         disabled={!!groupDraft.saving[gk]} onClick={() => applyGroup(group)}>
-                        {groupDraft.saving[gk] ? "…" : "Appliquer"}
+                        {groupDraft.saving[gk] ? "…" : "Save"}
                       </button>
                     )}
                     {config.getGroupInfoLine && (() => {
@@ -711,7 +711,7 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                                   className={`admin-panel__apply-btn${pendingDelete[ik] ? " admin-panel__apply-btn--danger" : ""}`}
                                   disabled={!!instOperating[ik]}
                                   onClick={() => applyOrDelete(inst)}>
-                                  {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Appliquer"}
+                                  {instOperating[ik] ? "…" : pendingDelete[ik] ? "⚠ Supprimer" : "Save"}
                                 </button>
                               )}
                               {config.getInstanceInfoLine && (() => {

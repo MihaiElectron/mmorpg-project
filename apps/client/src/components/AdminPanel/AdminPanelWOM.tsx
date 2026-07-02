@@ -516,7 +516,7 @@ function ResourceLootPoolEditor({ group, items, onSaved, onResult }: {
             </span>
           )}
           <button type="button" className="admin-panel__apply-btn" disabled={saving || hasInvalidRow} onClick={() => void save()}>
-            {saving ? "…" : "Sauver loot pool"}
+            {saving ? "…" : "Save"}
           </button>
         </>
       )}
@@ -655,6 +655,7 @@ function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onR
   const [gold, setGold] = useState(0);
   const [silver, setSilver] = useState(0);
   const [bronze, setBronze] = useState(0);
+  const [initial, setInitial] = useState({ gold: 0, silver: 0, bronze: 0 });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
 
@@ -665,9 +666,13 @@ function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onR
     const res = await ackPromise(socket, "admin:get_wallet", { characterId });
     setFetching(false);
     if (res.success) {
-      setGold((res as any).gold ?? 0);
-      setSilver((res as any).silver ?? 0);
-      setBronze((res as any).bronze ?? 0);
+      const g = (res as any).gold ?? 0;
+      const s = (res as any).silver ?? 0;
+      const b = (res as any).bronze ?? 0;
+      setGold(g);
+      setSilver(s);
+      setBronze(b);
+      setInitial({ gold: g, silver: s, bronze: b });
     }
   }
 
@@ -688,6 +693,7 @@ function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onR
   }
 
   const busy = loading || fetching;
+  const walletDirty = gold !== initial.gold || silver !== initial.silver || bronze !== initial.bronze;
 
   return (
     <div className="admin-panel__player-wallet">
@@ -709,9 +715,11 @@ function PlayerWalletPanel({ characterId, onResult }: { characterId: string; onR
             value={bronze} onChange={(e) => setBronze(Number(e.target.value))} disabled={busy} {...kbHandlers} />
         </label>
       </div>
-      <div className="admin-panel__button-row">
-        <button className="admin-panel__apply-btn" disabled={busy} onClick={save}>{loading ? "…" : "Enregistrer le solde"}</button>
-      </div>
+      {walletDirty && (
+        <div className="admin-panel__button-row">
+          <button className="admin-panel__apply-btn" disabled={busy} onClick={save}>{loading ? "…" : "Save"}</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -987,7 +995,7 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
                       {draft.hasAnyDirty(dk, player) && (
                         <button className="admin-panel__apply-btn"
                           disabled={!!draft.saving[dk]} onClick={() => onApply(player)}>
-                          {draft.saving[dk] ? "…" : "Appliquer stats"}
+                          {draft.saving[dk] ? "…" : "Save"}
                         </button>
                       )}
 

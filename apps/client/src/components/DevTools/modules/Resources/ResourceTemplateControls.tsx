@@ -67,6 +67,12 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
 
   if (!isResource || !type) return null;
 
+  const dirty =
+    delay !== (rawDelay != null ? String(rawDelay) : "") ||
+    loots !== (rawLoots != null ? String(rawLoots) : "") ||
+    charXp !== (rawCharXp != null ? String(rawCharXp) : "") ||
+    difficulty !== (rawDifficulty != null ? String(rawDifficulty) : "");
+
   function buildPatch():
     | { respawnDelayMs?: number; defaultRemainingLoots?: number; gatherCharacterXpReward?: number; gatheringDifficulty?: number }
     | null {
@@ -175,11 +181,13 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
         </span>
       </div>
 
-      <div className="rtc__actions">
-        <button className="rtc__save" onClick={handleSave} disabled={saving}>
-          {saving ? "…" : "Sauver"}
-        </button>
-      </div>
+      {dirty && (
+        <div className="rtc__actions">
+          <button className="rtc__save" onClick={handleSave} disabled={saving}>
+            {saving ? "…" : "Save"}
+          </button>
+        </div>
+      )}
 
       {error && <p className="rtc__error">{error}</p>}
     </div>

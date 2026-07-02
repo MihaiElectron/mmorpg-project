@@ -711,14 +711,16 @@ export default function ItemsModule() {
                   >
                     {maintenanceOpen ? "Fermer maintenance" : "Usages / Maintenance"}
                   </button>
-                  <button
-                    className="item-editor__save"
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!dirty || !valid || saving}
-                  >
-                    {saving ? "…" : "Sauver"}
-                  </button>
+                  {dirty && (
+                    <button
+                      className="item-editor__save"
+                      type="button"
+                      onClick={handleSave}
+                      disabled={!valid || saving}
+                    >
+                      {saving ? "…" : "Save"}
+                    </button>
+                  )}
                 </div>
 
                 {maintenanceOpen && (

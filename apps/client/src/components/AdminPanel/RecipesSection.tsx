@@ -286,12 +286,28 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           const resultValidation = validateRecipeResults(results, items);
           const ingredientItemIds = new Set(ingredients.map((ing) => ing.itemId));
           const resultItemIds = new Set(results.map((res) => res.itemId));
+          const recipeDirty = Object.keys(collectDirty(recipe.id, recipe)).length > 0;
+          const ingredientsDirty =
+            JSON.stringify(ingredients.map((i) => ({ itemId: i.itemId, requiredQuantity: i.requiredQuantity }))) !==
+            JSON.stringify(recipe.ingredients.map((i) => ({ itemId: i.itemId, requiredQuantity: i.requiredQuantity })));
+          const resultsDirty =
+            JSON.stringify(results.map((r) => ({ itemId: r.itemId, producedQuantity: r.producedQuantity, chance: r.chance }))) !==
+            JSON.stringify(recipe.results.map((r) => ({ itemId: r.itemId, producedQuantity: r.producedQuantity, chance: r.chance })));
+          // Image de la recette = image de l'item output (source de vérité, éditée dans Item Editor).
+          const outputRef = results[0]?.itemId;
+          const outputItem = outputRef
+            ? items.find((it: any) => it.id === outputRef || it.category === outputRef)
+            : null;
+          const outputImage = (outputItem as any)?.image ?? null;
 
           return (
             <div key={recipe.id} className="admin-panel__template-group">
               <div className="admin-panel__template-header" onClick={() => setExpandedId(expanded ? null : recipe.id)}>
                 <div className="admin-panel__recipe-header-main">
                   <span className="admin-panel__section-chevron">{expanded ? "▼" : "▶"}</span>
+                  {outputImage && (
+                    <img className="admin-panel__recipe-output-img" src={outputImage} alt="" aria-hidden="true" />
+                  )}
                   <span className="admin-panel__template-name">{recipe.name}</span>
                   <span className={`admin-panel__badge admin-panel__badge--${recipe.enabled ? "alive" : "dead"}`}>
                     {recipe.enabled ? "actif" : "désactivé"}
@@ -333,8 +349,10 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                     })}
                   </div>
                   <div className="admin-panel__template-actions">
-                    <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Sauvegarder</button>
-                    <button className="admin-panel__apply-btn" onClick={() => validateRecipe(recipe.id)}>Valider</button>
+                    {recipeDirty && (
+                      <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Save</button>
+                    )}
+                    <button className="admin-panel__apply-btn admin-panel__apply-btn--ghost" onClick={() => validateRecipe(recipe.id)}>Valider</button>
                   </div>
 
                   <div className="admin-panel__info-line">
@@ -380,18 +398,23 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                     addLabel="+ Ing."
                     searchInputHandlers={kbHandlers}
                   />
-                  <div className="admin-panel__template-actions">
-                    <button
-                      className="admin-panel__apply-btn"
-                      disabled={!ingredientValidation.valid || pending[`ing-save-${recipe.id}`]}
-                      onClick={() => saveIngredientDraft(recipe)}
-                    >
-                      {pending[`ing-save-${recipe.id}`] ? "…" : "Sauver ingrédients"}
-                    </button>
-                  </div>
+                  {ingredientsDirty && (
+                    <div className="admin-panel__template-actions">
+                      <button
+                        className="admin-panel__apply-btn"
+                        disabled={!ingredientValidation.valid || pending[`ing-save-${recipe.id}`]}
+                        onClick={() => saveIngredientDraft(recipe)}
+                      >
+                        {pending[`ing-save-${recipe.id}`] ? "…" : "Save"}
+                      </button>
+                    </div>
+                  )}
 
                   <div className="admin-panel__info-line">
                     <strong>Résultats ({results.length})</strong>
+                    <span className="admin-panel__field-hint">
+                      {" "}— l'image affichée en jeu et en inventaire vient de l'item output (éditable dans Item Editor).
+                    </span>
                   </div>
                   <div className="admin-panel__recipe-lines">
                   {results.map((res, index) => {
@@ -440,15 +463,17 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                     addLabel="+ Rés."
                     searchInputHandlers={kbHandlers}
                   />
-                  <div className="admin-panel__template-actions">
-                    <button
-                      className="admin-panel__apply-btn"
-                      disabled={!resultValidation.valid || pending[`res-save-${recipe.id}`]}
-                      onClick={() => saveResultDraft(recipe)}
-                    >
-                      {pending[`res-save-${recipe.id}`] ? "…" : "Sauver résultats"}
-                    </button>
-                  </div>
+                  {resultsDirty && (
+                    <div className="admin-panel__template-actions">
+                      <button
+                        className="admin-panel__apply-btn"
+                        disabled={!resultValidation.valid || pending[`res-save-${recipe.id}`]}
+                        onClick={() => saveResultDraft(recipe)}
+                      >
+                        {pending[`res-save-${recipe.id}`] ? "…" : "Save"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

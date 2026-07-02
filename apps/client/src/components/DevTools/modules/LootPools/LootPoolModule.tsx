@@ -411,14 +411,16 @@ export default function LootPoolModule() {
                   {message}
                 </span>
               )}
-              <button
-                className="loot-pool-editor__save"
-                type="button"
-                onClick={handleSave}
-                disabled={!dirty || !validation.valid || saving}
-              >
-                {saving ? "..." : "Sauver"}
-              </button>
+              {dirty && (
+                <button
+                  className="loot-pool-editor__save"
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!validation.valid || saving}
+                >
+                  {saving ? "..." : "Save"}
+                </button>
+              )}
             </div>
           </div>
 
