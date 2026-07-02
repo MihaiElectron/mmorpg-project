@@ -261,7 +261,7 @@ export class AdminService {
 
   async createResourceTemplate(
     fields: Pick<ResourceTemplate, 'type'> &
-      Partial<Pick<ResourceTemplate, 'textureKey' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward'>> & { skillKey?: string | null },
+      Partial<Pick<ResourceTemplate, 'textureKey' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty'>> & { skillKey?: string | null; lootPool?: unknown },
   ): Promise<ResourceTemplate> {
     if (!fields.type || typeof fields.type !== 'string') throw new BadRequestException('type est requis.');
     AdminService.validateSnakeCase(fields.type, 'type');
@@ -272,18 +272,33 @@ export class AdminService {
         throw new BadRequestException('textureKey doit être une chaîne non vide.');
       }
     }
+    if (fields.gatherCharacterXpReward !== undefined) {
+      const v = fields.gatherCharacterXpReward;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 999_999) {
+        throw new BadRequestException('gatherCharacterXpReward doit être un entier >= 0 et <= 999 999.');
+      }
+    }
+    if (fields.gatheringDifficulty !== undefined) {
+      const v = fields.gatheringDifficulty;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 100) {
+        throw new BadRequestException('gatheringDifficulty doit être un entier entre 0 et 100.');
+      }
+    }
     if ('skillKey' in fields && fields.skillKey != null) {
       const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.skillKey } });
       if (!sd) throw new BadRequestException(`Skill "${fields.skillKey}" inexistant dans SkillDefinition.`);
     }
+    const lootPool = fields.lootPool !== undefined ? await this.validateLootPool(fields.lootPool) : null;
     return this.resourceTemplateRepo.save(this.resourceTemplateRepo.create({
       type: fields.type,
       textureKey: fields.textureKey?.trim() ?? 'dead_tree',
       defaultRemainingLoots: fields.defaultRemainingLoots ?? 4,
       respawnDelayMs: fields.respawnDelayMs ?? 30_000,
       gatheringXpReward: fields.gatheringXpReward ?? 0,
+      gatherCharacterXpReward: fields.gatherCharacterXpReward ?? 0,
+      gatheringDifficulty: fields.gatheringDifficulty ?? 0,
       skillKey: fields.skillKey === '' ? null : fields.skillKey ?? null,
-      lootPool: null,
+      lootPool,
     }));
   }
 

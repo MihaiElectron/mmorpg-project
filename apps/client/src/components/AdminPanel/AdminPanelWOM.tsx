@@ -178,7 +178,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   },
   {
     id: "resources",
-    title: "Ressources",
+    title: "Resource Editor",
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
@@ -331,22 +331,132 @@ function wosToCreatureInstances(wos: WorldObject[]): any[] {
   }));
 }
 
-function wosToResourceTemplates(wos: WorldObject[]): any[] {
-  const map = new Map<string, any>();
-  for (const wo of wos) {
-    if (!map.has(wo.type)) {
-      map.set(wo.type, {
-        type: wo.type,
-        textureKey:              (wo.metadata.textureKey as string | null)       ?? 'dead_tree',
-        defaultRemainingLoots:   (wo.metadata.defaultRemainingLoots as number)   ?? 0,
-        respawnDelayMs:          (wo.metadata.respawnDelayMs as number)          ?? 0,
-        lootPoolItems:           (wo.metadata.lootPoolItems as string[])         ?? [],
-        gatherCharacterXpReward: (wo.metadata.gatherCharacterXpReward as number) ?? 0,
-        gatheringDifficulty:     (wo.metadata.gatheringDifficulty as number)     ?? 0,
-      });
+/**
+ * Mappe un ResourceTemplate (source : GET /admin/resource-templates) vers la
+ * forme attendue par le GroupedSection Resource Editor. La liste vient des
+ * TEMPLATES (pas des instances) : un template sans instance dans le monde
+ * (ex: grey_rock fraîchement créé) reste visible et éditable.
+ */
+function mapResourceTemplate(t: any): any {
+  const lootPool = Array.isArray(t.lootPool) ? t.lootPool : [];
+  return {
+    type: t.type,
+    textureKey:              t.textureKey ?? 'dead_tree',
+    defaultRemainingLoots:   t.defaultRemainingLoots ?? 0,
+    respawnDelayMs:          t.respawnDelayMs ?? 0,
+    lootPool,                // entrées complètes { itemId, minQty, maxQty, probability }
+    lootPoolItems:           lootPool.map((e: any) => e?.itemId).filter(Boolean),
+    gatherCharacterXpReward: t.gatherCharacterXpReward ?? 0,
+    gatheringDifficulty:     t.gatheringDifficulty ?? 0,
+  };
+}
+
+type LootRow = { itemId: string; minQty: number; maxQty: number; probability: number };
+
+/**
+ * Éditeur lootPool d'un template ressource existant (dans Resource Editor).
+ * Sauvegarde via le flux existant admin:update_resource_template.
+ * La probabilité est éditée/sauvegardée en 0–1 (compatible backend), label "Chance".
+ */
+function ResourceLootPoolEditor({ group, items, onSaved, onResult }: {
+  group: any;
+  items: any[];
+  onSaved: (type: string, lootPool: LootRow[]) => void;
+  onResult: (msg: string, ok: boolean) => void;
+}) {
+  const initial = (): LootRow[] =>
+    (Array.isArray(group.lootPool) ? group.lootPool : []).map((e: any) => ({
+      itemId: String(e?.itemId ?? ""),
+      minQty: Number(e?.minQty ?? 1),
+      maxQty: Number(e?.maxQty ?? 1),
+      probability: Number(e?.probability ?? 1),
+    }));
+  const [rows, setRows] = useState<LootRow[]>(initial);
+  const [saved, setSaved] = useState<LootRow[]>(initial);
+  const [saving, setSaving] = useState(false);
+
+  // Resynchronise si on change de template sélectionné.
+  useEffect(() => {
+    const next = initial();
+    setRows(next);
+    setSaved(next);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [group.type]);
+
+  // Le bouton n'apparaît que si le loot pool a changé depuis la dernière sauvegarde.
+  const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
+
+  function patchRow(idx: number, patch: Partial<LootRow>) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  async function save() {
+    const socket = getSocket();
+    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    const clean = rows.filter((r) => r.itemId.trim() !== "");
+    setSaving(true);
+    const result = await ackPromise(socket, "admin:update_resource_template", {
+      type: group.type,
+      fields: { lootPool: clean },
+    });
+    setSaving(false);
+    onResult(result.message, result.success);
+    if (result.success) {
+      setRows(clean);
+      setSaved(clean);
+      onSaved(group.type, clean);
     }
   }
-  return Array.from(map.values());
+
+  return (
+    <div className="admin-panel__lootpool-editor">
+      <div className="admin-panel__lootpool-head">
+        <span className="admin-panel__template-stat-label">Loot pool</span>
+        <button type="button" className="admin-panel__lootpool-add"
+          onClick={() => setRows((prev) => [...prev, { itemId: "", minQty: 1, maxQty: 1, probability: 1 }])}>
+          + Ligne
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <span className="admin-panel__field-hint">Aucune entrée (loot vide).</span>
+      ) : (
+        <div className="admin-panel__lootpool-grid">
+          <span className="admin-panel__lootpool-col">Item</span>
+          <span className="admin-panel__lootpool-col">Min</span>
+          <span className="admin-panel__lootpool-col">Max</span>
+          <span className="admin-panel__lootpool-col">Chance (0–1)</span>
+          <span className="admin-panel__lootpool-col" />
+          {rows.map((entry, idx) => (
+            <div key={idx} className="admin-panel__lootpool-row admin-panel__lootpool-row--grid">
+              <select className="admin-panel__template-stat-input admin-panel__lootpool-item"
+                value={entry.itemId}
+                onChange={(e) => patchRow(idx, { itemId: e.target.value })}>
+                <option value="">— item —</option>
+                {items.map((it: any) => (
+                  <option key={it.id} value={it.category}>{it.name} ({it.category})</option>
+                ))}
+              </select>
+              <input className="admin-panel__template-stat-input admin-panel__lootpool-num" type="number" min={1}
+                value={entry.minQty} onChange={(e) => patchRow(idx, { minQty: Number(e.target.value) })} />
+              <input className="admin-panel__template-stat-input admin-panel__lootpool-num" type="number" min={1}
+                value={entry.maxQty} onChange={(e) => patchRow(idx, { maxQty: Number(e.target.value) })} />
+              <input className="admin-panel__template-stat-input admin-panel__lootpool-num" type="number" min={0} max={1} step={0.05}
+                value={entry.probability} onChange={(e) => patchRow(idx, { probability: Number(e.target.value) })} />
+              <button type="button" className="admin-panel__lootpool-remove"
+                onClick={() => setRows((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {dirty && (
+        <button type="button" className="admin-panel__apply-btn" disabled={saving} onClick={() => void save()}>
+          {saving ? "…" : "Sauver loot pool"}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function wosToResourceInstances(wos: WorldObject[]): any[] {
@@ -444,7 +554,7 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
 const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
-const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0 };
+const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0, lootPool: [] as Array<{ itemId: string; minQty: number; maxQty: number; probability: number }> };
 const NEW_STATION_TEMPLATE_DEFAULT = {
   key: "",
   name: "",
@@ -890,11 +1000,14 @@ export default function AdminPanelWOM() {
       fetchAdmin<WorldObject[]>("/admin/creatures/world-objects", token).then((wos) =>
         setInstanceData((prev) => ({ ...prev, creatures: wosToCreatureInstances(wos) }))
       ),
-      // Ressources : templates dérivés du WOM, instances du WOM
-      fetchAdmin<WorldObject[]>("/admin/resources/world-objects", token).then((wos) => {
-        setGroupData((prev)    => ({ ...prev, resources: wosToResourceTemplates(wos) }));
-        setInstanceData((prev) => ({ ...prev, resources: wosToResourceInstances(wos) }));
-      }),
+      // Resource Editor : liste depuis les TEMPLATES (source de vérité),
+      // instances depuis le WOM (pour le détail par groupe).
+      fetchAdmin<any[]>("/admin/resource-templates", token).then((templates) =>
+        setGroupData((prev) => ({ ...prev, resources: templates.map(mapResourceTemplate) }))
+      ),
+      fetchAdmin<WorldObject[]>("/admin/resources/world-objects", token).then((wos) =>
+        setInstanceData((prev) => ({ ...prev, resources: wosToResourceInstances(wos) }))
+      ),
       fetchAdmin<WorldObject[]>("/admin/crafting-station-templates/world-objects", token).then((wos) =>
         setGroupData((prev) => ({ ...prev, craftingStations: wosToCraftingStationTemplates(wos) }))
       ),
@@ -1324,15 +1437,41 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
+          renderGroupExtra={(group) => (
+            <ResourceLootPoolEditor
+              group={group}
+              items={items}
+              onResult={pushResult}
+              onSaved={(type, lootPool) => setGroupData((prev) => ({
+                ...prev,
+                resources: (prev.resources ?? []).map((r: any) =>
+                  r.type === type
+                    ? { ...r, lootPool, lootPoolItems: lootPool.map((e) => e.itemId) }
+                    : r,
+                ),
+              }))}
+            />
+          )}
           rightHeader={
-            <div className="admin-panel__section-toggle" onClick={() => setCreateResourceTemplateOpen((o) => !o)}>
-              Créer Ressource
-              <span className="admin-panel__section-chevron">{createResourceTemplateOpen ? "▼" : "▶"}</span>
-            </div>
+            <span className="admin-panel__count">
+              {(groupData["resources"] ?? []).length} ressource{(groupData["resources"] ?? []).length > 1 ? "s" : ""}
+            </span>
           }
-          rightContent={createResourceTemplateOpen ? (
-            <div className="admin-panel__template-item">
-              <div className="admin-panel__template-stats">
+          topContent={
+            <>
+            <div className="admin-panel__create-head">
+              <button
+                type="button"
+                className="admin-panel__create-toggle"
+                onClick={() => setCreateResourceTemplateOpen((o) => !o)}
+              >
+                <span className="admin-panel__section-chevron">{createResourceTemplateOpen ? "▼" : "▶"}</span>
+                Créer ressource
+              </button>
+            </div>
+            {createResourceTemplateOpen && (
+            <div className="admin-panel__template-item admin-panel__template-item--create">
+              <div className="admin-panel__template-stats admin-panel__template-stats--create">
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Type</span>
                   <input className="admin-panel__template-stat-input" type="text"
@@ -1384,28 +1523,91 @@ export default function AdminPanelWOM() {
                   </span>
                 </label>
               </div>
+
+              <div className="admin-panel__lootpool-editor">
+                <div className="admin-panel__lootpool-head">
+                  <span className="admin-panel__template-stat-label">Loot pool</span>
+                  <button type="button" className="admin-panel__lootpool-add"
+                    onClick={() => setNewResourceTemplate((prev) => ({
+                      ...prev,
+                      lootPool: [...prev.lootPool, { itemId: "", minQty: 1, maxQty: 1, probability: 1 }],
+                    }))}>
+                    + Ligne
+                  </button>
+                </div>
+                {newResourceTemplate.lootPool.length === 0 ? (
+                  <span className="admin-panel__field-hint">Aucune entrée (loot vide).</span>
+                ) : (
+                <div className="admin-panel__lootpool-grid">
+                  <span className="admin-panel__lootpool-col">Item</span>
+                  <span className="admin-panel__lootpool-col">Min</span>
+                  <span className="admin-panel__lootpool-col">Max</span>
+                  <span className="admin-panel__lootpool-col">Chance (0–1)</span>
+                  <span className="admin-panel__lootpool-col" />
+                {newResourceTemplate.lootPool.map((entry, idx) => (
+                  <div key={idx} className="admin-panel__lootpool-row admin-panel__lootpool-row--grid">
+                    <select className="admin-panel__lootpool-item"
+                      value={entry.itemId}
+                      onChange={(e) => setNewResourceTemplate((prev) => {
+                        const lootPool = [...prev.lootPool];
+                        lootPool[idx] = { ...lootPool[idx], itemId: e.target.value };
+                        return { ...prev, lootPool };
+                      })}
+                      {...kbHandlers}>
+                      <option value="">— item —</option>
+                      {items.map((it: any) => (
+                        <option key={it.id} value={it.category}>{it.name} ({it.category})</option>
+                      ))}
+                    </select>
+                    <input className="admin-panel__lootpool-num" type="number" min={1} title="Min"
+                      value={entry.minQty}
+                      onChange={(e) => setNewResourceTemplate((prev) => {
+                        const lootPool = [...prev.lootPool];
+                        lootPool[idx] = { ...lootPool[idx], minQty: Number(e.target.value) };
+                        return { ...prev, lootPool };
+                      })} {...kbHandlers} />
+                    <input className="admin-panel__lootpool-num" type="number" min={1} title="Max"
+                      value={entry.maxQty}
+                      onChange={(e) => setNewResourceTemplate((prev) => {
+                        const lootPool = [...prev.lootPool];
+                        lootPool[idx] = { ...lootPool[idx], maxQty: Number(e.target.value) };
+                        return { ...prev, lootPool };
+                      })} {...kbHandlers} />
+                    <input className="admin-panel__lootpool-num" type="number" min={0} max={1} step={0.05} title="Chance (0–1)"
+                      value={entry.probability}
+                      onChange={(e) => setNewResourceTemplate((prev) => {
+                        const lootPool = [...prev.lootPool];
+                        lootPool[idx] = { ...lootPool[idx], probability: Number(e.target.value) };
+                        return { ...prev, lootPool };
+                      })} {...kbHandlers} />
+                    <button type="button" className="admin-panel__lootpool-remove"
+                      onClick={() => setNewResourceTemplate((prev) => ({
+                        ...prev,
+                        lootPool: prev.lootPool.filter((_, i) => i !== idx),
+                      }))}>✕</button>
+                  </div>
+                ))}
+                </div>
+                )}
+              </div>
               <button className="admin-panel__apply-btn" disabled={creating}
                 onClick={async () => {
                   const socket = getSocket();
                   if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
                   setCreating(true);
-                  const result = await ackPromise(socket, "admin:create_resource_template", { fields: newResourceTemplate });
+                  // Sanitize lootPool : on retire les lignes sans item choisi.
+                  const cleanLootPool = newResourceTemplate.lootPool.filter((e) => e.itemId.trim() !== "");
+                  const result = await ackPromise(socket, "admin:create_resource_template", {
+                    fields: { ...newResourceTemplate, lootPool: cleanLootPool },
+                  });
                   setCreating(false);
                   pushResult(result.message, result.success);
                   if (result.success && result.data) {
                     const tpl = result.data as any;
-                    setGroupData((prev) => ({
-                      ...prev,
-                      resources: [...(prev.resources ?? []), {
-                        type: tpl.type,
-                        textureKey: tpl.textureKey ?? 'dead_tree',
-                        defaultRemainingLoots: tpl.defaultRemainingLoots,
-                        respawnDelayMs: tpl.respawnDelayMs,
-                        lootPoolItems: [],
-                        gatherCharacterXpReward: tpl.gatherCharacterXpReward ?? 0,
-                        gatheringDifficulty: tpl.gatheringDifficulty ?? 0,
-                      }],
-                    }));
+                    setGroupData((prev) => {
+                      const others = (prev.resources ?? []).filter((r: any) => r.type !== tpl.type);
+                      return { ...prev, resources: [...others, mapResourceTemplate(tpl)] };
+                    });
                     setNewResourceTemplate({ ...NEW_RESOURCE_TEMPLATE_DEFAULT });
                     setCreateResourceTemplateOpen(false);
                   }
@@ -1413,7 +1615,9 @@ export default function AdminPanelWOM() {
                 {creating ? "…" : "Créer"}
               </button>
             </div>
-          ) : null}
+            )}
+            </>
+          }
         />
       ))}
 

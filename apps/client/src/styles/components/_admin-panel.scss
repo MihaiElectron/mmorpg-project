@@ -999,3 +999,169 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.admin-panel__lootpool-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+}
+
+.admin-panel__lootpool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-panel__lootpool-add,
+.admin-panel__lootpool-remove {
+  cursor: pointer;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}
+
+.admin-panel__lootpool-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+// Lisibilité : texte clair sur fond sombre (corrige le blanc-sur-blanc du select).
+.admin-panel__lootpool-item,
+.admin-panel__lootpool-num {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+  color: vars.$color-text-primary;
+  font-size: 0.78rem;
+  padding: 3px 6px;
+
+  option {
+    background: #1b2233;
+    color: vars.$color-text-primary;
+  }
+}
+
+.admin-panel__lootpool-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-panel__lootpool-num {
+  width: 58px;
+  flex: 0 0 auto;
+}
+
+.admin-panel__create-inline-btn {
+  cursor: pointer;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.72rem;
+  padding: 2px 10px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}
+
+.admin-panel__group-extra {
+  padding: 6px 8px;
+}
+
+.admin-panel__lootpool-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-panel__lootpool-col {
+  font-size: 0.66rem;
+  color: vars.$color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.admin-panel__lootpool-row--grid,
+.admin-panel__lootpool-editor .admin-panel__lootpool-col {
+  // en-tête colonnes : même gabarit que les lignes
+}
+
+.admin-panel__lootpool-editor {
+  .admin-panel__lootpool-grid {
+    // grille 4 colonnes + bouton suppression
+    display: grid;
+    grid-template-columns: 1fr 56px 56px 84px 28px;
+    gap: 4px 6px;
+    align-items: center;
+  }
+
+  .admin-panel__lootpool-row--grid {
+    display: contents;
+  }
+}
+
+// Formulaire "Créer Ressource" aligné sur le style Item Editor :
+// carte en grille 2 colonnes, champs empilés, inputs alignés à gauche.
+.admin-panel__template-stats--create {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+
+  .admin-panel__template-stat {
+    flex: none;
+    min-width: 0;
+  }
+
+  .admin-panel__template-stat-label {
+    color: vars.$color-text-muted;
+    font-weight: bold;
+  }
+
+  .admin-panel__template-stat-input,
+  .admin-panel__template-stat-select,
+  select.admin-panel__template-stat-input {
+    text-align: left;
+    color: vars.$color-text-primary;
+  }
+}
+
+// Compteur à droite de l'en-tête (ex: "3 ressources"), style Item Editor.
+.admin-panel__count {
+  color: vars.$color-text-muted;
+  font-size: 0.72rem;
+}
+
+// Bouton "Créer" déroulant à l'intérieur du panneau, style Item Editor.
+.admin-panel__create-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-panel__create-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: vars.$panel-header-bg;
+  border: 1px solid vars.$panel-border-subtle;
+  border-radius: vars.$panel-radius-sm;
+  color: vars.$color-text-gold;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 4px 8px;
+
+  &:hover { border-color: vars.$color-metal-silver; }
+}

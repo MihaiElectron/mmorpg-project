@@ -1065,6 +1065,33 @@ describe('createResourceTemplate', () => {
     await expect(service.createResourceTemplate({ type: 'dead_tree' })).rejects.toThrow(BadRequestException);
   });
 
+  it('crée avec gatherCharacterXpReward et gatheringDifficulty (défaut 0)', async () => {
+    const result = await service.createResourceTemplate({ type: 'oak_tree' });
+    expect(result.gatherCharacterXpReward).toBe(0);
+    expect(result.gatheringDifficulty).toBe(0);
+  });
+
+  it('persiste gatherCharacterXpReward et gatheringDifficulty fournis', async () => {
+    const result = await service.createResourceTemplate({
+      type: 'oak_tree',
+      gatherCharacterXpReward: 5,
+      gatheringDifficulty: 20,
+    });
+    expect(result.gatherCharacterXpReward).toBe(5);
+    expect(result.gatheringDifficulty).toBe(20);
+  });
+
+  it('refuse gatheringDifficulty hors bornes (> 100)', async () => {
+    await expect(
+      service.createResourceTemplate({ type: 'oak_tree', gatheringDifficulty: 150 }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('crée avec un lootPool vide (aucune entrée)', async () => {
+    const result = await service.createResourceTemplate({ type: 'oak_tree', lootPool: [] });
+    expect(result.lootPool).toEqual([]);
+  });
+
   it('refuse un textureKey vide', async () => {
     await expect(service.createResourceTemplate({ type: 'my_rock', textureKey: '' })).rejects.toThrow(BadRequestException);
   });
