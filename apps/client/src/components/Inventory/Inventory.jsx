@@ -9,8 +9,7 @@ import {
   emitInventoryWorldDrop,
   isValidWorldDrop,
 } from "./inventoryWorldDrop";
-
-const SLOT_COUNT = 18;
+import { buildSlotMap, MIN_SLOT_COUNT } from "./inventorySlots";
 
 export default function Inventory() {
   const inventory = useCharacterStore((s) => s.inventory);
@@ -25,32 +24,17 @@ export default function Inventory() {
   const [dragOverInventory, setDragOverInventory] = useState(false);
   const [pendingDrop, setPendingDrop] = useState(null);
   const [dropQty, setDropQty] = useState(1);
-  // slotMap[i] = inventory entry id | null — persiste le tri dans la session
-  const [slotMap, setSlotMap] = useState(() => new Array(SLOT_COUNT).fill(null));
+  // slotMap[i] = inventory entry id | null — persiste le tri dans la session.
+  // Grille dynamique : min MIN_SLOT_COUNT, étendue si l'inventaire dépasse.
+  const [slotMap, setSlotMap] = useState(() => new Array(MIN_SLOT_COUNT).fill(null));
   const qtyInputRef = useRef(null);
 
   const safeInventory = Array.isArray(inventory) ? inventory : [];
 
   // Resync slotMap quand l'inventaire change (equip/unequip/loot) :
-  // conserve les positions existantes, place les nouvelles entrées dans les slots libres.
+  // conserve les positions existantes et ne perd jamais une entrée projetée.
   useEffect(() => {
-    setSlotMap((prev) => {
-      const next = new Array(SLOT_COUNT).fill(null);
-      const placed = new Set();
-      prev.forEach((id, i) => {
-        if (id && safeInventory.some((inv) => inv.id === id)) {
-          next[i] = id;
-          placed.add(id);
-        }
-      });
-      safeInventory.forEach((inv) => {
-        if (!placed.has(inv.id)) {
-          const free = next.indexOf(null);
-          if (free !== -1) next[free] = inv.id;
-        }
-      });
-      return next;
-    });
+    setSlotMap((prev) => buildSlotMap(prev, safeInventory));
   }, [inventory]);
 
   const displaySlots = slotMap.map((id) =>
