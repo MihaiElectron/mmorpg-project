@@ -72,6 +72,7 @@ export default function ItemsModule() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL_FILTER);
   const [categoryFilter, setCategoryFilter] = useState(ALL_FILTER);
+  const [enabledFilter, setEnabledFilter] = useState<"all" | "active" | "disabled">("all");
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(
     "loading",
   );
@@ -149,10 +150,12 @@ export default function ItemsModule() {
     () => uniqueSorted(items.map((item) => item.category)),
     [items],
   );
-  const filteredItems = useMemo(
-    () => filterItems(items, query, typeFilter, categoryFilter),
-    [items, query, typeFilter, categoryFilter],
-  );
+  const filteredItems = useMemo(() => {
+    const base = filterItems(items, query, typeFilter, categoryFilter);
+    if (enabledFilter === "active") return base.filter((it) => it.enabled !== false);
+    if (enabledFilter === "disabled") return base.filter((it) => it.enabled === false);
+    return base;
+  }, [items, query, typeFilter, categoryFilter, enabledFilter]);
   const patch = selectedItem ? buildItemPatch(selectedItem, draft) : {};
   const dirty = Object.keys(patch).length > 0;
   const valid = isValidItemDraft(draft);
@@ -393,6 +396,16 @@ export default function ItemsModule() {
             </option>
           ))}
         </select>
+        <select
+          className="item-editor__filter"
+          value={enabledFilter}
+          onChange={(e) => setEnabledFilter(e.target.value as "all" | "active" | "disabled")}
+          aria-label="Filtrer par état"
+        >
+          <option value="all">Tous états</option>
+          <option value="active">Actifs</option>
+          <option value="disabled">Désactivés</option>
+        </select>
       </div>
 
       {status === "error" && (
@@ -438,7 +451,12 @@ export default function ItemsModule() {
                     )}
                   </span>
                   <span className="item-editor__row-main">
-                    <span className="item-editor__row-name">{item.name}</span>
+                    <span className="item-editor__row-name">
+                      {item.name}
+                      {item.enabled === false && (
+                        <span className="item-editor__row-badge">désactivé</span>
+                      )}
+                    </span>
                     <span className="item-editor__row-meta">
                       {item.type} / {item.category}
                     </span>

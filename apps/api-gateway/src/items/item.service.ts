@@ -143,6 +143,23 @@ export interface ItemReferenceBreakdown {
   recipeRefs: number;
 }
 
+/** Référence loot pool actionnable : source + chemin exact. */
+export interface LootPoolReferenceDetail {
+  sourceKind: 'resource_template' | 'creature_template';
+  sourceName: string; // ex: grey_rock, goblin
+  path: string;       // ex: lootPool[0]
+  itemRef: string;    // valeur stockée dans le lootPool (category ou id)
+}
+
+/** Référence recette actionnable : recette + rôle + id de la ligne à retirer. */
+export interface RecipeReferenceDetail {
+  recipeKey: string;
+  recipeName: string;
+  role: 'output' | 'ingredient';
+  path: string; // 'output' | 'ingredient'
+  refId: string; // id de la ligne CraftingResult / CraftingIngredient
+}
+
 export interface ItemMaintenanceReport {
   template: {
     id: string;
@@ -168,6 +185,10 @@ export interface ItemMaintenanceReport {
   auctionListingsCount: number;
   attachedMailsCount: number;
   references: ItemReferenceBreakdown; // detail par categorie de totalReferences
+  referencesDetail: {
+    lootPools: LootPoolReferenceDetail[];
+    recipes: RecipeReferenceDetail[];
+  };
   totalReferences: number; // 0 => template supprimable
 }
 
@@ -516,6 +537,8 @@ export class ItemService implements OnModuleInit {
       this.getUsageStats(itemId),
     ]);
 
+    const referencesDetail = await this.getReferenceDetails(item);
+
     const instancesTotal = instanceRows.reduce((sum, r) => sum + r.count, 0);
     const terminalStates: string[] = [
       ItemInstanceState.DESTROYED,
@@ -572,8 +595,62 @@ export class ItemService implements OnModuleInit {
       auctionListingsCount,
       attachedMailsCount,
       references,
+      referencesDetail,
       totalReferences,
     };
+  }
+
+  /**
+   * Détaille les références loot pool et recettes de façon actionnable
+   * (source + chemin exact) pour l'UI de maintenance.
+   */
+  private async getReferenceDetails(item: Item): Promise<{
+    lootPools: LootPoolReferenceDetail[];
+    recipes: RecipeReferenceDetail[];
+  }> {
+    const refs = new Set([item.category, item.id].filter(Boolean));
+    const matchesRef = (entry: unknown): boolean =>
+      typeof entry === 'object' && entry !== null &&
+      typeof (entry as { itemId?: unknown }).itemId === 'string' &&
+      refs.has((entry as { itemId: string }).itemId);
+
+    const lootPools: LootPoolReferenceDetail[] = [];
+
+    const [resourceTemplates, creatureTemplates] = await Promise.all([
+      this.resourceTemplateRepo.find(),
+      this.creatureTemplateRepo.find(),
+    ]);
+
+    for (const tpl of resourceTemplates) {
+      const pool = Array.isArray(tpl.lootPool) ? tpl.lootPool : [];
+      pool.forEach((entry: any, i: number) => {
+        if (matchesRef(entry)) {
+          lootPools.push({ sourceKind: 'resource_template', sourceName: tpl.type, path: `lootPool[${i}]`, itemRef: entry.itemId });
+        }
+      });
+    }
+    for (const tpl of creatureTemplates) {
+      const pool = Array.isArray((tpl as any).lootPool) ? (tpl as any).lootPool : [];
+      pool.forEach((entry: any, i: number) => {
+        if (matchesRef(entry)) {
+          lootPools.push({ sourceKind: 'creature_template', sourceName: (tpl as any).key ?? (tpl as any).name ?? String((tpl as any).id), path: `lootPool[${i}]`, itemRef: entry.itemId });
+        }
+      });
+    }
+
+    const recipes: RecipeReferenceDetail[] = [];
+    const [outputs, ingredients] = await Promise.all([
+      this.craftingResultRepo.find({ where: { itemId: item.id }, relations: ['recipe'] }),
+      this.craftingIngredientRepo.find({ where: { itemId: item.id }, relations: ['recipe'] }),
+    ]);
+    for (const r of outputs) {
+      recipes.push({ recipeKey: r.recipe?.key ?? r.recipeId, recipeName: r.recipe?.name ?? r.recipe?.key ?? r.recipeId, role: 'output', path: 'output', refId: r.id });
+    }
+    for (const ing of ingredients) {
+      recipes.push({ recipeKey: ing.recipe?.key ?? ing.recipeId, recipeName: ing.recipe?.name ?? ing.recipe?.key ?? ing.recipeId, role: 'ingredient', path: 'ingredient', refId: ing.id });
+    }
+
+    return { lootPools, recipes };
   }
 
   private async getInventoryStackLines(itemId: string): Promise<InventoryStackLine[]> {

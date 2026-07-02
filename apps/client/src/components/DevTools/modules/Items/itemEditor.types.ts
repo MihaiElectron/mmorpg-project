@@ -58,6 +58,7 @@ export interface ItemCatalogEntry {
   defense: number | null;
   range: number | null;
   weaponType: string | null;
+  enabled: boolean;
 }
 
 export interface ItemEditorDraft {
@@ -141,6 +142,21 @@ export interface ItemReferenceBreakdown {
   recipeRefs: number;
 }
 
+export interface LootPoolReferenceDetail {
+  sourceKind: "resource_template" | "creature_template";
+  sourceName: string;
+  path: string;
+  itemRef: string;
+}
+
+export interface RecipeReferenceDetail {
+  recipeKey: string;
+  recipeName: string;
+  role: "output" | "ingredient";
+  path: string;
+  refId: string;
+}
+
 export interface ItemMaintenanceReport {
   template: {
     id: string;
@@ -166,6 +182,10 @@ export interface ItemMaintenanceReport {
   auctionListingsCount: number;
   attachedMailsCount: number;
   references: ItemReferenceBreakdown;
+  referencesDetail: {
+    lootPools: LootPoolReferenceDetail[];
+    recipes: RecipeReferenceDetail[];
+  };
   totalReferences: number;
 }
 

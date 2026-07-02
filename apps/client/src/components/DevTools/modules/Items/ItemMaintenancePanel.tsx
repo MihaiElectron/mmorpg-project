@@ -1,6 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
 import { ackPromise, getSocket } from "../../../AdminPanel/adminPanel.shared";
-import type { ItemMaintenanceReport } from "./itemEditor.types";
+import type { ItemMaintenanceReport, LootPoolReferenceDetail, RecipeReferenceDetail } from "./itemEditor.types";
+
+const API = import.meta.env.VITE_API_URL as string;
+
+async function patchAdmin(path: string, body: unknown): Promise<{ ok: boolean; message: string }> {
+  try {
+    const token = localStorage.getItem("token") ?? "";
+    const res = await fetch(`${API}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true, message: "OK" };
+    const b = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return { ok: false, message: typeof b.message === "string" ? b.message : `Erreur ${res.status}` };
+  } catch {
+    return { ok: false, message: "Erreur réseau" };
+  }
+}
+
+async function getAdmin<T>(path: string): Promise<T | null> {
+  try {
+    const token = localStorage.getItem("token") ?? "";
+    const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Panneau de maintenance d'un item (DevTools admin).
@@ -82,6 +111,48 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       `Détruire (DESTROYED) l'instance de "${itemName}" [${state}] ?`,
     );
 
+  // Retire une entrée de loot pool (resource ou creature) via PATCH template.
+  // Recharge le pool courant, retire l'entrée ciblée (index + itemRef), sauvegarde.
+  async function handleRemoveLootRef(ref: LootPoolReferenceDetail): Promise<void> {
+    if (!window.confirm(
+      `Retirer "${itemName}" du loot pool de ${ref.sourceName} (${ref.path}) ?`,
+    )) return;
+    setBusy(true);
+    setMessage(null);
+
+    const isResource = ref.sourceKind === "resource_template";
+    const listPath = isResource ? "/admin/resource-templates" : "/admin/templates";
+    const idField = isResource ? "type" : "key";
+    const list = await getAdmin<any[]>(listPath);
+    const src = list?.find((t) => t[idField] === ref.sourceName);
+    if (!src) { setMessage(`Source ${ref.sourceName} introuvable.`); setBusy(false); setStale(true); return; }
+
+    const pool: any[] = Array.isArray(src.lootPool) ? src.lootPool : [];
+    const idxMatch = Number(ref.path.replace(/[^0-9]/g, ""));
+    const nextPool = pool.filter((e, i) =>
+      !(i === idxMatch && e?.itemId === ref.itemRef),
+    );
+    // Sécurité : si l'index n'a pas matché (pool modifié entre-temps), retire la 1re occurrence.
+    const finalPool = nextPool.length === pool.length
+      ? pool.filter((e) => e?.itemId !== ref.itemRef)
+      : nextPool;
+
+    const savePath = isResource
+      ? `/admin/resource-templates/${encodeURIComponent(ref.sourceName)}`
+      : `/admin/templates/${encodeURIComponent(ref.sourceName)}`;
+    const res = await patchAdmin(savePath, { lootPool: finalPool });
+    setMessage(res.message === "OK" ? `Retiré du loot pool de ${ref.sourceName}.` : res.message);
+    setBusy(false);
+    if (res.ok) { await loadReport(); onChanged(); } else setStale(true);
+  }
+
+  const handleRemoveRecipeRef = (ref: RecipeReferenceDetail) =>
+    run(
+      ref.role === "output" ? "admin:remove_result" : "admin:remove_ingredient",
+      ref.role === "output" ? { resultId: ref.refId } : { ingredientId: ref.refId },
+      `Retirer "${itemName}" (${ref.role === "output" ? "résultat" : "ingrédient"}) de la recette "${ref.recipeName}" ?`,
+    );
+
   const handleRepairOrphan = (instanceId: string) =>
     run(
       "admin:repair_orphan_equipped_instance",
@@ -151,6 +222,15 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       <div className="item-maintenance__summary">
         <span>Références au template : <strong>{report.totalReferences}</strong></span>
         <span>Template : {report.template.enabled ? "actif" : "désactivé"}</span>
+        <button
+          type="button"
+          className="item-editor__save item-editor__save--ghost"
+          disabled={busy}
+          onClick={() => void loadReport()}
+          title="Recalculer les références (après édition dans un autre éditeur)"
+        >
+          Rafraîchir
+        </button>
       </div>
 
       <div className="item-maintenance__refs">
@@ -168,6 +248,59 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
         Une même épée équipée peut compter comme instance active + équipement, car ce
         sont deux références différentes au même modèle.
       </p>
+
+      {/* Références loot pools (actionnables) */}
+      {report.referencesDetail.lootPools.length > 0 && (
+        <div className="item-maintenance__block">
+          <h4 className="item-maintenance__block-title">
+            Loot pools ({report.referencesDetail.lootPools.length}) — à modifier dans Resource Editor / LootPool Editor
+          </h4>
+          <ul className="item-maintenance__list">
+            {report.referencesDetail.lootPools.map((ref, i) => (
+              <li key={i} className="item-maintenance__row">
+                <span>
+                  <strong>{ref.sourceKind === "resource_template" ? "Ressource" : "Créature"} : {ref.sourceName}</strong>
+                  {" · "}{ref.path}{" · "}<code>{ref.itemRef}</code>
+                </span>
+                <button
+                  type="button"
+                  className="item-maintenance__danger"
+                  disabled={busy}
+                  onClick={() => void handleRemoveLootRef(ref)}
+                >
+                  Retirer
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Références recettes (actionnables) */}
+      {report.referencesDetail.recipes.length > 0 && (
+        <div className="item-maintenance__block">
+          <h4 className="item-maintenance__block-title">
+            Recettes craft ({report.referencesDetail.recipes.length}) — à modifier dans Recipe Editor
+          </h4>
+          <ul className="item-maintenance__list">
+            {report.referencesDetail.recipes.map((ref, i) => (
+              <li key={i} className="item-maintenance__row">
+                <span>
+                  <strong>{ref.recipeName}</strong>{" · "}{ref.role === "output" ? "résultat" : "ingrédient"}
+                </span>
+                <button
+                  type="button"
+                  className="item-maintenance__danger"
+                  disabled={busy}
+                  onClick={() => void handleRemoveRecipeRef(ref)}
+                >
+                  Retirer
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Inventory stacks */}
       <div className="item-maintenance__block">

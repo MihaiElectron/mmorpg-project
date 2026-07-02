@@ -106,15 +106,19 @@ describe('ItemService', () => {
   };
   let resourceTemplateRepo: {
     createQueryBuilder: jest.Mock;
+    find: jest.Mock;
   };
   let creatureTemplateRepo: {
     createQueryBuilder: jest.Mock;
+    find: jest.Mock;
   };
   let craftingIngredientRepo: {
     createQueryBuilder: jest.Mock;
+    find: jest.Mock;
   };
   let craftingResultRepo: {
     createQueryBuilder: jest.Mock;
+    find: jest.Mock;
   };
   let instanceRepo: {
     count: jest.Mock;
@@ -156,15 +160,19 @@ describe('ItemService', () => {
     };
     resourceTemplateRepo = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     creatureTemplateRepo = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     craftingIngredientRepo = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     craftingResultRepo = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     instanceRepo = {
       count: jest.fn().mockResolvedValue(0),

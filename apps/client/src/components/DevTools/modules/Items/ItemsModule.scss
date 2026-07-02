@@ -58,10 +58,7 @@
   &__toolbar {
     display: grid;
     gap: 6px;
-    grid-template-columns: minmax(0, 1.4fr) minmax(92px, 0.8fr) minmax(
-        118px,
-        1fr
-      );
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(88px, 1fr));
   }
 
   &__create-head {
@@ -518,4 +515,17 @@
       background: rgba(243, 156, 18, 0.3);
     }
   }
+}
+
+.item-editor__row-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: rgba(231, 76, 60, 0.22);
+  border: 1px solid rgba(231, 76, 60, 0.5);
+  color: #ff9d8f;
+  vertical-align: middle;
 }
