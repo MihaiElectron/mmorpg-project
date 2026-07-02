@@ -7,7 +7,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
-import { Item } from '../items/entities/item.entity';
+import { Item, ObjectMode } from '../items/entities/item.entity';
+import {
+  ItemInstance,
+  ItemInstanceContainerType,
+  ItemInstanceState,
+  ItemInstanceType,
+} from '../item-instances/entities/item-instance.entity';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
@@ -27,6 +34,13 @@ import {
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import type { LootEntry } from '../world/loot.service';
+import {
+  ProgressionService,
+  ProgressionSource,
+  CharacterXpResult,
+} from '../progression/progression.service';
+import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
+import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
 
 // ─── Seed definitions ─────────────────────────────────────────────────────────
 // Les itemCategory réfèrent à Item.category (cherché par (category, 'material')
@@ -190,6 +204,8 @@ export interface CraftResult {
   failures: number;
   consumed: { itemId: string; quantity: number }[];
   produced: { itemId: string; quantity: number }[];
+  // Skill XP calculée par le Runtime (ADR-0016). null si aucune XP accordée
+  // (0 succès ou skill non résolu).
   skill: {
     key: string;
     previousLevel: number;
@@ -198,7 +214,11 @@ export interface CraftResult {
     newXp: number;
     xpGained: number;
     nextLevelXp: number;
-  };
+  } | null;
+  // Character XP portée par la recette (craftCharacterXpReward). null si 0.
+  characterXp:
+    | (CharacterXpResult & { xpGained: number })
+    | null;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -230,6 +250,8 @@ export class CraftingService implements OnModuleInit {
     private readonly skillsService: SkillsService,
     private readonly worldService: WorldService,
     private readonly itemMaterialization: ItemMaterializationService,
+    private readonly progressionService: ProgressionService,
+    private readonly itemTransferService: ItemTransferService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -421,27 +443,66 @@ export class CraftingService implements OnModuleInit {
       );
 
       // ── 6. Lock inventaire + validation quantités ─────────────────────────
+      // Les ingrédients peuvent être STACKABLE (stock Inventory) ou INSTANCE
+      // (une ItemInstance NORMAL/AVAILABLE/INVENTORY par unité). On résout
+      // objectMode via Item, puis on valide chaque type sur sa source réelle.
       const ingredientItemIds = recipe.ingredients.map((i) => i.itemId);
-      const inventoryRows =
+      const ingredientItems =
         ingredientItemIds.length > 0
+          ? await manager.find(Item, { where: { id: In(ingredientItemIds) } })
+          : [];
+      const objectModeByItemId = new Map<string, ObjectMode>();
+      for (const it of ingredientItems) objectModeByItemId.set(it.id, it.objectMode);
+      const isInstanceIngredient = (itemId: string): boolean =>
+        objectModeByItemId.get(itemId) === ObjectMode.INSTANCE;
+
+      const stackableIds = ingredientItemIds.filter((id) => !isInstanceIngredient(id));
+      const instanceIds = ingredientItemIds.filter((id) => isInstanceIngredient(id));
+
+      // STACKABLE — lignes Inventory verrouillées.
+      const inventoryRows =
+        stackableIds.length > 0
           ? await manager.find(Inventory, {
               where: {
                 character: { id: characterId },
-                item: { id: In(ingredientItemIds) },
+                item: { id: In(stackableIds) },
               },
               relations: ['item'],
               lock: { mode: 'pessimistic_write' },
             })
           : [];
-
       const invMap = new Map<string, Inventory>();
       for (const row of inventoryRows) {
         invMap.set(row.item.id, row);
       }
 
+      // INSTANCE — instances NORMAL/AVAILABLE/INVENTORY du personnage, verrouillées.
+      const lockedInstancesByItemId = new Map<string, ItemInstance[]>();
+      for (const itemId of instanceIds) {
+        const instances = await manager
+          .getRepository(ItemInstance)
+          .createQueryBuilder('i')
+          .setLock('pessimistic_write')
+          .where(
+            'i.itemId = :itemId AND i.ownerId = :ownerId AND i.containerType = :containerType AND i.state = :state AND i.instanceType = :instanceType',
+            {
+              itemId,
+              ownerId: characterId,
+              containerType: ItemInstanceContainerType.INVENTORY,
+              state: ItemInstanceState.AVAILABLE,
+              instanceType: ItemInstanceType.NORMAL,
+            },
+          )
+          .orderBy('i.createdAt', 'ASC')
+          .getMany();
+        lockedInstancesByItemId.set(itemId, instances);
+      }
+
       for (const ing of recipe.ingredients) {
         const needed = ing.requiredQuantity * quantity;
-        const available = invMap.get(ing.itemId)?.quantity ?? 0;
+        const available = isInstanceIngredient(ing.itemId)
+          ? (lockedInstancesByItemId.get(ing.itemId)?.length ?? 0)
+          : (invMap.get(ing.itemId)?.quantity ?? 0);
         if (available < needed) {
           throw new BadRequestException(
             `Inventaire insuffisant : ${available} disponibles, ${needed} requis`,
@@ -485,12 +546,27 @@ export class CraftingService implements OnModuleInit {
 
       // ── 8. Persister les consommations ────────────────────────────────────
       for (const [itemId, consumed] of consumedMap) {
-        const inv = invMap.get(itemId)!;
-        inv.quantity -= consumed;
-        if (inv.quantity <= 0) {
-          await manager.remove(Inventory, inv);
+        if (consumed <= 0) continue;
+        if (isInstanceIngredient(itemId)) {
+          // INSTANCE — consommer `consumed` instances verrouillées via la
+          // transition CRAFT_CONSUME (AVAILABLE/INVENTORY/NORMAL → DESTROYED).
+          const instances = lockedInstancesByItemId.get(itemId) ?? [];
+          for (let k = 0; k < consumed; k++) {
+            const inst = instances[k];
+            await this.itemTransferService.transfer(manager, inst.id, {
+              requesterId: characterId,
+              transition: { type: 'CRAFT_CONSUME', characterId },
+            });
+          }
         } else {
-          await manager.save(Inventory, inv);
+          // STACKABLE — décrément de la ligne Inventory.
+          const inv = invMap.get(itemId)!;
+          inv.quantity -= consumed;
+          if (inv.quantity <= 0) {
+            await manager.remove(Inventory, inv);
+          } else {
+            await manager.save(Inventory, inv);
+          }
         }
       }
 
@@ -506,22 +582,50 @@ export class CraftingService implements OnModuleInit {
         });
       }
 
-      // ── 10. XP ───────────────────────────────────────────────────────────
+      // ── 10. XP Runtime (ADR-0016) ─────────────────────────────────────────
+      // Skill XP calculée par le Runtime depuis la difficulté de la recette
+      // (jamais une valeur d'XP skill stockée). Character XP portée par la
+      // recette. Les échecs n'accordent pas d'XP (calculateSkillXp: success).
       const previousLevel = playerSkill.level;
       const previousXp = playerSkill.xp;
-      const totalXp = recipe.xpReward * quantity;
 
-      const updatedSkill = await this.skillsService.applyXpInTx(
-        playerSkill,
-        totalXp,
-        skillDef,
-        manager,
-      );
+      let skillPayload: CraftResult['skill'] = null;
+      const skillXpResult =
+        successes > 0
+          ? calculateSkillXp(
+              this.buildCraftSkillXpContext(recipe, character, playerSkill.level),
+            )
+          : null;
+      if (skillXpResult) {
+        const skillXpTotal = skillXpResult.xpAmount * successes;
+        const updatedSkill = await this.skillsService.applySkillXpInTx(
+          characterId,
+          skillXpResult.skillDefinitionKey,
+          skillXpTotal,
+          manager,
+        );
+        skillPayload = {
+          key: updatedSkill.key,
+          previousLevel,
+          newLevel: updatedSkill.level,
+          previousXp,
+          newXp: updatedSkill.xp,
+          xpGained: skillXpTotal,
+          nextLevelXp: updatedSkill.nextLevelXp,
+        };
+      }
 
-      const nextLevelXp = this.skillsService.getNextLevelXp(
-        skillDef,
-        updatedSkill.level,
-      );
+      let characterXp: CraftResult['characterXp'] = null;
+      const charXpTotal = Math.max(0, recipe.craftCharacterXpReward ?? 0) * successes;
+      if (charXpTotal > 0) {
+        const cx = await this.progressionService.applyCharacterXpInTx(
+          characterId,
+          charXpTotal,
+          ProgressionSource.CRAFT,
+          manager,
+        );
+        characterXp = { ...cx, xpGained: charXpTotal };
+      }
 
       // ── 11. Résultat ──────────────────────────────────────────────────────
       return {
@@ -539,17 +643,37 @@ export class CraftingService implements OnModuleInit {
           itemId,
           quantity: qty,
         })),
-        skill: {
-          key: skillDef.key,
-          previousLevel,
-          newLevel: updatedSkill.level,
-          previousXp,
-          newXp: updatedSkill.xp,
-          xpGained: totalXp,
-          nextLevelXp,
-        },
+        skill: skillPayload,
+        characterXp,
       };
     });
+  }
+
+  /**
+   * Construit le SkillXpContext craft (ADR-0016). Le skill est résolu depuis
+   * requiredSkillKey existant — aucun champ craftSkillKey/craftSkillXpReward.
+   */
+  private buildCraftSkillXpContext(
+    recipe: CraftingRecipe,
+    character: Character,
+    skillLevel: number,
+  ): SkillXpContext {
+    return {
+      skillDefinitionKey: recipe.requiredSkillKey,
+      domain: 'crafting' as SkillDomain,
+      action: 'craft',
+      success: true,
+      difficulty: Math.max(0, Math.min(100, recipe.craftingDifficulty ?? 0)),
+      quality: null,
+      characterLevel: character.level ?? 1,
+      skillLevel,
+      duration: recipe.craftTimeMs > 0 ? recipe.craftTimeMs : null,
+      damage: null,
+      blockedDamage: null,
+      healedAmount: null,
+      buffs: [],
+      debuffs: [],
+    };
   }
 
   // ---------------------------------------------------------------------------

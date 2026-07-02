@@ -16,11 +16,20 @@ import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ProgressionService } from '../progression/progression.service';
+import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { ObjectMode } from '../items/entities/item.entity';
+import {
+  ItemInstance,
+  ItemInstanceContainerType,
+  ItemInstanceState,
+  ItemInstanceType,
+} from '../item-instances/entities/item-instance.entity';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
-function makeItem(category: string, type = 'material'): Item {
-  return { id: `item-${category}`, name: category, type, category } as Item;
+function makeItem(category: string, type = 'material', objectMode = ObjectMode.STACKABLE): Item {
+  return { id: `item-${category}`, name: category, type, category, objectMode } as Item;
 }
 
 function makeRecipe(key: string): CraftingRecipe {
@@ -71,10 +80,13 @@ describe('CraftingService — seedDefaultRecipes', () => {
         { provide: getRepositoryToken(CraftingIngredient), useValue: ingredientRepo },
         { provide: getRepositoryToken(CraftingResult), useValue: resultRepo },
         { provide: getRepositoryToken(CraftingStationTemplate), useValue: stationTemplateRepo },
+        { provide: getRepositoryToken(CraftingStation), useValue: { find: jest.fn() } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: SkillsService, useValue: {} },
         { provide: WorldService, useValue: { getConnectedPlayerByCharacterId: jest.fn() } },
         { provide: ItemMaterializationService, useValue: { materialize: jest.fn() } },
+        { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
       ],
     }).compile();
 
@@ -327,6 +339,8 @@ function makeFullRecipe(overrides: Partial<CraftingRecipe> = {}): CraftingRecipe
     minSuccessRate: 0.05,
     maxSuccessRate: 1.0,
     xpReward: 10,
+    craftCharacterXpReward: 0,
+    craftingDifficulty: 0,
     consumeIngredientsOnFailure: true,
     craftTimeMs: 2000,
     stationType: 'none',
@@ -358,15 +372,33 @@ describe('CraftingService — craft()', () => {
   let mockSkillsService: Partial<Record<keyof SkillsService, jest.Mock>>;
   let mockWorldService: { getConnectedPlayerByCharacterId: jest.Mock };
   let materializeMock: { materialize: jest.Mock };
+  let mockProgressionService: { applyCharacterXpInTx: jest.Mock };
+  let mockItemTransferService: { transfer: jest.Mock };
+  // Instances retournées par le query builder verrouillé (ingrédients INSTANCE).
+  let lockedInstances: Partial<ItemInstance>[];
+  let instanceQB: any;
 
   beforeEach(async () => {
+    lockedInstances = [];
+    const instanceQueryBuilder: any = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockImplementation(async () => lockedInstances),
+    };
+    instanceQB = instanceQueryBuilder;
     mockManager = {
       findOne: jest.fn(),
       find: jest.fn(),
       save: jest.fn().mockImplementation((_entity, data) => Promise.resolve({ ...data })),
       create: jest.fn().mockImplementation((_entity, data) => ({ ...data })),
       remove: jest.fn().mockResolvedValue(undefined),
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(instanceQueryBuilder),
+      }),
     };
+
+    mockItemTransferService = { transfer: jest.fn().mockResolvedValue({}) };
 
     materializeMock = {
       materialize: jest.fn().mockResolvedValue({ stacks: [], instances: [], worldItems: [] }),
@@ -379,7 +411,28 @@ describe('CraftingService — craft()', () => {
     mockSkillsService = {
       getOrCreatePlayerSkillInTx: jest.fn(),
       applyXpInTx: jest.fn().mockImplementation(async (ps) => ps),
+      // ADR-0016 : applySkillXpInTx renvoie un SkillUpdatePayload. Mock générique
+      // qui reflète le montant reçu pour vérifier xpGained côté résultat.
+      applySkillXpInTx: jest.fn().mockImplementation(async (_charId, skillKey, xpAmount) => ({
+        skillDefinitionKey: skillKey,
+        key: skillKey,
+        name: skillKey,
+        category: 'crafting',
+        enabled: true,
+        level: 10,
+        xp: xpAmount,
+        nextLevelXp: 100,
+        leveledUp: false,
+      })),
       getNextLevelXp: jest.fn().mockReturnValue(100),
+    };
+    mockProgressionService = {
+      applyCharacterXpInTx: jest.fn().mockImplementation(async (_charId, amount) => ({
+        level: 1,
+        experience: amount,
+        nextLevelXp: 100,
+        leveledUp: false,
+      })),
     };
     mockWorldService = {
       getConnectedPlayerByCharacterId: jest.fn().mockReturnValue({
@@ -402,10 +455,13 @@ describe('CraftingService — craft()', () => {
         { provide: getRepositoryToken(CraftingIngredient), useValue: {} },
         { provide: getRepositoryToken(CraftingResult), useValue: {} },
         { provide: getRepositoryToken(CraftingStationTemplate), useValue: {} },
+        { provide: getRepositoryToken(CraftingStation), useValue: {} },
         { provide: DataSource, useValue: mockDataSource },
         { provide: SkillsService, useValue: mockSkillsService },
         { provide: WorldService, useValue: mockWorldService },
         { provide: ItemMaterializationService, useValue: materializeMock },
+        { provide: ProgressionService, useValue: mockProgressionService },
+        { provide: ItemTransferService, useValue: mockItemTransferService },
       ],
     }).compile();
 
@@ -430,7 +486,13 @@ describe('CraftingService — craft()', () => {
       return Promise.resolve(null);
     });
 
-    mockManager.find.mockResolvedValue([inventoryRow]);
+    // find discrimine par entité : Item (objectMode), Inventory (stock),
+    // CraftingStation (résolution station) — l'ordre des appels n'importe plus.
+    mockManager.find.mockImplementation((entity: any) => {
+      if (entity === Item) return Promise.resolve([makeItem('iron_ore', 'material', ObjectMode.STACKABLE)]);
+      if (entity === Inventory) return Promise.resolve([inventoryRow]);
+      return Promise.resolve([]);
+    });
 
     mockSkillsService.getOrCreatePlayerSkillInTx!.mockResolvedValue(playerSkill);
     mockSkillsService.applyXpInTx!.mockImplementation(async (ps) => ps);
@@ -465,15 +527,19 @@ describe('CraftingService — craft()', () => {
     expect(result.failures).toBe(0);
     expect(result.consumed).toEqual([{ itemId: 'item-iron_ore', quantity: 3 }]);
     expect(result.produced).toEqual([{ itemId: 'item-iron_bar', quantity: 1 }]);
-    expect(result.skill.xpGained).toBe(10); // xpReward × 1 tentative
+    // Skill XP Runtime : base craft 15 + difficulté 0, × 1 succès = 15.
+    expect(result.skill?.xpGained).toBe(15);
     // save appelé pour : consommation (quantité restante) + production (nouveau slot)
     expect(mockManager.save).toHaveBeenCalled();
-    expect(mockSkillsService.applyXpInTx).toHaveBeenCalledWith(
-      expect.anything(),
-      10,
-      expect.anything(),
+    expect(mockSkillsService.applySkillXpInTx).toHaveBeenCalledWith(
+      'char-1',
+      'smithing',
+      15,
       mockManager,
     );
+    // craftCharacterXpReward = 0 par défaut → pas de Character XP.
+    expect(result.characterXp).toBeNull();
+    expect(mockProgressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
   });
 
   it('recette stationType none fonctionne sans station', async () => {
@@ -511,19 +577,21 @@ describe('CraftingService — craft()', () => {
       if (entity === Inventory) return Promise.resolve(null);
       return Promise.resolve(null);
     });
-    mockManager.find
-      .mockResolvedValueOnce([
-        {
-          id: 'station-1',
-          templateId: 'tpl-forge',
-          mapId: 1,
-          worldX: 1200,
-          worldY: 1000,
-          enabled: true,
-          template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
-        } as CraftingStation,
-      ])
-      .mockResolvedValueOnce([makeInventoryRow('item-iron_ore', 13)]);
+    const station = {
+      id: 'station-1',
+      templateId: 'tpl-forge',
+      mapId: 1,
+      worldX: 1200,
+      worldY: 1000,
+      enabled: true,
+      template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+    } as CraftingStation;
+    mockManager.find.mockImplementation((entity: any) => {
+      if (entity === CraftingStation) return Promise.resolve([station]);
+      if (entity === Item) return Promise.resolve([makeItem('iron_ore', 'material', ObjectMode.STACKABLE)]);
+      if (entity === Inventory) return Promise.resolve([makeInventoryRow('item-iron_ore', 13)]);
+      return Promise.resolve([]);
+    });
 
     const result = await service.craft('char-1', 'recipe-1', 1);
 
@@ -701,10 +769,12 @@ describe('CraftingService — craft()', () => {
     expect(result.successes).toBe(0);
     expect(result.consumed).toEqual([{ itemId: 'item-iron_ore', quantity: 3 }]);
     expect(result.produced).toHaveLength(0);
-    expect(result.skill.xpGained).toBe(10);
+    // ADR-0016 : les échecs n'accordent aucune XP skill.
+    expect(result.skill).toBeNull();
+    expect(mockSkillsService.applySkillXpInTx).not.toHaveBeenCalled();
   });
 
-  it('échec avec consumeIngredientsOnFailure=false : ne consomme pas, pas de résultat, ajoute XP', async () => {
+  it('échec avec consumeIngredientsOnFailure=false : ne consomme pas, pas de résultat, pas d\'XP', async () => {
     setupHappyPath(1);
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve(makeCharacter());
@@ -722,7 +792,7 @@ describe('CraftingService — craft()', () => {
     expect(result.failures).toBe(1);
     expect(result.consumed).toHaveLength(0); // aucune consommation
     expect(result.produced).toHaveLength(0);
-    expect(result.skill.xpGained).toBe(10);
+    expect(result.skill).toBeNull();
     expect(mockManager.save).not.toHaveBeenCalledWith(
       Inventory,
       expect.objectContaining({ quantity: expect.anything() }),
@@ -740,7 +810,9 @@ describe('CraftingService — craft()', () => {
     expect(result.consumed).toEqual([{ itemId: 'item-iron_ore', quantity: 9 }]);
     // 3 tentatives × 1 iron_bar = 3 produits
     expect(result.produced).toEqual([{ itemId: 'item-iron_bar', quantity: 3 }]);
-    expect(result.skill.xpGained).toBe(30); // 10 × 3
+    // Skill XP Runtime : 15 (base craft, difficulté 0) × 3 succès = 45.
+    expect(result.skill?.xpGained).toBe(45);
+    expect(mockSkillsService.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 45, mockManager);
   });
 
   it('rejette si une erreur survient pendant la matérialisation (rollback)', async () => {
@@ -750,18 +822,18 @@ describe('CraftingService — craft()', () => {
     await expect(service.craft('char-1', 'recipe-1', 1)).rejects.toThrow('DB error');
   });
 
-  it('PlayerSkill absent : créé level=1 xp=0 puis reçoit XP', async () => {
+  it('PlayerSkill absent : créé level=1 xp=0 puis reçoit XP via applySkillXpInTx', async () => {
     setupHappyPath(1);
     const newSkill = makePlayerSkill({ level: 1, xp: 0 });
     mockSkillsService.getOrCreatePlayerSkillInTx!.mockResolvedValue(newSkill);
-    // applyXpInTx retourne level=1 avec xp=10
-    mockSkillsService.applyXpInTx!.mockResolvedValue({ ...newSkill, xp: 10 });
 
     const result = await service.craft('char-1', 'recipe-1', 1);
 
-    expect(result.skill.previousLevel).toBe(1);
-    expect(result.skill.newXp).toBe(10);
-    expect(result.skill.xpGained).toBe(10);
+    // previousLevel/previousXp lus depuis le PlayerSkill avant application.
+    expect(result.skill?.previousLevel).toBe(1);
+    expect(result.skill?.previousXp).toBe(0);
+    expect(result.skill?.newXp).toBe(15); // mock reflète le montant reçu
+    expect(result.skill?.xpGained).toBe(15);
     expect(mockSkillsService.getOrCreatePlayerSkillInTx).toHaveBeenCalledWith(
       'char-1',
       expect.anything(),
@@ -929,6 +1001,173 @@ describe('CraftingService — craft()', () => {
 
       await expect(service.craft("char-1", "recipe-1", 1)).rejects.toBeInstanceOf(BadRequestException);
       expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Phase 2d : Craft XP Runtime (ADR-0016) ─────────────────────────────────
+  describe("craft() XP Runtime (ADR-0016)", () => {
+    function setupRecipe(overrides: Partial<CraftingRecipe>, level = 10) {
+      mockSkillsService.getOrCreatePlayerSkillInTx!.mockResolvedValue(makePlayerSkill({ level }));
+      mockManager.findOne.mockImplementation((entity: any) => {
+        if (entity === Character) return Promise.resolve(makeCharacter());
+        if (entity === CraftingRecipe) return Promise.resolve(makeFullRecipe(overrides));
+        if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+        return Promise.resolve(null);
+      });
+      mockManager.find.mockResolvedValue([makeInventoryRow("item-iron_ore", 999)]);
+      service["_randomFn"] = jest.fn().mockReturnValue(0.0); // succès garanti
+    }
+
+    it("craft réussi accorde Character XP + Skill XP dans la même transaction", async () => {
+      setupHappyPath(1);
+      setupRecipe({ craftCharacterXpReward: 20, craftingDifficulty: 0 });
+
+      const result = await service.craft("char-1", "recipe-1", 1);
+
+      expect(result.produced).toEqual([{ itemId: "item-iron_bar", quantity: 1 }]);
+      expect(result.skill?.xpGained).toBe(15);
+      expect(result.characterXp).toEqual(
+        expect.objectContaining({ level: 1, xpGained: 20, leveledUp: false }),
+      );
+      expect(mockProgressionService.applyCharacterXpInTx).toHaveBeenCalledWith(
+        "char-1", 20, "CRAFT", mockManager,
+      );
+    });
+
+    it("craftCharacterXpReward = 0 → aucune Character XP émise", async () => {
+      setupHappyPath(1);
+      setupRecipe({ craftCharacterXpReward: 0 });
+
+      const result = await service.craft("char-1", "recipe-1", 1);
+
+      expect(result.characterXp).toBeNull();
+      expect(mockProgressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [0, 15],
+      [20, 17],
+      [100, 25],
+    ])("difficulté %i → Skill XP %i", async (difficulty, expectedXp) => {
+      setupHappyPath(1);
+      setupRecipe({ craftingDifficulty: difficulty });
+
+      const result = await service.craft("char-1", "recipe-1", 1);
+
+      expect(result.skill?.xpGained).toBe(expectedXp);
+      expect(mockSkillsService.applySkillXpInTx).toHaveBeenCalledWith(
+        "char-1", "smithing", expectedXp, mockManager,
+      );
+    });
+
+    it("0 succès : ni Character XP ni Skill XP même avec récompenses configurées", async () => {
+      setupHappyPath(1);
+      setupRecipe({ craftCharacterXpReward: 50, craftingDifficulty: 50, baseSuccessRate: 0, minSuccessRate: 0 });
+      service["_randomFn"] = jest.fn().mockReturnValue(0.999); // échec garanti
+
+      const result = await service.craft("char-1", "recipe-1", 1);
+
+      expect(result.successes).toBe(0);
+      expect(result.skill).toBeNull();
+      expect(result.characterXp).toBeNull();
+      expect(mockSkillsService.applySkillXpInTx).not.toHaveBeenCalled();
+      expect(mockProgressionService.applyCharacterXpInTx).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Ingrédients INSTANCE (ItemInstance) ────────────────────────────────────
+  describe("craft() ingrédients INSTANCE", () => {
+    // Recette dont l'ingrédient est un item INSTANCE (ex: Épée basique).
+    function setupInstanceRecipe(availableCount, { requiredQuantity = 1 } = {}) {
+      const recipe = makeFullRecipe({
+        ingredients: [
+          { id: "ing-1", itemId: "item-basic_sword", requiredQuantity } as CraftingIngredient,
+        ],
+        results: [
+          { id: "res-1", itemId: "item-iron_bar", producedQuantity: 1, chance: 1.0 } as CraftingResult,
+        ],
+      });
+      mockManager.findOne.mockImplementation((entity: any) => {
+        if (entity === Character) return Promise.resolve(makeCharacter());
+        if (entity === CraftingRecipe) return Promise.resolve(recipe);
+        if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+        return Promise.resolve(null);
+      });
+      mockManager.find.mockImplementation((entity: any) => {
+        if (entity === Item) return Promise.resolve([makeItem("basic_sword", "weapon", ObjectMode.INSTANCE)]);
+        if (entity === Inventory) return Promise.resolve([]);
+        return Promise.resolve([]);
+      });
+      lockedInstances = Array.from({ length: availableCount }, (_, i) => ({
+        id: `inst-${i}`,
+        itemId: "item-basic_sword",
+        ownerId: "char-1",
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.INVENTORY,
+        instanceType: ItemInstanceType.NORMAL,
+      }));
+      mockSkillsService.getOrCreatePlayerSkillInTx!.mockResolvedValue(makePlayerSkill({ level: 10 }));
+      service["_randomFn"] = jest.fn().mockReturnValue(0.0); // succès garanti
+    }
+
+    it("consomme une instance via CRAFT_CONSUME et matérialise l'output", async () => {
+      setupInstanceRecipe(1);
+
+      const result = await service.craft("char-1", "recipe-1", 1);
+
+      expect(result.successes).toBe(1);
+      expect(mockItemTransferService.transfer).toHaveBeenCalledTimes(1);
+      expect(mockItemTransferService.transfer).toHaveBeenCalledWith(mockManager, "inst-0", {
+        requesterId: "char-1",
+        transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+      });
+      expect(materializeMock.materialize).toHaveBeenCalledWith(
+        mockManager,
+        [{ itemId: "item-iron_bar", quantity: 1 }],
+        expect.objectContaining({ source: "CRAFT" }),
+      );
+    });
+
+    it("quantité INSTANCE insuffisante → BadRequestException, rien consommé", async () => {
+      setupInstanceRecipe(0); // aucune instance disponible
+
+      await expect(service.craft("char-1", "recipe-1", 1)).rejects.toBeInstanceOf(BadRequestException);
+      expect(mockItemTransferService.transfer).not.toHaveBeenCalled();
+      expect(materializeMock.materialize).not.toHaveBeenCalled();
+    });
+
+    it("ne compte que les instances AVAILABLE/NORMAL/INVENTORY du personnage (exclut EQUIPPED/LISTED/LOT/IN_MAIL)", async () => {
+      setupInstanceRecipe(1);
+
+      await service.craft("char-1", "recipe-1", 1);
+
+      // La sélection est filtrée côté requête : état AVAILABLE, type NORMAL,
+      // container INVENTORY, owner = personnage. EQUIPPED/LISTED/LOT/IN_MAIL exclus.
+      expect(instanceQB.where).toHaveBeenCalledWith(
+        expect.stringContaining("i.state = :state"),
+        expect.objectContaining({
+          ownerId: "char-1",
+          containerType: ItemInstanceContainerType.INVENTORY,
+          state: ItemInstanceState.AVAILABLE,
+          instanceType: ItemInstanceType.NORMAL,
+        }),
+      );
+    });
+
+    it("quantity > 1 : consomme autant d'instances que de crafts", async () => {
+      setupInstanceRecipe(5);
+
+      const result = await service.craft("char-1", "recipe-1", 3);
+
+      expect(result.successes).toBe(3);
+      expect(mockItemTransferService.transfer).toHaveBeenCalledTimes(3);
+    });
+
+    it("rollback : une erreur en aval propage et annule la transaction", async () => {
+      setupInstanceRecipe(1);
+      materializeMock.materialize.mockRejectedValueOnce(new Error("materialize error"));
+
+      await expect(service.craft("char-1", "recipe-1", 1)).rejects.toThrow("materialize error");
     });
   });
 });

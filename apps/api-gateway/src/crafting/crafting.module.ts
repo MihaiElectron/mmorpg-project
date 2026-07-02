@@ -13,6 +13,8 @@ import { SkillsModule } from '../skills/skills.module';
 import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
+import { ProgressionModule } from '../progression/progression.module';
+import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
     CharactersModule,           // pour CharacterService (résolution characterId côté serveur)
     WorldModule,                // pour position serveur connectée
     ItemMaterializationModule,  // pour matérialisation des résultats de craft
+    ProgressionModule,          // pour Character XP (ADR-0016)
+    ItemTransferModule,         // pour consommer les ingrédients INSTANCE (CRAFT_CONSUME)
   ],
   controllers: [CraftingController],
   providers: [CraftingService, CraftingGateway],

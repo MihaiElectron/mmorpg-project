@@ -1550,4 +1550,67 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── transition CRAFT_CONSUME ────────────────────────────────────────────────
+  describe("transition CRAFT_CONSUME", () => {
+    it("détruit une instance AVAILABLE/INVENTORY/NORMAL du personnage", async () => {
+      const instance = makeInstance();
+      const manager = makeManager(instance);
+
+      const result = await service.transfer(manager, "inst-1", {
+        requesterId: "char-1",
+        transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+      });
+
+      expect(result.state).toBe(ItemInstanceState.DESTROYED);
+      expect(result.containerType).toBe(ItemInstanceContainerType.NONE);
+      expect(result.containerId).toBeNull();
+      expect(manager.save).toHaveBeenCalled();
+    });
+
+    it("refuse une instance LOT", async () => {
+      const manager = makeManager(makeInstance({ instanceType: ItemInstanceType.LOT }));
+      await expect(
+        service.transfer(manager, "inst-1", {
+          requesterId: "char-1",
+          transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance EQUIPPED (état != AVAILABLE)", async () => {
+      const manager = makeManager(
+        makeInstance({ state: ItemInstanceState.EQUIPPED, containerType: ItemInstanceContainerType.EQUIPMENT }),
+      );
+      await expect(
+        service.transfer(manager, "inst-1", {
+          requesterId: "char-1",
+          transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance d'un autre propriétaire", async () => {
+      const manager = makeManager(makeInstance({ ownerId: "char-2" }));
+      await expect(
+        service.transfer(manager, "inst-1", {
+          requesterId: "char-1",
+          transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance hors container INVENTORY", async () => {
+      // état AVAILABLE mais container BANK → validateContainer échoue.
+      const manager = makeManager(
+        makeInstance({ containerType: ItemInstanceContainerType.BANK, containerId: "bank-1" }),
+      );
+      await expect(
+        service.transfer(manager, "inst-1", {
+          requesterId: "char-1",
+          transition: { type: "CRAFT_CONSUME", characterId: "char-1" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

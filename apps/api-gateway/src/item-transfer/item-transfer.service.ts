@@ -37,6 +37,7 @@ export type ItemTransition =
   | { type: 'TRADE_LOCK'; tradeSessionId: string }
   | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
   | { type: 'TRADE_CANCEL'; tradeSessionId: string }
+  | { type: 'CRAFT_CONSUME'; characterId: string }
   | { type: 'ADMIN_DESTROY' }
   | { type: 'REPAIR_ORPHAN_EQUIPPED' };
 
@@ -109,6 +110,8 @@ export class ItemTransferService {
         return this.applyTradeCommit(manager, instance, transition);
       case 'TRADE_CANCEL':
         return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
+      case 'CRAFT_CONSUME':
+        return this.applyCraftConsume(manager, instance, requesterId, transition.characterId);
       case 'ADMIN_DESTROY':
         return this.applyAdminDestroy(manager, instance);
       case 'REPAIR_ORPHAN_EQUIPPED':
@@ -180,6 +183,37 @@ export class ItemTransferService {
     if (instance.state === ItemInstanceState.DESTROYED) {
       throw new BadRequestException('Instance deja detruite.');
     }
+
+    instance.state = ItemInstanceState.DESTROYED;
+    instance.containerType = ItemInstanceContainerType.NONE;
+    instance.containerId = null;
+    return manager.save(ItemInstance, instance);
+  }
+
+  /**
+   * Consommation d'une ItemInstance NORMAL comme ingrédient de craft.
+   * Transition INVENTORY/AVAILABLE/NORMAL → DESTROYED (jamais de hard delete,
+   * traçabilité préservée). L'appelant (CraftingService) a déjà verrouillé et
+   * sélectionné l'instance ; on revalide ici propriétaire, état, container et
+   * type avant de détruire.
+   */
+  private async applyCraftConsume(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    characterId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    if (instance.ownerId !== characterId) {
+      throw new BadRequestException(
+        `Instance ${instance.id} does not belong to character ${characterId}`,
+      );
+    }
+    if (instance.instanceType !== ItemInstanceType.NORMAL) {
+      throw new BadRequestException('Cannot consume a non-NORMAL item instance');
+    }
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY, characterId);
 
     instance.state = ItemInstanceState.DESTROYED;
     instance.containerType = ItemInstanceContainerType.NONE;
