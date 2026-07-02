@@ -355,6 +355,65 @@ function mapResourceTemplate(t: any): any {
 type LootRow = { itemId: string; minQty: number; maxQty: number; probability: number };
 
 /**
+ * Sélecteur d'item searchable pour le lootPool.
+ * - recherche par name / category / type / id (partiel)
+ * - liste navigable (catalogue complet quand la recherche est vide, limité à 50)
+ * - stocke l'id unique de l'item (évite l'ambiguïté de category)
+ * - affiche name · category · objectMode
+ */
+function LootItemPicker({ items, value, onChange }: {
+  items: any[];
+  value: string;
+  onChange: (itemId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = items.find((it: any) => it.id === value || it.category === value) ?? null;
+  const label = (it: any) => `${it.name} · ${it.category} · ${it.objectMode}`;
+
+  const q = query.trim().toLowerCase();
+  const filtered = (q === ""
+    ? items
+    : items.filter((it: any) =>
+        [it.name, it.category, it.type, it.id]
+          .filter(Boolean)
+          .some((f: any) => String(f).toLowerCase().includes(q)),
+      )
+  ).slice(0, 50);
+
+  return (
+    <div className="admin-panel__loot-picker">
+      <input
+        className="admin-panel__lootpool-item"
+        placeholder={selected ? label(selected) : "Rechercher un item…"}
+        value={open ? query : (selected ? label(selected) : "")}
+        onFocus={() => { setOpen(true); setQuery(""); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        {...kbHandlers}
+      />
+      {open && (
+        <div className="admin-panel__loot-picker-list">
+          {filtered.length === 0 && (
+            <div className="admin-panel__loot-picker-empty">Aucun item</div>
+          )}
+          {filtered.map((it: any) => (
+            <button
+              key={it.id}
+              type="button"
+              className="admin-panel__loot-picker-opt"
+              onMouseDown={(e) => { e.preventDefault(); onChange(it.id); setOpen(false); setQuery(""); }}
+            >
+              {label(it)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Éditeur lootPool d'un template ressource existant (dans Resource Editor).
  * Sauvegarde via le flux existant admin:update_resource_template.
  * La probabilité est éditée/sauvegardée en 0–1 (compatible backend), label "Chance".
@@ -386,6 +445,11 @@ function ResourceLootPoolEditor({ group, items, onSaved, onResult }: {
 
   // Le bouton n'apparaît que si le loot pool a changé depuis la dernière sauvegarde.
   const dirty = JSON.stringify(rows) !== JSON.stringify(saved);
+  // Une ligne est incomplète/invalide si : pas d'item, minQty<1, maxQty<minQty,
+  // ou probability hors [0,1]. Interdit la sauvegarde tant qu'elle existe.
+  const hasInvalidRow = rows.some(
+    (r) => !r.itemId.trim() || r.minQty < 1 || r.maxQty < r.minQty || r.probability < 0 || r.probability > 1,
+  );
 
   function patchRow(idx: number, patch: Partial<LootRow>) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -430,14 +494,7 @@ function ResourceLootPoolEditor({ group, items, onSaved, onResult }: {
           <span className="admin-panel__lootpool-col" />
           {rows.map((entry, idx) => (
             <div key={idx} className="admin-panel__lootpool-row admin-panel__lootpool-row--grid">
-              <select className="admin-panel__template-stat-input admin-panel__lootpool-item"
-                value={entry.itemId}
-                onChange={(e) => patchRow(idx, { itemId: e.target.value })}>
-                <option value="">— item —</option>
-                {items.map((it: any) => (
-                  <option key={it.id} value={it.category}>{it.name} ({it.category})</option>
-                ))}
-              </select>
+              <LootItemPicker items={items} value={entry.itemId} onChange={(id) => patchRow(idx, { itemId: id })} />
               <input className="admin-panel__template-stat-input admin-panel__lootpool-num" type="number" min={1}
                 value={entry.minQty} onChange={(e) => patchRow(idx, { minQty: Number(e.target.value) })} />
               <input className="admin-panel__template-stat-input admin-panel__lootpool-num" type="number" min={1}
@@ -452,9 +509,16 @@ function ResourceLootPoolEditor({ group, items, onSaved, onResult }: {
       )}
 
       {dirty && (
-        <button type="button" className="admin-panel__apply-btn" disabled={saving} onClick={() => void save()}>
-          {saving ? "…" : "Sauver loot pool"}
-        </button>
+        <>
+          {hasInvalidRow && (
+            <span className="admin-panel__field-hint">
+              Ligne incomplète : choisir un item, min ≥ 1, max ≥ min, chance 0–1.
+            </span>
+          )}
+          <button type="button" className="admin-panel__apply-btn" disabled={saving || hasInvalidRow} onClick={() => void save()}>
+            {saving ? "…" : "Sauver loot pool"}
+          </button>
+        </>
       )}
     </div>
   );
@@ -1558,19 +1622,15 @@ export default function AdminPanelWOM() {
                   <span className="admin-panel__lootpool-col" />
                 {newResourceTemplate.lootPool.map((entry, idx) => (
                   <div key={idx} className="admin-panel__lootpool-row admin-panel__lootpool-row--grid">
-                    <select className="admin-panel__lootpool-item"
+                    <LootItemPicker
+                      items={items}
                       value={entry.itemId}
-                      onChange={(e) => setNewResourceTemplate((prev) => {
+                      onChange={(id) => setNewResourceTemplate((prev) => {
                         const lootPool = [...prev.lootPool];
-                        lootPool[idx] = { ...lootPool[idx], itemId: e.target.value };
+                        lootPool[idx] = { ...lootPool[idx], itemId: id };
                         return { ...prev, lootPool };
                       })}
-                      {...kbHandlers}>
-                      <option value="">— item —</option>
-                      {items.map((it: any) => (
-                        <option key={it.id} value={it.category}>{it.name} ({it.category})</option>
-                      ))}
-                    </select>
+                    />
                     <input className="admin-panel__lootpool-num" type="number" min={1} title="Min"
                       value={entry.minQty}
                       onChange={(e) => setNewResourceTemplate((prev) => {

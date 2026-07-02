@@ -1165,3 +1165,45 @@
 
   &:hover { border-color: vars.$color-metal-silver; }
 }
+
+// Sélecteur d'item searchable pour le lootPool.
+.admin-panel__loot-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.admin-panel__loot-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #1b2233;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius-sm;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.admin-panel__loot-picker-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: vars.$color-text-primary;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.admin-panel__loot-picker-empty {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: vars.$color-text-muted;
+}
