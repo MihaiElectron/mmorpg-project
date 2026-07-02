@@ -459,8 +459,8 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
   );
 
   const createRecipeForm = (
-    <div className="admin-panel__template-item">
-      <div className="admin-panel__template-stats">
+    <div className="admin-panel__template-item admin-panel__template-item--create">
+      <div className="admin-panel__template-stats admin-panel__template-stats--create">
         {(["key", "name"] as const).map((f) => (
           <label key={f} className="admin-panel__template-stat">
             <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
@@ -527,15 +527,22 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
       <div className="admin-panel__dual-header">
         <div className="admin-panel__section-toggle" onClick={() => setRecipesOpen((o) => !o)}>
           <span className="admin-panel__section-chevron">{recipesOpen ? "▼" : "▶"}</span>
-          Recettes
+          Recipe Editor
         </div>
-        <div className="admin-panel__section-toggle" onClick={() => setCreateRecipeOpen((o) => !o)}>
-          Créer Recette
-          <span className="admin-panel__section-chevron">{createRecipeOpen ? "▼" : "▶"}</span>
-        </div>
+        <span className="admin-panel__count">
+          {recipes.length} recette{recipes.length > 1 ? "s" : ""}
+        </span>
       </div>
+      {recipesOpen && (
+        <div className="admin-panel__create-head">
+          <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateRecipeOpen((o) => !o)}>
+            <span className="admin-panel__section-chevron">{createRecipeOpen ? "▼" : "▶"}</span>
+            Créer recette
+          </button>
+        </div>
+      )}
+      {recipesOpen && createRecipeOpen && createRecipeForm}
       {recipesOpen && recipeList}
-      {createRecipeOpen && createRecipeForm}
     </section>
   );
 }

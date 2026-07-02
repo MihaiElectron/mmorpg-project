@@ -79,7 +79,7 @@ const SKILL_FIELDS = [
 
 const SKILLS_SECTION_CONFIG: SectionConfig = {
   id: "skills",
-  title: "Skills",
+  title: "Skill Editor",
   fetchPath: "/admin/skill-definitions",
   saveEvent: "admin:update_skill_definition",
   getEntityKey:  (sd) => sd.id,
@@ -130,7 +130,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   return [
   {
     id: "creatures",
-    title: "Créatures",
+    title: "Creature Editor",
     getGroupKey:  (t) => t.key,
     getGroupName: (t) => t.name,
     groupFields: [
@@ -235,7 +235,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   },
   {
     id: "craftingStations",
-    title: "Crafting Stations",
+    title: "Crafting Station Editor",
     getGroupKey:  (t) => t.id,
     getGroupName: (t) => `${t.name} (${t.stationType})`,
     groupFields: [
@@ -270,7 +270,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   },
   {
     id: "buildings",
-    title: "Buildings",
+    title: "Building Editor",
     getGroupKey:  (t) => t.id,
     getGroupName: (t) => `${t.name} (${t.buildingType})`,
     groupFields: [
@@ -1340,14 +1340,21 @@ export default function AdminPanelWOM() {
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
           rightHeader={
-            <div className="admin-panel__section-toggle" onClick={() => setCreateCreatureOpen((o) => !o)}>
-              Créer Créature
-              <span className="admin-panel__section-chevron">{createCreatureOpen ? "▼" : "▶"}</span>
-            </div>
+            <span className="admin-panel__count">
+              {(groupData["creatures"] ?? []).length} créature{(groupData["creatures"] ?? []).length > 1 ? "s" : ""}
+            </span>
           }
-          rightContent={createCreatureOpen ? (
-            <div className="admin-panel__template-item">
-              <div className="admin-panel__template-stats">
+          topContent={
+            <>
+            <div className="admin-panel__create-head">
+              <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateCreatureOpen((o) => !o)}>
+                <span className="admin-panel__section-chevron">{createCreatureOpen ? "▼" : "▶"}</span>
+                Créer créature
+              </button>
+            </div>
+            {createCreatureOpen && (
+            <div className="admin-panel__template-item admin-panel__template-item--create">
+              <div className="admin-panel__template-stats admin-panel__template-stats--create">
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Key</span>
                   <input className="admin-panel__template-stat-input" type="text"
@@ -1424,7 +1431,9 @@ export default function AdminPanelWOM() {
                 {creating ? "…" : "Créer"}
               </button>
             </div>
-          ) : null}
+            )}
+            </>
+          }
         />
       ))}
 
@@ -1631,14 +1640,21 @@ export default function AdminPanelWOM() {
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
           rightHeader={
-            <div className="admin-panel__section-toggle" onClick={() => setNewStationTemplateOpen((o) => !o)}>
-              Créer une station
-              <span className="admin-panel__section-chevron">{newStationTemplateOpen ? "▼" : "▶"}</span>
-            </div>
+            <span className="admin-panel__count">
+              {(groupData["craftingStations"] ?? []).length} station{(groupData["craftingStations"] ?? []).length > 1 ? "s" : ""}
+            </span>
           }
-          rightContent={newStationTemplateOpen ? (
-            <div className="admin-panel__template-item">
-              <div className="admin-panel__template-stats">
+          topContent={
+            <>
+            <div className="admin-panel__create-head">
+              <button type="button" className="admin-panel__create-toggle" onClick={() => setNewStationTemplateOpen((o) => !o)}>
+                <span className="admin-panel__section-chevron">{newStationTemplateOpen ? "▼" : "▶"}</span>
+                Créer une station
+              </button>
+            </div>
+            {newStationTemplateOpen && (
+            <div className="admin-panel__template-item admin-panel__template-item--create">
+              <div className="admin-panel__template-stats admin-panel__template-stats--create">
                 {(["key", "name"] as const).map((f) => (
                   <label key={f} className="admin-panel__template-stat">
                     <span className="admin-panel__template-stat-label">{f === "key" ? "Key" : "Nom"}</span>
@@ -1699,7 +1715,9 @@ export default function AdminPanelWOM() {
                 {creating ? "…" : "Créer"}
               </button>
             </div>
-          ) : null}
+            )}
+            </>
+          }
         />
       ))}
 
@@ -1713,14 +1731,21 @@ export default function AdminPanelWOM() {
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
           rightHeader={
-            <div className="admin-panel__section-toggle" onClick={() => setNewBuildingTemplateOpen((o) => !o)}>
-              Créer un building
-              <span className="admin-panel__section-chevron">{newBuildingTemplateOpen ? "▼" : "▶"}</span>
-            </div>
+            <span className="admin-panel__count">
+              {(groupData["buildings"] ?? []).length} building{(groupData["buildings"] ?? []).length > 1 ? "s" : ""}
+            </span>
           }
-          rightContent={newBuildingTemplateOpen ? (
-            <div className="admin-panel__template-item">
-              <div className="admin-panel__template-stats">
+          topContent={
+            <>
+            <div className="admin-panel__create-head">
+              <button type="button" className="admin-panel__create-toggle" onClick={() => setNewBuildingTemplateOpen((o) => !o)}>
+                <span className="admin-panel__section-chevron">{newBuildingTemplateOpen ? "▼" : "▶"}</span>
+                Créer un building
+              </button>
+            </div>
+            {newBuildingTemplateOpen && (
+            <div className="admin-panel__template-item admin-panel__template-item--create">
+              <div className="admin-panel__template-stats admin-panel__template-stats--create">
                 <label className="admin-panel__template-stat">
                   <span className="admin-panel__template-stat-label">Key</span>
                   <input className="admin-panel__template-stat-input" type="text"
@@ -1782,7 +1807,9 @@ export default function AdminPanelWOM() {
                 {creating ? "…" : "Créer"}
               </button>
             </div>
-          ) : null}
+            )}
+            </>
+          }
         />
       ))}
 
@@ -1792,24 +1819,23 @@ export default function AdminPanelWOM() {
         <div className="admin-panel__dual-header">
           <div className="admin-panel__section-toggle" onClick={() => setSkillsOpen((o) => !o)}>
             <span className="admin-panel__section-chevron">{skillsOpen ? "▼" : "▶"}</span>
-            Skills
+            Skill Editor
           </div>
-          <div className="admin-panel__section-toggle" onClick={() => setCreateSkillOpen((o) => !o)}>
-            Créer Skill
-            <span className="admin-panel__section-chevron">{createSkillOpen ? "▼" : "▶"}</span>
-          </div>
+          <span className="admin-panel__count">
+            {(sectionData["skills"] ?? []).length} skill{(sectionData["skills"] ?? []).length > 1 ? "s" : ""}
+          </span>
         </div>
         {skillsOpen && (
-          <EntitySection
-            config={SKILLS_SECTION_CONFIG}
-            items={sectionData["skills"] ?? []}
-            onResult={pushResult}
-            embedded
-          />
+          <div className="admin-panel__create-head">
+            <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateSkillOpen((o) => !o)}>
+              <span className="admin-panel__section-chevron">{createSkillOpen ? "▼" : "▶"}</span>
+              Créer skill
+            </button>
+          </div>
         )}
-        {createSkillOpen && (
-          <div className="admin-panel__template-item">
-            <div className="admin-panel__template-stats">
+        {skillsOpen && createSkillOpen && (
+          <div className="admin-panel__template-item admin-panel__template-item--create">
+            <div className="admin-panel__template-stats admin-panel__template-stats--create">
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Key</span>
                 <input className="admin-panel__template-stat-input" type="text"
@@ -1872,6 +1898,14 @@ export default function AdminPanelWOM() {
               {creating ? "…" : "Créer"}
             </button>
           </div>
+        )}
+        {skillsOpen && (
+          <EntitySection
+            config={SKILLS_SECTION_CONFIG}
+            items={sectionData["skills"] ?? []}
+            onResult={pushResult}
+            embedded
+          />
         )}
       </section>
 
