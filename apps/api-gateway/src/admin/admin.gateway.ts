@@ -687,6 +687,30 @@ export class AdminGateway implements OnGatewayConnection {
     }
   }
 
+  @SubscribeMessage('admin:repair_orphan_equipped_instance')
+  async onRepairOrphanEquippedInstance(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { itemInstanceId: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { itemInstanceId } = payload ?? {};
+    if (!itemInstanceId) return { success: false, message: 'Payload invalide : itemInstanceId requis.' };
+
+    try {
+      const instance = await this.dataSource.transaction((manager) =>
+        this.itemTransferService.transfer(manager, itemInstanceId, {
+          requesterId: null,
+          transition: { type: 'REPAIR_ORPHAN_EQUIPPED' },
+        }),
+      );
+      if (instance.ownerId) this.emitReloadIfConnected(instance.ownerId);
+      return { success: true, message: `Instance "${itemInstanceId}" réparée (AVAILABLE/INVENTORY).` };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de la réparation.' };
+    }
+  }
+
   @SubscribeMessage('admin:disable_item_template')
   async onDisableItemTemplate(
     @ConnectedSocket() client: WorldSocket,

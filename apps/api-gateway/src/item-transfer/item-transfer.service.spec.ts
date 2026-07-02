@@ -116,6 +116,50 @@ describe("ItemTransferService", () => {
     expect(manager._qb.setLock).toHaveBeenCalledWith("pessimistic_write");
   });
 
+  // ── Cycle equip → unequip → equip (repro bug earring) ────────────────────────
+
+  describe("cycle equip -> unequip -> equip", () => {
+    it("earring : equip puis unequip repasse AVAILABLE, la re-equip ne crash pas", async () => {
+      // Repro du bug "state should be AVAILABLE but is EQUIPPED" :
+      // apres un unequip correct, l'instance doit etre AVAILABLE/INVENTORY,
+      // sinon la seconde equip echoue.
+      const instance = makeInstance({
+        id: "earring-inst",
+        ownerId: "char-1",
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.INVENTORY,
+        containerId: "char-1",
+      });
+      const manager = makeManager(instance);
+
+      // 1) equip
+      await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "EQUIP", characterId: "char-1" },
+      });
+      expect(instance.state).toBe(ItemInstanceState.EQUIPPED);
+      expect(instance.containerType).toBe(ItemInstanceContainerType.EQUIPMENT);
+
+      // 2) unequip -> doit revenir AVAILABLE/INVENTORY
+      await service.transfer(manager, instance.id, {
+        requesterId: "char-1",
+        transition: { type: "UNEQUIP", characterId: "char-1" },
+      });
+      expect(instance.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(instance.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(instance.containerId).toBe("char-1");
+
+      // 3) re-equip -> ne doit PAS lever "Expected state AVAILABLE, got EQUIPPED"
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: "char-1",
+          transition: { type: "EQUIP", characterId: "char-1" },
+        }),
+      ).resolves.toBeDefined();
+      expect(instance.state).toBe(ItemInstanceState.EQUIPPED);
+    });
+  });
+
   // ── EQUIP ──────────────────────────────────────────────────────────────────
 
   describe("transition EQUIP", () => {
@@ -1414,6 +1458,94 @@ describe("ItemTransferService", () => {
         service.transfer(manager, instance.id, {
           requesterId: null,
           transition: { type: "ADMIN_DESTROY" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── REPAIR_ORPHAN_EQUIPPED ───────────────────────────────────────────────────
+
+  describe("transition REPAIR_ORPHAN_EQUIPPED", () => {
+    // Manager avec lock (createQueryBuilder) + count CharacterEquipment configurable.
+    function makeRepairManager(instance: ItemInstance, equipCount: number) {
+      const qb = {
+        setLock: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(instance),
+      };
+      const manager = {
+        getRepository: jest.fn().mockReturnValue({
+          createQueryBuilder: jest.fn(() => qb),
+          count: jest.fn().mockResolvedValue(equipCount),
+        }),
+        save: jest.fn().mockImplementation(async (_E: unknown, entity: unknown) => entity),
+      };
+      return manager as unknown as jest.Mocked<EntityManager>;
+    }
+
+    it("repare une instance EQUIPPED orpheline -> AVAILABLE/INVENTORY chez le owner", async () => {
+      const instance = makeInstance({
+        ownerId: "char-1",
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+        containerId: "char-1",
+      });
+      const manager = makeRepairManager(instance, 0); // aucune ligne character_equipment
+
+      const result = await service.transfer(manager, instance.id, {
+        requesterId: null,
+        transition: { type: "REPAIR_ORPHAN_EQUIPPED" },
+      });
+
+      expect(result.state).toBe(ItemInstanceState.AVAILABLE);
+      expect(result.containerType).toBe(ItemInstanceContainerType.INVENTORY);
+      expect(result.containerId).toBe("char-1");
+    });
+
+    it("refuse si l instance est encore referencee par character_equipment", async () => {
+      const instance = makeInstance({
+        ownerId: "char-1",
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeRepairManager(instance, 1); // une ligne existe
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "REPAIR_ORPHAN_EQUIPPED" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance non-EQUIPPED", async () => {
+      const instance = makeInstance({
+        ownerId: "char-1",
+        state: ItemInstanceState.AVAILABLE,
+        containerType: ItemInstanceContainerType.INVENTORY,
+      });
+      const manager = makeRepairManager(instance, 0);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "REPAIR_ORPHAN_EQUIPPED" },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse si ownerId absent", async () => {
+      const instance = makeInstance({
+        ownerId: null,
+        state: ItemInstanceState.EQUIPPED,
+        containerType: ItemInstanceContainerType.EQUIPMENT,
+      });
+      const manager = makeRepairManager(instance, 0);
+
+      await expect(
+        service.transfer(manager, instance.id, {
+          requesterId: null,
+          transition: { type: "REPAIR_ORPHAN_EQUIPPED" },
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });

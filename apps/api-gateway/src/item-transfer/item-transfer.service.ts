@@ -9,6 +9,7 @@ import {
 } from '../item-instances/entities/item-instance.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
+import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 
 // ── Intentions métier ─────────────────────────────────────────────────────────
 // Chaque type encode ce que le domaine veut faire, pas l'état cible.
@@ -36,7 +37,8 @@ export type ItemTransition =
   | { type: 'TRADE_LOCK'; tradeSessionId: string }
   | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
   | { type: 'TRADE_CANCEL'; tradeSessionId: string }
-  | { type: 'ADMIN_DESTROY' };
+  | { type: 'ADMIN_DESTROY' }
+  | { type: 'REPAIR_ORPHAN_EQUIPPED' };
 
 export interface TransferContext {
   requesterId: string | null; // null autorisé pour les opérations système (ARCHIVE)
@@ -109,7 +111,50 @@ export class ItemTransferService {
         return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
       case 'ADMIN_DESTROY':
         return this.applyAdminDestroy(manager, instance);
+      case 'REPAIR_ORPHAN_EQUIPPED':
+        return this.applyRepairOrphanEquipped(manager, instance);
     }
+  }
+
+  /**
+   * Répare une ItemInstance EQUIPPED orpheline (maintenance DevTools) :
+   * une instance restée EQUIPPED/EQUIPMENT alors qu'aucune ligne
+   * character_equipment ne la référence (desync). La remet AVAILABLE/INVENTORY
+   * chez son propriétaire.
+   * Refuse si l'instance est encore réellement équipée (ligne character_equipment
+   * présente), si elle n'est pas EQUIPPED/EQUIPMENT, ou si ownerId est absent.
+   */
+  private async applyRepairOrphanEquipped(
+    manager: EntityManager,
+    instance: ItemInstance,
+  ): Promise<ItemInstance> {
+    if (instance.state !== ItemInstanceState.EQUIPPED) {
+      throw new BadRequestException(
+        `Instance non EQUIPPED (etat ${instance.state}) : rien a reparer.`,
+      );
+    }
+    if (instance.containerType !== ItemInstanceContainerType.EQUIPMENT) {
+      throw new BadRequestException(
+        `Instance non dans le container EQUIPMENT (${instance.containerType}) : rien a reparer.`,
+      );
+    }
+    if (!instance.ownerId) {
+      throw new BadRequestException('Instance sans ownerId : reparation impossible.');
+    }
+
+    const linked = await manager.getRepository(CharacterEquipment).count({
+      where: { itemInstanceId: instance.id },
+    });
+    if (linked > 0) {
+      throw new BadRequestException(
+        'Instance encore referencee par character_equipment : desequiper normalement, pas de reparation.',
+      );
+    }
+
+    instance.state = ItemInstanceState.AVAILABLE;
+    instance.containerType = ItemInstanceContainerType.INVENTORY;
+    instance.containerId = instance.ownerId;
+    return manager.save(ItemInstance, instance);
   }
 
   /**

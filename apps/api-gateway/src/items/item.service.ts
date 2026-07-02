@@ -11,7 +11,7 @@ import { ResourceTemplate } from '../resources/entities/resource-template.entity
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
-import { ItemInstance, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
+import { ItemInstance, ItemInstanceState, ItemInstanceContainerType } from '../item-instances/entities/item-instance.entity';
 import { WorldItem, WorldItemState } from '../world-items/entities/world-item.entity';
 import { AuctionListing, AuctionListingStatus } from '../auction/entities/auction-listing.entity';
 import { MailMessage, MailStatus } from '../mail/entities/mail-message.entity';
@@ -119,6 +119,9 @@ export interface ItemInstanceLine {
   state: string;
   containerType: string;
   ownerId: string | null;
+  // Vrai si EQUIPPED/EQUIPMENT mais aucune ligne character_equipment ne la
+  // reference : cas reparable via admin:repair_orphan_equipped_instance.
+  orphanEquipped: boolean;
 }
 
 /** Nombre max d'instances individuelles listees dans le rapport (garde-fou payload). */
@@ -636,12 +639,29 @@ export class ItemService implements OnModuleInit {
       .take(MAINTENANCE_INSTANCE_LINES_LIMIT)
       .getMany();
 
+    // Ensemble des itemInstanceId réellement référencés par character_equipment,
+    // pour détecter les instances EQUIPPED orphelines (desync réparable).
+    const equippedInstanceIds = new Set<string>();
+    if (rows.length > 0) {
+      const equipRows = await this.equipmentRepo.find({
+        where: { itemInstanceId: In(rows.map((r) => r.id)) },
+        select: ['itemInstanceId'],
+      });
+      for (const e of equipRows) {
+        if (e.itemInstanceId) equippedInstanceIds.add(e.itemInstanceId);
+      }
+    }
+
     return rows.map((r) => ({
       id: r.id,
       instanceType: r.instanceType,
       state: r.state,
       containerType: r.containerType,
       ownerId: r.ownerId ?? null,
+      orphanEquipped:
+        r.state === ItemInstanceState.EQUIPPED &&
+        r.containerType === ItemInstanceContainerType.EQUIPMENT &&
+        !equippedInstanceIds.has(r.id),
     }));
   }
 

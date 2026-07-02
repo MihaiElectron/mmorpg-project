@@ -127,6 +127,7 @@ export interface ItemInstanceLine {
   state: string;
   containerType: string;
   ownerId: string | null;
+  orphanEquipped: boolean;
 }
 
 export interface ItemReferenceBreakdown {

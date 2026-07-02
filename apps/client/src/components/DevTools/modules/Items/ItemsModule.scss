@@ -479,6 +479,12 @@
     gap: 8px;
   }
 
+  &__row-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
   &__danger,
   &__warn {
     border-radius: vars.$panel-radius-sm;

@@ -82,6 +82,13 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       `Détruire (DESTROYED) l'instance de "${itemName}" [${state}] ?`,
     );
 
+  const handleRepairOrphan = (instanceId: string) =>
+    run(
+      "admin:repair_orphan_equipped_instance",
+      { itemInstanceId: instanceId },
+      `Réparer l'instance équipée orpheline de "${itemName}" ? Elle repassera disponible dans l'inventaire du propriétaire.`,
+    );
+
   const handleDisable = () =>
     run(
       "admin:disable_item_template",
@@ -208,16 +215,30 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
                   <span>
                     {inst.instanceType} · {inst.state} · {inst.containerType}
                     {inst.ownerId ? ` · ${inst.ownerId.slice(0, 8)}…` : ""}
+                    {inst.orphanEquipped ? " · ⚠ orpheline" : ""}
                   </span>
-                  <button
-                    type="button"
-                    className="item-maintenance__danger"
-                    disabled={busy || !destroyable}
-                    title={destroyable ? "Détruire cette instance" : `Non destructible à l'état ${inst.state}`}
-                    onClick={() => void handleDestroyInstance(inst.id, inst.state)}
-                  >
-                    Détruire
-                  </button>
+                  <span className="item-maintenance__row-actions">
+                    {inst.orphanEquipped && (
+                      <button
+                        type="button"
+                        className="item-maintenance__warn"
+                        disabled={busy}
+                        title="Instance EQUIPPED sans ligne d'équipement : la remettre en inventaire"
+                        onClick={() => void handleRepairOrphan(inst.id)}
+                      >
+                        Réparer instance équipée orpheline
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="item-maintenance__danger"
+                      disabled={busy || !destroyable}
+                      title={destroyable ? "Détruire cette instance" : `Non destructible à l'état ${inst.state}`}
+                      onClick={() => void handleDestroyInstance(inst.id, inst.state)}
+                    >
+                      Détruire
+                    </button>
+                  </span>
                 </li>
               );
             })}
