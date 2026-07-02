@@ -23,10 +23,25 @@ import { chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates
 import { getMapRoomId } from '../common/socket-rooms';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
+import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
+import { SkillUpdatePayload } from '../skills/skills.service';
+import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
+import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
+import { Resource } from './entities/resource.entity';
 
 interface InteractResourcePayload {
   targetId: string;
 }
+
+/**
+ * Résolution runtime type de ressource → skillDefinitionKey (Phase 2c).
+ * Le skill de récolte est déduit du type de la ressource, jamais d'un champ
+ * du template. Temporaire : destiné à migrer vers une config Studio.
+ */
+const GATHERING_RESOURCE_SKILL_MAP: Record<string, string> = {
+  dead_tree: 'woodcutting',
+  ore: 'mining',
+};
 
 // Portée de récolte en WU — temporaire, à recalibrer (≈ 100 px legacy).
 const RESOURCE_INTERACT_RANGE_WU = 1600;
@@ -68,7 +83,32 @@ export class ResourcesGateway
     private readonly itemMaterialization: ItemMaterializationService,
     private readonly wsAuthService: WsAuthService,
     private readonly skills: SkillsService,
+    private readonly progression: ProgressionService,
   ) {}
+
+  /** Résout le skill de récolte depuis le type de ressource (Runtime only). */
+  private resolveGatherSkillKey(resourceType: string): string | null {
+    return GATHERING_RESOURCE_SKILL_MAP[resourceType] ?? null;
+  }
+
+  private buildGatherSkillXpContext(skillKey: string, resourceType: string): SkillXpContext {
+    return {
+      skillDefinitionKey: skillKey,
+      domain: 'gathering' as SkillDomain,
+      action: 'gather',
+      success: true,
+      difficulty: 0,
+      quality: null,
+      characterLevel: 1,
+      skillLevel: 1,
+      duration: GATHER_INTERVAL_MS,
+      damage: null,
+      blockedDamage: null,
+      healedAmount: null,
+      buffs: [],
+      debuffs: [],
+    };
+  }
 
   async handleConnection(client: WorldSocket) {
     const auth = await this.wsAuthService.authenticate(client);
@@ -195,29 +235,55 @@ export class ResourcesGateway
       return;
     }
 
-    let matResult: MaterializationResult;
+    // Character XP vient du template ; Skill XP vient du Runtime (type → context).
+    const charXpReward = template?.gatherCharacterXpReward ?? 0;
+    const skillKey = this.resolveGatherSkillKey(resource.type);
+    const skillXpResult = skillKey
+      ? calculateSkillXp(this.buildGatherSkillXpContext(skillKey, resource.type))
+      : null;
+
+    // Pipeline transactionnel unique : loot + consumeLoot + Character XP + Skill XP.
+    // Tout ou rien : si une étape échoue, aucun loot, aucun décrément, aucune XP.
+    let txOut: {
+      matResult: MaterializationResult;
+      updatedResource: Resource;
+      characterXpUpdate?: CharacterXpResult;
+      skillUpdate?: SkillUpdatePayload;
+    };
     try {
-      matResult = await this.dataSource.transaction(async (manager) => {
-        return this.itemMaterialization.materialize(manager, lootEntries, {
+      txOut = await this.dataSource.transaction(async (manager) => {
+        const matResult = await this.itemMaterialization.materialize(manager, lootEntries, {
           source: ItemInstanceSource.LOOT,
           destination: { type: 'INVENTORY', characterId },
           ownerId: characterId,
         });
+        if (matResult.stacks.length === 0) throw new Error('no_loot');
+
+        const updatedResource = await this.resources.consumeLootInManager(manager, targetId);
+        if (!updatedResource) throw new Error('consume_failed');
+
+        let characterXpUpdate: CharacterXpResult | undefined;
+        if (charXpReward > 0) {
+          characterXpUpdate = await this.progression.applyCharacterXpInTx(
+            characterId, charXpReward, ProgressionSource.RESOURCE, manager,
+          );
+        }
+
+        let skillUpdate: SkillUpdatePayload | undefined;
+        if (skillXpResult) {
+          skillUpdate = await this.skills.applySkillXpInTx(
+            characterId, skillXpResult.skillDefinitionKey, skillXpResult.xpAmount, manager,
+          );
+        }
+
+        return { matResult, updatedResource, characterXpUpdate, skillUpdate };
       });
-      if (matResult.stacks.length === 0) {
-        this.cancelGathering(client, targetId, 'error');
-        return;
-      }
     } catch {
       this.cancelGathering(client, targetId, 'error');
       return;
     }
 
-    const updatedResource = await this.resources.consumeLoot(targetId);
-    if (!updatedResource) {
-      this.cancelGathering(client, targetId, 'error');
-      return;
-    }
+    const { matResult, updatedResource, characterXpUpdate, skillUpdate } = txOut;
 
     // 📤 Envoie chaque entrée de loot au client
     for (const stack of matResult.stacks) {
@@ -235,28 +301,12 @@ export class ResourcesGateway
       });
     }
 
+    if (characterXpUpdate) client.emit('character_xp_update', characterXpUpdate);
+    if (skillUpdate) client.emit('skill_update', skillUpdate);
+
     // 🔄 Mise à jour visuelle pour les joueurs de la même map
     const mapId = (updatedResource as any).mapId ?? DEFAULT_MAP_ID;
     this.server.to(getMapRoomId(mapId)).emit('resource_update', this.resources.buildResourceBroadcast(updatedResource as any, template?.textureKey));
-
-    // XP de récolte data-driven depuis ResourceTemplate.skillKey / gatheringXpReward.
-    // characterId vient du serveur (client.data.player), jamais du client.
-    // template est déjà chargé ci-dessus (ligne generateLoot).
-    const xpSkillKey = template?.skillKey ?? null;
-    const xpReward = template?.gatheringXpReward ?? 0;
-    if (xpSkillKey && xpReward > 0) {
-      try {
-        const updatedSkill = await this.skills.addXp(characterId, xpSkillKey, xpReward);
-        client.emit('skill_update', {
-          key: xpSkillKey,
-          level: updatedSkill.level,
-          xp: updatedSkill.xp,
-          nextLevelXp: this.skills.getNextLevelXp(updatedSkill.skillDefinition, updatedSkill.level),
-        });
-      } catch (err) {
-        console.warn(`[ResourcesGateway] XP récolte ignorée pour ${characterId}: ${(err as Error).message}`);
-      }
-    }
 
     if (updatedResource.state === 'dead') {
       await this.resources.scheduleRespawn(updatedResource.id);

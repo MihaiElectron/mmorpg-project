@@ -21,9 +21,17 @@ export class ResourceTemplate {
   @Column({ type: 'varchar', length: 64, name: 'skill_key', nullable: true, default: null })
   skillKey: string | null;
 
-  /** XP accordée par tick de récolte réussi. 0 → pas d'XP. */
+  /**
+   * @deprecated XP skill legacy (pré ADR-0016). Le Skill XP vient désormais du
+   * Runtime (resource type → SkillXpContext). Champ conservé pour compat schéma,
+   * plus lu par la récolte.
+   */
   @Column('int', { name: 'gathering_xp_reward', default: 0 })
   gatheringXpReward: number;
+
+  /** Character XP globale accordée par tick de récolte réussi. 0 → pas d'XP. */
+  @Column('int', { name: 'gather_character_xp_reward', default: 0 })
+  gatherCharacterXpReward: number;
 
   /** Clé Phaser du sprite (ex: 'dead_tree'). Utilisée par WorldScene pour charger la texture. */
   @Column({ type: 'varchar', length: 64, name: 'texture_key', default: 'dead_tree' })

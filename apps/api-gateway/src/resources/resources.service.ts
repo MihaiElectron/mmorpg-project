@@ -142,6 +142,28 @@ export class ResourcesService implements OnModuleInit {
   }
 
   /**
+   * Variante transactionnelle de consumeLoot : opère dans la transaction de
+   * l'appelant (EntityManager fourni). Verrou pessimiste sur la ligne pour un
+   * décrément atomique. Retourne null si la ressource est absente/déjà morte.
+   */
+  async consumeLootInManager(manager: import('typeorm').EntityManager, id: string): Promise<Resource | null> {
+    const resource = await manager.findOne(Resource, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!resource || resource.state === 'dead') return null;
+
+    const remainingLoots = Math.max((resource.remainingLoots ?? 9999) - 1, 0);
+    const state: 'alive' | 'dead' = remainingLoots === 0 ? 'dead' : 'alive';
+
+    await manager.update(Resource, id, { remainingLoots, state });
+
+    resource.remainingLoots = remainingLoots;
+    resource.state = state;
+    return resource;
+  }
+
+  /**
    * Force le respawn immédiat d'une resource quelle que soit son état.
    * Invalide le token courant : tout ancien timer armé deviendra no-op à son expiration.
    */

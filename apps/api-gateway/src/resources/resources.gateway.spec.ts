@@ -4,6 +4,7 @@ import { LootService } from '../world/loot.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { SkillsService } from '../skills/skills.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ProgressionService } from '../progression/progression.service';
 import { ResourceTemplate } from './entities/resource-template.entity';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -14,27 +15,28 @@ function makeResource(type: string, remainingLoots = 3) {
     type,
     state: 'alive',
     remainingLoots,
-    x: 100,
-    y: 100,
     worldX: 1024,
     worldY: 1024,
     mapId: 1,
   };
 }
 
-function makeTemplate(
-  type: string,
-  skillKey: string | null,
-  gatheringXpReward: number,
-): Partial<ResourceTemplate> {
+/**
+ * Template Phase 2c : plus de skillKey/gatheringXpReward lus par le runtime.
+ * gatherCharacterXpReward pilote la Character XP. On garde les champs legacy
+ * dans le stub pour prouver qu'ils sont IGNORÉS.
+ */
+function makeTemplate(type: string, gatherCharacterXpReward = 0): Partial<ResourceTemplate> {
   return {
     type,
-    skillKey,
-    gatheringXpReward,
-    lootPool: null,
+    lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 1 }],
     defaultRemainingLoots: 3,
     respawnDelayMs: 30_000,
-  };
+    gatherCharacterXpReward,
+    // legacy — ne doit jamais être lu par la récolte
+    skillKey: 'legacy_should_be_ignored',
+    gatheringXpReward: 999,
+  } as Partial<ResourceTemplate>;
 }
 
 function makeInventoryEntry() {
@@ -50,26 +52,28 @@ function makeInventoryEntry() {
   };
 }
 
-function makeClient(characterId = 'char-1', x = 100, y = 100): any {
+function makeClient(characterId = 'char-1'): any {
   return {
     id: 'socket-1',
     connected: true,
     emit: jest.fn(),
     data: {
-      player: { characterId, x, y, worldX: 1024, worldY: 1024, mapId: 1 },
+      player: { characterId, worldX: 1024, worldY: 1024, mapId: 1 },
     },
   };
 }
 
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
-describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
+describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill XP runtime)', () => {
   let gateway: ResourcesGateway;
   let resourcesMock: Record<string, jest.Mock>;
   let lootMock: Record<string, jest.Mock>;
   let dataSourceMock: { transaction: jest.Mock };
   let materializeMock: Record<string, jest.Mock>;
   let skillsMock: Record<string, jest.Mock>;
+  let progressionMock: Record<string, jest.Mock>;
+  let serverEmit: jest.Mock;
 
   function setupGateway() {
     gateway = new ResourcesGateway(
@@ -79,13 +83,13 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
       materializeMock as unknown as ItemMaterializationService,
       {} as unknown as WsAuthService,
       skillsMock as unknown as SkillsService,
+      progressionMock as unknown as ProgressionService,
     );
-    const serverEmit = jest.fn();
-    const serverMock = {
+    serverEmit = jest.fn();
+    (gateway as any).server = {
       to: jest.fn().mockReturnValue({ emit: serverEmit }),
       emit: serverEmit,
     };
-    (gateway as any).server = serverMock;
   }
 
   function setupSession(client: any, targetId = 'res-1') {
@@ -101,15 +105,13 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
     resourcesMock = {
       findOne: jest.fn(),
       getTemplate: jest.fn().mockResolvedValue(null),
-      consumeLoot: jest.fn(),
+      consumeLootInManager: jest.fn(),
       scheduleRespawn: jest.fn().mockResolvedValue(undefined),
       buildResourceBroadcast: jest.fn().mockReturnValue({}),
       setServer: jest.fn(),
     };
     lootMock = {
-      generateLoot: jest
-        .fn()
-        .mockReturnValue([{ itemId: 'wooden_stick', quantity: 1 }]),
+      generateLoot: jest.fn().mockReturnValue([{ itemId: 'wooden_stick', quantity: 1 }]),
     };
     materializeMock = {
       materialize: jest.fn().mockResolvedValue({
@@ -118,223 +120,210 @@ describe('ResourcesGateway — runGatherCycle XP data-driven', () => {
         worldItems: [],
       }),
     };
+    // La transaction exécute le callback avec un manager factice.
     dataSourceMock = {
       transaction: jest.fn().mockImplementation(async (fn) => fn({})),
     };
     skillsMock = {
-      addXp: jest.fn().mockResolvedValue({ level: 1, xp: 5 }),
+      applySkillXpInTx: jest.fn().mockResolvedValue({
+        skillDefinitionKey: 'woodcutting', key: 'woodcutting', name: 'Woodcutting',
+        category: 'gathering', enabled: true, level: 1, xp: 10, nextLevelXp: 100, leveledUp: false,
+      }),
+    };
+    progressionMock = {
+      applyCharacterXpInTx: jest.fn().mockResolvedValue({
+        level: 1, experience: 5, nextLevelXp: 100, leveledUp: false,
+      }),
     };
     setupGateway();
   });
 
-  it('accorde XP woodcutting/5 pour dead_tree via template', async () => {
+  // ── Character XP + Skill XP ──────────────────────────────────────────────────
+
+  it('dead_tree → Character XP (template) + Skill XP woodcutting (runtime)', async () => {
     const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 7));
 
     const client = makeClient('char-1');
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).toHaveBeenCalledWith('char-1', 'woodcutting', 5);
+    expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 7, 'RESOURCE', expect.anything());
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
+    expect(client.emit).toHaveBeenCalledWith('character_xp_update', expect.objectContaining({ level: 1 }));
+    expect(client.emit).toHaveBeenCalledWith('skill_update', expect.objectContaining({ key: 'woodcutting' }));
   });
 
-  it('accorde XP mining/5 pour ore via template', async () => {
+  it('ore → Character XP (template) + Skill XP mining (runtime)', async () => {
     const resource = makeResource('ore');
-    const updated = { ...resource, remainingLoots: 5 };
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('ore', 'mining', 5),
-    );
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('ore', 4));
 
     const client = makeClient('char-2');
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).toHaveBeenCalledWith('char-2', 'mining', 5);
+    expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-2', 4, 'RESOURCE', expect.anything());
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-2', 'mining', expect.any(Number), expect.anything());
   });
 
-  it("n'accorde pas XP si skillKey est null dans le template", async () => {
+  it('gatherCharacterXpReward = 0 → pas de character_xp_update', async () => {
     const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', null, 5),
-    );
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 0));
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).not.toHaveBeenCalled();
+    expect(progressionMock.applyCharacterXpInTx).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalledWith('character_xp_update', expect.anything());
+    // Skill XP toujours accordé (runtime), indépendant de la Character XP
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalled();
   });
 
-  it("n'accorde pas XP si gatheringXpReward vaut 0 dans le template", async () => {
-    const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
+  it('type non mappé → Character XP possible, mais pas de Skill XP', async () => {
+    const resource = makeResource('mystery_plant');
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 0),
-    );
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('mystery_plant', 3));
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).not.toHaveBeenCalled();
+    expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 3, 'RESOURCE', expect.anything());
+    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalledWith('skill_update', expect.anything());
   });
 
-  it("n'accorde pas XP si template est null (type sans template)", async () => {
-    const resource = makeResource('unknown_type');
-    const updated = { ...resource, remainingLoots: 2 };
+  it('ignore skillKey / gatheringXpReward legacy du template', async () => {
+    const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(null);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 1));
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).not.toHaveBeenCalled();
+    // Skill résolu par le runtime (dead_tree → woodcutting), jamais 'legacy_should_be_ignored'
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
+    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalledWith('char-1', 'legacy_should_be_ignored', expect.anything(), expect.anything());
   });
 
-  it("n'accorde pas XP si lootEntries est vide (aucun loot)", async () => {
-    lootMock.generateLoot.mockReturnValue([]);
+  // ── Rollback ──────────────────────────────────────────────────────────────────
+
+  it('rollback transaction → pas de loot émis, pas de décrément, pas d\'XP', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 5));
+    // La transaction échoue (rollback) : rien ne doit être émis ni décrémenté.
+    dataSourceMock.transaction.mockRejectedValue(new Error('DB rollback'));
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalledWith('resource_loot', expect.anything());
+    expect(client.emit).not.toHaveBeenCalledWith('character_xp_update', expect.anything());
+    expect(client.emit).not.toHaveBeenCalledWith('skill_update', expect.anything());
+    expect(serverEmit).not.toHaveBeenCalledWith('resource_update', expect.anything());
+    expect(client.emit).toHaveBeenCalledWith('gather_cancelled', expect.objectContaining({ reason: 'error' }));
   });
 
-  it("n'accorde pas XP si la matérialisation échoue (récolte annulée avant XP)", async () => {
-    dataSourceMock.transaction.mockRejectedValue(new Error('DB error'));
+  // ── Non-régression loot / consume / respawn / broadcast ──────────────────────
+
+  it('non-régression : generateLoot appelé avec le lootPool du template', async () => {
     const resource = makeResource('dead_tree');
+    const template = makeTemplate('dead_tree', 0);
     resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(template);
 
     const client = makeClient();
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.addXp).not.toHaveBeenCalled();
-  });
-
-  it('continue la récolte si addXp lève une exception', async () => {
-    skillsMock.addXp.mockRejectedValue(new Error('Skill DB down'));
-    const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
-    resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
-
-    const client = makeClient();
-    setupSession(client);
-
-    // Ne doit pas lever d'exception
-    await expect(
-      (gateway as any).runGatherCycle(client, 'res-1'),
-    ).resolves.not.toThrow();
-    // Le cycle suivant est relancé malgré l'erreur XP
-    expect(client.emit).toHaveBeenCalledWith(
-      'resource_loot',
-      expect.any(Object),
-    );
-  });
-
-  it('utilise le characterId serveur (client.data.player.characterId), pas un champ client', async () => {
-    const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
-    resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
-
-    const client = makeClient('server-resolved-char');
-    setupSession(client);
-    await (gateway as any).runGatherCycle(client, 'res-1');
-
-    expect(skillsMock.addXp).toHaveBeenCalledWith(
-      'server-resolved-char',
-      expect.any(String),
-      expect.any(Number),
-    );
-    expect(materializeMock.materialize).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.any(Array),
-      expect.objectContaining({
-        destination: expect.objectContaining({ characterId: 'server-resolved-char' }),
-      }),
-    );
-  });
-
-  it('utilise le skillKey et xpReward du template, pas des constantes hardcodées', async () => {
-    const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
-    resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    // Template personnalisé — différent des valeurs seed
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'custom_skill', 42),
-    );
-
-    const client = makeClient();
-    setupSession(client);
-    await (gateway as any).runGatherCycle(client, 'res-1');
-
-    expect(skillsMock.addXp).toHaveBeenCalledWith(
-      expect.any(String),
-      'custom_skill',
-      42,
-    );
-  });
-
-  it("émet l'image de l'item canonique pour affichage inventaire", async () => {
-    const resource = makeResource('dead_tree');
-    const updated = { ...resource, remainingLoots: 2 };
-    resourcesMock.findOne.mockResolvedValue(resource);
-    resourcesMock.consumeLoot.mockResolvedValue(updated);
-    resourcesMock.getTemplate.mockResolvedValue(
-      makeTemplate('dead_tree', 'woodcutting', 5),
-    );
-
-    const client = makeClient();
-    setupSession(client);
-    await (gateway as any).runGatherCycle(client, 'res-1');
-
-    expect(lootMock.generateLoot).toHaveBeenCalledWith('dead_tree', null);
+    expect(lootMock.generateLoot).toHaveBeenCalledWith('dead_tree', template.lootPool);
     expect(materializeMock.materialize).toHaveBeenCalledWith(
       expect.anything(),
       [{ itemId: 'wooden_stick', quantity: 1 }],
-      expect.objectContaining({ source: 'LOOT', destination: expect.objectContaining({ type: 'INVENTORY' }) }),
+      expect.objectContaining({ source: 'LOOT', destination: expect.objectContaining({ type: 'INVENTORY', characterId: 'char-1' }) }),
     );
     expect(client.emit).toHaveBeenCalledWith(
       'resource_loot',
       expect.objectContaining({
         lootItemId: 'wooden_stick',
-        item: expect.objectContaining({
-          name: 'Bâton de bois',
-          image: '/assets/images/items/wooden_stick.png',
-        }),
+        item: expect.objectContaining({ name: 'Bâton de bois', image: '/assets/images/items/wooden_stick.png' }),
       }),
     );
+  });
+
+  it('non-régression : remainingLoots décrémenté via consumeLootInManager + resource_update émis', async () => {
+    const resource = makeResource('dead_tree', 3);
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2, state: 'alive' });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 0));
+
+    const client = makeClient();
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(resourcesMock.consumeLootInManager).toHaveBeenCalledWith(expect.anything(), 'res-1');
+    expect(serverEmit).toHaveBeenCalledWith('resource_update', expect.anything());
+    expect(resourcesMock.scheduleRespawn).not.toHaveBeenCalled();
+  });
+
+  it('non-régression : passage dead → scheduleRespawn + gather_cancelled(depleted)', async () => {
+    const resource = makeResource('dead_tree', 1);
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 0, state: 'dead' });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 0));
+
+    const client = makeClient();
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(serverEmit).toHaveBeenCalledWith('resource_update', expect.anything());
+    expect(resourcesMock.scheduleRespawn).toHaveBeenCalledWith('res-1');
+    expect(client.emit).toHaveBeenCalledWith('gather_cancelled', expect.objectContaining({ reason: 'depleted' }));
+  });
+
+  it('non-régression : loot vide → récolte annulée, aucune XP', async () => {
+    lootMock.generateLoot.mockReturnValue([]);
+    const resource = makeResource('dead_tree');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 5));
+
+    const client = makeClient();
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(dataSourceMock.transaction).not.toHaveBeenCalled();
+    expect(progressionMock.applyCharacterXpInTx).not.toHaveBeenCalled();
+    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalled();
+  });
+
+  it('utilise le characterId serveur (client.data.player), jamais un champ client', async () => {
+    const resource = makeResource('dead_tree');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 5));
+
+    const client = makeClient('server-resolved-char');
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(materializeMock.materialize).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Array),
+      expect.objectContaining({ destination: expect.objectContaining({ characterId: 'server-resolved-char' }) }),
+    );
+    expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('server-resolved-char', 5, 'RESOURCE', expect.anything());
   });
 });

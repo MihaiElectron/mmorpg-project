@@ -343,19 +343,17 @@ export class AdminGateway implements OnGatewayConnection {
     const { type, fields } = payload ?? {};
     if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
 
-    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatheringXpReward'];
-    const allowed = [...numericFields, 'skillKey', 'textureKey'];
+    // skillKey / gatheringXpReward legacy volontairement non éditables (ADR-0016 :
+    // le Skill XP vient du Runtime, pas d'un champ de template). Colonnes conservées
+    // en DB mais retirées de la surface admin.
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward'];
+    const allowed = [...numericFields, 'textureKey'];
     const safe: Record<string, number | string | null> = {};
 
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
 
-      if (k === 'skillKey') {
-        if (v !== null && (typeof v !== 'string' || (v as string).trim() === '')) {
-          return { success: false, message: 'skillKey doit être une chaîne non vide ou null.' };
-        }
-        safe.skillKey = v === null || v === '' ? null : (v as string).trim();
-      } else if (k === 'textureKey') {
+      if (k === 'textureKey') {
         if (typeof v !== 'string' || (v as string).trim() === '') {
           return { success: false, message: 'textureKey doit être une chaîne non vide.' };
         }
@@ -366,8 +364,8 @@ export class AdminGateway implements OnGatewayConnection {
         if ((k === 'defaultRemainingLoots' || k === 'respawnDelayMs') && n <= 0) {
           return { success: false, message: `Valeur invalide pour "${k}" (doit être > 0).` };
         }
-        if (k === 'gatheringXpReward' && n < 0) {
-          return { success: false, message: 'gatheringXpReward doit être >= 0.' };
+        if (k === 'gatherCharacterXpReward' && n < 0) {
+          return { success: false, message: 'gatherCharacterXpReward doit être >= 0.' };
         }
         safe[k] = n;
       }
@@ -382,11 +380,10 @@ export class AdminGateway implements OnGatewayConnection {
     if (!updated) return { success: false, message: `Template ressource "${type}" introuvable.` };
 
     const parts: string[] = [];
-    if (safe.defaultRemainingLoots !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
-    if (safe.respawnDelayMs        !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
-    if (safe.gatheringXpReward     !== undefined) parts.push(`xp récolte → ${updated.gatheringXpReward}`);
-    if ('skillKey' in safe) parts.push(`skill → ${updated.skillKey ?? 'aucun'}`);
-    if (safe.textureKey            !== undefined) parts.push(`texture → ${updated.textureKey}`);
+    if (safe.defaultRemainingLoots    !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
+    if (safe.respawnDelayMs           !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
+    if (safe.gatherCharacterXpReward  !== undefined) parts.push(`xp perso → ${updated.gatherCharacterXpReward}`);
+    if (safe.textureKey               !== undefined) parts.push(`texture → ${updated.textureKey}`);
     return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
 
@@ -786,13 +783,12 @@ export class AdminGateway implements OnGatewayConnection {
     const fields = payload?.fields;
     if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
 
-    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatheringXpReward'];
+    // skillKey / gatheringXpReward legacy non exposés (ADR-0016 : Skill XP runtime).
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (numericFields.includes(k)) {
         safe[k] = Number(v);
-      } else if (k === 'skillKey') {
-        safe[k] = v === '' ? null : (v != null ? String(v) : null);
       } else {
         safe[k] = v != null ? String(v) : '';
       }

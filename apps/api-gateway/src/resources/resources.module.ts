@@ -9,6 +9,7 @@ import { LootService } from '../world/loot.service';
 import { CommonModule } from '../common/common.module';
 import { SkillsModule } from '../skills/skills.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
+import { ProgressionModule } from '../progression/progression.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
     CommonModule,
     SkillsModule,
     ItemMaterializationModule,
+    ProgressionModule,
   ],
   providers: [ResourcesService, ResourcesGateway, LootService],
   exports: [ResourcesService, ResourcesGateway],
