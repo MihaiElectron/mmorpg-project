@@ -149,6 +149,9 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
                 <span className="action-panel__recipe-label">Ingrédients</span>
                 {recipe.ingredients.map((ingredient) => (
                   <span key={ingredient.id} className="action-panel__recipe-line">
+                    {ingredient.itemImage && (
+                      <img className="action-panel__recipe-img" src={ingredient.itemImage} alt="" aria-hidden="true" />
+                    )}
                     {ingredient.itemName || ingredient.itemId} ×{ingredient.requiredQuantity}
                   </span>
                 ))}
@@ -157,6 +160,9 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
                 <span className="action-panel__recipe-label">Résultats</span>
                 {recipe.results.map((recipeResult) => (
                   <span key={recipeResult.id} className="action-panel__recipe-line">
+                    {recipeResult.itemImage && (
+                      <img className="action-panel__recipe-img" src={recipeResult.itemImage} alt="" aria-hidden="true" />
+                    )}
                     {recipeResult.itemName || recipeResult.itemId} ×{recipeResult.producedQuantity}
                   </span>
                 ))}

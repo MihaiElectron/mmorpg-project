@@ -15,6 +15,7 @@ export type CraftingRecipeIngredient = {
   itemId: string;
   itemName?: string;
   itemCategory?: string;
+  itemImage?: string | null;
   requiredQuantity: number;
 };
 
@@ -23,6 +24,7 @@ export type CraftingRecipeResult = {
   itemId: string;
   itemName?: string;
   itemCategory?: string;
+  itemImage?: string | null;
   producedQuantity: number;
   chance: number;
 };

@@ -27,6 +27,7 @@ export type AvailableCraftingRecipe = {
     itemId: string;
     itemName: string;
     itemCategory: string;
+    itemImage: string | null;
     requiredQuantity: number;
   }[];
   results: {
@@ -34,6 +35,7 @@ export type AvailableCraftingRecipe = {
     itemId: string;
     itemName: string;
     itemCategory: string;
+    itemImage: string | null;
     producedQuantity: number;
     chance: number;
   }[];
@@ -89,6 +91,7 @@ export class CraftingController {
         itemId: ingredient.itemId,
         itemName: ingredient.item?.name ?? ingredient.itemId,
         itemCategory: ingredient.item?.category ?? '',
+        itemImage: ingredient.item?.image ?? null,
         requiredQuantity: ingredient.requiredQuantity,
       })),
       results: (recipe.results ?? []).map((result) => ({
@@ -96,6 +99,7 @@ export class CraftingController {
         itemId: result.itemId,
         itemName: result.item?.name ?? result.itemId,
         itemCategory: result.item?.category ?? '',
+        itemImage: result.item?.image ?? null,
         producedQuantity: result.producedQuantity,
         chance: result.chance,
       })),
