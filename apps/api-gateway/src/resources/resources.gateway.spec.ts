@@ -349,6 +349,31 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalled();
   });
 
+  it('loot INSTANCE (arme) : pas de rollback, character:reload émis, XP appliquée', async () => {
+    // basic_sword est objectMode INSTANCE → materialize remplit instances, pas stacks.
+    materializeMock.materialize.mockResolvedValue({
+      stacks: [],
+      instances: [{ id: 'inst-1', itemId: 'item-sword' }],
+      worldItems: [],
+    });
+    const resource = makeResource('grey_rock');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('grey_rock', 3));
+
+    const client = makeClient('char-1');
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    // Pas d'annulation (pas de rollback).
+    expect(client.emit).not.toHaveBeenCalledWith('gather_cancelled', expect.objectContaining({ reason: 'error' }));
+    // Refresh autoritatif de l'inventaire pour le loot instance.
+    expect(client.emit).toHaveBeenCalledWith('character:reload');
+    // Décrément + XP appliqués.
+    expect(resourcesMock.consumeLootInManager).toHaveBeenCalledWith(expect.anything(), 'res-1');
+    expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 3, 'RESOURCE', expect.anything());
+  });
+
   it('utilise le characterId serveur (client.data.player), jamais un champ client', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);

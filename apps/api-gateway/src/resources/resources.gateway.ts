@@ -264,7 +264,11 @@ export class ResourcesGateway
           destination: { type: 'INVENTORY', characterId },
           ownerId: characterId,
         });
-        if (matResult.stacks.length === 0) throw new Error('no_loot');
+        // Le loot peut être STACKABLE (stacks) ou INSTANCE (instances) :
+        // n'échouer que si rien n'a été matérialisé.
+        if (matResult.stacks.length === 0 && matResult.instances.length === 0) {
+          throw new Error('no_loot');
+        }
 
         const updatedResource = await this.resources.consumeLootInManager(manager, targetId);
         if (!updatedResource) throw new Error('consume_failed');
@@ -307,6 +311,10 @@ export class ResourcesGateway
         },
       });
     }
+
+    // Loot INSTANCE (ex: arme) : pas de stack optimiste possible → refresh
+    // autoritatif de l'inventaire du joueur (projection avec instanceId correct).
+    if (matResult.instances.length > 0) client.emit('character:reload');
 
     if (characterXpUpdate) client.emit('character_xp_update', characterXpUpdate);
     if (skillUpdate) client.emit('skill_update', skillUpdate);
