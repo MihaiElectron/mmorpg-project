@@ -1305,24 +1305,32 @@ export default class WorldScene extends Phaser.Scene {
     const progress = Phaser.Math.Clamp((this.time.now - startTime) / duration, 0, 1);
 
     const x = sprite.x;
-    const y = sprite.y - 40;
-    const radius = 10;
+    const y = sprite.y - 46;
+    const radius = 16;
 
     graphics.clear();
-    graphics.lineStyle(3, 0x000000, 0.4);
+
+    // Halo sombre pour le contraste (cercle bien voyant sur tout décor).
+    graphics.lineStyle(7, 0x000000, 0.55);
     graphics.strokeCircle(x, y, radius);
 
-    graphics.lineStyle(3, 0x00ff66, 1);
+    // Anneau de fond.
+    graphics.lineStyle(5, 0x0a3d1f, 0.9);
+    graphics.strokeCircle(x, y, radius);
+
+    // Arc de progression (tourne en fonction de la durée de récolte).
+    const startAngle = Phaser.Math.DegToRad(-90);
+    const endAngle = Phaser.Math.DegToRad(-90 + progress * 360);
+    graphics.lineStyle(5, 0x37ff8b, 1);
     graphics.beginPath();
-    graphics.arc(
-      x,
-      y,
-      radius,
-      Phaser.Math.DegToRad(-90),
-      Phaser.Math.DegToRad(-90 + progress * 360),
-      false,
-    );
+    graphics.arc(x, y, radius, startAngle, endAngle, false);
     graphics.strokePath();
+
+    // Point de tête qui tourne le long de l'arc — renforce la lisibilité.
+    const headX = x + Math.cos(endAngle) * radius;
+    const headY = y + Math.sin(endAngle) * radius;
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(headX, headY, 3.5);
   }
 
   renderResources(resources) {
