@@ -396,7 +396,7 @@
   &__template-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: vars.$dt-gap-sm;
     align-items: flex-start;
   }
 
@@ -534,7 +534,7 @@
   &__template-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: vars.$dt-gap-sm;
     align-items: center;
   }
 
@@ -791,13 +791,28 @@
         border-color: color.adjust(vars.$btn-danger-bg, $lightness: 8%);
       }
     }
+
+    // Action secondaire (ex: diagnostic « Valider ») — visuellement discrète
+    // pour ne pas concurrencer le bouton « Save » principal.
+    &--ghost {
+      background: transparent;
+      border-color: vars.$panel-border;
+      color: vars.$color-text-muted;
+
+      &:hover:not(:disabled) {
+        background: vars.$panel-border-subtle;
+        border-color: vars.$panel-border;
+        color: vars.$color-text-primary;
+      }
+    }
   }
 
   // ── Rangée de boutons ────────────────────────────────────────────────────
   &__button-row {
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
+    flex-wrap: wrap;
+    gap: vars.$dt-gap;
+    margin-top: vars.$dt-gap;
   }
 
   // ── Inspecteur joueur — sous-sections ────────────────────────────────────
@@ -1206,4 +1221,12 @@
   padding: 4px 8px;
   font-size: 0.72rem;
   color: vars.$color-text-muted;
+}
+
+// Vignette de l'item output d'une recette (source de vérité = image de l'Item).
+.admin-panel__recipe-output-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
 }

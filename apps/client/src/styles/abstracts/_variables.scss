@@ -58,6 +58,12 @@ $panel-radius-sm:       4px;
 $panel-shadow:          0 -4px 20px rgba(0, 0, 0, 0.5);
 $panel-shadow-float:    0 4px 15px rgba(0, 0, 0, 0.5);
 
+// Gaps DevTools — petits espacements horizontaux réutilisables pour une mise
+// en page dense et responsive (moins de scroll horizontal au redimensionnement).
+$dt-gap:                8px;
+$dt-gap-sm:             6px;
+$dt-gap-xs:             4px;
+
 // ===============================
 // UI — Onglets
 // ===============================
