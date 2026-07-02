@@ -1080,7 +1080,7 @@ export class AdminService {
 
   async createCraftingStationTemplate(
     fields: Pick<CraftingStationTemplate, 'key' | 'name' | 'stationType'> &
-      Partial<Pick<CraftingStationTemplate, 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'enabled'>>,
+      Partial<Pick<CraftingStationTemplate, 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
   ): Promise<CraftingStationTemplate> {
     if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
     AdminService.validateSnakeCase(fields.key, 'key');
@@ -1113,13 +1113,14 @@ export class AdminService {
       category: fields.category ?? 'crafting',
       requiredSkillKey: fields.requiredSkillKey === '' ? null : fields.requiredSkillKey ?? null,
       interactionRadiusWU: fields.interactionRadiusWU ?? 1536,
+      textureKey: fields.textureKey === '' ? null : fields.textureKey ?? null,
       enabled: fields.enabled ?? true,
     }));
   }
 
   async updateCraftingStationTemplate(
     id: string,
-    fields: Partial<Pick<CraftingStationTemplate, 'name' | 'stationType' | 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'enabled'>>,
+    fields: Partial<Pick<CraftingStationTemplate, 'name' | 'stationType' | 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
   ): Promise<CraftingStationTemplate | null> {
     const template = await this.stationTemplateRepo.findOne({ where: { id } });
     if (!template) return null;
@@ -1151,6 +1152,9 @@ export class AdminService {
     if (fields.interactionRadiusWU !== undefined) {
       AdminService.validateInteractionRadiusWU(fields.interactionRadiusWU);
       template.interactionRadiusWU = fields.interactionRadiusWU;
+    }
+    if ('textureKey' in fields) {
+      template.textureKey = fields.textureKey === '' ? null : fields.textureKey ?? null;
     }
     if (fields.enabled !== undefined) template.enabled = Boolean(fields.enabled);
 

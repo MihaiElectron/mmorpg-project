@@ -130,6 +130,7 @@ function normalizeBuilding(raw) {
     state: raw.state ?? "ACTIVE",
     interactionRadiusWU: metadata.interactionRadiusWU ?? raw.interactionRadiusWU ?? 1536,
     templateEnabled: metadata.templateEnabled ?? raw.templateEnabled ?? true,
+    textureKey: metadata.textureKey ?? raw.textureKey ?? null,
   };
 }
 
@@ -248,6 +249,7 @@ function normalizeCraftingStation(station) {
     enabled: station.enabled ?? station.state === "enabled",
     templateEnabled: metadata.templateEnabled ?? template.enabled ?? true,
     interactionRadiusWU: metadata.interactionRadiusWU ?? template.interactionRadiusWU ?? station.interactionRadiusWU ?? 1536,
+    textureKey: metadata.textureKey ?? template.textureKey ?? station.textureKey ?? null,
   };
 }
 
@@ -1335,35 +1337,11 @@ export default class WorldScene extends Phaser.Scene {
 
   renderResources(resources) {
     this.clearResources();
-
+    // Délègue à upsertResource : garantit le chargement dynamique des AssetPath
+    // (/assets/...) au chargement initial, comme sur les updates socket.
     resources
       .filter((resource) => resource.state === "alive")
-      .forEach((resource) => {
-        const { x, y } = resolveScreen(resource);
-        const textureKey = resolveAppearanceTexture({
-          appearanceKey: resource.type,
-          textureKey: resource.textureKey,
-          fallbackTextureKey: "dead_tree",
-          isLoaded: (key) => this.textures.exists(key),
-        });
-
-        const sprite = this.add.image(x, y, textureKey);
-        sprite.setDepth(10);
-        sprite.setInteractive(
-          new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
-          Phaser.Geom.Rectangle.Contains
-        );
-
-        this.resourceSprites.set(resource.id, sprite);
-        this.resourceData.set(resource.id, resource);
-        this.interactionTargets.push({
-          sprite,
-          id: resource.id,
-          type: resource.type,
-          kind: "resource",
-          actions: ["ramasser"],
-        });
-      });
+      .forEach((resource) => this.upsertResource(resource));
     this.redrawResourceOverlay();
   }
 
@@ -1372,6 +1350,21 @@ export default class WorldScene extends Phaser.Scene {
     const existing = this.resourceSprites.get(resource.id);
     if (existing) {
       this.tweens.add({ targets: existing, x, y, duration: 200, ease: "Linear" });
+      // Texture changée (ex: édition DevTools) → recharger puis setTexture.
+      const prev = this.resourceData.get(resource.id);
+      if (prev && prev.textureKey !== resource.textureKey) {
+        const nextKey = resolveAppearanceTexture({
+          appearanceKey: resource.type,
+          textureKey: resource.textureKey,
+          fallbackTextureKey: "dead_tree",
+          isLoaded: (key) => this.textures.exists(key),
+        });
+        loadTextureIfMissing(this, nextKey, {
+          fallbackKey: "dead_tree",
+          onReady: (key) => existing.setTexture(key),
+        });
+      }
+      this.resourceData.set(resource.id, resource);
       return;
     }
 
@@ -1531,13 +1524,20 @@ export default class WorldScene extends Phaser.Scene {
     const existing = this.buildingDebugObjects.get(building.id);
 
     if (existing) {
-      existing.building = building;
-      existing.diamond.setPosition(x, y);
-      existing.diamond.setFillStyle(color, 0.92);
-      existing.label.setPosition(x, y - 28);
-      existing.label.setText(labelText);
-      this.buildingData.set(building.id, building);
-      return;
+      // Texture changée (édition DevTools) → détruire et recréer (le visuel peut
+      // passer de carré à image ou inversement, setTexture ne suffit pas).
+      if (existing.building?.textureKey !== building.textureKey) {
+        this.removeBuilding(building.id);
+      } else {
+        existing.building = building;
+        existing.diamond.setPosition(x, y);
+        // setFillStyle n'existe que sur le rectangle fallback (pas sur une image texturée).
+        if (typeof existing.diamond.setFillStyle === "function") existing.diamond.setFillStyle(color, 0.92);
+        existing.label.setPosition(x, y - 28);
+        existing.label.setText(labelText);
+        this.buildingData.set(building.id, building);
+        return;
+      }
     }
 
     const onPointerDown = (_pointer, _localX, _localY, event) => {
@@ -1667,33 +1667,27 @@ export default class WorldScene extends Phaser.Scene {
     const labelText = station.name || station.stationType;
 
     if (existing) {
-      existing.station = station;
-      existing.square.setPosition(x, y);
-      existing.square.setFillStyle(color, 0.92);
-      existing.label.setPosition(x, y - 25);
-      existing.label.setText(labelText);
-      this.drawCraftingStationRadius(existing.radius, x, y, station.interactionRadiusWU, color);
-      this.craftingStationData.set(station.id, station);
-      return;
+      // Texture changée (édition DevTools) → détruire et recréer (carré ↔ image).
+      if (existing.station?.textureKey !== station.textureKey) {
+        this.removeCraftingStation(station.id);
+      } else {
+        existing.station = station;
+        existing.square.setPosition(x, y);
+        // setFillStyle n'existe que sur le rectangle fallback (pas sur une image).
+        if (typeof existing.square.setFillStyle === "function") existing.square.setFillStyle(color, 0.92);
+        existing.label.setPosition(x, y - 25);
+        existing.label.setText(labelText);
+        this.drawCraftingStationRadius(existing.radius, x, y, station.interactionRadiusWU, color);
+        this.craftingStationData.set(station.id, station);
+        return;
+      }
     }
 
     const radius = this.add.graphics();
     radius.setDepth(CRAFTING_STATION_DEPTH - 1);
     this.drawCraftingStationRadius(radius, x, y, station.interactionRadiusWU, color);
 
-    const square = this.add.rectangle(x, y, CRAFTING_STATION_SIZE, CRAFTING_STATION_SIZE, color, 0.92);
-    square.setStrokeStyle(2, 0x111111, 0.75);
-    square.setDepth(CRAFTING_STATION_DEPTH);
-    square.setInteractive(
-      new Phaser.Geom.Rectangle(
-        -CRAFTING_STATION_SIZE / 2,
-        -CRAFTING_STATION_SIZE / 2,
-        CRAFTING_STATION_SIZE,
-        CRAFTING_STATION_SIZE,
-      ),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    square.on("pointerdown", (_pointer, _localX, _localY, event) => {
+    const onPointerDown = (_pointer, _localX, _localY, event) => {
       event?.stopPropagation();
       getActionPanelStore().getState().openPanel(
         {
@@ -1712,14 +1706,47 @@ export default class WorldScene extends Phaser.Scene {
         [craftingStationActionLabel(station)],
       );
       getDevToolsStore().getState().setSelectedWorldObject(craftingStationToWorldObject(station));
+    };
+
+    const buildVisual = (textureKey) => {
+      if (this.craftingStationDebugObjects.has(station.id)) return;
+
+      let square;
+      if (textureKey && this.textures.exists(textureKey)) {
+        square = this.add.image(x, y, textureKey);
+        square.setDepth(CRAFTING_STATION_DEPTH);
+        square.setInteractive(
+          new Phaser.Geom.Rectangle(0, 0, square.width, square.height),
+          Phaser.Geom.Rectangle.Contains,
+        );
+      } else {
+        square = this.add.rectangle(x, y, CRAFTING_STATION_SIZE, CRAFTING_STATION_SIZE, color, 0.92);
+        square.setStrokeStyle(2, 0x111111, 0.75);
+        square.setDepth(CRAFTING_STATION_DEPTH);
+        square.setInteractive(
+          new Phaser.Geom.Rectangle(
+            -CRAFTING_STATION_SIZE / 2,
+            -CRAFTING_STATION_SIZE / 2,
+            CRAFTING_STATION_SIZE,
+            CRAFTING_STATION_SIZE,
+          ),
+          Phaser.Geom.Rectangle.Contains,
+        );
+      }
+      square.on("pointerdown", onPointerDown);
+
+      const label = this.add.text(x, y - 25, labelText, CRAFTING_STATION_LABEL_STYLE);
+      label.setOrigin(0.5, 1);
+      label.setDepth(CRAFTING_STATION_DEPTH + 1);
+
+      this.craftingStationDebugObjects.set(station.id, { square, label, radius, station });
+      this.craftingStationData.set(station.id, station);
+    };
+
+    loadTextureIfMissing(this, station.textureKey ?? null, {
+      fallbackKey: null,
+      onReady: buildVisual,
     });
-
-    const label = this.add.text(x, y - 25, labelText, CRAFTING_STATION_LABEL_STYLE);
-    label.setOrigin(0.5, 1);
-    label.setDepth(CRAFTING_STATION_DEPTH + 1);
-
-    this.craftingStationDebugObjects.set(station.id, { square, label, radius, station });
-    this.craftingStationData.set(station.id, station);
   }
 
   drawCraftingStationRadius(graphics, x, y, radiusWU, color) {

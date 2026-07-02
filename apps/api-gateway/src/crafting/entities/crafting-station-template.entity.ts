@@ -31,6 +31,10 @@ export class CraftingStationTemplate {
   @Column({ type: 'int', default: 1536 })
   interactionRadiusWU: number;
 
+  /** Texture (AssetPath /assets/... ou clé Phaser legacy). Null → fallback carré. */
+  @Column({ type: 'varchar', length: 256, nullable: true, default: null })
+  textureKey: string | null;
+
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
 

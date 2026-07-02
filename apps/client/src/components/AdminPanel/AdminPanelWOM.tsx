@@ -244,6 +244,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "category",            label: "Catégorie",    options: ["smithing", "woodworking", "alchemy", "cooking", "crafting", "general"] },
       { key: "requiredSkillKey",    label: "Skill requis", options: skillKeyOptions },
       { key: "interactionRadiusWU", label: "Rayon WU",     min: 1 },
+      { key: "textureKey",          label: "Texture",      type: "asset" as const, assetCategory: "buildings" },
       { key: "enabled",             label: "Actif",        options: ["true", "false"] },
     ],
     groupSaveEvent: "admin:update_crafting_station_template",
@@ -482,6 +483,7 @@ function wosToCraftingStationTemplates(wos: WorldObject[]): any[] {
     category: (wo.metadata.category as string) ?? "crafting",
     requiredSkillKey: (wo.metadata.requiredSkillKey as string | null) ?? "",
     interactionRadiusWU: (wo.metadata.interactionRadiusWU as number) ?? 1536,
+    textureKey: (wo.metadata.textureKey as string | null) ?? "",
     enabled: wo.state === "enabled",
   }));
 }
@@ -562,6 +564,7 @@ const NEW_STATION_TEMPLATE_DEFAULT = {
   category: "smithing",
   requiredSkillKey: "",
   interactionRadiusWU: 1536,
+  textureKey: "",
   enabled: true,
 };
 
@@ -1696,6 +1699,14 @@ export default function AdminPanelWOM() {
                     value={newStationTemplate.interactionRadiusWU}
                     onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, interactionRadiusWU: Number(e.target.value) }))}
                     {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">Texture</span>
+                  <AssetPicker
+                    value={newStationTemplate.textureKey}
+                    onChange={(path) => setNewStationTemplate((prev) => ({ ...prev, textureKey: path }))}
+                    category="buildings"
+                  />
                 </label>
               </div>
               <button className="admin-panel__apply-btn" disabled={creating}

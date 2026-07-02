@@ -386,6 +386,18 @@ export class AdminGateway implements OnGatewayConnection {
     }
     if (!updated) return { success: false, message: `Template ressource "${type}" introuvable.` };
 
+    // Rebroadcast des ressources vivantes de ce type pour appliquer la nouvelle
+    // texture en temps réel (sans reload client).
+    if (safe.textureKey !== undefined) {
+      const resources = await this.resourcesService.findAllWithTextureKey();
+      for (const res of resources) {
+        if (res.type !== type || res.state !== 'alive') continue;
+        this.server
+          .to(getMapRoomId(res.mapId ?? DEFAULT_MAP_ID))
+          .emit('resource_update', this.resourcesService.buildResourceBroadcast(res as any, updated.textureKey));
+      }
+    }
+
     const parts: string[] = [];
     if (safe.defaultRemainingLoots    !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
     if (safe.respawnDelayMs           !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
@@ -1121,7 +1133,7 @@ export class AdminGateway implements OnGatewayConnection {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const allowed = ['name', 'stationType', 'category', 'requiredSkillKey', 'interactionRadiusWU', 'enabled'];
+    const allowed = ['name', 'stationType', 'category', 'requiredSkillKey', 'interactionRadiusWU', 'textureKey', 'enabled'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
@@ -1133,6 +1145,13 @@ export class AdminGateway implements OnGatewayConnection {
     try {
       const updated = await this.adminService.updateCraftingStationTemplate(id, safe as any);
       if (!updated) return { success: false, message: `Station template "${id}" introuvable.` };
+      // Rebroadcast des stations de ce template (texture temps réel).
+      const wos = await this.adminService.getCraftingStationWorldObjects();
+      for (const wo of wos) {
+        if ((wo.metadata as any)?.templateId === updated.id) {
+          this.server.emit('crafting_station_update', wo);
+        }
+      }
       return { success: true, message: `Station template "${updated.key}" mis à jour.`, data: updated };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
@@ -1245,6 +1264,14 @@ export class AdminGateway implements OnGatewayConnection {
 
     try {
       const updated = await this.buildingsService.updateTemplate(id, safe as any);
+      // Rebroadcast des buildings de ce template pour appliquer la nouvelle
+      // texture/enabled en temps réel (sans reload client).
+      const wos = await this.buildingsService.getBuildingWorldObjects();
+      for (const wo of wos) {
+        if ((wo.metadata as any)?.templateId === updated.id) {
+          this.server.to(getMapRoomId(wo.mapId ?? DEFAULT_MAP_ID)).emit('building_update', wo);
+        }
+      }
       return { success: true, message: `Template building "${updated.key}" mis à jour.`, data: updated };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };

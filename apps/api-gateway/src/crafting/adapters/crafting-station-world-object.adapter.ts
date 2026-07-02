@@ -25,6 +25,7 @@ export interface CraftingStationTemplateWorldObject {
     readonly category: string;
     readonly requiredSkillKey: string | null;
     readonly interactionRadiusWU: number;
+    readonly textureKey: string | null;
     readonly enabled: boolean;
   };
 }
@@ -46,6 +47,7 @@ export interface CraftingStationWorldObject {
     readonly templateCategory: string;
     readonly requiredSkillKey: string | null;
     readonly interactionRadiusWU: number;
+    readonly textureKey: string | null;
     readonly templateEnabled: boolean;
     readonly enabled: boolean;
   };
@@ -70,6 +72,7 @@ export function toCraftingStationTemplateWorldObject(
       category: template.category,
       requiredSkillKey: template.requiredSkillKey ?? null,
       interactionRadiusWU: template.interactionRadiusWU,
+      textureKey: template.textureKey ?? null,
       enabled: template.enabled,
     }),
   });
@@ -96,6 +99,7 @@ export function toCraftingStationWorldObject(
       templateCategory: template?.category ?? '',
       requiredSkillKey: template?.requiredSkillKey ?? null,
       interactionRadiusWU: template?.interactionRadiusWU ?? 0,
+      textureKey: template?.textureKey ?? null,
       templateEnabled: template?.enabled ?? false,
       enabled: station.enabled,
     }),
