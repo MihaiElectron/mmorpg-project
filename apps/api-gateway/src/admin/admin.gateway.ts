@@ -345,8 +345,9 @@ export class AdminGateway implements OnGatewayConnection {
 
     // skillKey / gatheringXpReward legacy volontairement non éditables (ADR-0016 :
     // le Skill XP vient du Runtime, pas d'un champ de template). Colonnes conservées
-    // en DB mais retirées de la surface admin.
-    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward'];
+    // en DB mais retirées de la surface admin. gatheringDifficulty est un INPUT
+    // (0–100) qui influence le Skill XP via le Runtime, jamais une valeur d'XP.
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward', 'gatheringDifficulty'];
     const allowed = [...numericFields, 'textureKey'];
     const safe: Record<string, number | string | null> = {};
 
@@ -367,6 +368,9 @@ export class AdminGateway implements OnGatewayConnection {
         if (k === 'gatherCharacterXpReward' && n < 0) {
           return { success: false, message: 'gatherCharacterXpReward doit être >= 0.' };
         }
+        if (k === 'gatheringDifficulty' && (n < 0 || n > 100)) {
+          return { success: false, message: 'gatheringDifficulty doit être entre 0 et 100.' };
+        }
         safe[k] = n;
       }
     }
@@ -383,6 +387,7 @@ export class AdminGateway implements OnGatewayConnection {
     if (safe.defaultRemainingLoots    !== undefined) parts.push(`loots défaut → ${updated.defaultRemainingLoots}`);
     if (safe.respawnDelayMs           !== undefined) parts.push(`respawn → ${updated.respawnDelayMs} ms`);
     if (safe.gatherCharacterXpReward  !== undefined) parts.push(`xp perso → ${updated.gatherCharacterXpReward}`);
+    if (safe.gatheringDifficulty      !== undefined) parts.push(`difficulté → ${updated.gatheringDifficulty}`);
     if (safe.textureKey               !== undefined) parts.push(`texture → ${updated.textureKey}`);
     return { success: true, message: `Template "${type}" mis à jour : ${parts.join(', ')}.`, data: updated };
   }
@@ -784,7 +789,8 @@ export class AdminGateway implements OnGatewayConnection {
     if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
 
     // skillKey / gatheringXpReward legacy non exposés (ADR-0016 : Skill XP runtime).
-    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward'];
+    // gatheringDifficulty = input runtime (0–100), pas une valeur d'XP.
+    const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward', 'gatheringDifficulty'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (numericFields.includes(k)) {

@@ -30,6 +30,8 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
     lootPool: null,
     skillKey: null,
     gatheringXpReward: 0,
+    gatherCharacterXpReward: 0,
+    gatheringDifficulty: 0,
     ...overrides,
   } as ResourceTemplate;
 }

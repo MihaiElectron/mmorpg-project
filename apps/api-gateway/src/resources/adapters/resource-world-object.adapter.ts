@@ -42,10 +42,14 @@ export interface ResourceMetadata {
   readonly lootPoolItems: readonly string[] | null;
   /** Date de réapparition prévue si la resource est dead et en attente de respawn. Null sinon. */
   readonly respawnAt: Date | null;
-  /** Clé du skill de récolte (ex: 'woodcutting'). Null si template absent ou non configuré. */
+  /** @deprecated Clé du skill de récolte legacy (ADR-0016 : résolue par le Runtime). */
   readonly skillKey: string | null;
-  /** XP accordée par tick de récolte réussi. Null si template absent. */
+  /** @deprecated XP skill legacy (ADR-0016 : Skill XP calculée par le Runtime). */
   readonly gatheringXpReward: number | null;
+  /** Character XP par tick de récolte réussi (Canal 1). Null si template absent. */
+  readonly gatherCharacterXpReward: number | null;
+  /** Difficulté de récolte 0–100 (input Runtime du Skill XP). Null si template absent. */
+  readonly gatheringDifficulty: number | null;
   /** Clé Phaser du sprite (ex: 'dead_tree'). Null si template absent. */
   readonly textureKey: string | null;
 }
@@ -114,7 +118,7 @@ const RESOURCE_CAPABILITIES: readonly ResourceCapability[] = Object.freeze([
  */
 export function toResourceWorldObject(
   resource: Resource,
-  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool' | 'skillKey' | 'gatheringXpReward' | 'textureKey'> | null,
+  template?: Pick<ResourceTemplate, 'respawnDelayMs' | 'defaultRemainingLoots' | 'lootPool' | 'skillKey' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty' | 'textureKey'> | null,
 ): ResourceWorldObject {
   const hasWU =
     resource.worldX != null &&
@@ -146,6 +150,8 @@ export function toResourceWorldObject(
       respawnAt: resource.respawnAt ?? null,
       skillKey: template?.skillKey ?? null,
       gatheringXpReward: template != null ? (template.gatheringXpReward ?? 0) : null,
+      gatherCharacterXpReward: template != null ? (template.gatherCharacterXpReward ?? 0) : null,
+      gatheringDifficulty: template != null ? (template.gatheringDifficulty ?? 0) : null,
       textureKey: template?.textureKey ?? null,
     }),
   });

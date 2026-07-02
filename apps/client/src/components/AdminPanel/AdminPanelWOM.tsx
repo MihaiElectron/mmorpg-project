@@ -88,6 +88,41 @@ const SKILLS_SECTION_CONFIG: SectionConfig = {
   fields: SKILL_FIELDS,
 };
 
+// ── Estimation XP skill récolte (lecture seule) ───────────────────────────────
+// TODO(shared): dupliquer temporairement la résolution + le calcul du Runtime.
+// Le module skill-xp-calculator vit dans api-gateway (pas d'alias cross-app côté
+// client). À factoriser dans un package partagé. Toute évolution de la formule
+// runtime (BASE_XP gathering / difficulty) doit être répercutée ici.
+// Miroir EXACT de ResourcesGateway.GATHERING_RESOURCE_SKILL_MAP + calculateSkillXp
+// (domain=gathering, action=gather, success=true, difficulty=0, quality=null).
+// Doit rester identique au runtime : une estimation affichée pour un type non
+// mappé côté runtime serait mensongère.
+const GATHERING_RESOURCE_SKILL_MAP: Record<string, string> = {
+  dead_tree: "woodcutting",
+  ore: "mining",
+};
+
+function estimateGatherSkillXp(
+  resourceType: string,
+  difficulty: number,
+): { skillKey: string; xpAmount: number } | null {
+  const skillKey = GATHERING_RESOURCE_SKILL_MAP[resourceType];
+  if (!skillKey) return null;
+  const BASE_GATHER_XP = 10; // BASE_XP.gathering.gather (runtime)
+  const d = Math.max(0, Math.min(100, Number(difficulty) || 0));
+  const difficultyBonus = Math.floor(d / 10); // DIFFICULTY_DIVISOR = 10
+  const qualityBonus = 0;                      // quality=null
+  const xpAmount = Math.max(1, Math.round(BASE_GATHER_XP + difficultyBonus + qualityBonus));
+  return { skillKey, xpAmount };
+}
+
+function gatherSkillXpLabel(resourceType: string, difficulty: number): string {
+  const est = estimateGatherSkillXp(resourceType, difficulty);
+  if (!est) return "XP skill estimée : aucune";
+  const skillName = est.skillKey.charAt(0).toUpperCase() + est.skillKey.slice(1);
+  return `XP skill estimée : +${est.xpAmount} ${skillName}`;
+}
+
 // ── Configs (identiques au legacy) ────────────────────────────────────────────
 
 function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[] {
@@ -147,17 +182,20 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     getGroupKey:  (t) => t.type,
     getGroupName: (t) => t.type,
     groupFields: [
-      { key: "textureKey",              label: "Texture",         type: "asset" as const, assetCategory: "sprites" },
-      { key: "defaultRemainingLoots",   label: "Loots défaut",    min: 1 },
-      { key: "respawnDelayMs",          label: "Respawn (ms)",    min: 1, step: 1000 },
+      { key: "textureKey",              label: "Texture",          type: "asset" as const, assetCategory: "sprites" },
+      { key: "defaultRemainingLoots",   label: "Loots défaut",     min: 1 },
+      { key: "respawnDelayMs",          label: "Respawn (ms)",     min: 1, step: 1000 },
       { key: "gatherCharacterXpReward", label: "XP perso récolte", min: 0 },
+      { key: "gatheringDifficulty",     label: "Difficulté (0–100)", min: 0, max: 100 },
     ],
     groupSaveEvent: "admin:update_resource_template",
     getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
     getGroupInfoLine: (t) => {
+      // XP skill estimée (lecture seule) — miroir du Runtime, dérivée de la difficulté.
+      const xpLine = gatherSkillXpLabel(t.type, t.gatheringDifficulty ?? 0);
       const items: string[] = t.lootPoolItems ?? [];
-      if (items.length === 0) return null;
-      return `Loot pool (lecture seule) : ${items.join(", ")}`;
+      const lootLine = items.length > 0 ? `Loot pool (lecture seule) : ${items.join(", ")}` : null;
+      return lootLine ? `${xpLine}  ·  ${lootLine}` : xpLine;
     },
     dragEvent: "admin:spawn_resource",
     getDragPayload: (t, worldX, worldY) => ({ type: t.type, worldX, worldY }),
@@ -299,12 +337,12 @@ function wosToResourceTemplates(wos: WorldObject[]): any[] {
     if (!map.has(wo.type)) {
       map.set(wo.type, {
         type: wo.type,
-        textureKey:            (wo.metadata.textureKey as string | null)     ?? 'dead_tree',
-        defaultRemainingLoots: (wo.metadata.defaultRemainingLoots as number) ?? 0,
-        respawnDelayMs:        (wo.metadata.respawnDelayMs as number)        ?? 0,
-        lootPoolItems:         (wo.metadata.lootPoolItems as string[])       ?? [],
-        skillKey:              (wo.metadata.skillKey as string | null)       ?? null,
-        gatheringXpReward:     (wo.metadata.gatheringXpReward as number)     ?? 0,
+        textureKey:              (wo.metadata.textureKey as string | null)       ?? 'dead_tree',
+        defaultRemainingLoots:   (wo.metadata.defaultRemainingLoots as number)   ?? 0,
+        respawnDelayMs:          (wo.metadata.respawnDelayMs as number)          ?? 0,
+        lootPoolItems:           (wo.metadata.lootPoolItems as string[])         ?? [],
+        gatherCharacterXpReward: (wo.metadata.gatherCharacterXpReward as number) ?? 0,
+        gatheringDifficulty:     (wo.metadata.gatheringDifficulty as number)     ?? 0,
       });
     }
   }
@@ -406,7 +444,7 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
 const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
-const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatheringXpReward: 0, skillKey: "" };
+const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0 };
 const NEW_STATION_TEMPLATE_DEFAULT = {
   key: "",
   name: "",
@@ -1326,21 +1364,24 @@ export default function AdminPanelWOM() {
                     {...kbHandlers} />
                 </label>
                 <label className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">XP récolte</span>
+                  <span className="admin-panel__template-stat-label">XP perso récolte</span>
                   <input className="admin-panel__template-stat-input" type="number" min={0}
-                    value={newResourceTemplate.gatheringXpReward}
-                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, gatheringXpReward: Number(e.target.value) }))}
+                    value={newResourceTemplate.gatherCharacterXpReward}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, gatherCharacterXpReward: Number(e.target.value) }))}
                     {...kbHandlers} />
                 </label>
                 <label className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">Skill</span>
-                  <select className="admin-panel__template-stat-input"
-                    value={newResourceTemplate.skillKey}
-                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, skillKey: e.target.value }))}
-                    {...kbHandlers}>
-                    <option value="">—</option>
-                    {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
-                  </select>
+                  <span className="admin-panel__template-stat-label">Difficulté récolte (0–100)</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0} max={100}
+                    value={newResourceTemplate.gatheringDifficulty}
+                    onChange={(e) => setNewResourceTemplate((prev) => ({ ...prev, gatheringDifficulty: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">XP skill estimée</span>
+                  <span className="admin-panel__field-hint">
+                    {gatherSkillXpLabel(newResourceTemplate.type, newResourceTemplate.gatheringDifficulty)}
+                  </span>
                 </label>
               </div>
               <button className="admin-panel__apply-btn" disabled={creating}
@@ -1361,8 +1402,8 @@ export default function AdminPanelWOM() {
                         defaultRemainingLoots: tpl.defaultRemainingLoots,
                         respawnDelayMs: tpl.respawnDelayMs,
                         lootPoolItems: [],
-                        skillKey: tpl.skillKey ?? null,
-                        gatheringXpReward: tpl.gatheringXpReward ?? 0,
+                        gatherCharacterXpReward: tpl.gatherCharacterXpReward ?? 0,
+                        gatheringDifficulty: tpl.gatheringDifficulty ?? 0,
                       }],
                     }));
                     setNewResourceTemplate({ ...NEW_RESOURCE_TEMPLATE_DEFAULT });

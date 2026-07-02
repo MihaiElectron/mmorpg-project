@@ -33,6 +33,14 @@ export class ResourceTemplate {
   @Column('int', { name: 'gather_character_xp_reward', default: 0 })
   gatherCharacterXpReward: number;
 
+  /**
+   * Difficulté de récolte (0–100). Input alimentant SkillXpContext.difficulty ;
+   * le Runtime en dérive le Skill XP via calculateSkillXp (base + floor(difficulty/10)).
+   * Ne stocke JAMAIS une valeur d'XP skill (ADR-0016 : Skill XP = Runtime).
+   */
+  @Column('int', { name: 'gathering_difficulty', default: 0 })
+  gatheringDifficulty: number;
+
   /** Clé Phaser du sprite (ex: 'dead_tree'). Utilisée par WorldScene pour charger la texture. */
   @Column({ type: 'varchar', length: 64, name: 'texture_key', default: 'dead_tree' })
   textureKey: string;

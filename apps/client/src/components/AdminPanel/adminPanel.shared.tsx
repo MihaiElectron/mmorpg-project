@@ -10,6 +10,7 @@ export type FieldDef = {
   key: string;
   label: string;
   min?: number;
+  max?: number;
   step?: number;
   options?: string[];
   /** Labels lisibles parallèles à `options` (même index). Si absent, affiche la valeur brute. */
@@ -295,6 +296,7 @@ export function StatField({ def, dirty, value, onChange }: StatFieldProps) {
   return (
     <input className={cls} type="number"
       min={def.min ?? 0} step={def.step ?? 1}
+      {...(def.max != null ? { max: def.max } : {})}
       value={value} onChange={(e) => onChange(e.target.value)}
       {...kbHandlers} />
   );

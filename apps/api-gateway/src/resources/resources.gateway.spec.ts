@@ -26,13 +26,14 @@ function makeResource(type: string, remainingLoots = 3) {
  * gatherCharacterXpReward pilote la Character XP. On garde les champs legacy
  * dans le stub pour prouver qu'ils sont IGNORÉS.
  */
-function makeTemplate(type: string, gatherCharacterXpReward = 0): Partial<ResourceTemplate> {
+function makeTemplate(type: string, gatherCharacterXpReward = 0, gatheringDifficulty = 0): Partial<ResourceTemplate> {
   return {
     type,
     lootPool: [{ itemId: 'wooden_stick', minQty: 1, maxQty: 2, probability: 1 }],
     defaultRemainingLoots: 3,
     respawnDelayMs: 30_000,
     gatherCharacterXpReward,
+    gatheringDifficulty,
     // legacy — ne doit jamais être lu par la récolte
     skillKey: 'legacy_should_be_ignored',
     gatheringXpReward: 999,
@@ -168,6 +169,45 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
 
     expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-2', 4, 'RESOURCE', expect.anything());
     expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-2', 'mining', expect.any(Number), expect.anything());
+  });
+
+  it('difficulty 0 → Skill XP = 10 (base)', async () => {
+    const resource = makeResource('dead_tree');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 0, 0));
+
+    const client = makeClient('char-1');
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 10, expect.anything());
+  });
+
+  it('difficulty 20 → Skill XP = 12 (10 + floor(20/10))', async () => {
+    const resource = makeResource('dead_tree');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('dead_tree', 0, 20));
+
+    const client = makeClient('char-1');
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 12, expect.anything());
+  });
+
+  it('difficulty 100 → Skill XP = 20 (10 + floor(100/10))', async () => {
+    const resource = makeResource('ore');
+    resourcesMock.findOne.mockResolvedValue(resource);
+    resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
+    resourcesMock.getTemplate.mockResolvedValue(makeTemplate('ore', 0, 100));
+
+    const client = makeClient('char-1');
+    setupSession(client);
+    await (gateway as any).runGatherCycle(client, 'res-1');
+
+    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'mining', 20, expect.anything());
   });
 
   it('gatherCharacterXpReward = 0 → pas de character_xp_update', async () => {

@@ -91,13 +91,13 @@ export class ResourcesGateway
     return GATHERING_RESOURCE_SKILL_MAP[resourceType] ?? null;
   }
 
-  private buildGatherSkillXpContext(skillKey: string, resourceType: string): SkillXpContext {
+  private buildGatherSkillXpContext(skillKey: string, difficulty: number): SkillXpContext {
     return {
       skillDefinitionKey: skillKey,
       domain: 'gathering' as SkillDomain,
       action: 'gather',
       success: true,
-      difficulty: 0,
+      difficulty: Math.max(0, Math.min(100, difficulty)),
       quality: null,
       characterLevel: 1,
       skillLevel: 1,
@@ -191,6 +191,10 @@ export class ResourcesGateway
     }, GATHER_INTERVAL_MS);
 
     this.gatherSessions.set(client.id, { targetId, timer, lastWorldX: worldX, lastWorldY: worldY });
+
+    // Signalement UI (cercle de progression WorldScene) — purement cosmétique,
+    // aucune logique runtime. La durée pilote l'animation de l'arc côté client.
+    client.emit('gather_tick', { targetId, duration: GATHER_INTERVAL_MS });
   }
 
   private async runGatherCycle(client: WorldSocket, targetId: string) {
@@ -236,10 +240,13 @@ export class ResourcesGateway
     }
 
     // Character XP vient du template ; Skill XP vient du Runtime (type → context).
+    // gatheringDifficulty (template) alimente SkillXpContext.difficulty — jamais
+    // une valeur d'XP skill stockée (ADR-0016).
     const charXpReward = template?.gatherCharacterXpReward ?? 0;
+    const gatheringDifficulty = template?.gatheringDifficulty ?? 0;
     const skillKey = this.resolveGatherSkillKey(resource.type);
     const skillXpResult = skillKey
-      ? calculateSkillXp(this.buildGatherSkillXpContext(skillKey, resource.type))
+      ? calculateSkillXp(this.buildGatherSkillXpContext(skillKey, gatheringDifficulty))
       : null;
 
     // Pipeline transactionnel unique : loot + consumeLoot + Character XP + Skill XP.
@@ -328,6 +335,8 @@ export class ResourcesGateway
   private cancelGathering(client: WorldSocket, targetId: string, reason: string) {
     this.clearSession(client.id);
     client.emit('gather_cancelled', { targetId, reason });
+    // Arrête le cercle de progression côté WorldScene (cosmétique).
+    client.emit('gather_stopped', { targetId });
   }
 
   private clearSession(socketId: string) {

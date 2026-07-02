@@ -289,7 +289,7 @@ export class AdminService {
 
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'textureKey'>> & { skillKey?: string | null; lootPool?: unknown },
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty' | 'textureKey'>> & { skillKey?: string | null; lootPool?: unknown },
   ): Promise<ResourceTemplate | null> {
     if (fields.respawnDelayMs !== undefined) {
       const v = fields.respawnDelayMs;
@@ -312,6 +312,22 @@ export class AdminService {
       if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 999_999) {
         throw new BadRequestException(
           'gatheringXpReward doit être un entier >= 0 et <= 999 999.',
+        );
+      }
+    }
+    if (fields.gatherCharacterXpReward !== undefined) {
+      const v = fields.gatherCharacterXpReward;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 999_999) {
+        throw new BadRequestException(
+          'gatherCharacterXpReward doit être un entier >= 0 et <= 999 999.',
+        );
+      }
+    }
+    if (fields.gatheringDifficulty !== undefined) {
+      const v = fields.gatheringDifficulty;
+      if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 100) {
+        throw new BadRequestException(
+          'gatheringDifficulty doit être un entier entre 0 et 100.',
         );
       }
     }
