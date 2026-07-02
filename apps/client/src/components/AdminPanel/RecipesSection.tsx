@@ -63,19 +63,19 @@ const RECIPE_FIELDS: FieldDef[] = [
   { key: "name",                       label: "Nom",                  type: "text" },
   { key: "category",                   label: "Catégorie",            options: [...RECIPE_CATEGORIES] },
   { key: "requiredSkillKey",           label: "Skill requis",         options: [] },
-  { key: "requiredSkillLevel",         label: "Niv. requis",          min: 1 },
+  { key: "requiredSkillLevel",         label: "Niveau skill requis",  min: 1 },
   { key: "baseSuccessRate",            label: "Taux base",            min: 0, step: 0.05 },
   { key: "successBonusPerLevel",       label: "Bonus/niv",            min: 0, step: 0.01 },
   { key: "minSuccessRate",             label: "Taux min",             min: 0, step: 0.05 },
   { key: "maxSuccessRate",             label: "Taux max",             min: 0, step: 0.05 },
   { key: "xpReward",                   label: "XP",                   min: 0 },
   { key: "craftTimeMs",                label: "Durée (ms)",           min: 0, step: 100 },
-  { key: "stationType",                label: "Station",              options: [...STATION_TYPES] },
+  { key: "stationType",                label: "Station requise",      options: [...STATION_TYPES] },
   { key: "enabled",                    label: "Actif",                options: ["true", "false"] },
   { key: "consumeIngredientsOnFailure", label: "Consomme si échec",   options: ["true", "false"] },
 ];
 
-const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "none" };
+const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "" };
 const NEW_ING_DEFAULT = { itemId: "", requiredQuantity: 1 };
 const NEW_RES_DEFAULT = { itemId: "", producedQuantity: 1, chance: 1.0 };
 
@@ -252,16 +252,10 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
     }
   }
 
-  async function validateRecipe(recipeId: string) {
-    const socket = getSocket();
-    if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
-    const r = await ackPromise(socket, "admin:validate_crafting_recipe", { recipeId });
-    onResult(r.message, r.success);
-  }
-
   async function createRecipe() {
     const socket = getSocket();
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
+    if (!newRecipe.stationType) { onResult("Station requise : choisir une station.", false); return; }
     setCreating(true);
     const r = await ackPromise(socket, "admin:create_crafting_recipe", { fields: newRecipe });
     setCreating(false);
@@ -348,12 +342,11 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                       );
                     })}
                   </div>
-                  <div className="admin-panel__template-actions">
-                    {recipeDirty && (
+                  {recipeDirty && (
+                    <div className="admin-panel__template-actions">
                       <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Save</button>
-                    )}
-                    <button className="admin-panel__apply-btn admin-panel__apply-btn--ghost" onClick={() => validateRecipe(recipe.id)}>Valider</button>
-                  </div>
+                    </div>
+                  )}
 
                   <div className="admin-panel__info-line">
                     <strong>Ingrédients ({ingredients.length})</strong>
@@ -505,11 +498,12 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           </select>
         </label>
         <label className="admin-panel__template-stat">
-          <span className="admin-panel__template-stat-label">Station</span>
+          <span className="admin-panel__template-stat-label">Station requise</span>
           <select className="admin-panel__template-stat-input"
             value={newRecipe.stationType}
             onChange={(e) => setNewRecipe((prev) => ({ ...prev, stationType: e.target.value }))}
             {...kbHandlers}>
+            <option value="" disabled>— choisir une station —</option>
             {STATION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
@@ -541,7 +535,15 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           </label>
         ))}
       </div>
-      <button className="admin-panel__apply-btn" disabled={creating} onClick={createRecipe}>
+      <p className="admin-panel__field-hint">
+        Station requise = où cette recette peut être fabriquée (forge, workbench…).
+        Skill requis = compétence et niveau du personnage nécessaires.
+      </p>
+      <button
+        className="admin-panel__apply-btn"
+        disabled={creating || !newRecipe.stationType}
+        onClick={createRecipe}
+      >
         {creating ? "…" : "Créer"}
       </button>
     </div>

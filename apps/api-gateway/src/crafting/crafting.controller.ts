@@ -62,6 +62,9 @@ export class CraftingController {
   async getAvailableRecipes(
     @Query('stationType') stationType?: string,
   ): Promise<AvailableCraftingRecipe[]> {
+    // Règle métier stricte : une station n'expose que ses propres recettes
+    // (stationType exact). stationType 'none' reste réservé à un usage futur
+    // (recette libre) et n'est pas ajouté implicitement aux stations.
     const where: Partial<CraftingRecipe> = { enabled: true };
     if (stationType) where.stationType = stationType;
 
