@@ -688,6 +688,18 @@ export class AdminService {
     }
   }
 
+  private static validateCraftCharacterXpReward(v: number): void {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0) {
+      throw new BadRequestException('craftCharacterXpReward doit être un entier >= 0.');
+    }
+  }
+
+  private static validateCraftingDifficulty(v: number): void {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0 || v > 100) {
+      throw new BadRequestException('craftingDifficulty doit être un entier entre 0 et 100.');
+    }
+  }
+
   private static validateInteractionRadiusWU(v: number): void {
     if (!Number.isFinite(v) || !Number.isInteger(v) || v <= 0 || v > 1_048_576) {
       throw new BadRequestException('interactionRadiusWU doit être un entier > 0 et <= 1 048 576 WU.');
@@ -726,7 +738,8 @@ export class AdminService {
       Partial<Pick<CraftingRecipe,
         'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
         'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
-        'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled'
+        'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled' |
+        'craftCharacterXpReward' | 'craftingDifficulty'
       >>,
   ): Promise<CraftingRecipe> {
     if (!fields.key || typeof fields.key !== 'string') {
@@ -776,6 +789,12 @@ export class AdminService {
         throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
       }
     }
+    if (fields.craftCharacterXpReward !== undefined) {
+      AdminService.validateCraftCharacterXpReward(fields.craftCharacterXpReward);
+    }
+    if (fields.craftingDifficulty !== undefined) {
+      AdminService.validateCraftingDifficulty(fields.craftingDifficulty);
+    }
 
     const toCreate: Partial<CraftingRecipe> = {
       key: fields.key,
@@ -793,6 +812,8 @@ export class AdminService {
       craftTimeMs: fields.craftTimeMs ?? 0,
       stationType: fields.stationType ?? 'none',
       enabled: fields.enabled ?? true,
+      craftCharacterXpReward: fields.craftCharacterXpReward ?? 0,
+      craftingDifficulty: fields.craftingDifficulty ?? 0,
       isDefault: false,
     };
 
@@ -804,7 +825,8 @@ export class AdminService {
     fields: Partial<Pick<CraftingRecipe,
       'name' | 'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
       'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
-      'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled'
+      'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled' |
+      'craftCharacterXpReward' | 'craftingDifficulty'
     >>,
   ): Promise<CraftingRecipe | null> {
     const recipe = await this.recipeRepo.findOne({ where: { id }, relations: ['ingredients', 'results'] });
@@ -846,6 +868,14 @@ export class AdminService {
     if (fields.craftTimeMs !== undefined) {
       if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
       recipe.craftTimeMs = fields.craftTimeMs;
+    }
+    if (fields.craftCharacterXpReward !== undefined) {
+      AdminService.validateCraftCharacterXpReward(fields.craftCharacterXpReward);
+      recipe.craftCharacterXpReward = fields.craftCharacterXpReward;
+    }
+    if (fields.craftingDifficulty !== undefined) {
+      AdminService.validateCraftingDifficulty(fields.craftingDifficulty);
+      recipe.craftingDifficulty = fields.craftingDifficulty;
     }
     if (fields.stationType !== undefined) {
       AdminService.validateStationType(fields.stationType, true);

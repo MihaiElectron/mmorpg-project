@@ -21,6 +21,8 @@ export type AvailableCraftingRecipe = {
   maxSuccessRate: number;
   xpReward: number;
   craftTimeMs: number;
+  craftCharacterXpReward: number;
+  craftingDifficulty: number;
   stationType: string;
   ingredients: {
     id: string;
@@ -88,6 +90,8 @@ export class CraftingController {
       maxSuccessRate: recipe.maxSuccessRate,
       xpReward: recipe.xpReward,
       craftTimeMs: recipe.craftTimeMs,
+      craftCharacterXpReward: recipe.craftCharacterXpReward,
+      craftingDifficulty: recipe.craftingDifficulty,
       stationType: recipe.stationType,
       ingredients: (recipe.ingredients ?? []).map((ingredient) => ({
         id: ingredient.id,

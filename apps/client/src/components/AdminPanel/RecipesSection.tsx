@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StatField, kbHandlers, ackPromise, getSocket, type FieldDef } from "./adminPanel.shared";
+import { estimateCraftSkillXp } from "../ActionPanel/craftingRuntime";
 import { ItemCatalog, ItemIcon } from "../DevTools/shared/ItemCatalog";
 import {
   replaceRecipeIngredients,
@@ -28,6 +29,8 @@ type Recipe = {
   minSuccessRate: number;
   maxSuccessRate: number;
   xpReward: number;
+  craftCharacterXpReward: number;
+  craftingDifficulty: number;
   consumeIngredientsOnFailure: boolean;
   craftTimeMs: number;
   stationType: string;
@@ -68,14 +71,16 @@ const RECIPE_FIELDS: FieldDef[] = [
   { key: "successBonusPerLevel",       label: "Bonus/niv",            min: 0, step: 0.01 },
   { key: "minSuccessRate",             label: "Taux min",             min: 0, step: 0.05 },
   { key: "maxSuccessRate",             label: "Taux max",             min: 0, step: 0.05 },
-  { key: "xpReward",                   label: "XP",                   min: 0 },
+  { key: "xpReward",                   label: "XP (legacy)",          min: 0 },
+  { key: "craftCharacterXpReward",     label: "XP perso craft",       min: 0 },
+  { key: "craftingDifficulty",         label: "Difficulté craft",     min: 0, max: 100 },
   { key: "craftTimeMs",                label: "Durée (ms)",           min: 0, step: 100 },
   { key: "stationType",                label: "Station requise",      options: [...STATION_TYPES] },
   { key: "enabled",                    label: "Actif",                options: ["true", "false"] },
   { key: "consumeIngredientsOnFailure", label: "Consomme si échec",   options: ["true", "false"] },
 ];
 
-const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "" };
+const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, craftCharacterXpReward: 0, craftingDifficulty: 0, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "" };
 const NEW_ING_DEFAULT = { itemId: "", requiredQuantity: 1 };
 const NEW_RES_DEFAULT = { itemId: "", producedQuantity: 1, chance: 1.0 };
 
@@ -342,6 +347,10 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                       );
                     })}
                   </div>
+                  <p className="admin-panel__field-hint">
+                    XP skill estimée : +{estimateCraftSkillXp(Number(drafts[recipe.id]?.craftingDifficulty ?? recipe.craftingDifficulty))} {recipe.requiredSkillKey || "—"} / craft réussi
+                    {" "}(calculée par le Runtime depuis la difficulté — lecture seule)
+                  </p>
                   {recipeDirty && (
                     <div className="admin-panel__template-actions">
                       <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Save</button>
@@ -523,7 +532,9 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
           { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
           { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
-          { f: "xpReward",             label: "XP",           step: 1 },
+          { f: "xpReward",             label: "XP (legacy)",  step: 1 },
+          { f: "craftCharacterXpReward", label: "XP perso craft", step: 1 },
+          { f: "craftingDifficulty",   label: "Difficulté craft (0–100)", step: 1 },
           { f: "craftTimeMs",          label: "Durée (ms)",   step: 100 },
         ] as const).map(({ f, label, step }) => (
           <label key={f} className="admin-panel__template-stat">

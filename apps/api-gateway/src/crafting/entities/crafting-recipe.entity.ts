@@ -48,9 +48,19 @@ export class CraftingRecipe {
   @Column({ type: 'float', default: 1.0 })
   maxSuccessRate: number;
 
-  // XP accordée après tentative (succès ou échec selon consumeIngredientsOnFailure)
+  // XP legacy (pré-ADR-0016) — plus utilisée par le Runtime craft pour la Skill
+  // XP (désormais calculée via calculateSkillXp). Conservée pour compat données.
   @Column({ type: 'int', default: 10 })
   xpReward: number;
+
+  // ADR-0016 : Character XP portée par la recette (appliquée via ProgressionService).
+  @Column({ type: 'int', default: 0 })
+  craftCharacterXpReward: number;
+
+  // ADR-0016 : difficulté 0–100 alimentant SkillXpContext.difficulty (Skill Xp
+  // calculée par le Runtime). Jamais une valeur d'XP skill stockée.
+  @Column({ type: 'int', default: 0 })
+  craftingDifficulty: number;
 
   // true = ingrédients perdus même en cas d'échec (comportement par défaut punitif)
   @Column({ type: 'boolean', default: true })

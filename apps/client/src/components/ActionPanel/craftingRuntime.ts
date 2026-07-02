@@ -43,6 +43,8 @@ export type AvailableCraftingRecipe = {
   maxSuccessRate: number;
   xpReward: number;
   craftTimeMs: number;
+  craftCharacterXpReward: number;
+  craftingDifficulty: number;
   stationType: string;
   ingredients: CraftingRecipeIngredient[];
   results: CraftingRecipeResult[];
@@ -57,6 +59,7 @@ export type CraftResultSnapshot = {
   failures: number;
   consumed: { itemId: string; quantity: number }[];
   produced: { itemId: string; quantity: number }[];
+  // Skill XP Runtime (ADR-0016) — null si aucune XP (0 succès / skill non résolu).
   skill: {
     key: string;
     previousLevel: number;
@@ -65,7 +68,15 @@ export type CraftResultSnapshot = {
     newXp: number;
     xpGained: number;
     nextLevelXp: number;
-  };
+  } | null;
+  // Character XP portée par la recette — null si aucune.
+  characterXp: {
+    level: number;
+    experience: number;
+    nextLevelXp: number;
+    leveledUp: boolean;
+    xpGained: number;
+  } | null;
 };
 
 export type WorldPositionWU = {
@@ -202,6 +213,17 @@ export function matchesRecipeQuery(recipe: AvailableCraftingRecipe, query: strin
     .join(" ")
     .toLowerCase();
   return haystack.includes(q);
+}
+
+/**
+ * Estimation lecture seule de la Skill XP par craft — miroir EXACT du Runtime
+ * (skill-xp-calculator : domain=crafting, action=craft → base 15 ; bonus =
+ * floor(difficulty/10) ; quality null). Affichage uniquement : la valeur
+ * autoritaire reste calculée côté serveur.
+ */
+export function estimateCraftSkillXp(craftingDifficulty: number): number {
+  const d = Math.max(0, Math.min(100, Math.floor(craftingDifficulty) || 0));
+  return Math.max(1, 15 + Math.floor(d / 10));
 }
 
 /** Temps de craft (ms) → libellé secondes lisible, pour une durée unitaire ou totale. */

@@ -3,6 +3,7 @@ import { useCharacterStore } from "../../store/character.store";
 import {
   buildCraftRequestPayload,
   computeMaxCraftable,
+  estimateCraftSkillXp,
   estimateStationReach,
   filterRecipesForStation,
   formatCraftingServerErrorDetail,
@@ -247,17 +248,21 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
             </div>
             <div>
               <dt>Difficulté</dt>
+              <dd>{selectedRecipe.craftingDifficulty} / 100</dd>
+            </div>
+            <div>
+              <dt>Skill requis</dt>
               <dd>
                 {selectedRecipe.requiredSkillKey} niv. {selectedRecipe.requiredSkillLevel} · succès {percent(selectedRecipe.baseSuccessRate)}
               </dd>
             </div>
             <div>
               <dt>XP perso</dt>
-              <dd className="action-panel__craft-meta-future">à venir</dd>
+              <dd>+{selectedRecipe.craftCharacterXpReward}</dd>
             </div>
             <div>
               <dt>XP skill est.</dt>
-              <dd>+{selectedRecipe.xpReward} {selectedRecipe.requiredSkillKey}</dd>
+              <dd>+{estimateCraftSkillXp(selectedRecipe.craftingDifficulty)} {selectedRecipe.requiredSkillKey}</dd>
             </div>
           </dl>
 
@@ -337,7 +342,18 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
           {result.produced.length > 0 && (
             <span>Produit: {result.produced.map((item) => `${itemLabel(item.itemId, recipes)} ×${item.quantity}`).join(", ")}</span>
           )}
-          <span>XP: +{result.skill.xpGained} {result.skill.key}</span>
+          {result.characterXp && (
+            <span>
+              XP perso: +{result.characterXp.xpGained}
+              {result.characterXp.leveledUp ? " · niveau supérieur !" : ""}
+            </span>
+          )}
+          {result.skill && (
+            <span>
+              XP skill: +{result.skill.xpGained} {result.skill.key}
+              {result.skill.newLevel > result.skill.previousLevel ? " · niveau supérieur !" : ""}
+            </span>
+          )}
         </div>
       )}
     </div>

@@ -952,7 +952,7 @@ export class AdminGateway implements OnGatewayConnection {
     const fields = payload?.fields;
     if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
 
-    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs'];
+    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (numericFields.includes(k)) {
@@ -985,8 +985,9 @@ export class AdminGateway implements OnGatewayConnection {
 
     const ALLOWED = ['name', 'description', 'category', 'requiredSkillKey', 'requiredSkillLevel',
       'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate',
-      'xpReward', 'consumeIngredientsOnFailure', 'craftTimeMs', 'stationType', 'enabled'];
-    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs'];
+      'xpReward', 'consumeIngredientsOnFailure', 'craftTimeMs', 'stationType', 'enabled',
+      'craftCharacterXpReward', 'craftingDifficulty'];
+    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
     const safe: Record<string, unknown> = {};
 
     for (const [k, v] of Object.entries(fields)) {

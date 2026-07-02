@@ -4,6 +4,7 @@ import {
   computeMaxCraftable,
   countOwned,
   distanceWU,
+  estimateCraftSkillXp,
   estimateStationReach,
   filterRecipesForStation,
   formatCraftingServerErrorDetail,
@@ -33,6 +34,8 @@ function recipe(id: string, stationType: string): AvailableCraftingRecipe {
     maxSuccessRate: 1,
     xpReward: 1,
     craftTimeMs: 0,
+    craftCharacterXpReward: 0,
+    craftingDifficulty: 0,
     stationType,
     ingredients: [],
     results: [],
@@ -220,5 +223,13 @@ describe("craft UX produit-first", () => {
     expect(formatCraftSeconds(2000)).toBe("2 s");
     expect(formatCraftSeconds(2000, 3)).toBe("6 s");
     expect(formatCraftSeconds(1500)).toBe("1.5 s");
+  });
+
+  it("estimateCraftSkillXp reflète le Runtime (base 15 + floor(difficulté/10))", () => {
+    expect(estimateCraftSkillXp(0)).toBe(15);
+    expect(estimateCraftSkillXp(20)).toBe(17);
+    expect(estimateCraftSkillXp(100)).toBe(25);
+    expect(estimateCraftSkillXp(150)).toBe(25); // borné à 100
+    expect(estimateCraftSkillXp(-5)).toBe(15); // borné à 0
   });
 });
