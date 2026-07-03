@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
   CraftJobService,
@@ -14,6 +19,7 @@ import { CraftingService } from './crafting.service';
 import { SkillsService } from '../skills/skills.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
@@ -78,6 +84,7 @@ describe('CraftJobService — launch()', () => {
   let mockTransfer: { transfer: jest.Mock };
   let mockCrafting: { findNearestCompatibleStationOrThrow: jest.Mock };
   let mockProgression: { applyCharacterXpInTx: jest.Mock };
+  let mockMaterialization: { materialize: jest.Mock };
   let savedCraftJob: any;
   let lockedInstances: Partial<ItemInstance>[];
   let jobToComplete: any;
@@ -122,6 +129,7 @@ describe('CraftJobService — launch()', () => {
     mockTransfer = { transfer: jest.fn().mockResolvedValue({}) };
     mockCrafting = { findNearestCompatibleStationOrThrow: jest.fn().mockResolvedValue({ id: 'station-1' }) };
     mockProgression = { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) };
+    mockMaterialization = { materialize: jest.fn().mockResolvedValue({ stacks: [], instances: [], worldItems: [] }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -131,6 +139,7 @@ describe('CraftJobService — launch()', () => {
         { provide: ItemTransferService, useValue: mockTransfer },
         { provide: CraftingService, useValue: mockCrafting },
         { provide: ProgressionService, useValue: mockProgression },
+        { provide: ItemMaterializationService, useValue: mockMaterialization },
       ],
     }).compile();
 
@@ -431,5 +440,109 @@ describe('CraftJobService — launch()', () => {
     mockProgression.applyCharacterXpInTx.mockRejectedValueOnce(new Error('xp error'));
 
     await expect(service.complete('job-1')).rejects.toThrow('xp error');
+  });
+
+  // ── claim() — Phase 3 ───────────────────────────────────────────────────────
+
+  function setupClaim(job: any, outputs: any[] = []) {
+    jobToComplete = job; // même holder que le query builder CraftJob
+    mockManager.find.mockImplementation((entity: any) => {
+      if (entity === CraftJobOutput) return Promise.resolve(outputs);
+      return Promise.resolve([]);
+    });
+  }
+
+  const completedJob = (overrides: any = {}) =>
+    makeJob({ state: CraftJobState.COMPLETED, successes: 1, failures: 0, ...overrides });
+
+  it('claim STACKABLE : materialize appelé une fois puis CLAIMED', async () => {
+    setupClaim(completedJob(), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+
+    const result = await service.claim('char-1', 'job-1');
+
+    expect(mockMaterialization.materialize).toHaveBeenCalledTimes(1);
+    expect(mockMaterialization.materialize).toHaveBeenCalledWith(
+      mockManager,
+      [{ itemId: 'item-iron_bar', quantity: 2 }],
+      { source: 'CRAFT', destination: { type: 'INVENTORY', characterId: 'char-1' }, ownerId: 'char-1' },
+    );
+    expect(result).toMatchObject({ state: CraftJobState.CLAIMED, produced: [{ itemId: 'item-iron_bar', quantity: 2 }] });
+    const jobSave = mockManager.save.mock.calls.find((c) => c[0] === CraftJob);
+    expect(jobSave[1]).toMatchObject({ state: CraftJobState.CLAIMED });
+    expect(jobSave[1].claimedAt).toBeInstanceOf(Date);
+  });
+
+  it('claim INSTANCE : mêmes entrées passées à materialize', async () => {
+    setupClaim(completedJob(), [{ itemId: 'item-sword', resolvedQuantity: 1, producedQuantity: 1, chance: 1 }]);
+
+    await service.claim('char-1', 'job-1');
+
+    expect(mockMaterialization.materialize).toHaveBeenCalledWith(
+      mockManager,
+      [{ itemId: 'item-sword', quantity: 1 }],
+      expect.objectContaining({ source: 'CRAFT' }),
+    );
+  });
+
+  it('claim mélange STACKABLE + INSTANCE : deux entrées, un seul materialize', async () => {
+    setupClaim(completedJob(), [
+      { itemId: 'item-iron_bar', resolvedQuantity: 3, producedQuantity: 1, chance: 1 },
+      { itemId: 'item-sword', resolvedQuantity: 1, producedQuantity: 1, chance: 1 },
+    ]);
+
+    const result = await service.claim('char-1', 'job-1');
+
+    expect(mockMaterialization.materialize).toHaveBeenCalledTimes(1);
+    expect(mockMaterialization.materialize).toHaveBeenCalledWith(
+      mockManager,
+      [{ itemId: 'item-iron_bar', quantity: 3 }, { itemId: 'item-sword', quantity: 1 }],
+      expect.objectContaining({ source: 'CRAFT' }),
+    );
+    expect(result.produced).toHaveLength(2);
+  });
+
+  it('n’inclut pas les outputs à resolvedQuantity 0 (0 output → pas de materialize)', async () => {
+    setupClaim(completedJob(), [{ itemId: 'item-iron_bar', resolvedQuantity: 0, producedQuantity: 1, chance: 0.1 }]);
+
+    const result = await service.claim('char-1', 'job-1');
+
+    expect(mockMaterialization.materialize).not.toHaveBeenCalled();
+    expect(result.state).toBe(CraftJobState.CLAIMED);
+  });
+
+  it('double claim : 409 Conflict, aucune seconde création', async () => {
+    setupClaim(completedJob({ state: CraftJobState.CLAIMED }), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+
+    await expect(service.claim('char-1', 'job-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(mockMaterialization.materialize).not.toHaveBeenCalled();
+  });
+
+  it('claim d’un job FAILED : refusé, aucune matérialisation', async () => {
+    setupClaim(completedJob({ state: CraftJobState.FAILED }), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+
+    await expect(service.claim('char-1', 'job-1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(mockMaterialization.materialize).not.toHaveBeenCalled();
+  });
+
+  it('claim par un mauvais propriétaire : Forbidden', async () => {
+    setupClaim(completedJob({ characterId: 'char-2' }), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+
+    await expect(service.claim('char-1', 'job-1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(mockMaterialization.materialize).not.toHaveBeenCalled();
+  });
+
+  it('rollback si materialize échoue : job non passé CLAIMED', async () => {
+    setupClaim(completedJob(), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+    mockMaterialization.materialize.mockRejectedValueOnce(new Error('materialize error'));
+
+    await expect(service.claim('char-1', 'job-1')).rejects.toThrow('materialize error');
+    expect(mockManager.save).not.toHaveBeenCalledWith(CraftJob, expect.anything());
+  });
+
+  it('rollback si update CLAIMED échoue', async () => {
+    setupClaim(completedJob(), [{ itemId: 'item-iron_bar', resolvedQuantity: 2, producedQuantity: 1, chance: 1 }]);
+    mockManager.save.mockImplementationOnce(async () => { throw new Error('save error'); });
+
+    await expect(service.claim('char-1', 'job-1')).rejects.toThrow('save error');
   });
 });

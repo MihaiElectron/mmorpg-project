@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,6 +19,9 @@ import {
   ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
+import type { LootEntry } from '../world/loot.service';
 import {
   ProgressionService,
   ProgressionSource,
@@ -39,6 +44,13 @@ export interface CraftJobCompletionResult {
   state: CraftJobState.COMPLETED | CraftJobState.FAILED;
   successes: number;
   failures: number;
+}
+
+/** Résultat d'un claim réussi. */
+export interface CraftJobClaimResult {
+  jobId: string;
+  state: CraftJobState.CLAIMED;
+  produced: { itemId: string; quantity: number }[];
 }
 
 /**
@@ -67,6 +79,7 @@ export class CraftJobService {
     private readonly itemTransferService: ItemTransferService,
     private readonly craftingService: CraftingService,
     private readonly progressionService: ProgressionService,
+    private readonly itemMaterialization: ItemMaterializationService,
   ) {}
 
   /**
@@ -416,6 +429,63 @@ export class CraftJobService {
       await manager.save(CraftJob, job);
 
       return { jobId, state: job.state, successes, failures };
+    });
+  }
+
+  /**
+   * Claim d'un CraftJob COMPLETED (ADR-0009, Phase 3). Transaction unique.
+   *
+   * SEUL endroit où `ItemMaterializationService` est appelé pour un CraftJob :
+   * l'output n'existe qu'ici (ni au launch, ni au scheduler). Les objets créés
+   * sont EXACTEMENT ceux qu'aurait produits le craft instantané (mêmes quantités
+   * résolues, même source CRAFT, même destination INVENTORY).
+   *
+   * Idempotent : un job déjà CLAIMED lève 409 (jamais deux créations). Un job
+   * FAILED ne peut jamais être claim. Le snapshot (`craft_job_output.resolvedQuantity`)
+   * est l'unique vérité — la recette/outputs vivants ne sont jamais relus.
+   */
+  async claim(characterId: string, jobId: string): Promise<CraftJobClaimResult> {
+    return this.dataSource.transaction(async (manager) => {
+      const job = await manager
+        .getRepository(CraftJob)
+        .createQueryBuilder('j')
+        .setLock('pessimistic_write')
+        .where('j.id = :id', { id: jobId })
+        .getOne();
+      if (!job) throw new NotFoundException(`CraftJob ${jobId} introuvable`);
+      if (job.characterId !== characterId) {
+        throw new ForbiddenException(`CraftJob ${jobId} n'appartient pas au personnage`);
+      }
+      if (job.state === CraftJobState.CLAIMED) {
+        throw new ConflictException(`CraftJob ${jobId} déjà réclamé`);
+      }
+      if (job.state === CraftJobState.FAILED) {
+        throw new BadRequestException(`CraftJob ${jobId} en échec : rien à réclamer`);
+      }
+      if (job.state !== CraftJobState.COMPLETED) {
+        throw new BadRequestException(`CraftJob ${jobId} pas encore terminé (état ${job.state})`);
+      }
+
+      // Snapshot uniquement — jamais la recette/outputs vivants.
+      const outputs = await manager.find(CraftJobOutput, { where: { jobId } });
+      const lootEntries: LootEntry[] = outputs
+        .filter((o) => o.resolvedQuantity > 0)
+        .map((o) => ({ itemId: o.itemId, quantity: o.resolvedQuantity }));
+
+      if (lootEntries.length > 0) {
+        // Unique appel à ItemMaterializationService pour un CraftJob.
+        await this.itemMaterialization.materialize(manager, lootEntries, {
+          source: ItemInstanceSource.CRAFT,
+          destination: { type: 'INVENTORY', characterId },
+          ownerId: characterId,
+        });
+      }
+
+      job.state = CraftJobState.CLAIMED;
+      job.claimedAt = new Date();
+      await manager.save(CraftJob, job);
+
+      return { jobId, state: CraftJobState.CLAIMED, produced: lootEntries };
     });
   }
 

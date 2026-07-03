@@ -118,6 +118,9 @@ export class CraftJob {
   @Column({ type: 'timestamptz', nullable: true, default: null })
   completedAt: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  claimedAt: Date | null;
+
   // ── Résultat figé à la complétion (RUNNING → COMPLETED/FAILED) ────────────────
   // Ce ne sont PAS des items : simples compteurs permettant un claim futur.
   @Column({ type: 'int', default: 0 })
