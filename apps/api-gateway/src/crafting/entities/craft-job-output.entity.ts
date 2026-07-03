@@ -36,4 +36,9 @@ export class CraftJobOutput {
 
   @Column({ type: 'float', default: 1.0 })
   chance: number;
+
+  // Quantité totale à matérialiser au CLAIM (figée à la complétion). Reste 0
+  // tant que le job n'est pas COMPLETED. Aucun item n'existe avant le claim.
+  @Column({ type: 'int', default: 0 })
+  resolvedQuantity: number;
 }

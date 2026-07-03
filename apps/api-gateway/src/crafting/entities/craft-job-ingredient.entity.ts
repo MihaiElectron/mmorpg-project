@@ -41,4 +41,9 @@ export class CraftJobIngredient {
   // Quantité totale réservée au lancement (requiredQuantity × quantity).
   @Column({ type: 'int', default: 0 })
   reservedQuantity: number;
+
+  // Quantité définitivement consommée à la complétion. Le reste
+  // (reservedQuantity − consumedQuantity) est à restituer au claim/cancel (Phase 3).
+  @Column({ type: 'int', default: 0 })
+  consumedQuantity: number;
 }

@@ -115,6 +115,17 @@ export class CraftJob {
   @Column({ type: 'timestamptz' })
   finishAt: Date;
 
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  completedAt: Date | null;
+
+  // ── Résultat figé à la complétion (RUNNING → COMPLETED/FAILED) ────────────────
+  // Ce ne sont PAS des items : simples compteurs permettant un claim futur.
+  @Column({ type: 'int', default: 0 })
+  successes: number;
+
+  @Column({ type: 'int', default: 0 })
+  failures: number;
+
   @OneToMany(() => CraftJobIngredient, (ing) => ing.job, { cascade: true })
   ingredients: CraftJobIngredient[];
 

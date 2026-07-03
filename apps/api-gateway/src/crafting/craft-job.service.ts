@@ -1,9 +1,10 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, LessThanOrEqual } from 'typeorm';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
@@ -16,6 +17,12 @@ import {
   ItemInstanceType,
 } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import {
+  ProgressionService,
+  ProgressionSource,
+} from '../progression/progression.service';
+import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
+import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
 import { CraftJob, CraftJobState } from './entities/craft-job.entity';
@@ -25,6 +32,14 @@ import { CraftJobOutput } from './entities/craft-job-output.entity';
 // Versions courantes figées dans chaque job au lancement (ADR-0009).
 export const CRAFT_JOB_VERSION = 1;
 export const CRAFT_SERVER_FORMULA_VERSION = 1;
+
+/** Résultat d'une tentative de complétion (null = skip idempotent). */
+export interface CraftJobCompletionResult {
+  jobId: string;
+  state: CraftJobState.COMPLETED | CraftJobState.FAILED;
+  successes: number;
+  failures: number;
+}
 
 /**
  * CraftJobService — production différée persistante (ADR-0009, V1).
@@ -41,11 +56,17 @@ export const CRAFT_SERVER_FORMULA_VERSION = 1;
  */
 @Injectable()
 export class CraftJobService {
+  private readonly logger = new Logger(CraftJobService.name);
+
+  /** Overridable pour les tests — jamais influencé par le client. [0,1[. */
+  protected _randomFn = (): number => Math.random();
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly skillsService: SkillsService,
     private readonly itemTransferService: ItemTransferService,
     private readonly craftingService: CraftingService,
+    private readonly progressionService: ProgressionService,
   ) {}
 
   /**
@@ -259,5 +280,172 @@ export class CraftJobService {
       savedJob.outputs = jobOutputs;
       return savedJob;
     });
+  }
+
+  /**
+   * Complétion d'un CraftJob dû : RUNNING → COMPLETED (≥1 succès) ou FAILED
+   * (échec total). Transaction unique, verrou pessimiste, recheck RUNNING →
+   * IDEMPOTENT. Retourne null si le job n'existe pas ou n'est plus RUNNING.
+   *
+   * INVARIANT ADR-0009 : ne crée, ne détruit ni ne déplace aucun Item OUTPUT.
+   * `ItemMaterializationService` n'est PAS utilisé ici — l'output n'existe qu'au
+   * claim (Phase 3). Seules opérations sur items : consommation définitive des
+   * ingrédients INSTANCE réservés (IN_CRAFT_ORDER → DESTROYED). Le résultat de
+   * production (succès/échec, quantités d'output) est figé dans le snapshot.
+   */
+  async complete(jobId: string): Promise<CraftJobCompletionResult | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const job = await manager
+        .getRepository(CraftJob)
+        .createQueryBuilder('j')
+        .setLock('pessimistic_write')
+        .where('j.id = :id', { id: jobId })
+        .getOne();
+      if (!job) return null;
+      if (job.state !== CraftJobState.RUNNING) return null; // idempotence
+
+      const ingredients = await manager.find(CraftJobIngredient, { where: { jobId } });
+      const outputs = await manager.find(CraftJobOutput, { where: { jobId } });
+
+      // Niveau de skill courant (le skill appartient au joueur, jamais relu de la
+      // recette vivante). Si le skill a disparu, on complète sans bonus ni XP.
+      const skillDef = await manager.findOne(SkillDefinition, {
+        where: { key: job.requiredSkillKey },
+      });
+      let skillLevel = job.requiredSkillLevel;
+      if (skillDef && skillDef.enabled) {
+        const playerSkill = await this.skillsService.getOrCreatePlayerSkillInTx(
+          job.characterId,
+          skillDef,
+          manager,
+        );
+        skillLevel = playerSkill.level;
+      }
+
+      // Taux de succès depuis le SNAPSHOT uniquement (jamais la recette vivante).
+      const successRate = Math.min(
+        job.maxSuccessRate,
+        Math.max(
+          job.minSuccessRate,
+          job.baseSuccessRate + (skillLevel - job.requiredSkillLevel) * job.successBonusPerLevel,
+        ),
+      );
+
+      let successes = 0;
+      let failures = 0;
+      let consumedSets = 0;
+      for (let i = 0; i < job.quantity; i++) {
+        const isSuccess = this._randomFn() < successRate;
+        if (isSuccess) successes++;
+        else failures++;
+        if (isSuccess || job.consumeIngredientsOnFailure) consumedSets++;
+      }
+
+      // Résolution des OUTPUTS (chance tirée par succès) — quantités seulement,
+      // aucun item créé. La matérialisation aura lieu au claim (Phase 3).
+      for (const out of outputs) {
+        let resolved = 0;
+        for (let s = 0; s < successes; s++) {
+          if (this._randomFn() < out.chance) resolved += out.producedQuantity;
+        }
+        out.resolvedQuantity = resolved;
+      }
+      if (outputs.length > 0) await manager.save(CraftJobOutput, outputs);
+
+      // Consommation définitive des ingrédients consommés.
+      for (const ing of ingredients) {
+        const consumedQty = consumedSets * ing.requiredQuantity;
+        ing.consumedQuantity = consumedQty;
+        if (consumedQty > 0 && ing.objectMode === ObjectMode.INSTANCE) {
+          const reserved = await manager
+            .getRepository(ItemInstance)
+            .createQueryBuilder('i')
+            .setLock('pessimistic_write')
+            .where(
+              'i.itemId = :itemId AND i.containerType = :containerType AND i.containerId = :jobId AND i.state = :state AND i.instanceType = :instanceType',
+              {
+                itemId: ing.itemId,
+                containerType: ItemInstanceContainerType.CRAFT_ORDER,
+                jobId,
+                state: ItemInstanceState.IN_CRAFT_ORDER,
+                instanceType: ItemInstanceType.NORMAL,
+              },
+            )
+            .orderBy('i.createdAt', 'ASC')
+            .getMany();
+          for (let k = 0; k < consumedQty; k++) {
+            await this.itemTransferService.transfer(manager, reserved[k].id, {
+              requesterId: null,
+              transition: { type: 'CONSUME_FROM_CRAFT_ORDER', jobId },
+            });
+          }
+        }
+        // STACKABLE : déjà décrémenté au launch. Le reste
+        // (reservedQuantity − consumedQuantity) est restitué au claim/cancel
+        // (Phase 3). Aucun re-décrément ni matérialisation ici.
+      }
+      if (ingredients.length > 0) await manager.save(CraftJobIngredient, ingredients);
+
+      // XP uniquement si ≥ 1 succès (ADR-0016), multipliée par le nombre de succès.
+      if (successes > 0) {
+        if (skillDef && skillDef.enabled) {
+          const skillXp = calculateSkillXp(this.buildCraftSkillXpContext(job, skillLevel));
+          if (skillXp) {
+            await this.skillsService.applySkillXpInTx(
+              job.characterId,
+              skillXp.skillDefinitionKey,
+              skillXp.xpAmount * successes,
+              manager,
+            );
+          }
+        }
+        if (job.craftCharacterXpReward > 0) {
+          await this.progressionService.applyCharacterXpInTx(
+            job.characterId,
+            job.craftCharacterXpReward * successes,
+            ProgressionSource.CRAFT,
+            manager,
+          );
+        }
+      }
+
+      job.state = successes > 0 ? CraftJobState.COMPLETED : CraftJobState.FAILED;
+      job.successes = successes;
+      job.failures = failures;
+      job.completedAt = new Date();
+      await manager.save(CraftJob, job);
+
+      return { jobId, state: job.state, successes, failures };
+    });
+  }
+
+  /** IDs des jobs dus (RUNNING, finishAt <= now), bornés — pour le scheduler. */
+  async findDueJobIds(now: Date, limit: number): Promise<string[]> {
+    const rows = await this.dataSource.getRepository(CraftJob).find({
+      where: { state: CraftJobState.RUNNING, finishAt: LessThanOrEqual(now) },
+      order: { finishAt: 'ASC' },
+      take: limit,
+      select: ['id'],
+    });
+    return rows.map((r) => r.id);
+  }
+
+  private buildCraftSkillXpContext(job: CraftJob, skillLevel: number): SkillXpContext {
+    return {
+      skillDefinitionKey: job.requiredSkillKey,
+      domain: 'crafting' as SkillDomain,
+      action: 'craft',
+      success: true,
+      difficulty: Math.max(0, Math.min(100, job.craftingDifficulty ?? 0)),
+      quality: null,
+      characterLevel: 1,
+      skillLevel,
+      duration: job.craftTimeMs > 0 ? job.craftTimeMs : null,
+      damage: null,
+      blockedDamage: null,
+      healedAmount: null,
+      buffs: [],
+      debuffs: [],
+    };
   }
 }

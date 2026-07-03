@@ -39,6 +39,7 @@ export type ItemTransition =
   | { type: 'TRADE_CANCEL'; tradeSessionId: string }
   | { type: 'CRAFT_CONSUME'; characterId: string }
   | { type: 'RESERVE_FOR_CRAFT'; characterId: string; jobId: string }
+  | { type: 'CONSUME_FROM_CRAFT_ORDER'; jobId: string }
   | { type: 'ADMIN_DESTROY' }
   | { type: 'REPAIR_ORPHAN_EQUIPPED' };
 
@@ -115,6 +116,8 @@ export class ItemTransferService {
         return this.applyCraftConsume(manager, instance, requesterId, transition.characterId);
       case 'RESERVE_FOR_CRAFT':
         return this.applyReserveForCraft(manager, instance, requesterId, transition.characterId, transition.jobId);
+      case 'CONSUME_FROM_CRAFT_ORDER':
+        return this.applyConsumeFromCraftOrder(manager, instance, transition.jobId);
       case 'ADMIN_DESTROY':
         return this.applyAdminDestroy(manager, instance);
       case 'REPAIR_ORPHAN_EQUIPPED':
@@ -253,6 +256,30 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.IN_CRAFT_ORDER;
     instance.containerType = ItemInstanceContainerType.CRAFT_ORDER;
     instance.containerId = jobId;
+    return manager.save(ItemInstance, instance);
+  }
+
+  /**
+   * Consommation définitive d'une ItemInstance réservée pour un CraftJob, à la
+   * complétion (ADR-0009). Transition IN_CRAFT_ORDER/CRAFT_ORDER → DESTROYED
+   * (jamais de hard delete). Opération système : pas de validation de
+   * propriétaire (le scheduler agit sans requester), mais état/container/jobId
+   * et type NORMAL sont vérifiés.
+   */
+  private async applyConsumeFromCraftOrder(
+    manager: EntityManager,
+    instance: ItemInstance,
+    jobId: string,
+  ): Promise<ItemInstance> {
+    if (instance.instanceType !== ItemInstanceType.NORMAL) {
+      throw new BadRequestException('Cannot consume a non-NORMAL item instance');
+    }
+    this.validateState(instance, ItemInstanceState.IN_CRAFT_ORDER);
+    this.validateContainer(instance, ItemInstanceContainerType.CRAFT_ORDER, jobId);
+
+    instance.state = ItemInstanceState.DESTROYED;
+    instance.containerType = ItemInstanceContainerType.NONE;
+    instance.containerId = null;
     return manager.save(ItemInstance, instance);
   }
 

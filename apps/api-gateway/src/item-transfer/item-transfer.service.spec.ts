@@ -1656,4 +1656,46 @@ describe("ItemTransferService", () => {
       await expect(service.transfer(manager, "inst-1", reserve)).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── transition CONSUME_FROM_CRAFT_ORDER ─────────────────────────────────────
+  describe("transition CONSUME_FROM_CRAFT_ORDER", () => {
+    const consume: TransferContext = {
+      requesterId: null,
+      transition: { type: "CONSUME_FROM_CRAFT_ORDER", jobId: "job-1" },
+    };
+
+    function reservedInstance(overrides: Partial<ItemInstance> = {}): ItemInstance {
+      return makeInstance({
+        state: ItemInstanceState.IN_CRAFT_ORDER,
+        containerType: ItemInstanceContainerType.CRAFT_ORDER,
+        containerId: "job-1",
+        ...overrides,
+      });
+    }
+
+    it("détruit une instance réservée IN_CRAFT_ORDER du bon job", async () => {
+      const manager = makeManager(reservedInstance());
+
+      const result = await service.transfer(manager, "inst-1", consume);
+
+      expect(result.state).toBe(ItemInstanceState.DESTROYED);
+      expect(result.containerType).toBe(ItemInstanceContainerType.NONE);
+      expect(result.containerId).toBeNull();
+    });
+
+    it("refuse une instance non IN_CRAFT_ORDER (ex: AVAILABLE)", async () => {
+      const manager = makeManager(makeInstance());
+      await expect(service.transfer(manager, "inst-1", consume)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance réservée pour un autre job", async () => {
+      const manager = makeManager(reservedInstance({ containerId: "job-2" }));
+      await expect(service.transfer(manager, "inst-1", consume)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance LOT", async () => {
+      const manager = makeManager(reservedInstance({ instanceType: ItemInstanceType.LOT }));
+      await expect(service.transfer(manager, "inst-1", consume)).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

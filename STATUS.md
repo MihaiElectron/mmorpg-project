@@ -13,7 +13,8 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 **Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
 **Market Lots implémentés** : objets STACKABLE vendables via l'Auction House — pipeline Inventory → LOT → Auction → Mail → Claim → Inventory validé en base (5 cas + 6 contrôles de sécurité).
 **Gameplay V1 ouvert** : ADR-0012 proposé, prochaine phase à démarrer.
-**CraftJob Runtime V1 (fondation)** : ADR-0009 révisée (CraftJob, output au claim, XP à la complétion, escrow d'items, scheduler idempotent, snapshot + 3 versions). Fondation posée : entités `craft_job*`, `launch()` crée un job RUNNING avec snapshot + escrow ingrédients. Scheduler de complétion, claim et matérialisation output = phases suivantes.
+**CraftJob Runtime V1 (fondation)** : ADR-0009 révisée (CraftJob, output au claim, XP à la complétion, escrow d'items, scheduler idempotent, snapshot + 3 versions). Fondation posée : entités `craft_job*`, `launch()` crée un job RUNNING avec snapshot + escrow ingrédients.
+**CraftJob Phase 2 (completion scheduler)** : `CraftJobScheduler` (`@Cron` chaque minute, batch borné) complète les jobs RUNNING échus via `CraftJobService.complete()` — transaction unique, verrou + recheck RUNNING (idempotent), succès/échec depuis le snapshot, XP perso + skill à `RUNNING→COMPLETED` (ADR-0016), consommation des ingrédients INSTANCE réservés (`CONSUME_FROM_CRAFT_ORDER → DESTROYED`). **Aucune matérialisation d'output, aucun claim** (l'output reste figé en quantités `resolvedQuantity`). Claim + restitution des ingrédients non consommés = Phase 3.
 **Studio Asset System V1** : `GET /admin/assets/tree` sandboxé, composant `AssetPicker` générique, intégré sur Items/Creatures/Resources/Buildings. `loadTextureIfMissing` helper Phaser pour chargement dynamique sans rebuild.
 
 ---
