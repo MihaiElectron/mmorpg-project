@@ -80,6 +80,11 @@ export class CraftingRecipe {
   @Column({ type: 'boolean', default: true })
   isDefault: boolean;
 
+  // Version incrémentée à chaque édition (ADR-0009) — snapshotée par CraftJob
+  // pour qu'un job ancien termine avec exactement les règles de son lancement.
+  @Column({ type: 'int', default: 1 })
+  version: number;
+
   @OneToMany(() => CraftingIngredient, (ing) => ing.recipe, { cascade: true })
   ingredients: CraftingIngredient[];
 

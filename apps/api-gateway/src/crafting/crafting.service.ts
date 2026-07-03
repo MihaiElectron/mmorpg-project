@@ -704,7 +704,9 @@ export class CraftingService implements OnModuleInit {
    * Distance : euclidienne en WU. Le client ne fournit jamais stationId en Phase 1 ;
    * le serveur choisit implicitement la station compatible la plus proche.
    */
-  private async findNearestCompatibleStationOrThrow(
+  // Public : réutilisé par CraftJobService pour valider la station au lancement
+  // d'une production différée (évite la duplication de la logique anti-cheat).
+  async findNearestCompatibleStationOrThrow(
     characterId: string,
     recipe: CraftingRecipe,
     manager: EntityManager,

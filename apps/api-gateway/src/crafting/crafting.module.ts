@@ -6,7 +6,11 @@ import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
 import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
 import { CraftingStation } from './entities/crafting-station.entity';
+import { CraftJob } from './entities/craft-job.entity';
+import { CraftJobIngredient } from './entities/craft-job-ingredient.entity';
+import { CraftJobOutput } from './entities/craft-job-output.entity';
 import { CraftingService } from './crafting.service';
+import { CraftJobService } from './craft-job.service';
 import { CraftingController } from './crafting.controller';
 import { CraftingGateway } from './crafting.gateway';
 import { SkillsModule } from '../skills/skills.module';
@@ -24,6 +28,9 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
       CraftingResult,
       CraftingStationTemplate,
       CraftingStation,
+      CraftJob,
+      CraftJobIngredient,
+      CraftJobOutput,
       Item, // nécessaire pour la résolution des items au seed
     ]),
     SkillsModule,               // pour SkillsService (helpers transactionnels craft)
@@ -34,7 +41,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
     ItemTransferModule,         // pour consommer les ingrédients INSTANCE (CRAFT_CONSUME)
   ],
   controllers: [CraftingController],
-  providers: [CraftingService, CraftingGateway],
-  exports: [CraftingService],
+  providers: [CraftingService, CraftJobService, CraftingGateway],
+  exports: [CraftingService, CraftJobService],
 })
 export class CraftingModule {}

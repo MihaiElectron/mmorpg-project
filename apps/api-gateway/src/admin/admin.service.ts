@@ -887,6 +887,10 @@ export class AdminService {
     }
     if (fields.enabled !== undefined) recipe.enabled = Boolean(fields.enabled);
 
+    // Toute édition de recette incrémente sa version (ADR-0009 : recipeVersion
+    // snapshotée par CraftJob).
+    recipe.version = (recipe.version ?? 1) + 1;
+
     return this.recipeRepo.save(recipe);
   }
 
@@ -950,6 +954,10 @@ export class AdminService {
       await this.ingredientRepo.save(toSave as any);
     }
 
+    // Modification du contenu de la recette → bump recipeVersion (ADR-0009).
+    recipe.version = (recipe.version ?? 1) + 1;
+    await this.recipeRepo.save(recipe);
+
     return this.getCraftingRecipe(recipeId);
   }
 
@@ -961,6 +969,10 @@ export class AdminService {
     await this.craftingResultRepo.delete({ recipeId } as any);
     const toSave = normalized.map((entry) => this.craftingResultRepo.create({ recipeId, ...entry }));
     await this.craftingResultRepo.save(toSave as any);
+
+    // Modification du contenu de la recette → bump recipeVersion (ADR-0009).
+    recipe.version = (recipe.version ?? 1) + 1;
+    await this.recipeRepo.save(recipe);
 
     return this.getCraftingRecipe(recipeId);
   }

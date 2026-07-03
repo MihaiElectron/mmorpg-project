@@ -38,6 +38,7 @@ export type ItemTransition =
   | { type: 'TRADE_COMMIT'; tradeSessionId: string; recipientCharacterId: string }
   | { type: 'TRADE_CANCEL'; tradeSessionId: string }
   | { type: 'CRAFT_CONSUME'; characterId: string }
+  | { type: 'RESERVE_FOR_CRAFT'; characterId: string; jobId: string }
   | { type: 'ADMIN_DESTROY' }
   | { type: 'REPAIR_ORPHAN_EQUIPPED' };
 
@@ -112,6 +113,8 @@ export class ItemTransferService {
         return this.applyTradeCancel(manager, instance, transition.tradeSessionId);
       case 'CRAFT_CONSUME':
         return this.applyCraftConsume(manager, instance, requesterId, transition.characterId);
+      case 'RESERVE_FOR_CRAFT':
+        return this.applyReserveForCraft(manager, instance, requesterId, transition.characterId, transition.jobId);
       case 'ADMIN_DESTROY':
         return this.applyAdminDestroy(manager, instance);
       case 'REPAIR_ORPHAN_EQUIPPED':
@@ -218,6 +221,38 @@ export class ItemTransferService {
     instance.state = ItemInstanceState.DESTROYED;
     instance.containerType = ItemInstanceContainerType.NONE;
     instance.containerId = null;
+    return manager.save(ItemInstance, instance);
+  }
+
+  /**
+   * Réservation (escrow) d'une ItemInstance NORMAL comme ingrédient d'un CraftJob
+   * (ADR-0009). Transition INVENTORY/AVAILABLE/NORMAL → IN_CRAFT_ORDER/CRAFT_ORDER,
+   * `containerId = jobId`. L'instance sort de l'inventaire sans être détruite :
+   * l'état IN_CRAFT_ORDER la protège contre tout autre flux (equip/auction/trade)
+   * jusqu'à consommation (complétion) ou restitution (annulation), phases suivantes.
+   */
+  private async applyReserveForCraft(
+    manager: EntityManager,
+    instance: ItemInstance,
+    requesterId: string | null,
+    characterId: string,
+    jobId: string,
+  ): Promise<ItemInstance> {
+    this.validateOwner(instance, requesterId);
+    if (instance.ownerId !== characterId) {
+      throw new BadRequestException(
+        `Instance ${instance.id} does not belong to character ${characterId}`,
+      );
+    }
+    if (instance.instanceType !== ItemInstanceType.NORMAL) {
+      throw new BadRequestException('Cannot reserve a non-NORMAL item instance');
+    }
+    this.validateState(instance, ItemInstanceState.AVAILABLE);
+    this.validateContainer(instance, ItemInstanceContainerType.INVENTORY, characterId);
+
+    instance.state = ItemInstanceState.IN_CRAFT_ORDER;
+    instance.containerType = ItemInstanceContainerType.CRAFT_ORDER;
+    instance.containerId = jobId;
     return manager.save(ItemInstance, instance);
   }
 

@@ -1613,4 +1613,47 @@ describe("ItemTransferService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  // ── transition RESERVE_FOR_CRAFT ────────────────────────────────────────────
+  describe("transition RESERVE_FOR_CRAFT", () => {
+    const reserve: TransferContext = {
+      requesterId: "char-1",
+      transition: { type: "RESERVE_FOR_CRAFT", characterId: "char-1", jobId: "job-1" },
+    };
+
+    it("réserve une instance AVAILABLE/INVENTORY/NORMAL vers IN_CRAFT_ORDER", async () => {
+      const manager = makeManager(makeInstance());
+
+      const result = await service.transfer(manager, "inst-1", reserve);
+
+      expect(result.state).toBe(ItemInstanceState.IN_CRAFT_ORDER);
+      expect(result.containerType).toBe(ItemInstanceContainerType.CRAFT_ORDER);
+      expect(result.containerId).toBe("job-1");
+      expect(manager.save).toHaveBeenCalled();
+    });
+
+    it("refuse une instance LOT", async () => {
+      const manager = makeManager(makeInstance({ instanceType: ItemInstanceType.LOT }));
+      await expect(service.transfer(manager, "inst-1", reserve)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance EQUIPPED", async () => {
+      const manager = makeManager(
+        makeInstance({ state: ItemInstanceState.EQUIPPED, containerType: ItemInstanceContainerType.EQUIPMENT }),
+      );
+      await expect(service.transfer(manager, "inst-1", reserve)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance d'un autre propriétaire", async () => {
+      const manager = makeManager(makeInstance({ ownerId: "char-2" }));
+      await expect(service.transfer(manager, "inst-1", reserve)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une instance hors container INVENTORY", async () => {
+      const manager = makeManager(
+        makeInstance({ containerType: ItemInstanceContainerType.BANK, containerId: "bank-1" }),
+      );
+      await expect(service.transfer(manager, "inst-1", reserve)).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });
