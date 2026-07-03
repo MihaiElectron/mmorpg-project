@@ -197,10 +197,16 @@ FAILED (erreur système / production sans output)
 - **COMPLETED** — production résolue serveur, XP accordée, output décrit par le
   snapshot, en attente de claim. Rien n'est matérialisé.
 - **CLAIMED** — output matérialisé et livré (terminal).
-- **CANCELLED** — annulé avant complétion, ingrédients restitués (terminal).
-- **FAILED** — erreur système ou échec de craft sans output ; ingrédients
-  consommés ou restitués selon `consumeIngredientsOnFailure` du snapshot
-  (terminal).
+- **CANCELLED** — annulé **tant que RUNNING** (avant résolution). Comme la
+  résolution est atomique (Décision 3bis), rien n'est encore résolu : la
+  **totalité** des ingrédients réservés est restituée. Il n'existe aucun cas
+  « garder les outputs déjà réussis » en V1 (terminal).
+- **FAILED** — échec total à la résolution (0 succès) ou erreur système sans
+  output. Les ingrédients consommés le restent (selon
+  `consumeIngredientsOnFailure`) ; **FAILED ne rembourse jamais**. Les
+  ingrédients non consommés (échec avec `consumeIngredientsOnFailure=false`)
+  restent réservés et sont restitués au claim/cancel, pas par la transition
+  FAILED elle-même (terminal).
 
 **`QUEUED` est explicitement retiré de la V1.** Il ne sera introduit que
 lorsqu'existeront réellement :
@@ -213,6 +219,41 @@ lorsqu'existeront réellement :
 Tant que la V1 démarre un job immédiatement (pas de file, pas de limite), un état
 `QUEUED` serait un état mort. Il sera ajouté par une révision ultérieure au
 moment où la file d'attente devient une mécanique réelle.
+
+---
+
+### Décision 3bis — Granularité de résolution V1 : atomique (pas de progression par unité)
+
+**En V1, un CraftJob résout la totalité de sa `quantity` en une seule fois**, à
+l'échéance `finishAt = startedAt + craftTimeMs × quantity`. Le scheduler
+(`CraftJobService.complete`) tire les `quantity` tentatives d'un coup et fige le
+résultat (`successes`, `failures`, `resolvedQuantity` par output). Il n'existe
+**aucun `finishAt` par unité, aucun compteur `remaining`, aucune progression
+intermédiaire**.
+
+Conséquences (à respecter, ne pas prétendre le contraire) :
+
+- **Il n'y a jamais d'état « 2/5 crafts résolus, 3 restants ».** Un job est soit
+  RUNNING (0 résolu), soit résolu en totalité (COMPLETED/FAILED).
+- **L'annulation partielle n'existe pas en V1.** Un `CANCELLED` n'est possible que
+  pendant RUNNING, où **rien** n'est encore résolu → remboursement **total**. On
+  ne peut pas « arrêter après 2 crafts en gardant 2 outputs et en remboursant 3 ».
+- Le suivi fin `resolved / successes / failures / remaining` par unité, et
+  l'annulation qui conserve les outputs déjà réussis tout en remboursant les
+  unités non encore résolues, **nécessitent une progression par unité** (ticks
+  successifs, `finishAt` par unité ou compteur `remaining`). C'est une évolution
+  **différée** : elle sera introduite avec la production tick-par-tick (et
+  cohabitera avec `QUEUED` / files / ouvriers).
+
+Distinction des deux cas métier (pour mémoire, à la lumière de ce qui précède) :
+
+1. **Échec d'un craft déjà résolu** (FAILED total) — ingrédients consommés/perdus
+   selon `consumeIngredientsOnFailure`, pas d'output, pas d'XP. Pas de
+   remboursement.
+2. **Annulation volontaire avant résolution** (CANCELLED depuis RUNNING) — en V1
+   atomique, aucun craft n'est résolu tant que RUNNING, donc **remboursement
+   total**. La variante « garder les succès déjà résolus, rembourser le reste »
+   appartient au modèle par unité, **non supporté en V1**.
 
 ---
 
