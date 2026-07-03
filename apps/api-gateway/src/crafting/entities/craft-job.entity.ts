@@ -54,6 +54,11 @@ export class CraftJob {
   @Column({ type: 'varchar' })
   recipeId: string;
 
+  // Nom de la recette figé au lancement (affichage) — jamais relu de la recette
+  // vivante, qui peut être renommée, désactivée ou supprimée.
+  @Column({ type: 'varchar', length: 256, default: '' })
+  recipeName: string;
+
   // Version de la recette au lancement (contenu : ingrédients, outputs, taux…).
   @Column({ type: 'int', default: 1 })
   recipeVersion: number;

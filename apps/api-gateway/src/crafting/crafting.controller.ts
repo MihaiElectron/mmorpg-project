@@ -1,11 +1,36 @@
-import { Body, Controller, Get, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CharacterService } from '../characters/character.service';
 import { CraftingService, CraftResult } from './crafting.service';
+import { CraftJobService, CraftJobClaimResult } from './craft-job.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
+import { CraftJobLaunchDto } from './dto/craft-job-launch.dto';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
+import { Item } from '../items/entities/item.entity';
+
+export type CraftJobDto = {
+  jobId: string;
+  recipeId: string;
+  recipeName: string;
+  stationType: string;
+  quantity: number;
+  state: string;
+  startedAt: Date;
+  finishAt: Date;
+  completedAt: Date | null;
+  claimedAt: Date | null;
+  successes: number;
+  failures: number;
+  outputs: {
+    itemId: string;
+    itemName: string;
+    itemImage: string | null;
+    quantity: number;
+    resolvedQuantity: number;
+  }[];
+};
 
 export type AvailableCraftingRecipe = {
   id: string;
@@ -48,9 +73,12 @@ export type AvailableCraftingRecipe = {
 export class CraftingController {
   constructor(
     private readonly craftingService: CraftingService,
+    private readonly craftJobService: CraftJobService,
     private readonly characterService: CharacterService,
     @InjectRepository(CraftingRecipe)
     private readonly recipeRepo: Repository<CraftingRecipe>,
+    @InjectRepository(Item)
+    private readonly itemRepo: Repository<Item>,
   ) {}
 
   /**
@@ -134,5 +162,80 @@ export class CraftingController {
   async craft(@Request() req, @Body() dto: CraftRequestDto): Promise<CraftResult> {
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.craftingService.craft(character.id, dto.recipeId, dto.quantity);
+  }
+
+  // ── CraftJob (production différée) ────────────────────────────────────────
+  // characterId toujours résolu côté serveur depuis le JWT. La logique métier
+  // vit dans CraftJobService — le contrôleur ne fait qu'exposer.
+
+  /** Lance une production différée. */
+  @Post('jobs')
+  async launchJob(@Request() req, @Body() dto: CraftJobLaunchDto): Promise<CraftJobDto> {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    const job = await this.craftJobService.launch(character.id, dto.recipeId, dto.quantity);
+    const [dtoRow] = await this.toCraftJobDtos([job]);
+    return dtoRow;
+  }
+
+  /** Liste les CraftJob du joueur (snapshot, jamais reconstruit depuis la recette). */
+  @Get('jobs')
+  async listJobs(@Request() req): Promise<CraftJobDto[]> {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    const jobs = await this.craftJobService.listForCharacter(character.id);
+    return this.toCraftJobDtos(jobs);
+  }
+
+  /** Réclame la production terminée. */
+  @Post('jobs/:jobId/claim')
+  async claimJob(@Request() req, @Param('jobId') jobId: string): Promise<CraftJobClaimResult> {
+    const character = await this.characterService.findFirstByUser(req.user.userId);
+    return this.craftJobService.claim(character.id, jobId);
+  }
+
+  /**
+   * Projette des CraftJob en DTO — **entièrement depuis le snapshot du job**,
+   * jamais depuis la recette vivante (qui peut être renommée, désactivée ou
+   * supprimée).
+   *
+   * - `recipeName` : snapshoté au lancement (`job.recipeName`).
+   * - `outputs` (itemId, producedQuantity, resolvedQuantity) : snapshot du job.
+   * - `itemName` / `itemImage` : résolus via le CATALOGUE `Item` par le `itemId`
+   *   du snapshot (jointure autorisée), jamais via les outputs de la recette.
+   */
+  private async toCraftJobDtos(
+    jobs: import('./entities/craft-job.entity').CraftJob[],
+  ): Promise<CraftJobDto[]> {
+    const outputItemIds = [
+      ...new Set(jobs.flatMap((j) => (j.outputs ?? []).map((o) => o.itemId))),
+    ];
+    const items = outputItemIds.length
+      ? await this.itemRepo.find({ where: { id: In(outputItemIds) }, select: ['id', 'name', 'image'] })
+      : [];
+    const itemById = new Map(items.map((it) => [it.id, it]));
+
+    return jobs.map((job) => ({
+      jobId: job.id,
+      recipeId: job.recipeId,
+      recipeName: job.recipeName || job.recipeId,
+      stationType: job.stationType,
+      quantity: job.quantity,
+      state: job.state,
+      startedAt: job.startedAt,
+      finishAt: job.finishAt,
+      completedAt: job.completedAt,
+      claimedAt: job.claimedAt,
+      successes: job.successes,
+      failures: job.failures,
+      outputs: (job.outputs ?? []).map((o) => {
+        const item = itemById.get(o.itemId);
+        return {
+          itemId: o.itemId,
+          itemName: item?.name ?? o.itemId,
+          itemImage: item?.image ?? null,
+          quantity: o.producedQuantity,
+          resolvedQuantity: o.resolvedQuantity,
+        };
+      }),
+    }));
   }
 }

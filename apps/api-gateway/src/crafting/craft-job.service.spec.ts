@@ -168,6 +168,7 @@ describe('CraftJobService — launch()', () => {
 
     expect(job.state).toBe(CraftJobState.RUNNING);
     expect(job.recipeId).toBe('recipe-1');
+    expect(job.recipeName).toBe('Fondre minerai'); // nom snapshoté
     expect(job.recipeVersion).toBe(3);
     expect(job.jobVersion).toBe(CRAFT_JOB_VERSION);
     expect(job.serverFormulaVersion).toBe(CRAFT_SERVER_FORMULA_VERSION);

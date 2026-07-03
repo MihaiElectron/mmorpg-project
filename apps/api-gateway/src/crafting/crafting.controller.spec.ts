@@ -5,10 +5,12 @@ import { plainToInstance } from 'class-transformer';
 import { NotFoundException } from '@nestjs/common';
 import { CraftingController } from './crafting.controller';
 import { CraftingService } from './crafting.service';
+import { CraftJobService } from './craft-job.service';
 import { CharacterService } from '../characters/character.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
 import { Character } from '../characters/entities/character.entity';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
+import { Item } from '../items/entities/item.entity';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -89,13 +91,20 @@ describe('CraftRequestDto — validation', () => {
 describe('CraftingController', () => {
   let controller: CraftingController;
   let craftingService: Record<string, jest.Mock>;
+  let craftJobService: Record<string, jest.Mock>;
   let characterService: Record<string, jest.Mock>;
   let recipeRepo: Record<string, jest.Mock>;
+  let itemRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     craftingService = {
       craft: jest.fn(),
       getCraftingStationWorldObjects: jest.fn(),
+    };
+    craftJobService = {
+      launch: jest.fn(),
+      listForCharacter: jest.fn().mockResolvedValue([]),
+      claim: jest.fn(),
     };
 
     characterService = {
@@ -104,13 +113,18 @@ describe('CraftingController', () => {
     recipeRepo = {
       find: jest.fn().mockResolvedValue([]),
     };
+    itemRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CraftingController],
       providers: [
         { provide: CraftingService, useValue: craftingService },
+        { provide: CraftJobService, useValue: craftJobService },
         { provide: CharacterService, useValue: characterService },
         { provide: getRepositoryToken(CraftingRecipe), useValue: recipeRepo },
+        { provide: getRepositoryToken(Item), useValue: itemRepo },
       ],
     }).compile();
 
@@ -240,5 +254,79 @@ describe('CraftingController', () => {
     craftingService.getCraftingStationWorldObjects.mockResolvedValue([]);
     await controller.getStationWorldObjects("1");
     expect(craftingService.getCraftingStationWorldObjects).toHaveBeenCalledWith(1);
+  });
+
+  // ── CraftJob endpoints ──────────────────────────────────────────────────────
+
+  const req = { user: { userId: "user-1" } };
+
+  function makeJob(overrides: any = {}) {
+    return {
+      id: "job-1",
+      recipeId: "rec-1",
+      recipeName: "Fondre minerai", // snapshot au lancement
+      stationType: "forge",
+      quantity: 2,
+      state: "COMPLETED",
+      startedAt: new Date("2026-07-01T00:00:00Z"),
+      finishAt: new Date("2026-07-01T00:10:00Z"),
+      completedAt: new Date("2026-07-01T00:10:00Z"),
+      claimedAt: null,
+      successes: 2,
+      failures: 0,
+      outputs: [{ itemId: "item-bar", producedQuantity: 1, resolvedQuantity: 2 }],
+      ...overrides,
+    };
+  }
+
+  it("POST jobs délègue à CraftJobService.launch avec le characterId du JWT", async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
+    craftJobService.launch.mockResolvedValue(makeJob({ state: "RUNNING" }));
+
+    const result = await controller.launchJob(req, { recipeId: "rec-1", quantity: 2 } as any);
+
+    expect(craftJobService.launch).toHaveBeenCalledWith("char-9", "rec-1", 2);
+    expect(result).toMatchObject({ jobId: "job-1", recipeName: "Fondre minerai", state: "RUNNING" });
+  });
+
+  it("GET jobs : nom depuis le SNAPSHOT + outputs enrichis via Item (jamais la recette)", async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
+    craftJobService.listForCharacter.mockResolvedValue([makeJob()]);
+    itemRepo.find.mockResolvedValue([{ id: "item-bar", name: "Lingot de fer", image: "/assets/bar.png" }]);
+
+    const result = await controller.listJobs(req);
+
+    expect(craftJobService.listForCharacter).toHaveBeenCalledWith("char-9");
+    // Le nom de recette ne vient JAMAIS de recipeRepo (recette vivante).
+    expect(recipeRepo.find).not.toHaveBeenCalled();
+    expect(result[0]).toMatchObject({
+      recipeName: "Fondre minerai",
+      state: "COMPLETED",
+      successes: 2,
+      outputs: [{ itemId: "item-bar", itemName: "Lingot de fer", itemImage: "/assets/bar.png", quantity: 1, resolvedQuantity: 2 }],
+    });
+  });
+
+  it("GET jobs : recipeName reste affichable même si la recette a été supprimée/renommée", async () => {
+    // recipeRepo renverrait autre chose ou rien : sans importance, on ne l'utilise pas.
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter());
+    craftJobService.listForCharacter.mockResolvedValue([makeJob({ recipeName: "Nom au lancement" })]);
+    itemRepo.find.mockResolvedValue([]); // item catalogue disparu aussi
+
+    const result = await controller.listJobs(req);
+
+    expect(result[0].recipeName).toBe("Nom au lancement"); // snapshot, pas la recette vivante
+    // Fallback item : itemName = itemId si l'Item n'existe plus.
+    expect(result[0].outputs[0]).toMatchObject({ itemId: "item-bar", itemName: "item-bar", itemImage: null });
+  });
+
+  it("POST jobs/:id/claim délègue à CraftJobService.claim", async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
+    craftJobService.claim.mockResolvedValue({ jobId: "job-1", state: "CLAIMED", produced: [] });
+
+    const result = await controller.claimJob(req, "job-1");
+
+    expect(craftJobService.claim).toHaveBeenCalledWith("char-9", "job-1");
+    expect(result).toMatchObject({ jobId: "job-1", state: "CLAIMED" });
   });
 });

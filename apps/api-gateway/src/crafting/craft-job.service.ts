@@ -215,6 +215,7 @@ export class CraftJobService {
           characterId,
           state: CraftJobState.RUNNING,
           recipeId: recipe.id,
+          recipeName: recipe.name,
           recipeVersion: recipe.version ?? 1,
           jobVersion: CRAFT_JOB_VERSION,
           serverFormulaVersion: CRAFT_SERVER_FORMULA_VERSION,
@@ -486,6 +487,30 @@ export class CraftJobService {
       await manager.save(CraftJob, job);
 
       return { jobId, state: CraftJobState.CLAIMED, produced: lootEntries };
+    });
+  }
+
+  /**
+   * Liste les CraftJob d'un personnage avec leurs outputs (lecture seule).
+   * Tri : RUNNING → COMPLETED → FAILED → CLAIMED, puis finishAt décroissant.
+   * Les outputs proviennent du snapshot (`craft_job_output`), jamais de la recette.
+   */
+  async listForCharacter(characterId: string): Promise<CraftJob[]> {
+    const jobs = await this.dataSource.getRepository(CraftJob).find({
+      where: { characterId },
+      relations: ['outputs'],
+    });
+    const priority: Record<CraftJobState, number> = {
+      [CraftJobState.RUNNING]: 0,
+      [CraftJobState.COMPLETED]: 1,
+      [CraftJobState.FAILED]: 2,
+      [CraftJobState.CLAIMED]: 3,
+      [CraftJobState.CANCELLED]: 4,
+    };
+    return jobs.sort((a, b) => {
+      const p = priority[a.state] - priority[b.state];
+      if (p !== 0) return p;
+      return b.finishAt.getTime() - a.finishAt.getTime();
     });
   }
 

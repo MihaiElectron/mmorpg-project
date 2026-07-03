@@ -572,4 +572,173 @@
   &__craft-submit {
     margin-top: 2px;
   }
+
+  // ── Onglets Recettes / Production ──────────────────────────────────────────
+  &__craft-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid vars.$panel-border;
+  }
+
+  &__craft-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: vars.$color-text-muted;
+    font-size: 0.82rem;
+    padding: 6px 8px;
+    cursor: pointer;
+
+    &:hover {
+      color: vars.$color-text-primary;
+    }
+
+    &.is-active {
+      color: vars.$color-text-gold;
+      border-bottom-color: vars.$color-text-gold;
+    }
+  }
+
+  // ── Deux actions (Fabriquer maintenant / Production) ───────────────────────
+  &__craft-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .action-panel__craft-submit {
+      flex: 1;
+      min-width: 120px;
+    }
+  }
+
+  &__craft-submit--secondary {
+    @include m.btn-neutral;
+  }
+
+  // ── Liste des productions (CraftJobs) ──────────────────────────────────────
+  &__jobs {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 58vh;
+    overflow-y: auto;
+  }
+
+  &__jobs-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__job {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-card;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 8px;
+
+    &--failed {
+      border-color: rgba(207, 126, 126, 0.35);
+    }
+  }
+
+  &__job-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__job-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__job-time {
+    font-size: 0.76rem;
+    color: vars.$color-magic-amber;
+    font-family: 'Courier New', Courier, monospace;
+    flex-shrink: 0;
+  }
+
+  &__job-progress {
+    width: 100%;
+    height: 8px;
+    appearance: none;
+    border: none;
+    border-radius: vars.$panel-radius-sm;
+    background: rgba(0, 0, 0, 0.35);
+
+    &::-webkit-progress-bar {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: vars.$panel-radius-sm;
+    }
+
+    &::-webkit-progress-value {
+      background: vars.$color-text-gold;
+      border-radius: vars.$panel-radius-sm;
+    }
+
+    &::-moz-progress-bar {
+      background: vars.$color-text-gold;
+      border-radius: vars.$panel-radius-sm;
+    }
+  }
+
+  &__job-badge {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 1px 6px;
+    border-radius: vars.$panel-radius-sm;
+    flex-shrink: 0;
+
+    &--ok {
+      color: #7ecf7e;
+      background: rgba(126, 207, 126, 0.12);
+    }
+
+    &--fail {
+      color: #cf7e7e;
+      background: rgba(207, 126, 126, 0.12);
+    }
+  }
+
+  &__job-meta {
+    font-size: 0.78rem;
+    color: vars.$color-text-muted;
+    line-height: 1.35;
+  }
+
+  &__job-outputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  &__job-output {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: vars.$color-text-primary;
+  }
+
+  &__job-output-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+  }
+
+  &__job-claim {
+    align-self: flex-start;
+    margin-top: 2px;
+  }
 }

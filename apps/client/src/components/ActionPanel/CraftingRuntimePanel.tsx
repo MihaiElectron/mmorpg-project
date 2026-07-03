@@ -19,6 +19,16 @@ import {
   type CraftingStationTarget,
   type CraftResultSnapshot,
 } from "./craftingRuntime";
+import {
+  buildCraftJobLaunchPayload,
+  craftJobProgress,
+  craftJobRemainingMs,
+  formatRemaining,
+  groupCraftJobs,
+  isClaimable,
+  CRAFT_JOB_POLL_MS,
+  type CraftJobDto,
+} from "./craftJobs";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -54,6 +64,11 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState<"recipes" | "jobs">("recipes");
+  const [jobs, setJobs] = useState<CraftJobDto[]>([]);
+  const [launchingRecipeId, setLaunchingRecipeId] = useState<string | null>(null);
+  const [claimingJobId, setClaimingJobId] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const stationType = station.stationType ?? station.type;
   const reachEstimate = estimateStationReach(
@@ -152,6 +167,87 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     }
   }
 
+  // ── CraftJobs (production différée) ────────────────────────────────────────
+  async function fetchJobs() {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/crafting/jobs`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      setJobs((await res.json()) as CraftJobDto[]);
+    } catch {
+      // polling silencieux : on réessaie au tick suivant
+    }
+  }
+
+  // Rafraîchit inventaire/skills/personnage sans recharger la scène.
+  async function refreshCharacter() {
+    await Promise.all([loadCharacter(), loadSkills()]);
+  }
+
+  async function launchProduction(recipe: AvailableCraftingRecipe) {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) {
+      setError({ message: "Non authentifié." });
+      return;
+    }
+    setLaunchingRecipeId(recipe.id);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`${API}/crafting/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(buildCraftJobLaunchPayload(recipe.id, quantity)),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
+      await Promise.all([fetchJobs(), refreshCharacter()]);
+      setActiveTab("jobs");
+    } catch (err) {
+      setError(isCraftingServerError(err) ? err : { message: "Production impossible." });
+    } finally {
+      setLaunchingRecipeId(null);
+    }
+  }
+
+  async function claimJob(jobId: string) {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) return;
+    setClaimingJobId(jobId);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/crafting/jobs/${jobId}/claim`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
+      await Promise.all([fetchJobs(), refreshCharacter()]);
+    } catch (err) {
+      setError(isCraftingServerError(err) ? err : { message: "Réclamation impossible." });
+    } finally {
+      setClaimingJobId(null);
+    }
+  }
+
+  // Chargement initial + polling simple toutes les 10 s (remplaçable par websocket).
+  useEffect(() => {
+    fetchJobs();
+    const id = setInterval(fetchJobs, CRAFT_JOB_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // Tick 1 s pour animer les barres de progression tant qu'un job tourne.
+  const grouped = useMemo(() => groupCraftJobs(jobs), [jobs]);
+  useEffect(() => {
+    if (activeTab !== "jobs" || grouped.running.length === 0) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [activeTab, grouped.running.length]);
+
+  const canLaunch = Boolean(selectedRecipe) && hasEnough && quantity >= 1 && !outOfRange && launchingRecipeId === null;
+
   return (
     <div className="action-panel__crafting">
       <div className="action-panel__crafting-header">
@@ -161,6 +257,34 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
         </button>
       </div>
 
+      <div className="action-panel__craft-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className={`action-panel__craft-tab${activeTab === "recipes" ? " is-active" : ""}`}
+          onClick={() => setActiveTab("recipes")}
+        >
+          Recettes
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`action-panel__craft-tab${activeTab === "jobs" ? " is-active" : ""}`}
+          onClick={() => setActiveTab("jobs")}
+        >
+          Production{grouped.running.length > 0 ? ` (${grouped.running.length})` : ""}
+        </button>
+      </div>
+
+      {error && (
+        <div className="action-panel__crafting-error">
+          <span>{error.message}</span>
+          {errorDetail && <span className="action-panel__crafting-error-detail">{errorDetail}</span>}
+        </div>
+      )}
+
+      {activeTab === "recipes" && (
+        <>
       <div className={`action-panel__station-range action-panel__station-range--${reachEstimate.status}`}>
         {reachEstimate.status === "unknown" && "Portée estimée indisponible"}
         {reachEstimate.status === "in_range" && "✓ Station à portée"}
@@ -173,12 +297,6 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       </div>
 
       {loading && <p className="action-panel__crafting-muted">Chargement des recettes…</p>}
-      {error && (
-        <div className="action-panel__crafting-error">
-          <span>{error.message}</span>
-          {errorDetail && <span className="action-panel__crafting-error-detail">{errorDetail}</span>}
-        </div>
-      )}
 
       {!loading && compatibleRecipes.length === 0 && (
         <p className="action-panel__crafting-muted">Aucun objet fabriquable ici.</p>
@@ -322,13 +440,22 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
             <span className="action-panel__craft-maxinfo">Maximum craftable : {maxCraftable}</span>
           </div>
 
-          <button
-            className="action-panel__button action-panel__craft-submit"
-            disabled={!canCraft}
-            onClick={() => craft(selectedRecipe)}
-          >
-            {isCrafting ? "Fabrication…" : "Fabriquer"}
-          </button>
+          <div className="action-panel__craft-actions">
+            <button
+              className="action-panel__button action-panel__craft-submit"
+              disabled={!canCraft}
+              onClick={() => craft(selectedRecipe)}
+            >
+              {isCrafting ? "Fabrication…" : "Fabriquer maintenant"}
+            </button>
+            <button
+              className="action-panel__button action-panel__craft-submit action-panel__craft-submit--secondary"
+              disabled={!canLaunch}
+              onClick={() => launchProduction(selectedRecipe)}
+            >
+              {launchingRecipeId === selectedRecipe.id ? "Lancement…" : "Production"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -353,6 +480,84 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
               XP skill: +{result.skill.xpGained} {result.skill.key}
               {result.skill.newLevel > result.skill.previousLevel ? " · niveau supérieur !" : ""}
             </span>
+          )}
+        </div>
+      )}
+        </>
+      )}
+
+      {activeTab === "jobs" && (
+        <div className="action-panel__jobs">
+          {jobs.length === 0 && (
+            <p className="action-panel__crafting-muted">Aucune production lancée.</p>
+          )}
+
+          {grouped.running.length > 0 && (
+            <div className="action-panel__jobs-group">
+              <span className="action-panel__craft-section-label">Productions en cours</span>
+              {grouped.running.map((job) => (
+                <div key={job.jobId} className="action-panel__job">
+                  <div className="action-panel__job-head">
+                    <span className="action-panel__job-name">{job.recipeName} ×{job.quantity}</span>
+                    <span className="action-panel__job-time">{formatRemaining(craftJobRemainingMs(job.finishAt, nowTick))}</span>
+                  </div>
+                  <progress
+                    className="action-panel__job-progress"
+                    value={craftJobProgress(job.startedAt, job.finishAt, nowTick)}
+                    max={1}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {grouped.completed.length > 0 && (
+            <div className="action-panel__jobs-group">
+              <span className="action-panel__craft-section-label">Terminées</span>
+              {grouped.completed.map((job) => (
+                <div key={job.jobId} className="action-panel__job action-panel__job--completed">
+                  <div className="action-panel__job-head">
+                    <span className="action-panel__job-name">{job.recipeName} ×{job.quantity}</span>
+                    <span className="action-panel__job-badge action-panel__job-badge--ok">COMPLETED</span>
+                  </div>
+                  <span className="action-panel__job-meta">Succès {job.successes} · Échecs {job.failures}</span>
+                  {job.outputs.filter((o) => o.resolvedQuantity > 0).length > 0 && (
+                    <div className="action-panel__job-outputs">
+                      {job.outputs.filter((o) => o.resolvedQuantity > 0).map((o) => (
+                        <span key={o.itemId} className="action-panel__job-output">
+                          {o.itemImage && (
+                            <img className="action-panel__job-output-img" src={o.itemImage} alt="" aria-hidden="true" />
+                          )}
+                          {o.itemName} ×{o.resolvedQuantity}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="action-panel__button action-panel__job-claim"
+                    disabled={!isClaimable(job) || claimingJobId === job.jobId}
+                    onClick={() => claimJob(job.jobId)}
+                  >
+                    {claimingJobId === job.jobId ? "Réclamation…" : "Réclamer"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {grouped.failed.length > 0 && (
+            <div className="action-panel__jobs-group">
+              <span className="action-panel__craft-section-label">Échouées</span>
+              {grouped.failed.map((job) => (
+                <div key={job.jobId} className="action-panel__job action-panel__job--failed">
+                  <div className="action-panel__job-head">
+                    <span className="action-panel__job-name">{job.recipeName} ×{job.quantity}</span>
+                    <span className="action-panel__job-badge action-panel__job-badge--fail">FAILED</span>
+                  </div>
+                  <span className="action-panel__job-meta">Succès {job.successes} · Échecs {job.failures}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
