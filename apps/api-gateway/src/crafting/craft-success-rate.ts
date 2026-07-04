@@ -3,8 +3,8 @@
  *
  * Aucune dépendance NestJS, aucun accès DB, aucun effet de bord : la fonction
  * reçoit des paramètres explicites (jamais un objet Recipe/Job complet) pour
- * rester indépendante du modèle de données. Partagée par `CraftingService.craft()`
- * (recette vivante) et `CraftJobService.complete()` (snapshot du job).
+ * rester indépendante du modèle de données. Utilisée par
+ * `CraftJobService.complete()` sur le snapshot immuable du job.
  *
  * Formule : `clamp(baseSuccessRate + (skillLevel − requiredSkillLevel) ×
  * successBonusPerLevel, minSuccessRate, maxSuccessRate)`.

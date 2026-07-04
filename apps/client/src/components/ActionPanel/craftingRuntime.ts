@@ -50,35 +50,6 @@ export type AvailableCraftingRecipe = {
   results: CraftingRecipeResult[];
 };
 
-export type CraftResultSnapshot = {
-  recipeId: string;
-  recipeKey: string;
-  requestedQuantity: number;
-  attempts: number;
-  successes: number;
-  failures: number;
-  consumed: { itemId: string; quantity: number }[];
-  produced: { itemId: string; quantity: number }[];
-  // Skill XP Runtime (ADR-0016) — null si aucune XP (0 succès / skill non résolu).
-  skill: {
-    key: string;
-    previousLevel: number;
-    newLevel: number;
-    previousXp: number;
-    newXp: number;
-    xpGained: number;
-    nextLevelXp: number;
-  } | null;
-  // Character XP portée par la recette — null si aucune.
-  characterXp: {
-    level: number;
-    experience: number;
-    nextLevelXp: number;
-    leveledUp: boolean;
-    xpGained: number;
-  } | null;
-};
-
 export type WorldPositionWU = {
   worldX?: number | null;
   worldY?: number | null;
@@ -226,10 +197,22 @@ export function estimateCraftSkillXp(craftingDifficulty: number): number {
   return Math.max(1, 15 + Math.floor(d / 10));
 }
 
-/** Temps de craft (ms) → libellé secondes lisible, pour une durée unitaire ou totale. */
+/**
+ * Durée minimale d'une fabrication joueur (ms). DOIT rester alignée sur la garde
+ * serveur `MIN_CRAFT_TIME_MS` (crafting.constants.ts) : le Runtime clampe chaque
+ * unité à `max(craftTimeMs, MIN_CRAFT_TIME_MS)`. L'affichage applique le même
+ * clamp — aucune fabrication joueur n'est instantanée.
+ */
+export const MIN_CRAFT_TIME_MS = 3000;
+
+/**
+ * Temps de craft (ms) → libellé secondes lisible, pour une durée unitaire ou
+ * totale. La durée unitaire est clampée à `MIN_CRAFT_TIME_MS` comme le Runtime,
+ * donc jamais « instantané » même si la recette porte `craftTimeMs <= 0`.
+ */
 export function formatCraftSeconds(craftTimeMs: number, quantity = 1): string {
-  const totalMs = Math.max(0, craftTimeMs) * Math.max(1, Math.floor(quantity) || 1);
-  if (totalMs <= 0) return "instantané";
+  const perUnitMs = Math.max(MIN_CRAFT_TIME_MS, Math.floor(craftTimeMs) || 0);
+  const totalMs = perUnitMs * Math.max(1, Math.floor(quantity) || 1);
   const seconds = totalMs / 1000;
   const rounded = seconds >= 10 ? Math.round(seconds) : Math.round(seconds * 10) / 10;
   return `${rounded} s`;

@@ -33,14 +33,12 @@ export type CraftJobDto = {
 export const CRAFT_JOB_MAX_QUANTITY = 99;
 
 /**
- * Réponse de l'action joueur unique « Fabriquer » (POST /crafting/craft). Le
- * SERVEUR décide du mode — le client se contente d'afficher. Aujourd'hui toute
- * recette crée un CraftJob (`mode: "job"`) ; le `mode: "instant"` reste géré
- * pour une éventuelle règle serveur future, sans changement de frontend.
+ * Réponse de l'action joueur unique « Fabriquer » (POST /crafting/craft). Toute
+ * fabrication crée un CraftJob (`mode: "job"`) — l'output n'est matérialisé qu'au
+ * claim. Le discriminant `mode` est conservé pour absorber une éventuelle
+ * extension serveur future sans casser le client.
  */
-export type CraftExecuteResponse =
-  | { mode: "instant"; craft: unknown }
-  | { mode: "job"; job: CraftJobDto };
+export type CraftExecuteResponse = { mode: "job"; job: CraftJobDto };
 
 /** Intervalle de polling (ms) — remplaçable par du websocket plus tard. */
 export const CRAFT_JOB_POLL_MS = 10_000;

@@ -3,19 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CharacterService } from '../characters/character.service';
-import { CraftingService, CraftResult } from './crafting.service';
+import { CraftingService } from './crafting.service';
 import { CraftJobService, CraftJobClaimResult } from './craft-job.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { Item } from '../items/entities/item.entity';
 
 /**
- * Résultat unifié de l'action joueur « Fabriquer ». Le SERVEUR décide du mode
- * selon `recipe.craftTimeMs` (autoritaire) — l'UI ne choisit jamais.
+ * Résultat de l'action joueur « Fabriquer ». Toute fabrication joueur crée un
+ * **CraftJob** (`mode: "job"`) — l'output n'est matérialisé qu'au claim. Le
+ * champ `mode` reste discriminant pour préserver le contrat client si une règle
+ * future introduit un autre mode côté serveur.
  */
-export type CraftExecuteResult =
-  | { mode: 'instant'; craft: CraftResult }
-  | { mode: 'job'; job: CraftJobDto };
+export type CraftExecuteResult = { mode: 'job'; job: CraftJobDto };
 
 export type CraftJobDto = {
   jobId: string;
@@ -92,8 +92,9 @@ export class CraftingController {
    * GET /crafting/available-recipes?stationType=forge
    *
    * Endpoint lecture UI : expose les recettes enabled et leurs ingrédients/résultats.
-   * Ce endpoint n'autorise rien définitivement ; CraftingService.craft() reste la
-   * validation serveur pour stationType, distance, inventaire, skill et résultat.
+   * Ce endpoint n'autorise rien définitivement ; le lancement d'un CraftJob
+   * (`CraftJobService.launch`) reste la validation serveur pour stationType,
+   * distance, inventaire, skill et résultat.
    */
   @Get('available-recipes')
   async getAvailableRecipes(
@@ -170,10 +171,10 @@ export class CraftingController {
    * workflow — le client ne choisit jamais la technologie.
    *
    * Règle actuelle (ADR-0009) : toute recette a une durée ≥ 3 s, donc toute
-   * fabrication joueur crée un **CraftJob** (`mode: "job"`). Le craft instantané
-   * (`CraftingService.craft`) n'est PAS déclenché par le joueur (legacy/interne/
-   * admin/tests). Le résultat reste typé (`mode`) : si une règle future produit
-   * un craft immédiat (premium, NPC…), le frontend n'a pas à changer.
+   * fabrication joueur crée un **CraftJob** (`mode: "job"`) et l'output n'est
+   * matérialisé qu'au claim. Aucun craft instantané joueur n'existe. Le résultat
+   * reste typé (`mode`) : si une règle future produit un craft immédiat (premium,
+   * NPC…), le frontend n'a pas à changer.
    */
   @Post('craft')
   async craft(@Request() req, @Body() dto: CraftRequestDto): Promise<CraftExecuteResult> {

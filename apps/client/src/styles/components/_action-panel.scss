@@ -273,8 +273,7 @@
   }
 
   &__recipe-label,
-  &__recipe-line,
-  &__craft-result span {
+  &__recipe-line {
     display: block;
   }
 
@@ -294,26 +293,6 @@
     object-fit: contain;
     vertical-align: middle;
     margin-right: 4px;
-  }
-
-  &__craft-result {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    border-radius: vars.$panel-radius-card;
-    padding: 8px;
-    font-size: 0.8rem;
-    line-height: 1.35;
-
-    &--ok {
-      background: rgba(126, 207, 126, 0.1);
-      border: 1px solid rgba(126, 207, 126, 0.35);
-    }
-
-    &--fail {
-      background: rgba(207, 126, 126, 0.1);
-      border: 1px solid rgba(207, 126, 126, 0.35);
-    }
   }
 
   // ── Craft produit-first ───────────────────────────────────────────────────
@@ -598,22 +577,6 @@
       color: vars.$color-text-gold;
       border-bottom-color: vars.$color-text-gold;
     }
-  }
-
-  // ── Deux actions (Fabriquer maintenant / Production) ───────────────────────
-  &__craft-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-
-    .action-panel__craft-submit {
-      flex: 1;
-      min-width: 120px;
-    }
-  }
-
-  &__craft-submit--secondary {
-    @include m.btn-neutral;
   }
 
   &__craft-qty-max {

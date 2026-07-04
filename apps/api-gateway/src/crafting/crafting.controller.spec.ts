@@ -18,28 +18,6 @@ function makeCharacter(id = 'char-uuid-1'): Character {
   return { id } as Character;
 }
 
-function makeCraftResult() {
-  return {
-    recipeId: 'recipe-uuid-1',
-    recipeKey: 'iron_bar_from_ore',
-    requestedQuantity: 1,
-    attempts: 1,
-    successes: 1,
-    failures: 0,
-    consumed: [{ itemId: 'item-iron_ore', quantity: 3 }],
-    produced: [{ itemId: 'item-iron_bar', quantity: 1 }],
-    skill: {
-      key: 'smithing',
-      previousLevel: 1,
-      newLevel: 1,
-      previousXp: 0,
-      newXp: 10,
-      xpGained: 10,
-      nextLevelXp: 100,
-    },
-  };
-}
-
 // ─── CraftRequestDto ─────────────────────────────────────────────────────────
 
 describe('CraftRequestDto — validation', () => {
@@ -98,7 +76,6 @@ describe('CraftingController', () => {
 
   beforeEach(async () => {
     craftingService = {
-      craft: jest.fn(),
       getCraftingStationWorldObjects: jest.fn(),
     };
     craftJobService = {
@@ -194,7 +171,8 @@ describe('CraftingController', () => {
 
     expect(characterService.findFirstByUser).toHaveBeenCalledWith('user-uuid-1');
     expect(craftJobService.launch).toHaveBeenCalledWith('char-uuid-1', 'recipe-uuid-1', 2);
-    expect(craftingService.craft).not.toHaveBeenCalled(); // le joueur ne matérialise jamais immédiatement
+    // Toute fabrication joueur passe par un CraftJob : aucun output matérialisé
+    // avant le claim. Le craft instantané n'existe plus dans le domaine.
     expect(result).toMatchObject({ mode: 'job', job: { jobId: 'job-1', state: 'RUNNING' } });
   });
 

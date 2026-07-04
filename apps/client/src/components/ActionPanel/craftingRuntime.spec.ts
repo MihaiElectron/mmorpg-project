@@ -218,11 +218,15 @@ describe("craft UX produit-first", () => {
     expect(recipeProductLabel(craftRecipe({ name: "Recette X", results: [] }))).toBe("Recette X");
   });
 
-  it("formatCraftSeconds convertit ms → secondes et gère l'instantané", () => {
-    expect(formatCraftSeconds(0)).toBe("instantané");
-    expect(formatCraftSeconds(2000)).toBe("2 s");
-    expect(formatCraftSeconds(2000, 3)).toBe("6 s");
-    expect(formatCraftSeconds(1500)).toBe("1.5 s");
+  it("formatCraftSeconds clampe à MIN_CRAFT_TIME_MS (jamais instantané) et multiplie par la quantité", () => {
+    // Durée unitaire < 3 s (ou 0) → clampée à 3 s comme le Runtime, jamais "instantané".
+    expect(formatCraftSeconds(0)).toBe("3 s");
+    expect(formatCraftSeconds(2000)).toBe("3 s");
+    expect(formatCraftSeconds(2000, 3)).toBe("9 s"); // 3 s clampé × 3
+    // Durée unitaire >= 3 s respectée telle quelle.
+    expect(formatCraftSeconds(10000)).toBe("10 s");
+    expect(formatCraftSeconds(10000, 3)).toBe("30 s");
+    expect(formatCraftSeconds(4500)).toBe("4.5 s");
   });
 
   it("estimateCraftSkillXp reflète le Runtime (base 15 + floor(difficulté/10))", () => {

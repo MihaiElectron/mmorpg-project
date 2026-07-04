@@ -17,7 +17,6 @@ import {
   type AvailableCraftingRecipe,
   type CraftingServerError,
   type CraftingStationTarget,
-  type CraftResultSnapshot,
 } from "./craftingRuntime";
 import {
   craftJobProgress,
@@ -27,20 +26,9 @@ import {
   isClaimable,
   CRAFT_JOB_POLL_MS,
   type CraftJobDto,
-  type CraftExecuteResponse,
 } from "./craftJobs";
 
 const API = import.meta.env.VITE_API_URL as string;
-
-function itemLabel(itemId: string, recipes: AvailableCraftingRecipe[]): string {
-  for (const recipe of recipes) {
-    const ing = recipe.ingredients.find((item) => item.itemId === itemId);
-    if (ing) return ing.itemName || ing.itemId;
-    const res = recipe.results.find((item) => item.itemId === itemId);
-    if (res) return res.itemName || res.itemId;
-  }
-  return itemId;
-}
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -60,7 +48,6 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [craftingRecipeId, setCraftingRecipeId] = useState<string | null>(null);
   const [error, setError] = useState<CraftingServerError | null>(null);
-  const [result, setResult] = useState<CraftResultSnapshot | null>(null);
   const [query, setQuery] = useState("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -155,9 +142,9 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   }
 
   /**
-   * Action joueur UNIQUE « Fabriquer ». Le serveur décide du workflow ; l'UI
-   * n'affiche que le résultat. Aujourd'hui le serveur crée toujours un CraftJob
-   * (mode "job") — le mode "instant" est géré pour une règle serveur future.
+   * Action joueur UNIQUE « Fabriquer ». Le serveur crée toujours un CraftJob
+   * (`mode: "job"`) : les ingrédients sont réservés et aucun output n'existe
+   * tant que le claim n'a pas eu lieu. L'UI bascule sur l'onglet Production.
    */
   async function execute(recipe: AvailableCraftingRecipe) {
     const token = localStorage.getItem("token") ?? "";
@@ -167,7 +154,6 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     }
     setCraftingRecipeId(recipe.id);
     setError(null);
-    setResult(null);
     try {
       const res = await fetch(`${API}/crafting/craft`, {
         method: "POST",
@@ -177,17 +163,10 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
 
-      const response = body as CraftExecuteResponse;
-      if (response.mode === "instant") {
-        // Chemin interne/futur : résultat immédiat + reload inventaire/skills.
-        setResult(response.craft as CraftResultSnapshot);
-        await refreshCharacter();
-      } else {
-        // Fabrication lancée : job RUNNING affiché, ingrédients réservés, aucun
-        // output tant que le claim n'a pas eu lieu.
-        await Promise.all([fetchJobs(), loadCharacter()]);
-        setActiveTab("jobs");
-      }
+      // Réponse serveur : toujours un CraftJob (mode "job"). Fabrication lancée,
+      // ingrédients réservés, aucun output tant que le claim n'a pas eu lieu.
+      await Promise.all([fetchJobs(), loadCharacter()]);
+      setActiveTab("jobs");
     } catch (err) {
       setError(isCraftingServerError(err) ? err : { message: "Fabrication impossible." });
     } finally {
@@ -463,30 +442,6 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
         </div>
       )}
 
-      {result && (
-        <div className={`action-panel__craft-result action-panel__craft-result--${result.successes > 0 ? "ok" : "fail"}`}>
-          <strong>{result.successes > 0 ? "Craft réussi" : "Craft échoué"}</strong>
-          <span>Succès: {result.successes} · Échecs: {result.failures}</span>
-          {result.consumed.length > 0 && (
-            <span>Consommé: {result.consumed.map((item) => `${itemLabel(item.itemId, recipes)} ×${item.quantity}`).join(", ")}</span>
-          )}
-          {result.produced.length > 0 && (
-            <span>Produit: {result.produced.map((item) => `${itemLabel(item.itemId, recipes)} ×${item.quantity}`).join(", ")}</span>
-          )}
-          {result.characterXp && (
-            <span>
-              XP perso: +{result.characterXp.xpGained}
-              {result.characterXp.leveledUp ? " · niveau supérieur !" : ""}
-            </span>
-          )}
-          {result.skill && (
-            <span>
-              XP skill: +{result.skill.xpGained} {result.skill.key}
-              {result.skill.newLevel > result.skill.previousLevel ? " · niveau supérieur !" : ""}
-            </span>
-          )}
-        </div>
-      )}
         </>
       )}
 

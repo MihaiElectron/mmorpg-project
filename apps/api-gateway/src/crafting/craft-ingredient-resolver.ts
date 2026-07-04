@@ -39,9 +39,10 @@ export interface ResolvedCraftIngredients {
  *  - valider la disponibilité (`requiredQuantity × quantity`) et lever une erreur
  *    métier lisible si insuffisant.
  *
- * Partagé par `CraftingService.craft()` (legacy/interne) et `CraftJobService.launch()`.
- * Chaque appelant garde sa responsabilité en aval (consommer vs réserver) : le
- * resolver ne fait que fournir les sources verrouillées et validées.
+ * Utilisé par `CraftJobService.launch()` pour verrouiller et valider les
+ * ingrédients avant l'escrow. L'appelant garde sa responsabilité en aval
+ * (réserver/consommer) : le resolver ne fait que fournir les sources
+ * verrouillées et validées.
  */
 @Injectable()
 export class CraftIngredientResolver {

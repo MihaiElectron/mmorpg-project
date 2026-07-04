@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { CraftingService } from './crafting.service';
 import { Item } from '../items/entities/item.entity';
@@ -9,12 +8,7 @@ import { CraftingIngredient } from './entities/crafting-ingredient.entity';
 import { CraftingResult } from './entities/crafting-result.entity';
 import { CraftingStationTemplate } from './entities/crafting-station-template.entity';
 import { CraftingStation } from './entities/crafting-station.entity';
-import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
-import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
-import { CraftIngredientResolver } from './craft-ingredient-resolver';
-import { ProgressionService } from '../progression/progression.service';
-import { ItemTransferService } from '../item-transfer/item-transfer.service';
 
 // Couverture directe de CraftingService.findNearestCompatibleStationOrThrow :
 // barrière anti-cheat de proximité station (distance euclidienne WU) réutilisée
@@ -26,7 +20,9 @@ function makeRecipe(stationType = 'forge'): CraftingRecipe {
   return { id: 'recipe-1', key: 'basic_sword', stationType } as CraftingRecipe;
 }
 
-function makeStation(overrides: Partial<CraftingStation> = {}): CraftingStation {
+function makeStation(
+  overrides: Partial<CraftingStation> = {},
+): CraftingStation {
   return {
     id: 'station-1',
     templateId: 'tpl-forge',
@@ -34,7 +30,11 @@ function makeStation(overrides: Partial<CraftingStation> = {}): CraftingStation 
     worldX: 1200,
     worldY: 1000,
     enabled: true,
-    template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: true },
+    template: {
+      stationType: 'forge',
+      interactionRadiusWU: 1536,
+      enabled: true,
+    },
     ...overrides,
   } as CraftingStation;
 }
@@ -68,13 +68,7 @@ describe('CraftingService — findNearestCompatibleStationOrThrow', () => {
         { provide: getRepositoryToken(CraftingResult), useValue: {} },
         { provide: getRepositoryToken(CraftingStationTemplate), useValue: {} },
         { provide: getRepositoryToken(CraftingStation), useValue: {} },
-        { provide: DataSource, useValue: {} },
-        { provide: SkillsService, useValue: {} },
         { provide: WorldService, useValue: mockWorldService },
-        { provide: ItemMaterializationService, useValue: {} },
-        { provide: ProgressionService, useValue: {} },
-        { provide: ItemTransferService, useValue: {} },
-        CraftIngredientResolver,
       ],
     }).compile();
 
@@ -85,10 +79,16 @@ describe('CraftingService — findNearestCompatibleStationOrThrow', () => {
     expected: Record<string, unknown>,
   ): Promise<BadRequestException> {
     try {
-      await service.findNearestCompatibleStationOrThrow('char-1', makeRecipe(), mockManager as never);
+      await service.findNearestCompatibleStationOrThrow(
+        'char-1',
+        makeRecipe(),
+        mockManager as never,
+      );
     } catch (err) {
       expect(err).toBeInstanceOf(BadRequestException);
-      expect((err as BadRequestException).getResponse()).toEqual(expect.objectContaining(expected));
+      expect((err as BadRequestException).getResponse()).toEqual(
+        expect.objectContaining(expected),
+      );
       return err as BadRequestException;
     }
     throw new Error('Expected station BadRequestException');
@@ -140,7 +140,11 @@ describe('CraftingService — findNearestCompatibleStationOrThrow', () => {
   it('template station disabled : ignoré → CRAFTING_STATION_REQUIRED', async () => {
     mockManager.find.mockResolvedValue([
       makeStation({
-        template: { stationType: 'forge', interactionRadiusWU: 1536, enabled: false } as never,
+        template: {
+          stationType: 'forge',
+          interactionRadiusWU: 1536,
+          enabled: false,
+        } as never,
       }),
     ]);
 
@@ -160,7 +164,9 @@ describe('CraftingService — findNearestCompatibleStationOrThrow', () => {
   });
 
   it('station trop loin : CRAFTING_STATION_OUT_OF_RANGE avec distance + radius', async () => {
-    mockManager.find.mockResolvedValue([makeStation({ worldX: 5000, worldY: 1000 })]);
+    mockManager.find.mockResolvedValue([
+      makeStation({ worldX: 5000, worldY: 1000 }),
+    ]);
 
     await expectStationError({
       code: 'CRAFTING_STATION_OUT_OF_RANGE',
