@@ -113,6 +113,25 @@ export default class PlayerController {
     this.currentPathIndex = 0;
   }
 
+  /**
+   * Arrêt immédiat et propre du déplacement souris (pathfinding + steering).
+   * Contrairement à stopMouseMove(), ne recalcule JAMAIS de chemin : usage
+   * programmatique quand la scène décide de figer le joueur (ex. arrivée à portée
+   * d'une craft station → ouverture du panneau). N'affecte ni le clavier ni les
+   * déplacements programmatiques (auto-attaque/poursuite).
+   */
+  cancelMouseMove() {
+    this.mouseActive = false;
+    this.isDragging = false;
+    this.isMouseHoldMovement = false;
+    this.isPointerHeld = false;
+    this.lastMouseDirection = null;
+    this.target = null;
+    this.path = null;
+    this.currentPathIndex = 0;
+    this.player?.setVelocity?.(0);
+  }
+
   // -------------------------------------------------------
   // DÉPLACEMENT PROGRAMMATIQUE (auto-attaque, poursuite)
   // -------------------------------------------------------

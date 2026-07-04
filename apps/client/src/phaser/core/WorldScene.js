@@ -19,6 +19,7 @@ import {
   worldWUToScreen,
   worldWUToTile,
 } from "../utils/worldCoordinates";
+import { estimateStationReach } from "../../components/ActionPanel/craftingRuntime";
 import Pathfinder from "../utils/pathfinding";
 import {
   createNavGridFromWalkabilityGrid,
@@ -364,6 +365,9 @@ export default class WorldScene extends Phaser.Scene {
     this.craftingStationDebugObjects = new Map();
     this.craftingStationData = new Map();
     this.hoveredCraftStationId = null;
+    // Station cliquée dont on ouvrira le panneau craft dès que le joueur est à
+    // portée (déplacement guidé). Le serveur reste l'autorité de distance.
+    this.pendingOpenCraftStationId = null;
     this.buildingDebugObjects = new Map();
     this.buildingData = new Map();
     this.resourceOverlayGraphics = null;
@@ -534,6 +538,10 @@ export default class WorldScene extends Phaser.Scene {
     this.input.on("pointerdown", (pointer) => {
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
+
+      // Tout clic hors d'une craft station (les stations stoppent la propagation)
+      // annule une ouverture auto en attente : autre cible, déplacement, etc.
+      this.pendingOpenCraftStationId = null;
 
       getDevToolsStore().getState().setDevToolsFocused(false);
 
@@ -861,6 +869,43 @@ export default class WorldScene extends Phaser.Scene {
     this.updateGatherIndicator();
     this.updatePlayerHpBar();
     this.updateCreatureHpBars();
+    this.updatePendingCraftStationOpen();
+  }
+
+  // Ouvre le panneau craft de la station cliquée dès que le joueur entre dans son
+  // rayon d'interaction (WU). Une seule ouverture ; jamais hors portée. Le serveur
+  // revalide la distance à POST /crafting/craft — ceci ne fait que guider l'UI.
+  updatePendingCraftStationOpen() {
+    if (!this.pendingOpenCraftStationId || !this.player) return;
+    const station = this.craftingStationData.get(this.pendingOpenCraftStationId);
+    if (!station) {
+      // Station disparue entre-temps.
+      this.pendingOpenCraftStationId = null;
+      return;
+    }
+    const playerWU = screenToWorldWU(this.player.x, this.player.y);
+    const reach = estimateStationReach(playerWU, station);
+    if (reach.inRange !== true) return;
+
+    this.pendingOpenCraftStationId = null;
+    // À portée : figer le déplacement (ne pas continuer jusqu'au sprite) puis ouvrir.
+    this.controller?.cancelMouseMove?.();
+    getActionPanelStore().getState().openPanel(
+      {
+        id: station.id,
+        type: station.stationType,
+        kind: "crafting_station",
+        name: station.name,
+        stationType: station.stationType,
+        worldX: station.worldX,
+        worldY: station.worldY,
+        interactionRadiusWU: station.interactionRadiusWU,
+        enabled: station.enabled,
+        health: null,
+        maxHealth: null,
+      },
+      [craftingStationActionLabel(station)],
+    );
   }
 
   updatePlayerHpBar() {
@@ -1697,23 +1742,18 @@ export default class WorldScene extends Phaser.Scene {
 
     const onPointerDown = (_pointer, _localX, _localY, event) => {
       event?.stopPropagation();
-      getActionPanelStore().getState().openPanel(
-        {
-          id: station.id,
-          type: station.stationType,
-          kind: "crafting_station",
-          name: station.name,
-          stationType: station.stationType,
-          worldX: station.worldX,
-          worldY: station.worldY,
-          interactionRadiusWU: station.interactionRadiusWU,
-          enabled: station.enabled,
-          health: null,
-          maxHealth: null,
-        },
-        [craftingStationActionLabel(station)],
-      );
+      // Sélection DevTools/admin conservée (immédiate).
       getDevToolsStore().getState().setSelectedWorldObject(craftingStationToWorldObject(station));
+      // Ne plus ouvrir immédiatement : on guide le joueur vers la station et le
+      // panneau s'ouvrira automatiquement une fois à portée (voir update()).
+      this.pendingOpenCraftStationId = station.id;
+      this.stopAutoAttack?.();
+      const entry = this.craftingStationDebugObjects.get(station.id);
+      const targetSprite = entry?.square;
+      if (this.controller && targetSprite) {
+        // startMouseMove snappe déjà vers une tuile walkable si la station bloque.
+        this.controller.startMouseMove(targetSprite.x, targetSprite.y);
+      }
     };
 
     const buildVisual = (textureKey) => {
@@ -2112,6 +2152,7 @@ export default class WorldScene extends Phaser.Scene {
     this.craftingStationDebugObjects.clear();
     this.craftingStationData.clear();
     this.hoveredCraftStationId = null;
+    this.pendingOpenCraftStationId = null;
   }
 
   removeCraftingStation(stationId) {
@@ -2127,6 +2168,9 @@ export default class WorldScene extends Phaser.Scene {
     if (this.hoveredCraftStationId === stationId) {
       this.hoveredCraftStationId = null;
       this.input.setDefaultCursor("default");
+    }
+    if (this.pendingOpenCraftStationId === stationId) {
+      this.pendingOpenCraftStationId = null;
     }
   }
 

@@ -393,3 +393,27 @@ describe("PlayerController — mouse movement", () => {
     expect(player.velocity.x).toBeGreaterThan(0);
   });
 });
+
+describe("cancelMouseMove", () => {
+  it("fige le déplacement (état vidé + vélocité nulle) sans recalculer de chemin", () => {
+    const pathfinder = { findPath: vi.fn(() => [ { x: 4, y: 4 }, { x: 28, y: 4 } ]) };
+    const { controller, player } = createController({ pathfinder });
+
+    controller.startMouseMove(100, 0);
+    expect(controller.mouseActive).toBe(true);
+
+    player.setVelocity.mockClear();
+    controller.cancelMouseMove();
+
+    expect(controller.mouseActive).toBe(false);
+    expect(controller.target).toBeNull();
+    expect(controller.path).toBeNull();
+    expect(controller.currentPathIndex).toBe(0);
+    expect(player.setVelocity).toHaveBeenCalledWith(0);
+    // Aucun recalcul de chemin (contrairement à stopMouseMove sur clic court).
+    pathfinder.findPath.mockClear();
+    controller.update();
+    expect(pathfinder.findPath).not.toHaveBeenCalled();
+    expect(player.velocity).toEqual({ x: 0, y: 0 });
+  });
+});

@@ -49,6 +49,11 @@ export default function ActionPanel() {
   // (station A) sous l'en-tête d'une autre station ciblée (station B).
   const craftPanelOpenForTarget = isCraftStationPanelOpenFor(target, craftingStation);
   const visibleActions = craftPanelOpenForTarget ? [] : actions;
+  // Vue craft station pure : uniquement titre + fermer + CraftingRuntimePanel.
+  // On masque alors la console admin et les éléments génériques (le champ commande
+  // « /spawn … » n'a rien à faire dans une fenêtre de craft). La console reste
+  // disponible partout ailleurs.
+  const isCraftStationPanelMode = craftPanelOpenForTarget;
 
   // ── Fermeture au clic extérieur (sauf canvas Phaser) ─────────────────────
   useEffect(() => {
@@ -75,6 +80,19 @@ export default function ActionPanel() {
     }
     setCraftingStation(null);
   }, [isAdmin, hasOverlap, target?.id]);
+
+  // Ouverture automatique du panneau craft quand WorldScene ouvre une station.
+  // WorldScene n'ouvre une station QUE lorsque le joueur est à portée (garde WU
+  // dans updatePendingCraftStationOpen) : l'ouverture ne donne donc aucun avantage
+  // hors portée, le serveur restant l'autorité (POST /crafting/craft). Chaque
+  // openPanel passe un nouvel objet `target` → l'effet refire même pour la même
+  // station (ré-approche). Déclaré APRÈS le reset ci-dessus → net « ouvert ».
+  useEffect(() => {
+    if (target?.kind === "crafting_station") {
+      setCraftingStation(target as CraftingStationTarget);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
 
   // ── Gestion du focus → store admin + désactivation capture clavier Phaser ─
   function getPhaserKeyboard() {
@@ -252,7 +270,7 @@ export default function ActionPanel() {
           <HealthBar health={target.health} maxHealth={target.maxHealth} />
         )}
 
-      {isAdmin && (
+      {isAdmin && !isCraftStationPanelMode && (
         <div className="action-panel__console">
           {hasOverlap && (
             <div className="action-panel__overlap">
