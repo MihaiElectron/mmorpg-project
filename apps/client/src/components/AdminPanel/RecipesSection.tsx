@@ -15,6 +15,8 @@ import {
   MIN_CRAFT_TIME_SECONDS,
   MIN_CRAFT_TIME_MS,
   MIN_CRAFT_TIME_MESSAGE,
+  FAILURE_SKILL_XP_MULTIPLIER,
+  effectiveSuccessAtRequiredLevelPercent,
 } from "../DevTools/modules/Recipes/recipeEditorHelpers";
 import type { ItemCatalogEntry } from "../DevTools/modules/Items/itemEditor.types";
 
@@ -77,7 +79,7 @@ const RECIPE_FIELDS: FieldDef[] = [
   { key: "successBonusPerLevel",       label: "Bonus/niv",            min: 0, step: 0.01 },
   { key: "minSuccessRate",             label: "Taux min",             min: 0, step: 0.05 },
   { key: "maxSuccessRate",             label: "Taux max",             min: 0, step: 0.05 },
-  { key: "xpReward",                   label: "XP (legacy)",          min: 0 },
+  { key: "xpReward",                   label: "XP (legacy, non Runtime)",          min: 0 },
   { key: "craftCharacterXpReward",     label: "XP perso craft",       min: 0 },
   { key: "craftingDifficulty",         label: "Difficulté craft",     min: 0, max: 100 },
   // craftTimeMs est rendu séparément en secondes (voir Durée (s)).
@@ -371,10 +373,33 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                   {!isValidCraftTimeMs(drafts[recipe.id]?.craftTimeMs ?? recipe.craftTimeMs) && (
                     <p className="admin-panel__recipe-validation">{MIN_CRAFT_TIME_MESSAGE}</p>
                   )}
-                  <p className="admin-panel__field-hint">
-                    Une recette crée toujours un CraftJob : le joueur réclamera son résultat une fois la fabrication terminée.
-                    {" "}XP skill estimée : +{estimateCraftSkillXp(Number(drafts[recipe.id]?.craftingDifficulty ?? recipe.craftingDifficulty))} {recipe.requiredSkillKey || "—"} / craft réussi (Runtime, lecture seule).
-                  </p>
+                  {(() => {
+                    const draft = drafts[recipe.id];
+                    const difficulty = Number(draft?.craftingDifficulty ?? recipe.craftingDifficulty);
+                    const base = Number(draft?.baseSuccessRate ?? recipe.baseSuccessRate);
+                    const min = Number(draft?.minSuccessRate ?? recipe.minSuccessRate);
+                    const max = Number(draft?.maxSuccessRate ?? recipe.maxSuccessRate);
+                    const charXp = Number(draft?.craftCharacterXpReward ?? recipe.craftCharacterXpReward);
+                    const successSkillXp = estimateCraftSkillXp(difficulty);
+                    const failureSkillXp = Math.floor(successSkillXp * FAILURE_SKILL_XP_MULTIPLIER);
+                    const skillKey = recipe.requiredSkillKey || "—";
+                    return (
+                      <div className="admin-panel__field-hint">
+                        <p>
+                          <strong>Réussite</strong> — chance effective au niveau requis :{" "}
+                          {effectiveSuccessAtRequiredLevelPercent(base, min, max)}%. Le serveur
+                          calcule la chance finale = base + bonus×(niveau − niveau requis), bornée
+                          par min / max.
+                        </p>
+                        <p>
+                          <strong>Progression</strong> — Succès : +{charXp} XP perso · +{successSkillXp} XP {skillKey}.
+                          {" "}Échec : +0 XP perso · +{failureSkillXp} XP {skillKey}{" "}
+                          ({Math.round(FAILURE_SKILL_XP_MULTIPLIER * 100)} % de l'XP skill succès).
+                          {" "}L'XP est accordée à la complétion du CraftJob, pas au claim (estimation Runtime, lecture seule).
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {recipeDirty && (
                     <div className="admin-panel__template-actions">
                       <button
@@ -562,7 +587,7 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
           { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
           { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
-          { f: "xpReward",             label: "XP (legacy)",  step: 1 },
+          { f: "xpReward",             label: "XP (legacy, non Runtime)",  step: 1 },
           { f: "craftCharacterXpReward", label: "XP perso craft", step: 1 },
           { f: "craftingDifficulty",   label: "Difficulté craft (0–100)", step: 1 },
         ] as const).map(({ f, label, step }) => (

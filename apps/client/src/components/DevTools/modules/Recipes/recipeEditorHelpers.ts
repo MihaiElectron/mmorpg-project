@@ -137,6 +137,28 @@ export const MIN_CRAFT_TIME_SECONDS = 3;
 export const MIN_CRAFT_TIME_MS = MIN_CRAFT_TIME_SECONDS * 1000;
 export const MIN_CRAFT_TIME_MESSAGE = "La durée minimale d'une recette est de 3 secondes.";
 
+/**
+ * Miroir lecture seule de la règle serveur `FAILURE_SKILL_XP_MULTIPLIER`
+ * (crafting.constants.ts). Une tentative ratée n'accorde pas d'XP perso mais
+ * 25 % de l'XP compétence d'un succès. Aperçu DevTools uniquement — le serveur
+ * reste l'autorité de calcul.
+ */
+export const FAILURE_SKILL_XP_MULTIPLIER = 0.25;
+
+/**
+ * Chance de succès EFFECTIVE au niveau requis (aperçu DevTools, lecture seule).
+ * Au niveau requis, le bonus est nul : le serveur applique clamp(base, min, max).
+ * Retourne un pourcentage entier arrondi.
+ */
+export function effectiveSuccessAtRequiredLevelPercent(
+  baseSuccessRate: number,
+  minSuccessRate: number,
+  maxSuccessRate: number,
+): number {
+  const clamped = Math.min(maxSuccessRate, Math.max(minSuccessRate, baseSuccessRate));
+  return Math.round(clamped * 100);
+}
+
 /** true si la durée (ms) respecte le minimum autorisé. */
 export function isValidCraftTimeMs(ms: number | string | null | undefined): boolean {
   const n = Number(ms);
