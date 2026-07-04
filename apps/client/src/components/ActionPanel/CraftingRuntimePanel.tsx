@@ -26,6 +26,7 @@ import {
   isClaimable,
   CRAFT_JOB_POLL_MS,
   type CraftJobDto,
+  type CraftClaimSummary,
 } from "./craftJobs";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -54,6 +55,7 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<"recipes" | "jobs">("recipes");
   const [jobs, setJobs] = useState<CraftJobDto[]>([]);
   const [claimingJobId, setClaimingJobId] = useState<string | null>(null);
+  const [lastClaimResult, setLastClaimResult] = useState<CraftClaimSummary | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const stationType = station.stationType ?? station.type;
@@ -186,6 +188,8 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
+      // Le serveur renvoie le résumé déjà accordé — on l'affiche tel quel.
+      setLastClaimResult(body as CraftClaimSummary);
       await Promise.all([fetchJobs(), refreshCharacter()]);
     } catch (err) {
       setError(isCraftingServerError(err) ? err : { message: "Réclamation impossible." });
@@ -447,6 +451,42 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
 
       {activeTab === "jobs" && (
         <div className="action-panel__jobs">
+          {lastClaimResult && (
+            <div className="action-panel__claim-result">
+              <div className="action-panel__claim-result-head">
+                <strong>Résultat réclamé — {lastClaimResult.recipeName} ×{lastClaimResult.quantity}</strong>
+                <button
+                  type="button"
+                  className="action-panel__claim-result-close"
+                  onClick={() => setLastClaimResult(null)}
+                  aria-label="Fermer le résultat"
+                >
+                  ×
+                </button>
+              </div>
+              <span className="action-panel__job-meta">
+                Succès {lastClaimResult.successes} · Échecs {lastClaimResult.failures}
+              </span>
+              {lastClaimResult.produced.length > 0 ? (
+                <div className="action-panel__job-outputs">
+                  {lastClaimResult.produced.map((o) => (
+                    <span key={o.itemId} className="action-panel__job-output">
+                      {o.itemImage && (
+                        <img className="action-panel__job-output-img" src={o.itemImage} alt="" aria-hidden="true" />
+                      )}
+                      {o.itemName} ×{o.quantity}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="action-panel__crafting-muted">Aucun objet obtenu.</span>
+              )}
+              <span className="action-panel__job-xp">
+                XP obtenue : +{lastClaimResult.grantedCharacterXp} perso · +{lastClaimResult.grantedSkillXp} skill
+              </span>
+            </div>
+          )}
+
           {jobs.length === 0 && (
             <p className="action-panel__crafting-muted">Aucune production lancée.</p>
           )}
@@ -456,6 +496,8 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
               <span className="action-panel__craft-section-label">Productions en cours</span>
               {grouped.running.map((job) => {
                 const remaining = craftJobRemainingMs(job.finishAt, nowTick);
+                const reserved = job.ingredients.filter((i) => i.reservedQuantity > 0);
+                const expected = job.outputs.filter((o) => o.quantity > 0);
                 return (
                   <div key={job.jobId} className="action-panel__job">
                     <div className="action-panel__job-head">
@@ -469,6 +511,16 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
                       value={craftJobProgress(job.startedAt, job.finishAt, nowTick)}
                       max={1}
                     />
+                    {reserved.length > 0 && (
+                      <span className="action-panel__job-line">
+                        Réservé : {reserved.map((i) => `${i.itemName} ×${i.reservedQuantity}`).join(", ")}
+                      </span>
+                    )}
+                    {expected.length > 0 && (
+                      <span className="action-panel__job-line">
+                        Attendu : {expected.map((o) => `${o.itemName} ×${o.quantity} (${percent(o.chance)})`).join(", ")}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -497,6 +549,9 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
                       ))}
                     </div>
                   )}
+                  <span className="action-panel__job-xp">
+                    XP accordée : +{job.grantedCharacterXp} perso · +{job.grantedSkillXp} skill
+                  </span>
                   <button
                     className="action-panel__button action-panel__job-claim"
                     disabled={!isClaimable(job) || claimingJobId === job.jobId}
@@ -519,6 +574,10 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
                     <span className="action-panel__job-badge action-panel__job-badge--fail">FAILED</span>
                   </div>
                   <span className="action-panel__job-meta">Succès {job.successes} · Échecs {job.failures}</span>
+                  <span className="action-panel__crafting-muted">Aucun output.</span>
+                  <span className="action-panel__job-xp">
+                    XP d'échec : +{job.grantedSkillXp} skill · +0 perso
+                  </span>
                 </div>
               ))}
             </div>

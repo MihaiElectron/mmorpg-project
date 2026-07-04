@@ -711,4 +711,49 @@
     align-self: flex-start;
     margin-top: 2px;
   }
+
+  &__job-line {
+    font-size: 0.76rem;
+    color: vars.$color-text-muted;
+    line-height: 1.35;
+  }
+
+  &__job-xp {
+    font-size: 0.78rem;
+    color: vars.$color-text-gold;
+    line-height: 1.35;
+  }
+
+  // Carte "Résultat réclamé" affichée en tête de l'onglet Production.
+  &__claim-result {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    border-radius: vars.$panel-radius-card;
+    background: rgba(126, 207, 126, 0.1);
+    border: 1px solid rgba(126, 207, 126, 0.35);
+  }
+
+  &__claim-result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: vars.$color-text-primary;
+  }
+
+  &__claim-result-close {
+    background: none;
+    border: none;
+    color: vars.$color-text-muted;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      color: vars.$color-text-primary;
+    }
+  }
 }

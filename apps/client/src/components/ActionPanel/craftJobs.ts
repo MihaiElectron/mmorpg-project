@@ -10,7 +10,18 @@ export type CraftJobOutputDto = {
   itemName: string;
   itemImage: string | null;
   quantity: number;
+  chance: number;
   resolvedQuantity: number;
+};
+
+export type CraftJobIngredientDto = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  objectMode: string;
+  requiredQuantity: number;
+  reservedQuantity: number;
+  consumedQuantity: number;
 };
 
 export type CraftJobDto = {
@@ -19,6 +30,7 @@ export type CraftJobDto = {
   recipeName: string;
   stationType: string;
   quantity: number;
+  craftTimeMs: number;
   state: CraftJobState;
   startedAt: string;
   finishAt: string;
@@ -26,7 +38,36 @@ export type CraftJobDto = {
   claimedAt: string | null;
   successes: number;
   failures: number;
+  // XP réellement accordée à la complétion (0 tant que RUNNING). Fournie par le serveur.
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
+  failureSkillXpMultiplier: number;
+  ingredients: CraftJobIngredientDto[];
   outputs: CraftJobOutputDto[];
+};
+
+/** Objet d'un résumé de claim (produced / ingredientsConsumed). */
+export type CraftClaimItem = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  quantity: number;
+};
+
+/** Résumé complet renvoyé par POST /crafting/jobs/:id/claim — affiché tel quel. */
+export type CraftClaimSummary = {
+  jobId: string;
+  state: CraftJobState;
+  recipeName: string;
+  quantity: number;
+  successes: number;
+  failures: number;
+  produced: CraftClaimItem[];
+  ingredientsConsumed: CraftClaimItem[];
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
+  completedAt: string | null;
+  claimedAt: string | null;
 };
 
 /** Borne serveur (@Max(99)). */
