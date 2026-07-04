@@ -187,6 +187,16 @@ describe('CraftJobService — launch()', () => {
     expect(job.stationId).toBeNull();
   });
 
+  it('stationType "none" : aucune validation de station (findNearestCompatibleStationOrThrow non appelé)', async () => {
+    setupStackable(makeRecipe({ stationType: 'none' }));
+
+    const job = await service.launch('char-1', 'recipe-1', 1);
+
+    expect(job.stationType).toBe('none');
+    expect(job.stationId).toBeNull();
+    expect(mockCrafting.findNearestCompatibleStationOrThrow).not.toHaveBeenCalled();
+  });
+
   it('finishAt = startedAt + craftTimeMs × quantity (durée >= min)', async () => {
     setupStackable(makeRecipe({ craftTimeMs: 4000 }));
 
