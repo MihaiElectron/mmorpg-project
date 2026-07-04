@@ -256,6 +256,46 @@ describe('CraftingController', () => {
     });
   });
 
+  it("GET jobs : expose ingrédients réservés/consommés, XP accordée, chance output et multiplicateur d'échec", async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
+    craftJobService.listForCharacter.mockResolvedValue([
+      makeJob({
+        craftTimeMs: 4000,
+        grantedCharacterXp: 14,
+        grantedSkillXp: 34,
+        ingredients: [
+          { itemId: "item-ore", objectMode: "STACKABLE", requiredQuantity: 2, reservedQuantity: 4, consumedQuantity: 4 },
+        ],
+        outputs: [{ itemId: "item-bar", producedQuantity: 1, chance: 0.8, resolvedQuantity: 2 }],
+      }),
+    ]);
+    itemRepo.find.mockResolvedValue([
+      { id: "item-bar", name: "Lingot de fer", image: "/assets/bar.png" },
+      { id: "item-ore", name: "Minerai de fer", image: null },
+    ]);
+
+    const [dto] = await controller.listJobs(req);
+
+    expect(dto).toMatchObject({
+      craftTimeMs: 4000,
+      grantedCharacterXp: 14,
+      grantedSkillXp: 34,
+      failureSkillXpMultiplier: 0.25,
+      ingredients: [
+        {
+          itemId: "item-ore",
+          itemName: "Minerai de fer",
+          itemImage: null,
+          objectMode: "STACKABLE",
+          requiredQuantity: 2,
+          reservedQuantity: 4,
+          consumedQuantity: 4,
+        },
+      ],
+      outputs: [{ itemId: "item-bar", chance: 0.8, resolvedQuantity: 2 }],
+    });
+  });
+
   it("GET jobs : recipeName reste affichable même si la recette a été supprimée/renommée", async () => {
     // recipeRepo renverrait autre chose ou rien : sans importance, on ne l'utilise pas.
     characterService.findFirstByUser.mockResolvedValue(makeCharacter());
@@ -269,13 +309,41 @@ describe('CraftingController', () => {
     expect(result[0].outputs[0]).toMatchObject({ itemId: "item-bar", itemName: "item-bar", itemImage: null });
   });
 
-  it("POST jobs/:id/claim délègue à CraftJobService.claim", async () => {
+  it("POST jobs/:id/claim renvoie un résumé complet enrichi (nom/image items)", async () => {
     characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
-    craftJobService.claim.mockResolvedValue({ jobId: "job-1", state: "CLAIMED", produced: [] });
+    craftJobService.claim.mockResolvedValue({
+      jobId: "job-1",
+      state: "CLAIMED",
+      recipeName: "Lame brute",
+      quantity: 2,
+      successes: 1,
+      failures: 1,
+      produced: [{ itemId: "item-bar", quantity: 1 }],
+      ingredientsConsumed: [{ itemId: "item-ore", quantity: 4 }],
+      grantedCharacterXp: 7,
+      grantedSkillXp: 21,
+      completedAt: null,
+      claimedAt: null,
+    });
+    itemRepo.find.mockResolvedValue([
+      { id: "item-bar", name: "Lingot de fer", image: "/assets/bar.png" },
+      { id: "item-ore", name: "Minerai de fer", image: null },
+    ]);
 
     const result = await controller.claimJob(req, "job-1");
 
     expect(craftJobService.claim).toHaveBeenCalledWith("char-9", "job-1");
-    expect(result).toMatchObject({ jobId: "job-1", state: "CLAIMED" });
+    expect(result).toMatchObject({
+      jobId: "job-1",
+      state: "CLAIMED",
+      recipeName: "Lame brute",
+      quantity: 2,
+      successes: 1,
+      failures: 1,
+      grantedCharacterXp: 7,
+      grantedSkillXp: 21,
+      produced: [{ itemId: "item-bar", itemName: "Lingot de fer", itemImage: "/assets/bar.png", quantity: 1 }],
+      ingredientsConsumed: [{ itemId: "item-ore", itemName: "Minerai de fer", itemImage: null, quantity: 4 }],
+    });
   });
 });

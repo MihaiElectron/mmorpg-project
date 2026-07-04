@@ -30,7 +30,7 @@ import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
 import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
-import { MIN_CRAFT_TIME_MS } from './crafting.constants';
+import { MIN_CRAFT_TIME_MS, FAILURE_SKILL_XP_MULTIPLIER } from './crafting.constants';
 import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { computeCraftSuccessRate } from './craft-success-rate';
 import { CraftJob, CraftJobState } from './entities/craft-job.entity';
@@ -47,13 +47,28 @@ export interface CraftJobCompletionResult {
   state: CraftJobState.COMPLETED | CraftJobState.FAILED;
   successes: number;
   failures: number;
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
 }
 
-/** Résultat d'un claim réussi. */
+/**
+ * Résumé d'un claim réussi (résultat déjà accordé à la complétion). Les items
+ * (`produced`/`ingredientsConsumed`) sont exposés par itemId + quantité ; le
+ * contrôleur y adjoint nom/image depuis le catalogue Item.
+ */
 export interface CraftJobClaimResult {
   jobId: string;
   state: CraftJobState.CLAIMED;
+  recipeName: string;
+  quantity: number;
+  successes: number;
+  failures: number;
   produced: { itemId: string; quantity: number }[];
+  ingredientsConsumed: { itemId: string; quantity: number }[];
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
+  completedAt: Date | null;
+  claimedAt: Date | null;
 }
 
 /**
@@ -370,36 +385,60 @@ export class CraftJobService {
       }
       if (ingredients.length > 0) await manager.save(CraftJobIngredient, ingredients);
 
-      // XP uniquement si ≥ 1 succès (ADR-0016), multipliée par le nombre de succès.
-      if (successes > 0) {
-        if (skillDef && skillDef.enabled) {
-          const skillXp = calculateSkillXp(this.buildCraftSkillXpContext(job, skillLevel));
-          if (skillXp) {
-            await this.skillsService.applySkillXpInTx(
-              job.characterId,
-              skillXp.skillDefinitionKey,
-              skillXp.xpAmount * successes,
-              manager,
-            );
-          }
+      // XP accordée à la complétion (ADR-0016 + règle d'échec V1). L'XP réellement
+      // créditée est FIGÉE sur le job (grantedCharacterXp/grantedSkillXp) pour être
+      // affichée telle quelle — jamais recalculée côté client.
+      // - Succès : XP perso pleine (craftCharacterXpReward) + XP skill pleine, ×succès.
+      // - Échec  : 0 XP perso + FAILURE_SKILL_XP_MULTIPLIER × XP skill succès, ×échec.
+      let perSuccessSkillXp = 0;
+      let skillDefinitionKey: string | null = null;
+      if (skillDef && skillDef.enabled) {
+        const skillXp = calculateSkillXp(this.buildCraftSkillXpContext(job, skillLevel));
+        if (skillXp) {
+          perSuccessSkillXp = skillXp.xpAmount;
+          skillDefinitionKey = skillXp.skillDefinitionKey;
         }
-        if (job.craftCharacterXpReward > 0) {
-          await this.progressionService.applyCharacterXpInTx(
-            job.characterId,
-            job.craftCharacterXpReward * successes,
-            ProgressionSource.CRAFT,
-            manager,
-          );
-        }
+      }
+      const failureSkillXpPerAttempt = Math.floor(
+        perSuccessSkillXp * FAILURE_SKILL_XP_MULTIPLIER,
+      );
+      const grantedSkillXp =
+        perSuccessSkillXp * successes + failureSkillXpPerAttempt * failures;
+      const grantedCharacterXp = Math.max(0, job.craftCharacterXpReward) * successes;
+
+      if (grantedSkillXp > 0 && skillDefinitionKey) {
+        await this.skillsService.applySkillXpInTx(
+          job.characterId,
+          skillDefinitionKey,
+          grantedSkillXp,
+          manager,
+        );
+      }
+      if (grantedCharacterXp > 0) {
+        await this.progressionService.applyCharacterXpInTx(
+          job.characterId,
+          grantedCharacterXp,
+          ProgressionSource.CRAFT,
+          manager,
+        );
       }
 
       job.state = successes > 0 ? CraftJobState.COMPLETED : CraftJobState.FAILED;
       job.successes = successes;
       job.failures = failures;
+      job.grantedCharacterXp = grantedCharacterXp;
+      job.grantedSkillXp = grantedSkillXp;
       job.completedAt = new Date();
       await manager.save(CraftJob, job);
 
-      return { jobId, state: job.state, successes, failures };
+      return {
+        jobId,
+        state: job.state,
+        successes,
+        failures,
+        grantedCharacterXp,
+        grantedSkillXp,
+      };
     });
   }
 
@@ -439,6 +478,7 @@ export class CraftJobService {
 
       // Snapshot uniquement — jamais la recette/outputs vivants.
       const outputs = await manager.find(CraftJobOutput, { where: { jobId } });
+      const ingredients = await manager.find(CraftJobIngredient, { where: { jobId } });
       const lootEntries: LootEntry[] = outputs
         .filter((o) => o.resolvedQuantity > 0)
         .map((o) => ({ itemId: o.itemId, quantity: o.resolvedQuantity }));
@@ -456,19 +496,35 @@ export class CraftJobService {
       job.claimedAt = new Date();
       await manager.save(CraftJob, job);
 
-      return { jobId, state: CraftJobState.CLAIMED, produced: lootEntries };
+      return {
+        jobId,
+        state: CraftJobState.CLAIMED,
+        recipeName: job.recipeName || job.recipeId,
+        quantity: job.quantity,
+        successes: job.successes,
+        failures: job.failures,
+        produced: lootEntries,
+        ingredientsConsumed: ingredients
+          .filter((ing) => ing.consumedQuantity > 0)
+          .map((ing) => ({ itemId: ing.itemId, quantity: ing.consumedQuantity })),
+        grantedCharacterXp: job.grantedCharacterXp,
+        grantedSkillXp: job.grantedSkillXp,
+        completedAt: job.completedAt,
+        claimedAt: job.claimedAt,
+      };
     });
   }
 
   /**
-   * Liste les CraftJob d'un personnage avec leurs outputs (lecture seule).
-   * Tri : RUNNING → COMPLETED → FAILED → CLAIMED, puis finishAt décroissant.
-   * Les outputs proviennent du snapshot (`craft_job_output`), jamais de la recette.
+   * Liste les CraftJob d'un personnage avec leurs outputs et ingrédients
+   * (lecture seule). Tri : RUNNING → COMPLETED → FAILED → CLAIMED, puis finishAt
+   * décroissant. Outputs et ingrédients proviennent du snapshot, jamais de la
+   * recette vivante.
    */
   async listForCharacter(characterId: string): Promise<CraftJob[]> {
     const jobs = await this.dataSource.getRepository(CraftJob).find({
       where: { characterId },
-      relations: ['outputs'],
+      relations: ['outputs', 'ingredients'],
     });
     const priority: Record<CraftJobState, number> = {
       [CraftJobState.RUNNING]: 0,

@@ -413,21 +413,52 @@ describe('CraftJobService — launch()', () => {
 
     const result = await service.complete('job-1');
 
-    expect(result).toMatchObject({ state: CraftJobState.COMPLETED, successes: 1, failures: 0 });
+    expect(result).toMatchObject({
+      state: CraftJobState.COMPLETED,
+      successes: 1,
+      failures: 0,
+      grantedCharacterXp: 7,
+      grantedSkillXp: 17,
+    });
     // difficulté 20 → skill XP base 17, × 1 succès
     expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 17, mockManager);
     expect(mockProgression.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 7, 'CRAFT', mockManager);
     expect(outputs[0].resolvedQuantity).toBe(1);
   });
 
-  it('échec total → FAILED + aucune XP', async () => {
-    setupComplete(makeJob({ baseSuccessRate: 0, minSuccessRate: 0 }));
+  it('échec total (×1) → FAILED + XP skill partielle 25% + 0 XP perso (règle V1)', async () => {
+    setupComplete(makeJob({ baseSuccessRate: 0, minSuccessRate: 0, quantity: 1 }));
     forceRandom(0.99); // échec garanti
 
     const result = await service.complete('job-1');
 
-    expect(result).toMatchObject({ state: CraftJobState.FAILED, successes: 0 });
-    expect(mockSkills.applySkillXpInTx).not.toHaveBeenCalled();
+    // perSuccessSkillXp = 15 + floor(20/10) = 17 ; échec = floor(17 × 0.25) = 4.
+    expect(result).toMatchObject({
+      state: CraftJobState.FAILED,
+      successes: 0,
+      failures: 1,
+      grantedCharacterXp: 0,
+      grantedSkillXp: 4,
+    });
+    expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 4, mockManager);
+    expect(mockProgression.applyCharacterXpInTx).not.toHaveBeenCalled();
+  });
+
+  it('échec total (×3) → XP skill partielle multipliée par le nombre d\'échecs', async () => {
+    setupComplete(makeJob({ baseSuccessRate: 0, minSuccessRate: 0, quantity: 3 }));
+    forceRandom(0.99);
+
+    const result = await service.complete('job-1');
+
+    // 3 échecs × floor(17 × 0.25) = 3 × 4 = 12.
+    expect(result).toMatchObject({
+      state: CraftJobState.FAILED,
+      successes: 0,
+      failures: 3,
+      grantedCharacterXp: 0,
+      grantedSkillXp: 12,
+    });
+    expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 12, mockManager);
     expect(mockProgression.applyCharacterXpInTx).not.toHaveBeenCalled();
   });
 

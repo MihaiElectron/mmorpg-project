@@ -6,6 +6,7 @@ import { CharacterService } from '../characters/character.service';
 import { CraftingService } from './crafting.service';
 import { CraftJobService, CraftJobClaimResult } from './craft-job.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
+import { FAILURE_SKILL_XP_MULTIPLIER } from './crafting.constants';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { Item } from '../items/entities/item.entity';
 
@@ -17,12 +18,32 @@ import { Item } from '../items/entities/item.entity';
  */
 export type CraftExecuteResult = { mode: 'job'; job: CraftJobDto };
 
+export type CraftJobIngredientDto = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  objectMode: string;
+  requiredQuantity: number;
+  reservedQuantity: number;
+  consumedQuantity: number;
+};
+
+export type CraftJobOutputDto = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  quantity: number;
+  chance: number;
+  resolvedQuantity: number;
+};
+
 export type CraftJobDto = {
   jobId: string;
   recipeId: string;
   recipeName: string;
   stationType: string;
   quantity: number;
+  craftTimeMs: number;
   state: string;
   startedAt: Date;
   finishAt: Date;
@@ -30,13 +51,36 @@ export type CraftJobDto = {
   claimedAt: Date | null;
   successes: number;
   failures: number;
-  outputs: {
-    itemId: string;
-    itemName: string;
-    itemImage: string | null;
-    quantity: number;
-    resolvedQuantity: number;
-  }[];
+  // XP réellement accordée à la complétion (0 tant que RUNNING). Jamais recalculée client.
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
+  // Multiplicateur d'XP compétence appliqué aux tentatives échouées (règle V1).
+  failureSkillXpMultiplier: number;
+  ingredients: CraftJobIngredientDto[];
+  outputs: CraftJobOutputDto[];
+};
+
+export type CraftClaimItemDto = {
+  itemId: string;
+  itemName: string;
+  itemImage: string | null;
+  quantity: number;
+};
+
+/** Résumé complet renvoyé au claim — l'UI l'affiche tel quel (aucun recalcul). */
+export type CraftJobClaimSummaryDto = {
+  jobId: string;
+  state: string;
+  recipeName: string;
+  quantity: number;
+  successes: number;
+  failures: number;
+  produced: CraftClaimItemDto[];
+  ingredientsConsumed: CraftClaimItemDto[];
+  grantedCharacterXp: number;
+  grantedSkillXp: number;
+  completedAt: Date | null;
+  claimedAt: Date | null;
 };
 
 export type AvailableCraftingRecipe = {
@@ -197,11 +241,50 @@ export class CraftingController {
     return this.toCraftJobDtos(jobs);
   }
 
-  /** Réclame la production terminée. */
+  /** Réclame la production terminée et renvoie le résumé complet (déjà accordé). */
   @Post('jobs/:jobId/claim')
-  async claimJob(@Request() req, @Param('jobId') jobId: string): Promise<CraftJobClaimResult> {
+  async claimJob(
+    @Request() req,
+    @Param('jobId') jobId: string,
+  ): Promise<CraftJobClaimSummaryDto> {
     const character = await this.characterService.findFirstByUser(req.user.userId);
-    return this.craftJobService.claim(character.id, jobId);
+    const result: CraftJobClaimResult = await this.craftJobService.claim(character.id, jobId);
+
+    // Résolution nom/image depuis le CATALOGUE Item (produced + ingrédients consommés).
+    const itemIds = [
+      ...new Set([
+        ...result.produced.map((p) => p.itemId),
+        ...result.ingredientsConsumed.map((c) => c.itemId),
+      ]),
+    ];
+    const items = itemIds.length
+      ? await this.itemRepo.find({ where: { id: In(itemIds) }, select: ['id', 'name', 'image'] })
+      : [];
+    const itemById = new Map(items.map((it) => [it.id, it]));
+    const toItemDto = (entry: { itemId: string; quantity: number }): CraftClaimItemDto => {
+      const item = itemById.get(entry.itemId);
+      return {
+        itemId: entry.itemId,
+        itemName: item?.name ?? entry.itemId,
+        itemImage: item?.image ?? null,
+        quantity: entry.quantity,
+      };
+    };
+
+    return {
+      jobId: result.jobId,
+      state: result.state,
+      recipeName: result.recipeName,
+      quantity: result.quantity,
+      successes: result.successes,
+      failures: result.failures,
+      produced: result.produced.map(toItemDto),
+      ingredientsConsumed: result.ingredientsConsumed.map(toItemDto),
+      grantedCharacterXp: result.grantedCharacterXp,
+      grantedSkillXp: result.grantedSkillXp,
+      completedAt: result.completedAt,
+      claimedAt: result.claimedAt,
+    };
   }
 
   /**
@@ -217,11 +300,16 @@ export class CraftingController {
   private async toCraftJobDtos(
     jobs: import('./entities/craft-job.entity').CraftJob[],
   ): Promise<CraftJobDto[]> {
-    const outputItemIds = [
-      ...new Set(jobs.flatMap((j) => (j.outputs ?? []).map((o) => o.itemId))),
+    const itemIds = [
+      ...new Set(
+        jobs.flatMap((j) => [
+          ...(j.outputs ?? []).map((o) => o.itemId),
+          ...(j.ingredients ?? []).map((i) => i.itemId),
+        ]),
+      ),
     ];
-    const items = outputItemIds.length
-      ? await this.itemRepo.find({ where: { id: In(outputItemIds) }, select: ['id', 'name', 'image'] })
+    const items = itemIds.length
+      ? await this.itemRepo.find({ where: { id: In(itemIds) }, select: ['id', 'name', 'image'] })
       : [];
     const itemById = new Map(items.map((it) => [it.id, it]));
 
@@ -231,6 +319,7 @@ export class CraftingController {
       recipeName: job.recipeName || job.recipeId,
       stationType: job.stationType,
       quantity: job.quantity,
+      craftTimeMs: job.craftTimeMs,
       state: job.state,
       startedAt: job.startedAt,
       finishAt: job.finishAt,
@@ -238,6 +327,21 @@ export class CraftingController {
       claimedAt: job.claimedAt,
       successes: job.successes,
       failures: job.failures,
+      grantedCharacterXp: job.grantedCharacterXp,
+      grantedSkillXp: job.grantedSkillXp,
+      failureSkillXpMultiplier: FAILURE_SKILL_XP_MULTIPLIER,
+      ingredients: (job.ingredients ?? []).map((ing) => {
+        const item = itemById.get(ing.itemId);
+        return {
+          itemId: ing.itemId,
+          itemName: item?.name ?? ing.itemId,
+          itemImage: item?.image ?? null,
+          objectMode: ing.objectMode,
+          requiredQuantity: ing.requiredQuantity,
+          reservedQuantity: ing.reservedQuantity,
+          consumedQuantity: ing.consumedQuantity,
+        };
+      }),
       outputs: (job.outputs ?? []).map((o) => {
         const item = itemById.get(o.itemId);
         return {
@@ -245,6 +349,7 @@ export class CraftingController {
           itemName: item?.name ?? o.itemId,
           itemImage: item?.image ?? null,
           quantity: o.producedQuantity,
+          chance: o.chance,
           resolvedQuantity: o.resolvedQuantity,
         };
       }),

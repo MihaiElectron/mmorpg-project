@@ -25,7 +25,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Combat creature | Aggro, fuite, auto-attaque, respawn (20 s) |
 | Récolte | Timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
 | Loot | Hybrid STACKABLE/INSTANCE — `ItemMaterializationService` 4 chemins |
-| Craft | Action joueur unique **FABRIQUER** (station en WU, validation distance, UX produit-first) → **CraftJob** : `POST /crafting/craft` → `launch` (snapshot + escrow ingrédients STACKABLE/INSTANCE) → `scheduler.complete` (10 s, XP à la complétion) → `claim` (**seule matérialisation d'output**). Durée min 3 s (`MIN_CRAFT_TIME_MS`, garde Runtime `max(craftTimeMs, MIN)`). Craft instantané supprimé : CraftJob = unique workflow joueur, aucun output avant le claim. Détail : ADR-0009. |
+| Craft | Action joueur unique **FABRIQUER** (station en WU, validation distance, UX produit-first) → **CraftJob** : `POST /crafting/craft` → `launch` (snapshot + escrow ingrédients STACKABLE/INSTANCE) → `scheduler.complete` (10 s, XP à la complétion) → `claim` (**seule matérialisation d'output**). Durée min 3 s (`MIN_CRAFT_TIME_MS`, garde Runtime `max(craftTimeMs, MIN)`). Craft instantané supprimé : CraftJob = unique workflow joueur, aucun output avant le claim. **XP V1** : succès = XP perso + skill pleines ; échec = 0 perso + 25 % skill (`FAILURE_SKILL_XP_MULTIPLIER`), figée `grantedCharacterXp`/`grantedSkillXp` au complete(). DTO job enrichi (ingrédients réservés/consommés, chance output, XP accordée) + résumé de claim affiché en carte "Résultat réclamé". Détail : ADR-0009, ADR-0016. |
 | Skills joueur | Niveau, XP, nextLevelXp par skill — onglet panneau personnage |
 | Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
 | Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
@@ -65,7 +65,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | `server.emit` broadcast global — pas de rooms/zones | Medium | montée en charge |
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
 | — | Sprite goblin utilise `textureKey: 'turkey'` en placeholder | Low | contenu |
-| — | `synchronize: true` en dev — migrations TypeORM pour prod non créées (inclut `craft_job` / `craft_job_ingredient` / `craft_job_output` et `crafting_recipe.version`) | Medium | prod-readiness |
+| — | `synchronize: true` en dev — migrations TypeORM pour prod non créées (inclut `craft_job` / `craft_job_ingredient` / `craft_job_output` et `crafting_recipe.version`, ainsi que `craft_job.grantedCharacterXp INT DEFAULT 0` et `craft_job.grantedSkillXp INT DEFAULT 0`) | Medium | prod-readiness |
 | — | Mail monétaire expiré — l'argent reste bloqué dans le wallet `auction_escrow` (pas de retour vendeur automatique) | Medium | Auction MVP 2 |
 | — | Building : aucun seed créé, aucune texture réelle — placeholder debug diamond visible seulement | Low | contenu |
 | — | `CraftingRuntimePanel` toujours embarqué dans ActionPanel (devrait passer par WindowManager) | Low | WindowManager V2 |

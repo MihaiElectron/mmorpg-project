@@ -165,22 +165,32 @@ Character XP **et** Skill XP sont accordées **exclusivement** lors de la
 transition `RUNNING → COMPLETED`, dans la transaction de complétion. **Jamais au
 lancement, jamais au claim.**
 
-- **Character XP** — `ProgressionService.applyCharacterXpInTx(characterId,
-  craftCharacterXpReward, ProgressionSource.CRAFT, manager)` (ADR-0016, canal 1).
-- **Skill XP** — `calculateSkillXp(SkillXpContext{ domain:'crafting',
-  action:'craft', difficulty: snapshot.craftingDifficulty,
-  skillDefinitionKey: snapshot.requiredSkillKey, ... })` →
-  `SkillsService.applySkillXpInTx` (ADR-0016, canal 2).
+L'XP est calculée **par tentative** (règle succès/échec V1, détaillée dans
+ADR-0016 § Craft) :
+
+- **Succès** — `+craftCharacterXpReward` (Character XP) **et** Skill XP pleine
+  (`calculateSkillXp` depuis `snapshot.craftingDifficulty`).
+- **Échec** — **0 Character XP** et Skill XP **partielle** =
+  `floor(perSuccessSkillXp × FAILURE_SKILL_XP_MULTIPLIER)`, avec
+  `FAILURE_SKILL_XP_MULTIPLIER = 0.25` (constante métier V1, `crafting.constants.ts`).
+  Un échec ne produit **aucun output**.
+
+`complete()` **fige** l'XP réellement accordée sur le job
+(`grantedCharacterXp`, `grantedSkillXp`) : ces valeurs sont retournées par
+`GET /crafting/jobs` et le résumé de claim, et **affichées telles quelles** par le
+frontend (aucun recalcul client).
 
 Le **claim ne doit jamais influencer la progression** : il ne fait que
-matérialiser des objets. Un joueur qui ne réclame pas conserve tout de même l'XP
-gagnée à la complétion.
+matérialiser des objets, **sans accorder d'XP**. Un joueur qui ne réclame pas
+conserve tout de même l'XP gagnée à la complétion.
 
 Les valeurs XP proviennent du **snapshot** du job (Décision 4), donc immunisées
 contre toute modification ultérieure de la recette.
 
-Conformité ADR-0016 : aucune valeur d'XP compétence n'est stockée ; seule la
-**difficulté** figurée dans le snapshot alimente `SkillXpContext.difficulty`.
+Conformité ADR-0016 : le **template** ne stocke aucune valeur d'XP compétence
+(seule la **difficulté** alimente `SkillXpContext.difficulty`). Le montant
+d'XP compétence effectivement accordé est en revanche figé **sur le job**
+(`grantedSkillXp`) comme résultat de complétion.
 
 ---
 

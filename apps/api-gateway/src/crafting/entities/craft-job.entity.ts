@@ -134,6 +134,16 @@ export class CraftJob {
   @Column({ type: 'int', default: 0 })
   failures: number;
 
+  // XP réellement accordée au personnage à la complétion (jamais recalculée
+  // côté client). Succès uniquement : craftCharacterXpReward × successes.
+  @Column({ type: 'int', default: 0 })
+  grantedCharacterXp: number;
+
+  // XP compétence réellement accordée à la complétion (succès pleins + part
+  // d'échec FAILURE_SKILL_XP_MULTIPLIER). Figée ici, affichée telle quelle.
+  @Column({ type: 'int', default: 0 })
+  grantedSkillXp: number;
+
   @OneToMany(() => CraftJobIngredient, (ing) => ing.job, { cascade: true })
   ingredients: CraftJobIngredient[];
 

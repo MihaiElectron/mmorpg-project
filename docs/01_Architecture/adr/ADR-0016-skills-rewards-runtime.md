@@ -517,18 +517,60 @@ L'XP craft est accordée à la **complétion** du CraftJob (jamais au lancement 
 au claim) ; l'output n'est matérialisé qu'au **claim**, dans une transaction
 distincte.
 
+#### Règle XP succès / échec (V1)
+
+L'XP est calculée **par tentative** (`quantity` tentatives par job), depuis le
+**snapshot** du job uniquement :
+
+- **Succès** : `+craftCharacterXpReward` (XP personnage) **et** XP compétence
+  pleine (`calculateSkillXp`, dépend de `difficulty`) — un output est possible
+  selon la `chance` de chaque résultat.
+- **Échec** : **0 XP personnage**, XP compétence **partielle** =
+  `floor(perSuccessSkillXp × FAILURE_SKILL_XP_MULTIPLIER)` — **aucun output**.
+
+`FAILURE_SKILL_XP_MULTIPLIER = 0.25` est une **constante métier V1** unique
+(`crafting.constants.ts`), non configurable en DB, documentée ici (Runtime ⇄
+DevTools ⇄ ADR).
+
+> **Cohérence avec le coefficient d'`outcome`** — la valeur `0.25` est
+> volontairement **identique** au coefficient générique `failed` du modèle
+> `calculateSkillXp` (§ Outcome). Le craft V1 ne passe cependant **pas** par ce
+> coefficient : `buildCraftSkillXpContext` construit toujours un contexte
+> `success: true` (→ `perSuccessSkillXp`), et la part d'échec est appliquée
+> **au niveau du job** dans `complete()` via `FAILURE_SKILL_XP_MULTIPLIER`
+> (agrégation par nombre d'échecs). Les deux couches expriment la même règle
+> ("l'effort raté rapporte 25 %") ; toute évolution doit les garder alignées.
+
+Total accordé sur un job :
+
 ```
-CraftJobService.complete()  [transaction, RUNNING → COMPLETED]
+grantedCharacterXp = craftCharacterXpReward × successes
+grantedSkillXp     = perSuccessSkillXp × successes
+                   + floor(perSuccessSkillXp × 0.25) × failures
+```
+
+#### Stockage et affichage
+
+`complete()` **fige** `grantedCharacterXp` et `grantedSkillXp` sur le `CraftJob`
+(colonnes dédiées) au moment où l'XP est réellement appliquée. Le **frontend
+affiche ces valeurs telles quelles** (job en cours/terminé et résumé de claim) —
+il ne recalcule jamais l'XP. Le DevTools n'expose que des **estimations lecture
+seule** (`estimateCraftSkillXp`, aperçu échec 25 %), le serveur restant l'autorité.
+
+```
+CraftJobService.complete()  [transaction, RUNNING → COMPLETED/FAILED]
+  ├─ tirage succès/échecs par tentative depuis le snapshot
   ├─ consommation ingrédients réservés (ItemTransferService, CONSUME_FROM_CRAFT_ORDER)
-  ├─ [si succès] ProgressionService.applyCharacterXpInTx (Character XP)
-  ├─ context = buildCraftSkillXpContext(job snapshot, skillLevel)
-  │   // outcome = 'failed' si craft raté, 'success'/'exceptional' si réussi
-  │     { skillDefinitionKey, xpAmount } = calculateSkillXp(context)
-  │     if (xpAmount > 0) : SkillsService.applySkillXpInTx(...)
-  └─ commit
+  ├─ perSuccessSkillXp = calculateSkillXp(buildCraftSkillXpContext(job, skillLevel)).xpAmount
+  ├─ grantedSkillXp     = perSuccessSkillXp×successes + floor(perSuccessSkillXp×0.25)×failures
+  ├─ grantedCharacterXp = craftCharacterXpReward×successes
+  ├─ if (grantedSkillXp > 0)     : SkillsService.applySkillXpInTx(...)
+  ├─ if (grantedCharacterXp > 0) : ProgressionService.applyCharacterXpInTx(...)
+  ├─ job.grantedCharacterXp / job.grantedSkillXp figés
+  └─ commit  (idempotent : un job non-RUNNING n'accorde jamais de nouveau)
 
 CraftJobService.claim()  [transaction séparée, COMPLETED → CLAIMED]
-  └─ production item (ItemMaterializationService)  // SEULE matérialisation
+  └─ production item (ItemMaterializationService)  // SEULE matérialisation ; aucune XP
 ```
 
 ---
