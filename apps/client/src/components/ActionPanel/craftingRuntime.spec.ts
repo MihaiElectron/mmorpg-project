@@ -10,6 +10,7 @@ import {
   formatCraftingServerErrorDetail,
   formatCraftSeconds,
   ingredientAvailability,
+  isCraftStationPanelOpenFor,
   matchesRecipeQuery,
   parseCraftingServerError,
   recipeProductLabel,
@@ -235,5 +236,29 @@ describe("craft UX produit-first", () => {
     expect(estimateCraftSkillXp(100)).toBe(25);
     expect(estimateCraftSkillXp(150)).toBe(25); // borné à 100
     expect(estimateCraftSkillXp(-5)).toBe(15); // borné à 0
+  });
+});
+
+describe("isCraftStationPanelOpenFor", () => {
+  const stationTarget = (id: string) => ({ kind: "crafting_station", id });
+
+  it("vrai si le panneau est ouvert pour LA station courante (même id)", () => {
+    expect(isCraftStationPanelOpenFor(stationTarget("s1"), { id: "s1" })).toBe(true);
+  });
+
+  it("faux si une autre station est sélectionnée (id différent)", () => {
+    expect(isCraftStationPanelOpenFor(stationTarget("s2"), { id: "s1" })).toBe(false);
+  });
+
+  it("faux si aucun panneau craft ouvert", () => {
+    expect(isCraftStationPanelOpenFor(stationTarget("s1"), null)).toBe(false);
+  });
+
+  it("faux si la cible n'est pas une crafting_station", () => {
+    expect(isCraftStationPanelOpenFor({ kind: "creature", id: "s1" }, { id: "s1" })).toBe(false);
+  });
+
+  it("faux si la cible est nulle", () => {
+    expect(isCraftStationPanelOpenFor(null, { id: "s1" })).toBe(false);
   });
 });

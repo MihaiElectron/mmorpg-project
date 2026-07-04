@@ -296,3 +296,22 @@ function numberOrUndefined(value: unknown): number | undefined {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : undefined;
 }
+
+/**
+ * Le panneau de craft est-il déjà ouvert pour CE target station ? Comparaison
+ * par identité (kind + id), jamais par le libellé de l'action. Sert à masquer le
+ * bouton « Ouvrir … » redondant quand la station courante est déjà ouverte, tout
+ * en laissant l'action disponible pour une autre station ou après fermeture.
+ */
+export function isCraftStationPanelOpenFor(
+  target: { kind?: string | null; id?: string | null } | null | undefined,
+  openStation: { id?: string | null } | null | undefined,
+): boolean {
+  return (
+    !!target &&
+    target.kind === "crafting_station" &&
+    !!openStation &&
+    openStation.id != null &&
+    openStation.id === target.id
+  );
+}

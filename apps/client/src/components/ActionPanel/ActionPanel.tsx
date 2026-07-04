@@ -8,7 +8,7 @@ import { commandRegistry, autocompleteCommand } from "../../phaser/admin/command
 import HealthBar from "../HealthBar/HealthBar";
 import { getDevToolsSocket, getWorldScene } from "../DevTools/devtoolsBridge";
 import CraftingRuntimePanel from "./CraftingRuntimePanel";
-import type { CraftingStationTarget } from "./craftingRuntime";
+import { isCraftStationPanelOpenFor, type CraftingStationTarget } from "./craftingRuntime";
 
 type ConsoleLine = { text: string; ok: boolean };
 
@@ -43,6 +43,12 @@ export default function ActionPanel() {
   const token   = localStorage.getItem("token") ?? "";
   const isAdmin = decodeJwtRole(token) === "admin";
   const hasOverlap = overlappingTargets.length > 1;
+  // Vrai quand le CraftingRuntimePanel est ouvert POUR la station ciblée (même id).
+  // Pilote à la fois le masquage du bouton « Ouvrir … » redondant (l'unique action
+  // d'une station) ET le rendu du panneau : on n'affiche jamais l'ancien panneau
+  // (station A) sous l'en-tête d'une autre station ciblée (station B).
+  const craftPanelOpenForTarget = isCraftStationPanelOpenFor(target, craftingStation);
+  const visibleActions = craftPanelOpenForTarget ? [] : actions;
 
   // ── Fermeture au clic extérieur (sauf canvas Phaser) ─────────────────────
   useEffect(() => {
@@ -299,7 +305,7 @@ export default function ActionPanel() {
 
       {target.kind !== "player" && (
         <div className="action-panel__actions">
-          {actions.map((action) => (
+          {visibleActions.map((action) => (
             <button
               key={action}
               className="action-panel__button"
@@ -319,7 +325,7 @@ export default function ActionPanel() {
         </div>
       )}
 
-      {target.kind === "crafting_station" && craftingStation && (
+      {craftPanelOpenForTarget && craftingStation && (
         <CraftingRuntimePanel
           station={craftingStation}
           onClose={() => setCraftingStation(null)}
