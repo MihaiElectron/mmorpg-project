@@ -6,14 +6,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
-import { Item, ObjectMode } from '../items/entities/item.entity';
-import {
-  ItemInstance,
-  ItemInstanceContainerType,
-  ItemInstanceState,
-  ItemInstanceType,
-} from '../item-instances/entities/item-instance.entity';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import { Item } from '../items/entities/item.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
@@ -41,6 +35,8 @@ import {
 } from '../progression/progression.service';
 import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
 import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
+import { CraftIngredientResolver } from './craft-ingredient-resolver';
+import { computeCraftSuccessRate } from './craft-success-rate';
 
 // ─── Seed definitions ─────────────────────────────────────────────────────────
 // Les itemCategory réfèrent à Item.category (cherché par (category, 'material')
@@ -252,6 +248,7 @@ export class CraftingService implements OnModuleInit {
     private readonly itemMaterialization: ItemMaterializationService,
     private readonly progressionService: ProgressionService,
     private readonly itemTransferService: ItemTransferService,
+    private readonly craftIngredientResolver: CraftIngredientResolver,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -430,85 +427,30 @@ export class CraftingService implements OnModuleInit {
         );
       }
 
-      // ── 5. Taux de succès ─────────────────────────────────────────────────
-      // clamp(base + (playerLevel - required) × bonus, min, max)
-      const successRate = Math.min(
-        recipe.maxSuccessRate,
-        Math.max(
-          recipe.minSuccessRate,
-          recipe.baseSuccessRate +
-            (playerSkill.level - recipe.requiredSkillLevel) *
-              recipe.successBonusPerLevel,
-        ),
+      // ── 5. Taux de succès (fonction pure partagée) ────────────────────────
+      const successRate = computeCraftSuccessRate({
+        baseSuccessRate: recipe.baseSuccessRate,
+        successBonusPerLevel: recipe.successBonusPerLevel,
+        minSuccessRate: recipe.minSuccessRate,
+        maxSuccessRate: recipe.maxSuccessRate,
+        requiredSkillLevel: recipe.requiredSkillLevel,
+        skillLevel: playerSkill.level,
+      });
+
+      // ── 6. Résolution + validation des ingrédients (lecture seule, partagée) ─
+      // CraftIngredientResolver verrouille et valide STACKABLE (Inventory) et
+      // INSTANCE (ItemInstance AVAILABLE/INVENTORY/NORMAL). Ce service legacy/
+      // interne consomme ensuite immédiatement (sections 8+).
+      const {
+        isInstanceIngredient,
+        stackRowByItemId: invMap,
+        instancesByItemId: lockedInstancesByItemId,
+      } = await this.craftIngredientResolver.resolve(
+        manager,
+        characterId,
+        recipe.ingredients,
+        quantity,
       );
-
-      // ── 6. Lock inventaire + validation quantités ─────────────────────────
-      // Les ingrédients peuvent être STACKABLE (stock Inventory) ou INSTANCE
-      // (une ItemInstance NORMAL/AVAILABLE/INVENTORY par unité). On résout
-      // objectMode via Item, puis on valide chaque type sur sa source réelle.
-      const ingredientItemIds = recipe.ingredients.map((i) => i.itemId);
-      const ingredientItems =
-        ingredientItemIds.length > 0
-          ? await manager.find(Item, { where: { id: In(ingredientItemIds) } })
-          : [];
-      const objectModeByItemId = new Map<string, ObjectMode>();
-      for (const it of ingredientItems) objectModeByItemId.set(it.id, it.objectMode);
-      const isInstanceIngredient = (itemId: string): boolean =>
-        objectModeByItemId.get(itemId) === ObjectMode.INSTANCE;
-
-      const stackableIds = ingredientItemIds.filter((id) => !isInstanceIngredient(id));
-      const instanceIds = ingredientItemIds.filter((id) => isInstanceIngredient(id));
-
-      // STACKABLE — lignes Inventory verrouillées.
-      const inventoryRows =
-        stackableIds.length > 0
-          ? await manager.find(Inventory, {
-              where: {
-                character: { id: characterId },
-                item: { id: In(stackableIds) },
-              },
-              relations: ['item'],
-              lock: { mode: 'pessimistic_write' },
-            })
-          : [];
-      const invMap = new Map<string, Inventory>();
-      for (const row of inventoryRows) {
-        invMap.set(row.item.id, row);
-      }
-
-      // INSTANCE — instances NORMAL/AVAILABLE/INVENTORY du personnage, verrouillées.
-      const lockedInstancesByItemId = new Map<string, ItemInstance[]>();
-      for (const itemId of instanceIds) {
-        const instances = await manager
-          .getRepository(ItemInstance)
-          .createQueryBuilder('i')
-          .setLock('pessimistic_write')
-          .where(
-            'i.itemId = :itemId AND i.ownerId = :ownerId AND i.containerType = :containerType AND i.state = :state AND i.instanceType = :instanceType',
-            {
-              itemId,
-              ownerId: characterId,
-              containerType: ItemInstanceContainerType.INVENTORY,
-              state: ItemInstanceState.AVAILABLE,
-              instanceType: ItemInstanceType.NORMAL,
-            },
-          )
-          .orderBy('i.createdAt', 'ASC')
-          .getMany();
-        lockedInstancesByItemId.set(itemId, instances);
-      }
-
-      for (const ing of recipe.ingredients) {
-        const needed = ing.requiredQuantity * quantity;
-        const available = isInstanceIngredient(ing.itemId)
-          ? (lockedInstancesByItemId.get(ing.itemId)?.length ?? 0)
-          : (invMap.get(ing.itemId)?.quantity ?? 0);
-        if (available < needed) {
-          throw new BadRequestException(
-            `Inventaire insuffisant : ${available} disponibles, ${needed} requis`,
-          );
-        }
-      }
 
       // ── 7. Tentatives ─────────────────────────────────────────────────────
       const consumedMap = new Map<string, number>();

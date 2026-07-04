@@ -20,6 +20,7 @@ import { SkillsService } from '../skills/skills.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
@@ -145,6 +146,7 @@ describe('CraftJobService — launch()', () => {
         { provide: CraftingService, useValue: mockCrafting },
         { provide: ProgressionService, useValue: mockProgression },
         { provide: ItemMaterializationService, useValue: mockMaterialization },
+        CraftIngredientResolver,
       ],
     }).compile();
 

@@ -31,6 +31,8 @@ import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-con
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
 import { MIN_CRAFT_TIME_MS } from './crafting.constants';
+import { CraftIngredientResolver } from './craft-ingredient-resolver';
+import { computeCraftSuccessRate } from './craft-success-rate';
 import { CraftJob, CraftJobState } from './entities/craft-job.entity';
 import { CraftJobIngredient } from './entities/craft-job-ingredient.entity';
 import { CraftJobOutput } from './entities/craft-job-output.entity';
@@ -81,6 +83,7 @@ export class CraftJobService {
     private readonly craftingService: CraftingService,
     private readonly progressionService: ProgressionService,
     private readonly itemMaterialization: ItemMaterializationService,
+    private readonly craftIngredientResolver: CraftIngredientResolver,
   ) {}
 
   /**
@@ -146,66 +149,21 @@ export class CraftJobService {
         );
       }
 
-      // ── 5. Disponibilité des ingrédients (STACKABLE / INSTANCE) ─────────────
-      const ingredientItemIds = recipe.ingredients.map((i) => i.itemId);
-      const ingredientItems =
-        ingredientItemIds.length > 0
-          ? await manager.find(Item, { where: { id: In(ingredientItemIds) } })
-          : [];
-      const objectModeByItemId = new Map<string, ObjectMode>();
-      for (const it of ingredientItems) objectModeByItemId.set(it.id, it.objectMode);
-      const isInstanceIngredient = (itemId: string): boolean =>
-        objectModeByItemId.get(itemId) === ObjectMode.INSTANCE;
-
-      const stackableIds = ingredientItemIds.filter((id) => !isInstanceIngredient(id));
-      const instanceIds = ingredientItemIds.filter((id) => isInstanceIngredient(id));
-
-      const inventoryRows =
-        stackableIds.length > 0
-          ? await manager.find(Inventory, {
-              where: {
-                character: { id: characterId },
-                item: { id: In(stackableIds) },
-              },
-              relations: ['item'],
-              lock: { mode: 'pessimistic_write' },
-            })
-          : [];
-      const invMap = new Map<string, Inventory>();
-      for (const row of inventoryRows) invMap.set(row.item.id, row);
-
-      const lockedInstancesByItemId = new Map<string, ItemInstance[]>();
-      for (const itemId of instanceIds) {
-        const instances = await manager
-          .getRepository(ItemInstance)
-          .createQueryBuilder('i')
-          .setLock('pessimistic_write')
-          .where(
-            'i.itemId = :itemId AND i.ownerId = :ownerId AND i.containerType = :containerType AND i.state = :state AND i.instanceType = :instanceType',
-            {
-              itemId,
-              ownerId: characterId,
-              containerType: ItemInstanceContainerType.INVENTORY,
-              state: ItemInstanceState.AVAILABLE,
-              instanceType: ItemInstanceType.NORMAL,
-            },
-          )
-          .orderBy('i.createdAt', 'ASC')
-          .getMany();
-        lockedInstancesByItemId.set(itemId, instances);
-      }
-
-      for (const ing of recipe.ingredients) {
-        const needed = ing.requiredQuantity * quantity;
-        const available = isInstanceIngredient(ing.itemId)
-          ? (lockedInstancesByItemId.get(ing.itemId)?.length ?? 0)
-          : (invMap.get(ing.itemId)?.quantity ?? 0);
-        if (available < needed) {
-          throw new BadRequestException(
-            `Inventaire insuffisant : ${available} disponibles, ${needed} requis`,
-          );
-        }
-      }
+      // ── 5. Résolution + validation des ingrédients (lecture seule, partagée) ─
+      // CraftIngredientResolver verrouille et valide STACKABLE (Inventory) et
+      // INSTANCE (AVAILABLE/INVENTORY/NORMAL). Ce service RÉSERVE ensuite (escrow)
+      // au lieu de consommer — aucune matérialisation ici.
+      const {
+        objectModeByItemId,
+        isInstanceIngredient,
+        stackRowByItemId: invMap,
+        instancesByItemId: lockedInstancesByItemId,
+      } = await this.craftIngredientResolver.resolve(
+        manager,
+        characterId,
+        recipe.ingredients,
+        quantity,
+      );
 
       // ── 6. Création du job (snapshot immuable) ─────────────────────────────
       // Garde Runtime : aucune fabrication joueur ne peut avoir une durée unitaire
@@ -346,14 +304,16 @@ export class CraftJobService {
         skillLevel = playerSkill.level;
       }
 
-      // Taux de succès depuis le SNAPSHOT uniquement (jamais la recette vivante).
-      const successRate = Math.min(
-        job.maxSuccessRate,
-        Math.max(
-          job.minSuccessRate,
-          job.baseSuccessRate + (skillLevel - job.requiredSkillLevel) * job.successBonusPerLevel,
-        ),
-      );
+      // Taux de succès depuis le SNAPSHOT uniquement (jamais la recette vivante),
+      // via la fonction pure partagée avec le craft instantané.
+      const successRate = computeCraftSuccessRate({
+        baseSuccessRate: job.baseSuccessRate,
+        successBonusPerLevel: job.successBonusPerLevel,
+        minSuccessRate: job.minSuccessRate,
+        maxSuccessRate: job.maxSuccessRate,
+        requiredSkillLevel: job.requiredSkillLevel,
+        skillLevel,
+      });
 
       let successes = 0;
       let failures = 0;

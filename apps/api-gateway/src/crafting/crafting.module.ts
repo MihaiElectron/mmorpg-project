@@ -11,6 +11,7 @@ import { CraftJobIngredient } from './entities/craft-job-ingredient.entity';
 import { CraftJobOutput } from './entities/craft-job-output.entity';
 import { CraftingService } from './crafting.service';
 import { CraftJobService } from './craft-job.service';
+import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { CraftJobScheduler } from './craft-job.scheduler';
 import { CraftingController } from './crafting.controller';
 import { SkillsModule } from '../skills/skills.module';
@@ -41,7 +42,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
     ItemTransferModule,         // pour consommer les ingrédients INSTANCE (CRAFT_CONSUME)
   ],
   controllers: [CraftingController],
-  providers: [CraftingService, CraftJobService, CraftJobScheduler],
+  providers: [CraftingService, CraftJobService, CraftJobScheduler, CraftIngredientResolver],
   exports: [CraftingService, CraftJobService],
 })
 export class CraftingModule {}

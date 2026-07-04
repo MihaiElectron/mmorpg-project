@@ -16,6 +16,7 @@ import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { SkillsService } from '../skills/skills.service';
 import { WorldService } from '../world/world.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
+import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { ProgressionService } from '../progression/progression.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ObjectMode } from '../items/entities/item.entity';
@@ -87,6 +88,7 @@ describe('CraftingService — seedDefaultRecipes', () => {
         { provide: ItemMaterializationService, useValue: { materialize: jest.fn() } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        CraftIngredientResolver,
       ],
     }).compile();
 
@@ -462,6 +464,7 @@ describe('CraftingService — craft()', () => {
         { provide: ItemMaterializationService, useValue: materializeMock },
         { provide: ProgressionService, useValue: mockProgressionService },
         { provide: ItemTransferService, useValue: mockItemTransferService },
+        CraftIngredientResolver,
       ],
     }).compile();
 
