@@ -513,18 +513,22 @@ Il expose uniquement :
 
 Le Runtime calcule l'XP depuis `difficulty`, `quality`, `outcome` — jamais depuis un champ de template.
 
+L'XP craft est accordée à la **complétion** du CraftJob (jamais au lancement ni
+au claim) ; l'output n'est matérialisé qu'au **claim**, dans une transaction
+distincte.
+
 ```
-CraftingService.craft()  [dans une transaction unique]
-  ├─ consommation ingrédients (ItemTransferService)
-  ├─ [si succès] production item (ItemMaterializationService)
+CraftJobService.complete()  [transaction, RUNNING → COMPLETED]
+  ├─ consommation ingrédients réservés (ItemTransferService, CONSUME_FROM_CRAFT_ORDER)
   ├─ [si succès] ProgressionService.applyCharacterXpInTx (Character XP)
-  ├─ context = buildCraftContext(recipe, station, outcome, quality)
+  ├─ context = buildCraftSkillXpContext(job snapshot, skillLevel)
   │   // outcome = 'failed' si craft raté, 'success'/'exceptional' si réussi
   │     { skillDefinitionKey, xpAmount } = calculateSkillXp(context)
   │     if (xpAmount > 0) : SkillsService.applySkillXpInTx(...)
   └─ commit
-  ↓
-Émission : character_xp_update, skill_update, craft_result
+
+CraftJobService.claim()  [transaction séparée, COMPLETED → CLAIMED]
+  └─ production item (ItemMaterializationService)  // SEULE matérialisation
 ```
 
 ---

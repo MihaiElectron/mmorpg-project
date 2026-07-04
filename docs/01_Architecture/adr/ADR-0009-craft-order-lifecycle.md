@@ -36,17 +36,21 @@
 
 ## Context
 
-Le projet dispose d'un **craft instantané** opérationnel via les stations de
-craft placées dans le monde : validation serveur (station, distance,
-inventaire, skill), consommation des ingrédients STACKABLE (`Inventory`) et
-INSTANCE (`ItemTransferService` transition `CRAFT_CONSUME` → `DESTROYED`),
-matérialisation de l'output via `ItemMaterializationService`, XP personnage
-(`ProgressionService`) et XP compétence (`calculateSkillXp` + `applySkillXpInTx`)
-— le tout dans une **transaction unique**.
+Le projet disposait à l'origine d'un **craft instantané** (`CraftingService.craft()`)
+via les stations : validation serveur, consommation des ingrédients et
+matérialisation **immédiate** de l'output dans une transaction unique.
 
-Un **CraftJob** est différent : c'est une production **différée**, **persistante**
-et **résistante à la déconnexion**. Il ne remplace pas le craft instantané ; il
-constitue une seconde voie de production.
+**Ce craft instantané a été entièrement supprimé** (unification joueur, commits
+`3be3038`/`6b81063` puis suppression finale `c3046ef`). Il n'existe plus aucun
+chemin — joueur, socket ou interne — produisant un output immédiat : la méthode
+`CraftingService.craft()` a été retirée et l'ancien bypass socket `craft:start`
+supprimé. La logique de validation encore utile (proximité de station,
+résolution/verrou des ingrédients, calcul du taux de succès) a été extraite en
+services/fonctions partagés que le CraftJob réutilise.
+
+Un **CraftJob** est une production **différée**, **persistante** et **résistante à
+la déconnexion**. C'est l'**unique voie de fabrication joueur** (action
+« FABRIQUER ») : l'output n'est **jamais matérialisé avant le claim**.
 
 Cette révision (2026-07-03) resynchronise l'ADR avec l'architecture réelle du
 projet, qui a évolué depuis la rédaction initiale :
@@ -65,12 +69,13 @@ révision les tranche explicitement.
 ## Decision
 
 Un **CraftJob** est un enregistrement métier durable dont le **cycle de vie est
-possédé par le serveur**. Il ne remplace pas le craft instantané des stations.
+possédé par le serveur**. C'est l'**unique voie de fabrication joueur** ; le craft
+instantané (`CraftingService.craft()`) a été supprimé (Décision 9).
 
 Périmètre initial (V1 personnel) :
 
 - CraftJob **privé** d'un joueur uniquement ;
-- validation de recette réutilisée du craft instantané (logique partagée) ;
+- validation de recette via des services/fonctions partagés réutilisables ;
 - ingrédients **réservés au lancement** par escrow d'**items** (aucune monnaie) ;
 - **aucun objet n'existe avant le claim** : la complétion ne crée rien ;
 - annulation avant complétion → restitution des ingrédients réservés ;
@@ -403,13 +408,12 @@ du workflow ; l'UI n'affiche que le résultat.
   (Recipe Editor : saisie en secondes, min 3, message d'erreur, sauvegarde
   bloquée). Une recette invalide ne peut pas être sauvegardée.
 - **Toute fabrication joueur crée un CraftJob.** Le craft instantané
-  (`CraftingService.craft`) devient **legacy/interne/admin/tests** : il n'est
-  jamais déclenché par le joueur.
+  (`CraftingService.craft()`) a été **supprimé** : aucun chemin (joueur, socket
+  ou interne) ne matérialise d'output immédiat.
 - **Endpoint unique** `POST /crafting/craft` (routeur autoritaire) : renvoie un
-  résultat **typé** `{ mode: "instant" | "job", … }`. Aujourd'hui il renvoie
-  toujours `mode: "job"`. Si une règle serveur future produit un craft immédiat
-  (premium, NPC, settlement…), **le frontend ne change pas** (il gère déjà les
-  deux modes). L'endpoint de lancement séparé (`POST /crafting/jobs`) est
+  résultat **typé** `{ mode: "job", … }`. Le discriminant `mode` est conservé
+  pour permettre une extension serveur future (un autre mode) sans casser le
+  contrat client. L'endpoint de lancement séparé (`POST /crafting/jobs`) est
   supprimé côté joueur ; restent `GET /crafting/jobs` et
   `POST /crafting/jobs/:id/claim`.
 
@@ -424,7 +428,7 @@ seul de ces trois endroits.
 
 Positives :
 
-- Sépare la production différée du craft instantané.
+- Production différée à output unique au claim (le craft instantané est retiré).
 - **Aucune ItemInstance fantôme** : les objets n'existent qu'au claim.
 - Annulation, complétion et claim testables et idempotents.
 - Snapshot + trois versions garantissent des résultats reproductibles.
@@ -469,9 +473,11 @@ de requêtes) sont différés.
   inutile et le stockage superflu.
 - **Consommer les ingrédients au claim** : rejeté — permettrait le re-spend et la
   duplication entre lancement et claim ; l'escrow au lancement est requis.
-- **Réutiliser directement `POST /crafting/craft`** : rejeté — le craft instantané
-  consomme et produit en une requête ; le CraftJob exige escrow, délai,
-  complétion différée et claim.
+- **Réutiliser directement le craft instantané (`CraftingService.craft`) pour le
+  joueur** : rejeté — il consomme et produit en une seule requête ; le CraftJob
+  exige escrow, délai, complétion différée et claim. Depuis la Décision 9,
+  `POST /crafting/craft` route vers le CraftJob ; le craft instantané a depuis
+  été supprimé.
 - **Introduire `QUEUED` en V1** : rejeté — état mort sans file d'attente réelle.
 - **Coupler à Economy Core dès la V1** : rejeté pour le CraftJob personnel
   (escrow d'items suffit) ; réservé aux orders publics/settlement différés.

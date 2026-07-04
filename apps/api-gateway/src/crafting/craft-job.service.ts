@@ -305,7 +305,7 @@ export class CraftJobService {
       }
 
       // Taux de succès depuis le SNAPSHOT uniquement (jamais la recette vivante),
-      // via la fonction pure partagée avec le craft instantané.
+      // via la fonction pure de calcul du taux de succès.
       const successRate = computeCraftSuccessRate({
         baseSuccessRate: job.baseSuccessRate,
         successBonusPerLevel: job.successBonusPerLevel,
@@ -408,8 +408,8 @@ export class CraftJobService {
    *
    * SEUL endroit où `ItemMaterializationService` est appelé pour un CraftJob :
    * l'output n'existe qu'ici (ni au launch, ni au scheduler). Les objets créés
-   * sont EXACTEMENT ceux qu'aurait produits le craft instantané (mêmes quantités
-   * résolues, même source CRAFT, même destination INVENTORY).
+   * proviennent des quantités résolues à la complétion (source CRAFT,
+   * destination INVENTORY).
    *
    * Idempotent : un job déjà CLAIMED lève 409 (jamais deux créations). Un job
    * FAILED ne peut jamais être claim. Le snapshot (`craft_job_output.resolvedQuantity`)

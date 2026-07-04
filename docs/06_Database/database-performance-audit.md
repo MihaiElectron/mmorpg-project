@@ -173,8 +173,8 @@ globales et passer à des requêtes par zone, page, filtre et curseur.
 
 ### Points forts
 
-- `CraftingService.craft()` est transactionnel.
-- Le craft verrouille pessimiste les lignes `Inventory` consommées.
+- Le craft joueur (CraftJob : `launch` / `complete` / `claim`) est transactionnel.
+- Le lancement verrouille pessimiste les lignes `Inventory` réservées (escrow).
 - Les flows d'équipement/unequip/delete character utilisent des transactions.
 
 ### Risques

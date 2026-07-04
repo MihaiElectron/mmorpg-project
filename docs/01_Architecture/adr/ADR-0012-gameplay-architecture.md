@@ -439,6 +439,12 @@ Rejected because:
 Implement skill logic directly inside `CreaturesGateway`,
 `ResourcesGateway`, and `CraftingGateway`.
 
+> Note : `CraftingGateway` a depuis été **supprimée** — il n'existe plus aucun
+> WebSocket craft (`craft:start` / `craft:result` retirés). Le craft joueur passe
+> par HTTP (`POST /crafting/craft` → CraftJob → claim) ; non-régression couverte
+> par `crafting.no-instant-bypass.spec`. La mention ci-dessus reste comme exemple
+> historique de l'alternative rejetée.
+
 Rejected because:
 
 - gateways become authoritative and untestable (large handlers with mixed

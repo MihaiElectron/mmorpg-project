@@ -85,8 +85,11 @@ Objectifs :
 - `player_move` ;
 - `interact_resource` ;
 - `attack_creature` ;
-- `craft:start` ;
 - `admin:*`.
+
+_Note : `craft:start` retiré de cette liste — la `CraftingGateway` et son bypass
+socket ont été supprimés (`6b81063`, `c3046ef`). Le craft joueur passe par
+`POST /crafting/craft` (HTTP) ; aucune surface socket craft à rate-limiter._
 
 Risque traité : brute force, socket spam, flood admin, DoS logique.
 

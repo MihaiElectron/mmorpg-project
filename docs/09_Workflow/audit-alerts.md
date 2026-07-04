@@ -136,9 +136,11 @@ Ordre de correction recommandé :
 ### SEC-BLOCKER-003 - Authentification WebSocket sensible non garantie
 
 - Source audit : `backend-websocket-security-audit.md`
-- Constat court : `AdminGateway` et `CraftingGateway` ne montrent pas de
-  `handleConnection` propre ; ils dépendent de `client.data`.
-- Impact concret : event admin ou craft utilisable si la provenance de
+- Constat court : `AdminGateway` ne montre pas de `handleConnection` propre ;
+  il dépend de `client.data`. (`CraftingGateway` a depuis été **supprimée** —
+  plus aucun WebSocket craft ; le craft passe par HTTP `POST /crafting/craft` →
+  CraftJob, non-régression `crafting.no-instant-bypass.spec`.)
+- Impact concret : event admin utilisable si la provenance de
   `client.data.userId/role` n'est pas garantie.
 - Correction attendue : guard WebSocket ou authentification centralisée sur
   chaque gateway sensible ; revalidation rôle et comportement token expiré.

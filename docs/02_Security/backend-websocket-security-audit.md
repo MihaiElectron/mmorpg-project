@@ -58,7 +58,7 @@ admin sans audit log durable, et provenance de `client.data.role` dans
 | `WorldGateway` | `join_world`, `player_move` | `WsAuthService` | join vérifie ownership character | mouvement accepte intentions WU client | `Implemented` / `Not verified` |
 | `ResourcesGateway` | `get_resources`, `interact_resource` | `WsAuthService` | utilise `client.data.player` | range/state revalidés à chaque tick | `Implemented` |
 | `CreaturesGateway` | `get_creatures`, `attack_creature` | `WsAuthService` | utilise `client.data.player` | cooldown et range côté service | `Implemented` |
-| `CraftingGateway` | `craft:start` | pas de hook propre observé | vérifie `client.data.userId` | dépend du namespace partagé | `Not verified` |
+| `CraftingGateway` _(supprimé)_ | ~~`craft:start`~~ | — | — | Gateway et bypass socket supprimés (`6b81063`, `c3046ef`) ; toute fabrication passe par `POST /crafting/craft` → CraftJob. Non-régression : `crafting.no-instant-bypass.spec`. | `Removed` |
 | `AdminGateway` | nombreux `admin:*` | pas de hook propre observé | vérifie `client.data.role === 'admin'` | provenance du rôle non indépendante | `Not verified` |
 
 ### Événements admin observés
@@ -115,7 +115,6 @@ le monde ou les règles gameplay.
 `Not verified` :
 
 - `AdminGateway` n'a pas de `handleConnection` propre observé.
-- `CraftingGateway` n'a pas de `handleConnection` propre observé.
 - L'ordre d'exécution garanti entre gateways du namespace partagé.
 - Revalidation d'un token déjà connecté après expiration, révocation ou rôle
   modifié.
@@ -209,7 +208,6 @@ le monde ou les règles gameplay.
 - `player_move` rejette NaN/Infinity via `Number.isFinite`.
 - `interact_resource` vérifie `targetId` string.
 - `attack_creature` vérifie `targetId` string.
-- `craft:start` valide recipeId string et quantity entier 1-99.
 - Admin events utilisent des validations manuelles par event.
 
 `Missing` / `Not verified` :
@@ -291,8 +289,7 @@ le monde ou les règles gameplay.
 
 `Not verified` :
 
-- authentication propre de `CraftingGateway` si utilisé sans autre gateway.
-- rate limiting craft.
+- rate limiting craft (endpoint HTTP `POST /crafting/craft`).
 - replay/double-submit idempotency.
 
 ### Inventaire

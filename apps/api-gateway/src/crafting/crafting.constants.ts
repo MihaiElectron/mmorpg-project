@@ -9,8 +9,8 @@
 
 /**
  * Durée minimale d'une recette joueur (ms). Aucune recette joueur ne peut être
- * instantanée : toute fabrication passe par un CraftJob. Le craft instantané
- * (`CraftingService.craft`) reste réservé au legacy/interne/admin/tests.
+ * instantanée : toute fabrication passe par un CraftJob (FABRIQUER → launch →
+ * scheduler → claim), l'output n'étant matérialisé qu'au claim.
  */
 export const MIN_CRAFT_TIME_MS = 3000;
 
