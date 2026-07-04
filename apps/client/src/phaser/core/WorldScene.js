@@ -85,6 +85,12 @@ const CRAFTING_STATION_LABEL_STYLE = Object.freeze({
   padding: { x: 4, y: 2 },
 });
 
+// Icône d'interaction affichée au survol d'une craft station. Texture générée
+// une seule fois via Graphics (aucun asset externe). Affichée au-dessus du label.
+const CRAFT_INTERACTION_ICON_KEY = "craft_interaction_icon";
+const CRAFT_INTERACTION_ICON_DEPTH = CRAFTING_STATION_DEPTH + 2;
+const CRAFT_INTERACTION_ICON_OFFSET_Y = 44;
+
 const BUILDING_WO_CAPABILITIES = Object.freeze([
   "placement", "persistence", "validation", "interaction",
 ]);
@@ -357,6 +363,7 @@ export default class WorldScene extends Phaser.Scene {
     this.worldItemData = new Map();
     this.craftingStationDebugObjects = new Map();
     this.craftingStationData = new Map();
+    this.hoveredCraftStationId = null;
     this.buildingDebugObjects = new Map();
     this.buildingData = new Map();
     this.resourceOverlayGraphics = null;
@@ -1677,6 +1684,7 @@ export default class WorldScene extends Phaser.Scene {
         if (typeof existing.square.setFillStyle === "function") existing.square.setFillStyle(color, 0.92);
         existing.label.setPosition(x, y - 25);
         existing.label.setText(labelText);
+        if (existing.icon) existing.icon.setPosition(x, y - CRAFT_INTERACTION_ICON_OFFSET_Y);
         this.drawCraftingStationRadius(existing.radius, x, y, station.interactionRadiusWU, color);
         this.craftingStationData.set(station.id, station);
         return;
@@ -1734,12 +1742,16 @@ export default class WorldScene extends Phaser.Scene {
         );
       }
       square.on("pointerdown", onPointerDown);
+      // Hover : icône d'interaction (le clic reste géré par onPointerDown ci-dessus,
+      // comportement d'ouverture inchangé pour ce commit).
+      square.on("pointerover", () => this.showCraftStationInteractionIcon(station.id));
+      square.on("pointerout", () => this.hideCraftStationInteractionIcon(station.id));
 
       const label = this.add.text(x, y - 25, labelText, CRAFTING_STATION_LABEL_STYLE);
       label.setOrigin(0.5, 1);
       label.setDepth(CRAFTING_STATION_DEPTH + 1);
 
-      this.craftingStationDebugObjects.set(station.id, { square, label, radius, station });
+      this.craftingStationDebugObjects.set(station.id, { square, label, radius, station, icon: null });
       this.craftingStationData.set(station.id, station);
     };
 
@@ -2095,9 +2107,11 @@ export default class WorldScene extends Phaser.Scene {
       entry.square.destroy();
       entry.label.destroy();
       entry.radius.destroy();
+      entry.icon?.destroy();
     }
     this.craftingStationDebugObjects.clear();
     this.craftingStationData.clear();
+    this.hoveredCraftStationId = null;
   }
 
   removeCraftingStation(stationId) {
@@ -2106,9 +2120,64 @@ export default class WorldScene extends Phaser.Scene {
       entry.square.destroy();
       entry.label.destroy();
       entry.radius.destroy();
+      entry.icon?.destroy();
       this.craftingStationDebugObjects.delete(stationId);
     }
     this.craftingStationData.delete(stationId);
+    if (this.hoveredCraftStationId === stationId) {
+      this.hoveredCraftStationId = null;
+      this.input.setDefaultCursor("default");
+    }
+  }
+
+  // Génère une fois la texture de l'icône d'interaction (curseur/flèche sobre),
+  // sans asset externe. Réutilisée par toutes les stations.
+  ensureCraftInteractionIconTexture() {
+    if (this.textures.exists(CRAFT_INTERACTION_ICON_KEY)) return;
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    // Flèche de curseur classique (pointe en haut-gauche).
+    const pts = [
+      [1, 1], [1, 17], [5, 13], [8, 19], [11, 18], [8, 12], [14, 12],
+    ];
+    g.fillStyle(0xffffff, 1);
+    g.lineStyle(1.5, 0x111111, 1);
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+    g.generateTexture(CRAFT_INTERACTION_ICON_KEY, 16, 22);
+    g.destroy();
+  }
+
+  showCraftStationInteractionIcon(stationId) {
+    const entry = this.craftingStationDebugObjects.get(stationId);
+    if (!entry) return;
+    this.hoveredCraftStationId = stationId;
+    this.input.setDefaultCursor("pointer");
+
+    const iconX = entry.square.x;
+    const iconY = entry.square.y - CRAFT_INTERACTION_ICON_OFFSET_Y;
+    if (!entry.icon) {
+      this.ensureCraftInteractionIconTexture();
+      const icon = this.add.image(iconX, iconY, CRAFT_INTERACTION_ICON_KEY);
+      icon.setOrigin(0.5, 1);
+      icon.setDepth(CRAFT_INTERACTION_ICON_DEPTH);
+      entry.icon = icon;
+    } else {
+      entry.icon.setPosition(iconX, iconY);
+      entry.icon.setVisible(true);
+    }
+  }
+
+  hideCraftStationInteractionIcon(stationId) {
+    const entry = this.craftingStationDebugObjects.get(stationId);
+    if (entry?.icon) entry.icon.setVisible(false);
+    if (this.hoveredCraftStationId === stationId) {
+      this.hoveredCraftStationId = null;
+      this.input.setDefaultCursor("default");
+    }
   }
 
   removeCreature(creatureId) {
