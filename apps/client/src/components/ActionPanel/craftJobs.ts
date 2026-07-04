@@ -29,8 +29,18 @@ export type CraftJobDto = {
   outputs: CraftJobOutputDto[];
 };
 
-/** Borne serveur (CraftJobLaunchDto @Max(99)). */
+/** Borne serveur (@Max(99)). */
 export const CRAFT_JOB_MAX_QUANTITY = 99;
+
+/**
+ * Réponse de l'action joueur unique « Fabriquer » (POST /crafting/craft). Le
+ * SERVEUR décide du mode — le client se contente d'afficher. Aujourd'hui toute
+ * recette crée un CraftJob (`mode: "job"`) ; le `mode: "instant"` reste géré
+ * pour une éventuelle règle serveur future, sans changement de frontend.
+ */
+export type CraftExecuteResponse =
+  | { mode: "instant"; craft: unknown }
+  | { mode: "job"; job: CraftJobDto };
 
 /** Intervalle de polling (ms) — remplaçable par du websocket plus tard. */
 export const CRAFT_JOB_POLL_MS = 10_000;
@@ -69,9 +79,13 @@ export function craftJobProgress(
   return Math.max(0, Math.min(1, ratio));
 }
 
-/** Libellé de temps restant lisible. */
+/**
+ * Libellé de temps restant lisible. Retourne "" quand il ne reste plus de temps
+ * (≤ 0) : il n'existe pas d'état « prêt » séparé — l'appelant affiche alors
+ * « Finalisation… » (RUNNING) puis « Réclamer » (COMPLETED).
+ */
 export function formatRemaining(ms: number): string {
-  if (ms <= 0) return "prêt";
+  if (ms <= 0) return "";
   const totalSeconds = Math.ceil(ms / 1000);
   if (totalSeconds < 60) return `${totalSeconds} s`;
   const minutes = Math.floor(totalSeconds / 60);

@@ -51,8 +51,9 @@ describe("craftJobs helpers", () => {
     expect(craftJobProgress(s, f, Date.parse("2026-07-01T00:15:00.000Z"))).toBe(1);
   });
 
-  it("formatRemaining formate secondes / minutes / heures", () => {
-    expect(formatRemaining(0)).toBe("prêt");
+  it("formatRemaining formate secondes / minutes / heures et n'affiche pas 'prêt'", () => {
+    expect(formatRemaining(0)).toBe(""); // pas d'état « prêt » séparé
+    expect(formatRemaining(-5000)).toBe("");
     expect(formatRemaining(30_000)).toBe("30 s");
     expect(formatRemaining(90_000)).toBe("1 min 30 s");
     expect(formatRemaining(120_000)).toBe("2 min");

@@ -20,7 +20,6 @@ import {
   type CraftResultSnapshot,
 } from "./craftingRuntime";
 import {
-  buildCraftJobLaunchPayload,
   craftJobProgress,
   craftJobRemainingMs,
   formatRemaining,
@@ -28,6 +27,7 @@ import {
   isClaimable,
   CRAFT_JOB_POLL_MS,
   type CraftJobDto,
+  type CraftExecuteResponse,
 } from "./craftJobs";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -66,7 +66,6 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<"recipes" | "jobs">("recipes");
   const [jobs, setJobs] = useState<CraftJobDto[]>([]);
-  const [launchingRecipeId, setLaunchingRecipeId] = useState<string | null>(null);
   const [claimingJobId, setClaimingJobId] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
@@ -137,37 +136,7 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     return Math.max(1, Math.min(CRAFT_MAX_QUANTITY, Math.floor(next)));
   }
 
-  async function craft(recipe: AvailableCraftingRecipe) {
-    const token = localStorage.getItem("token") ?? "";
-    if (!token) {
-      setError({ message: "Non authentifié." });
-      return;
-    }
-
-    setCraftingRecipeId(recipe.id);
-    setError(null);
-    setResult(null);
-    try {
-      const res = await fetch(`${API}/crafting/craft`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(buildCraftRequestPayload(recipe.id, quantity)),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
-      setResult(body as CraftResultSnapshot);
-      await Promise.all([loadCharacter(), loadSkills()]);
-    } catch (err) {
-      setError(isCraftingServerError(err) ? err : { message: "Craft impossible." });
-    } finally {
-      setCraftingRecipeId(null);
-    }
-  }
-
-  // ── CraftJobs (production différée) ────────────────────────────────────────
+  // ── CraftJobs (liste des fabrications) ─────────────────────────────────────
   async function fetchJobs() {
     const token = localStorage.getItem("token") ?? "";
     if (!token) return;
@@ -185,29 +154,44 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     await Promise.all([loadCharacter(), loadSkills()]);
   }
 
-  async function launchProduction(recipe: AvailableCraftingRecipe) {
+  /**
+   * Action joueur UNIQUE « Fabriquer ». Le serveur décide du workflow ; l'UI
+   * n'affiche que le résultat. Aujourd'hui le serveur crée toujours un CraftJob
+   * (mode "job") — le mode "instant" est géré pour une règle serveur future.
+   */
+  async function execute(recipe: AvailableCraftingRecipe) {
     const token = localStorage.getItem("token") ?? "";
     if (!token) {
       setError({ message: "Non authentifié." });
       return;
     }
-    setLaunchingRecipeId(recipe.id);
+    setCraftingRecipeId(recipe.id);
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${API}/crafting/jobs`, {
+      const res = await fetch(`${API}/crafting/craft`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(buildCraftJobLaunchPayload(recipe.id, quantity)),
+        body: JSON.stringify(buildCraftRequestPayload(recipe.id, quantity)),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw parseCraftingServerError(body, `Erreur ${res.status}`);
-      await Promise.all([fetchJobs(), refreshCharacter()]);
-      setActiveTab("jobs");
+
+      const response = body as CraftExecuteResponse;
+      if (response.mode === "instant") {
+        // Chemin interne/futur : résultat immédiat + reload inventaire/skills.
+        setResult(response.craft as CraftResultSnapshot);
+        await refreshCharacter();
+      } else {
+        // Fabrication lancée : job RUNNING affiché, ingrédients réservés, aucun
+        // output tant que le claim n'a pas eu lieu.
+        await Promise.all([fetchJobs(), loadCharacter()]);
+        setActiveTab("jobs");
+      }
     } catch (err) {
-      setError(isCraftingServerError(err) ? err : { message: "Production impossible." });
+      setError(isCraftingServerError(err) ? err : { message: "Fabrication impossible." });
     } finally {
-      setLaunchingRecipeId(null);
+      setCraftingRecipeId(null);
     }
   }
 
@@ -231,12 +215,21 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     }
   }
 
-  // Chargement initial + polling simple toutes les 10 s (remplaçable par websocket).
+  // Chargement initial + polling simple toutes les 10 s (cohérent avec le
+  // scheduler serveur à 10 s ; remplaçable par websocket plus tard). Le polling
+  // vit tant que le panneau craft est monté.
   useEffect(() => {
     fetchJobs();
     const id = setInterval(fetchJobs, CRAFT_JOB_POLL_MS);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Rafraîchit immédiatement en ouvrant l'onglet Production (sans attendre le tick).
+  useEffect(() => {
+    if (activeTab === "jobs") fetchJobs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Tick 1 s pour animer les barres de progression tant qu'un job tourne.
   const grouped = useMemo(() => groupCraftJobs(jobs), [jobs]);
@@ -246,7 +239,18 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
     return () => clearInterval(id);
   }, [activeTab, grouped.running.length]);
 
-  const canLaunch = Boolean(selectedRecipe) && hasEnough && quantity >= 1 && !outOfRange && launchingRecipeId === null;
+  // Finalisation : temps écoulé mais job encore RUNNING (en attente du scheduler).
+  // On poll alors plus vite (2 s) pour afficher « Réclamer » sans délai perceptible.
+  const hasFinalizing = grouped.running.some(
+    (job) => craftJobRemainingMs(job.finishAt, nowTick) <= 0,
+  );
+  useEffect(() => {
+    if (!hasFinalizing) return;
+    const id = setInterval(fetchJobs, 2000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasFinalizing]);
+
 
   return (
     <div className="action-panel__crafting">
@@ -436,26 +440,26 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
               >
                 +
               </button>
+              <button
+                type="button"
+                className="action-panel__craft-qty-btn action-panel__craft-qty-max"
+                onClick={() => setQuantity(clampQuantity(Math.max(1, maxCraftable)))}
+                disabled={maxCraftable < 1 || quantity >= maxCraftable}
+                aria-label="Quantité maximale"
+              >
+                MAX
+              </button>
             </div>
-            <span className="action-panel__craft-maxinfo">Maximum craftable : {maxCraftable}</span>
+            <span className="action-panel__craft-maxinfo">Maximum fabricable : {maxCraftable}</span>
           </div>
 
-          <div className="action-panel__craft-actions">
-            <button
-              className="action-panel__button action-panel__craft-submit"
-              disabled={!canCraft}
-              onClick={() => craft(selectedRecipe)}
-            >
-              {isCrafting ? "Fabrication…" : "Fabriquer maintenant"}
-            </button>
-            <button
-              className="action-panel__button action-panel__craft-submit action-panel__craft-submit--secondary"
-              disabled={!canLaunch}
-              onClick={() => launchProduction(selectedRecipe)}
-            >
-              {launchingRecipeId === selectedRecipe.id ? "Lancement…" : "Production"}
-            </button>
-          </div>
+          <button
+            className="action-panel__button action-panel__craft-submit"
+            disabled={!canCraft}
+            onClick={() => execute(selectedRecipe)}
+          >
+            {isCrafting ? "Fabrication…" : "Fabriquer"}
+          </button>
         </div>
       )}
 
@@ -495,19 +499,24 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
           {grouped.running.length > 0 && (
             <div className="action-panel__jobs-group">
               <span className="action-panel__craft-section-label">Productions en cours</span>
-              {grouped.running.map((job) => (
-                <div key={job.jobId} className="action-panel__job">
-                  <div className="action-panel__job-head">
-                    <span className="action-panel__job-name">{job.recipeName} ×{job.quantity}</span>
-                    <span className="action-panel__job-time">{formatRemaining(craftJobRemainingMs(job.finishAt, nowTick))}</span>
+              {grouped.running.map((job) => {
+                const remaining = craftJobRemainingMs(job.finishAt, nowTick);
+                return (
+                  <div key={job.jobId} className="action-panel__job">
+                    <div className="action-panel__job-head">
+                      <span className="action-panel__job-name">{job.recipeName} ×{job.quantity}</span>
+                      <span className="action-panel__job-time">
+                        {remaining > 0 ? formatRemaining(remaining) : "Finalisation…"}
+                      </span>
+                    </div>
+                    <progress
+                      className="action-panel__job-progress"
+                      value={craftJobProgress(job.startedAt, job.finishAt, nowTick)}
+                      max={1}
+                    />
                   </div>
-                  <progress
-                    className="action-panel__job-progress"
-                    value={craftJobProgress(job.startedAt, job.finishAt, nowTick)}
-                    max={1}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

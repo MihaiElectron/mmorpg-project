@@ -30,6 +30,7 @@ import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
 import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
+import { MIN_CRAFT_TIME_MS } from './crafting.constants';
 import { CraftJob, CraftJobState } from './entities/craft-job.entity';
 import { CraftJobIngredient } from './entities/craft-job-ingredient.entity';
 import { CraftJobOutput } from './entities/craft-job-output.entity';
@@ -207,8 +208,17 @@ export class CraftJobService {
       }
 
       // ── 6. Création du job (snapshot immuable) ─────────────────────────────
+      // Garde Runtime : aucune fabrication joueur ne peut avoir une durée unitaire
+      // < MIN_CRAFT_TIME_MS, même si la recette DB est legacy/corrompue. On clampe
+      // la durée effective (le DevTools continue de signaler la recette invalide).
+      const effectiveCraftTimeMs = Math.max(recipe.craftTimeMs ?? 0, MIN_CRAFT_TIME_MS);
+      if ((recipe.craftTimeMs ?? 0) < MIN_CRAFT_TIME_MS) {
+        this.logger.warn(
+          `Recette ${recipe.id} : craftTimeMs=${recipe.craftTimeMs} < ${MIN_CRAFT_TIME_MS} — durée clampée à ${MIN_CRAFT_TIME_MS} ms (à corriger dans le Recipe Editor).`,
+        );
+      }
       const startedAt = new Date();
-      const finishAt = new Date(startedAt.getTime() + recipe.craftTimeMs * quantity);
+      const finishAt = new Date(startedAt.getTime() + effectiveCraftTimeMs * quantity);
       const savedJob = await manager.save(
         CraftJob,
         manager.create(CraftJob, {
@@ -222,7 +232,7 @@ export class CraftJobService {
           stationId,
           stationType: recipe.stationType,
           quantity,
-          craftTimeMs: recipe.craftTimeMs,
+          craftTimeMs: effectiveCraftTimeMs,
           craftingDifficulty: recipe.craftingDifficulty ?? 0,
           requiredSkillKey: recipe.requiredSkillKey,
           requiredSkillLevel: recipe.requiredSkillLevel,

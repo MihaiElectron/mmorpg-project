@@ -112,6 +112,8 @@ describe('CraftingController', () => {
     };
     recipeRepo = {
       find: jest.fn().mockResolvedValue([]),
+      // Par défaut : recette instantanée (craftTimeMs = 0).
+      findOne: jest.fn().mockResolvedValue({ id: 'recipe-uuid-1', craftTimeMs: 0 }),
     };
     itemRepo = {
       find: jest.fn().mockResolvedValue([]),
@@ -181,66 +183,45 @@ describe('CraftingController', () => {
     }));
   });
 
-  it('résout le characterId depuis req.user.userId et appelle craft()', async () => {
-    const character = makeCharacter();
-    const craftResult = makeCraftResult();
-    characterService.findFirstByUser.mockResolvedValue(character);
-    craftingService.craft.mockResolvedValue(craftResult);
-
-    const req = { user: { userId: 'user-uuid-1' } };
-    const dto: CraftRequestDto = {
-      recipeId: 'recipe-uuid-1',
-      quantity: 1,
-    };
-
-    const result = await controller.craft(req, dto);
-
-    expect(characterService.findFirstByUser).toHaveBeenCalledWith('user-uuid-1');
-    expect(craftingService.craft).toHaveBeenCalledWith('char-uuid-1', 'recipe-uuid-1', 1);
-    expect(result).toEqual(craftResult);
-  });
-
-  it("n'utilise jamais un characterId venant du payload (pattern sécurisé)", async () => {
-    const character = makeCharacter('server-resolved-id');
-    characterService.findFirstByUser.mockResolvedValue(character);
-    craftingService.craft.mockResolvedValue(makeCraftResult());
-
-    const req = { user: { userId: 'user-uuid-1' } };
-    // Le DTO ne contient pas characterId — whitelist + forbidNonWhitelisted bloquent tout champ inconnu
-    const dto: CraftRequestDto = { recipeId: 'recipe-uuid-1', quantity: 1 };
-
-    await controller.craft(req, dto);
-
-    // Le characterId passé à craft est celui résolu par le serveur
-    expect(craftingService.craft).toHaveBeenCalledWith('server-resolved-id', expect.any(String), expect.any(Number));
-  });
-
-  it("propage NotFoundException si le personnage n'existe pas", async () => {
-    characterService.findFirstByUser.mockRejectedValue(
-      new NotFoundException('No character found'),
-    );
-
-    const req = { user: { userId: 'user-uuid-1' } };
-    const dto: CraftRequestDto = { recipeId: 'recipe-uuid-1', quantity: 1 };
-
-    await expect(controller.craft(req, dto)).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('retourne le CraftResult complet (attempts, successes, skill delta)', async () => {
-    const craftResult = makeCraftResult();
-    characterService.findFirstByUser.mockResolvedValue(makeCharacter());
-    craftingService.craft.mockResolvedValue(craftResult);
+  it('« Fabriquer » (POST craft) crée toujours un CraftJob (mode "job"), jamais de craft instantané joueur', async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter('char-uuid-1'));
+    craftJobService.launch.mockResolvedValue(makeJob({ state: 'RUNNING' }));
 
     const result = await controller.craft(
       { user: { userId: 'user-uuid-1' } },
-      { recipeId: 'recipe-uuid-1', quantity: 1 },
+      { recipeId: 'recipe-uuid-1', quantity: 2 },
     );
 
-    expect(result.attempts).toBe(1);
-    expect(result.successes).toBe(1);
-    expect(result.skill.xpGained).toBe(10);
-    expect(result.consumed).toEqual([{ itemId: 'item-iron_ore', quantity: 3 }]);
-    expect(result.produced).toEqual([{ itemId: 'item-iron_bar', quantity: 1 }]);
+    expect(characterService.findFirstByUser).toHaveBeenCalledWith('user-uuid-1');
+    expect(craftJobService.launch).toHaveBeenCalledWith('char-uuid-1', 'recipe-uuid-1', 2);
+    expect(craftingService.craft).not.toHaveBeenCalled(); // le joueur ne matérialise jamais immédiatement
+    expect(result).toMatchObject({ mode: 'job', job: { jobId: 'job-1', state: 'RUNNING' } });
+  });
+
+  it("n'utilise jamais un characterId venant du payload (characterId résolu serveur)", async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter('server-resolved-id'));
+    craftJobService.launch.mockResolvedValue(makeJob({ state: 'RUNNING' }));
+
+    await controller.craft({ user: { userId: 'user-uuid-1' } }, { recipeId: 'recipe-uuid-1', quantity: 1 });
+
+    expect(craftJobService.launch).toHaveBeenCalledWith('server-resolved-id', 'recipe-uuid-1', 1);
+  });
+
+  it('propage l’erreur de launch (ex. recette introuvable)', async () => {
+    characterService.findFirstByUser.mockResolvedValue(makeCharacter());
+    craftJobService.launch.mockRejectedValue(new NotFoundException('Recette introuvable'));
+
+    await expect(
+      controller.craft({ user: { userId: 'u' } }, { recipeId: 'x', quantity: 1 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("propage NotFoundException si le personnage n'existe pas", async () => {
+    characterService.findFirstByUser.mockRejectedValue(new NotFoundException('No character found'));
+
+    await expect(
+      controller.craft({ user: { userId: 'user-uuid-1' } }, { recipeId: 'recipe-uuid-1', quantity: 1 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("stations/world-objects appelle getCraftingStationWorldObjects sans mapId", async () => {
@@ -278,16 +259,6 @@ describe('CraftingController', () => {
       ...overrides,
     };
   }
-
-  it("POST jobs délègue à CraftJobService.launch avec le characterId du JWT", async () => {
-    characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));
-    craftJobService.launch.mockResolvedValue(makeJob({ state: "RUNNING" }));
-
-    const result = await controller.launchJob(req, { recipeId: "rec-1", quantity: 2 } as any);
-
-    expect(craftJobService.launch).toHaveBeenCalledWith("char-9", "rec-1", 2);
-    expect(result).toMatchObject({ jobId: "job-1", recipeName: "Fondre minerai", state: "RUNNING" });
-  });
 
   it("GET jobs : nom depuis le SNAPSHOT + outputs enrichis via Item (jamais la recette)", async () => {
     characterService.findFirstByUser.mockResolvedValue(makeCharacter("char-9"));

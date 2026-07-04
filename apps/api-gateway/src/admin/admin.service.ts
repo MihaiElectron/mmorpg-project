@@ -4,6 +4,7 @@ import * as nodePath from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, MoreThan, In } from 'typeorm';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
+import { MIN_CRAFT_TIME_MS, MIN_CRAFT_TIME_MESSAGE } from '../crafting/crafting.constants';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
 import { CraftingStationTemplate } from '../crafting/entities/crafting-station-template.entity';
@@ -700,6 +701,13 @@ export class AdminService {
     }
   }
 
+  // ADR-0009 : aucune recette joueur instantanée — durée minimale MIN_CRAFT_TIME_MS.
+  private static validateCraftTimeMs(v: number): void {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v < MIN_CRAFT_TIME_MS) {
+      throw new BadRequestException(MIN_CRAFT_TIME_MESSAGE);
+    }
+  }
+
   private static validateInteractionRadiusWU(v: number): void {
     if (!Number.isFinite(v) || !Number.isInteger(v) || v <= 0 || v > 1_048_576) {
       throw new BadRequestException('interactionRadiusWU doit être un entier > 0 et <= 1 048 576 WU.');
@@ -784,10 +792,9 @@ export class AdminService {
         throw new BadRequestException('xpReward doit être un entier >= 0.');
       }
     }
+    // Durée : minimum 3 s à la création (défaut appliqué plus bas si absent).
     if (fields.craftTimeMs !== undefined) {
-      if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) {
-        throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
-      }
+      AdminService.validateCraftTimeMs(fields.craftTimeMs);
     }
     if (fields.craftCharacterXpReward !== undefined) {
       AdminService.validateCraftCharacterXpReward(fields.craftCharacterXpReward);
@@ -809,7 +816,7 @@ export class AdminService {
       maxSuccessRate: fields.maxSuccessRate ?? 1.0,
       xpReward: fields.xpReward ?? 10,
       consumeIngredientsOnFailure: fields.consumeIngredientsOnFailure ?? true,
-      craftTimeMs: fields.craftTimeMs ?? 0,
+      craftTimeMs: fields.craftTimeMs ?? MIN_CRAFT_TIME_MS,
       stationType: fields.stationType ?? 'none',
       enabled: fields.enabled ?? true,
       craftCharacterXpReward: fields.craftCharacterXpReward ?? 0,
@@ -866,9 +873,13 @@ export class AdminService {
     }
     if (fields.consumeIngredientsOnFailure !== undefined) recipe.consumeIngredientsOnFailure = Boolean(fields.consumeIngredientsOnFailure);
     if (fields.craftTimeMs !== undefined) {
-      if (!Number.isFinite(fields.craftTimeMs) || !Number.isInteger(fields.craftTimeMs) || fields.craftTimeMs < 0) throw new BadRequestException('craftTimeMs doit être un entier >= 0.');
+      AdminService.validateCraftTimeMs(fields.craftTimeMs);
       recipe.craftTimeMs = fields.craftTimeMs;
     }
+    // Aucune recette invalide ne peut être sauvegardée : la durée effective doit
+    // toujours respecter le minimum (corrige aussi les recettes legacy < 3 s dès
+    // qu'on les édite).
+    AdminService.validateCraftTimeMs(recipe.craftTimeMs);
     if (fields.craftCharacterXpReward !== undefined) {
       AdminService.validateCraftCharacterXpReward(fields.craftCharacterXpReward);
       recipe.craftCharacterXpReward = fields.craftCharacterXpReward;
@@ -1096,6 +1107,7 @@ export class AdminService {
     }
     if (recipe.baseSuccessRate < 0.1) warnings.push(`Taux de succès de base faible (${recipe.baseSuccessRate}).`);
     if (recipe.xpReward === 0) warnings.push('xpReward est 0 — aucune XP accordée pour cette recette.');
+    if ((recipe.craftTimeMs ?? 0) < MIN_CRAFT_TIME_MS) errors.push(MIN_CRAFT_TIME_MESSAGE);
 
     return { valid: errors.length === 0, errors, warnings };
   }

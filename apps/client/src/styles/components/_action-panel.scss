@@ -616,6 +616,13 @@
     @include m.btn-neutral;
   }
 
+  &__craft-qty-max {
+    width: auto;
+    padding: 0 8px;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+  }
+
   // ── Liste des productions (CraftJobs) ──────────────────────────────────────
   &__jobs {
     display: flex;

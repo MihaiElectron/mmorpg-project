@@ -9,6 +9,12 @@ import {
 import {
   validateRecipeIngredients,
   validateRecipeResults,
+  craftTimeMsToSeconds,
+  craftTimeSecondsToMs,
+  isValidCraftTimeMs,
+  MIN_CRAFT_TIME_SECONDS,
+  MIN_CRAFT_TIME_MS,
+  MIN_CRAFT_TIME_MESSAGE,
 } from "../DevTools/modules/Recipes/recipeEditorHelpers";
 import type { ItemCatalogEntry } from "../DevTools/modules/Items/itemEditor.types";
 
@@ -74,13 +80,13 @@ const RECIPE_FIELDS: FieldDef[] = [
   { key: "xpReward",                   label: "XP (legacy)",          min: 0 },
   { key: "craftCharacterXpReward",     label: "XP perso craft",       min: 0 },
   { key: "craftingDifficulty",         label: "Difficulté craft",     min: 0, max: 100 },
-  { key: "craftTimeMs",                label: "Durée (ms)",           min: 0, step: 100 },
+  // craftTimeMs est rendu séparément en secondes (voir Durée (s)).
   { key: "stationType",                label: "Station requise",      options: [...STATION_TYPES] },
   { key: "enabled",                    label: "Actif",                options: ["true", "false"] },
   { key: "consumeIngredientsOnFailure", label: "Consomme si échec",   options: ["true", "false"] },
 ];
 
-const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, craftCharacterXpReward: 0, craftingDifficulty: 0, consumeIngredientsOnFailure: true, craftTimeMs: 0, stationType: "" };
+const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, craftCharacterXpReward: 0, craftingDifficulty: 0, consumeIngredientsOnFailure: true, craftTimeMs: MIN_CRAFT_TIME_MS, stationType: "" };
 const NEW_ING_DEFAULT = { itemId: "", requiredQuantity: 1 };
 const NEW_RES_DEFAULT = { itemId: "", producedQuantity: 1, chance: 1.0 };
 
@@ -143,6 +149,8 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
     const dirty = collectDirty(recipe.id, recipe);
     if (Object.keys(dirty).length === 0) return;
+    const effectiveCraftTimeMs = (dirty.craftTimeMs as number | undefined) ?? recipe.craftTimeMs;
+    if (!isValidCraftTimeMs(effectiveCraftTimeMs)) { onResult(MIN_CRAFT_TIME_MESSAGE, false); return; }
     const r = await ackPromise(socket, "admin:update_crafting_recipe", { id: recipe.id, fields: dirty });
     onResult(r.message, r.success);
     if (r.success && r.data) {
@@ -261,6 +269,7 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
     const socket = getSocket();
     if (!socket?.connected) { onResult("Socket non connecté.", false); return; }
     if (!newRecipe.stationType) { onResult("Station requise : choisir une station.", false); return; }
+    if (!isValidCraftTimeMs(newRecipe.craftTimeMs)) { onResult(MIN_CRAFT_TIME_MESSAGE, false); return; }
     setCreating(true);
     const r = await ackPromise(socket, "admin:create_crafting_recipe", { fields: newRecipe });
     setCreating(false);
@@ -346,14 +355,35 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                         </label>
                       );
                     })}
+                    <label className="admin-panel__template-stat">
+                      <span className="admin-panel__template-stat-label">Durée (s)</span>
+                      <input
+                        className="admin-panel__template-stat-input"
+                        type="number"
+                        min={MIN_CRAFT_TIME_SECONDS}
+                        step={0.1}
+                        value={craftTimeMsToSeconds(drafts[recipe.id]?.craftTimeMs ?? recipe.craftTimeMs)}
+                        onChange={(e) => setDraftField(recipe.id, "craftTimeMs", String(craftTimeSecondsToMs(e.target.value)))}
+                        {...kbHandlers}
+                      />
+                    </label>
                   </div>
+                  {!isValidCraftTimeMs(drafts[recipe.id]?.craftTimeMs ?? recipe.craftTimeMs) && (
+                    <p className="admin-panel__recipe-validation">{MIN_CRAFT_TIME_MESSAGE}</p>
+                  )}
                   <p className="admin-panel__field-hint">
-                    XP skill estimée : +{estimateCraftSkillXp(Number(drafts[recipe.id]?.craftingDifficulty ?? recipe.craftingDifficulty))} {recipe.requiredSkillKey || "—"} / craft réussi
-                    {" "}(calculée par le Runtime depuis la difficulté — lecture seule)
+                    Une recette crée toujours un CraftJob : le joueur réclamera son résultat une fois la fabrication terminée.
+                    {" "}XP skill estimée : +{estimateCraftSkillXp(Number(drafts[recipe.id]?.craftingDifficulty ?? recipe.craftingDifficulty))} {recipe.requiredSkillKey || "—"} / craft réussi (Runtime, lecture seule).
                   </p>
                   {recipeDirty && (
                     <div className="admin-panel__template-actions">
-                      <button className="admin-panel__apply-btn" onClick={() => saveRecipe(recipe)}>Save</button>
+                      <button
+                        className="admin-panel__apply-btn"
+                        disabled={!isValidCraftTimeMs(drafts[recipe.id]?.craftTimeMs ?? recipe.craftTimeMs)}
+                        onClick={() => saveRecipe(recipe)}
+                      >
+                        Save
+                      </button>
                     </div>
                   )}
 
@@ -535,7 +565,6 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           { f: "xpReward",             label: "XP (legacy)",  step: 1 },
           { f: "craftCharacterXpReward", label: "XP perso craft", step: 1 },
           { f: "craftingDifficulty",   label: "Difficulté craft (0–100)", step: 1 },
-          { f: "craftTimeMs",          label: "Durée (ms)",   step: 100 },
         ] as const).map(({ f, label, step }) => (
           <label key={f} className="admin-panel__template-stat">
             <span className="admin-panel__template-stat-label">{label}</span>
@@ -545,14 +574,25 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
               {...kbHandlers} />
           </label>
         ))}
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Durée (s)</span>
+          <input className="admin-panel__template-stat-input" type="number" min={MIN_CRAFT_TIME_SECONDS} step={0.1}
+            value={craftTimeMsToSeconds(newRecipe.craftTimeMs)}
+            onChange={(e) => setNewRecipe((prev) => ({ ...prev, craftTimeMs: craftTimeSecondsToMs(e.target.value) }))}
+            {...kbHandlers} />
+        </label>
       </div>
+      {!isValidCraftTimeMs(newRecipe.craftTimeMs) && (
+        <p className="admin-panel__recipe-validation">{MIN_CRAFT_TIME_MESSAGE}</p>
+      )}
       <p className="admin-panel__field-hint">
         Station requise = où cette recette peut être fabriquée (forge, workbench…).
         Skill requis = compétence et niveau du personnage nécessaires.
+        Toute recette crée un CraftJob (durée minimale {MIN_CRAFT_TIME_SECONDS} s) : le joueur réclame son résultat une fois terminé.
       </p>
       <button
         className="admin-panel__apply-btn"
-        disabled={creating || !newRecipe.stationType}
+        disabled={creating || !newRecipe.stationType || !isValidCraftTimeMs(newRecipe.craftTimeMs)}
         onClick={createRecipe}
       >
         {creating ? "…" : "Créer"}

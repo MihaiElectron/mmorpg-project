@@ -6,9 +6,16 @@ import { CharacterService } from '../characters/character.service';
 import { CraftingService, CraftResult } from './crafting.service';
 import { CraftJobService, CraftJobClaimResult } from './craft-job.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
-import { CraftJobLaunchDto } from './dto/craft-job-launch.dto';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { Item } from '../items/entities/item.entity';
+
+/**
+ * Résultat unifié de l'action joueur « Fabriquer ». Le SERVEUR décide du mode
+ * selon `recipe.craftTimeMs` (autoritaire) — l'UI ne choisit jamais.
+ */
+export type CraftExecuteResult =
+  | { mode: 'instant'; craft: CraftResult }
+  | { mode: 'job'; job: CraftJobDto };
 
 export type CraftJobDto = {
   jobId: string;
@@ -158,24 +165,28 @@ export class CraftingController {
     );
   }
 
+  /**
+   * Action joueur UNIQUE « Fabriquer ». Le serveur est AUTORITAIRE et décide du
+   * workflow — le client ne choisit jamais la technologie.
+   *
+   * Règle actuelle (ADR-0009) : toute recette a une durée ≥ 3 s, donc toute
+   * fabrication joueur crée un **CraftJob** (`mode: "job"`). Le craft instantané
+   * (`CraftingService.craft`) n'est PAS déclenché par le joueur (legacy/interne/
+   * admin/tests). Le résultat reste typé (`mode`) : si une règle future produit
+   * un craft immédiat (premium, NPC…), le frontend n'a pas à changer.
+   */
   @Post('craft')
-  async craft(@Request() req, @Body() dto: CraftRequestDto): Promise<CraftResult> {
+  async craft(@Request() req, @Body() dto: CraftRequestDto): Promise<CraftExecuteResult> {
     const character = await this.characterService.findFirstByUser(req.user.userId);
-    return this.craftingService.craft(character.id, dto.recipeId, dto.quantity);
+    const job = await this.craftJobService.launch(character.id, dto.recipeId, dto.quantity);
+    const [jobDto] = await this.toCraftJobDtos([job]);
+    return { mode: 'job', job: jobDto };
   }
 
   // ── CraftJob (production différée) ────────────────────────────────────────
-  // characterId toujours résolu côté serveur depuis le JWT. La logique métier
-  // vit dans CraftJobService — le contrôleur ne fait qu'exposer.
-
-  /** Lance une production différée. */
-  @Post('jobs')
-  async launchJob(@Request() req, @Body() dto: CraftJobLaunchDto): Promise<CraftJobDto> {
-    const character = await this.characterService.findFirstByUser(req.user.userId);
-    const job = await this.craftJobService.launch(character.id, dto.recipeId, dto.quantity);
-    const [dtoRow] = await this.toCraftJobDtos([job]);
-    return dtoRow;
-  }
+  // characterId toujours résolu côté serveur depuis le JWT. Le lancement passe
+  // exclusivement par POST /crafting/craft (routeur autoritaire ci-dessus) — il
+  // n'existe plus d'endpoint de lancement séparé côté joueur.
 
   /** Liste les CraftJob du joueur (snapshot, jamais reconstruit depuis la recette). */
   @Get('jobs')

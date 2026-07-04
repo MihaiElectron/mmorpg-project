@@ -650,12 +650,26 @@ describe('AdminService — createCraftingRecipe', () => {
     expect(r.key).toBe('test_recipe');
   });
 
-  it('applique les valeurs par défaut', async () => {
+  it('applique les valeurs par défaut (durée = 3000 ms mini)', async () => {
     await service.createCraftingRecipe({ key: 'test_recipe', name: 'Test' });
     const created = recipeRepo.create.mock.calls[0][0];
     expect(created.enabled).toBe(true);
     expect(created.xpReward).toBe(10);
     expect(created.stationType).toBe('none');
+    expect(created.craftTimeMs).toBe(3000); // aucune recette instantanée
+  });
+
+  it('rejette une durée < 3000 ms (create)', async () => {
+    for (const craftTimeMs of [0, 500, 1000, 2000]) {
+      await expect(service.createCraftingRecipe({ key: 'test_r', name: 'Test', craftTimeMs }))
+        .rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
+  it('accepte une durée >= 3000 ms (create)', async () => {
+    const r = await service.createCraftingRecipe({ key: 'test_r', name: 'Test', craftTimeMs: 3000 });
+    expect(r).toBeDefined();
+    expect(recipeRepo.save).toHaveBeenCalled();
   });
 
   it('rejette une key dupliquée', async () => {
@@ -864,6 +878,7 @@ describe('AdminService — validateCraftingRecipe', () => {
       minSuccessRate: 0.05,
       maxSuccessRate: 1.0,
       xpReward: 10,
+      craftTimeMs: 3000,
       ingredients: [{ id: 'ing-1', itemId: 'item-1', requiredQuantity: 3 }],
       results: [{ id: 'res-1', itemId: 'item-2', producedQuantity: 1, chance: 1.0 }],
     };
@@ -888,6 +903,13 @@ describe('AdminService — validateCraftingRecipe', () => {
     const result = await service.validateCraftingRecipe('rec-1');
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => /ingrédient/i.test(e))).toBe(true);
+  });
+
+  it('erreur si durée < 3 secondes', async () => {
+    recipeRepo.findOne.mockResolvedValue({ ...makeFullRecipe(), craftTimeMs: 2000 });
+    const result = await service.validateCraftingRecipe('rec-1');
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /3 secondes/i.test(e))).toBe(true);
   });
 
   it('erreur si skill inexistant', async () => {

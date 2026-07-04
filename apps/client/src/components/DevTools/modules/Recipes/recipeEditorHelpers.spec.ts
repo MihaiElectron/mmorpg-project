@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRecipePatch,
+  craftTimeMsToSeconds,
+  craftTimeSecondsToMs,
+  isValidCraftTimeMs,
+  MIN_CRAFT_TIME_MS,
   normalizeIngredients,
   normalizeResults,
   validateRecipeIngredients,
@@ -104,5 +108,39 @@ describe("recipe editor helpers", () => {
     expect(
       normalizeResults([{ itemId: " item-bar ", producedQuantity: 1, chance: 0.8 }]),
     ).toEqual([{ itemId: "item-bar", producedQuantity: 1, chance: 0.8 }]);
+  });
+
+  it("craftTimeSecondsToMs convertit les secondes UI en millisecondes (payload)", () => {
+    expect(craftTimeSecondsToMs("10")).toBe(10000); // 10 s, jamais 10 ms
+    expect(craftTimeSecondsToMs("0.5")).toBe(500);
+    expect(craftTimeSecondsToMs("0")).toBe(0);
+    expect(craftTimeSecondsToMs("")).toBe(0);
+    expect(craftTimeSecondsToMs("-5")).toBe(0);
+  });
+
+  it("craftTimeMsToSeconds convertit les millisecondes en secondes (affichage)", () => {
+    expect(craftTimeMsToSeconds(10000)).toBe("10");
+    expect(craftTimeMsToSeconds(500)).toBe("0.5");
+    expect(craftTimeMsToSeconds(0)).toBe("0");
+    expect(craftTimeMsToSeconds("")).toBe("");
+    expect(craftTimeMsToSeconds(null)).toBe("");
+  });
+
+  it("aller-retour secondes → ms → secondes est stable", () => {
+    expect(craftTimeMsToSeconds(craftTimeSecondsToMs("10"))).toBe("10");
+    expect(craftTimeMsToSeconds(craftTimeSecondsToMs("2.5"))).toBe("2.5");
+  });
+
+  it("isValidCraftTimeMs refuse < 3000 ms (aucune recette instantanée)", () => {
+    expect(MIN_CRAFT_TIME_MS).toBe(3000);
+    for (const ms of [0, 500, 1000, 2000, 2999]) {
+      expect(isValidCraftTimeMs(ms)).toBe(false);
+    }
+    for (const ms of [3000, 5000, 10000]) {
+      expect(isValidCraftTimeMs(ms)).toBe(true);
+    }
+    // équivalences secondes UI → ms
+    expect(isValidCraftTimeMs(craftTimeSecondsToMs("2"))).toBe(false);
+    expect(isValidCraftTimeMs(craftTimeSecondsToMs("3"))).toBe(true);
   });
 });

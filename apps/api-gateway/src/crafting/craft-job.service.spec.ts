@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, LessThanOrEqual } from 'typeorm';
 import {
   CraftJobService,
   CRAFT_JOB_VERSION,
@@ -85,6 +85,7 @@ describe('CraftJobService — launch()', () => {
   let mockCrafting: { findNearestCompatibleStationOrThrow: jest.Mock };
   let mockProgression: { applyCharacterXpInTx: jest.Mock };
   let mockMaterialization: { materialize: jest.Mock };
+  let craftJobRepo: { find: jest.Mock };
   let savedCraftJob: any;
   let lockedInstances: Partial<ItemInstance>[];
   let jobToComplete: any;
@@ -130,11 +131,15 @@ describe('CraftJobService — launch()', () => {
     mockCrafting = { findNearestCompatibleStationOrThrow: jest.fn().mockResolvedValue({ id: 'station-1' }) };
     mockProgression = { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) };
     mockMaterialization = { materialize: jest.fn().mockResolvedValue({ stacks: [], instances: [], worldItems: [] }) };
+    craftJobRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CraftJobService,
-        { provide: DataSource, useValue: { transaction: jest.fn().mockImplementation((cb) => cb(mockManager)) } },
+        { provide: DataSource, useValue: {
+          transaction: jest.fn().mockImplementation((cb) => cb(mockManager)),
+          getRepository: jest.fn().mockReturnValue(craftJobRepo),
+        } },
         { provide: SkillsService, useValue: mockSkills },
         { provide: ItemTransferService, useValue: mockTransfer },
         { provide: CraftingService, useValue: mockCrafting },
@@ -180,12 +185,44 @@ describe('CraftJobService — launch()', () => {
     expect(job.stationId).toBeNull();
   });
 
-  it('finishAt = startedAt + craftTimeMs × quantity', async () => {
-    setupStackable(makeRecipe({ craftTimeMs: 2000 }));
+  it('finishAt = startedAt + craftTimeMs × quantity (durée >= min)', async () => {
+    setupStackable(makeRecipe({ craftTimeMs: 4000 }));
 
     const job = await service.launch('char-1', 'recipe-1', 3);
 
-    expect(job.finishAt.getTime() - job.startedAt.getTime()).toBe(2000 * 3);
+    expect(job.finishAt.getTime() - job.startedAt.getTime()).toBe(4000 * 3);
+  });
+
+  it('durée 10 s : quantity 1 → 10000 ms, quantity 3 → 30000 ms', async () => {
+    setupStackable(makeRecipe({ craftTimeMs: 10000 }));
+    const j1 = await service.launch('char-1', 'recipe-1', 1);
+    expect(j1.finishAt.getTime() - j1.startedAt.getTime()).toBe(10000);
+
+    setupStackable(makeRecipe({ craftTimeMs: 10000 }));
+    const j3 = await service.launch('char-1', 'recipe-1', 3);
+    expect(j3.finishAt.getTime() - j3.startedAt.getTime()).toBe(30000);
+  });
+
+  it('garde Runtime : une durée DB < 3000 est clampée à 3000 (jamais de job < 3 s)', async () => {
+    for (const craftTimeMs of [0, 1000, 2999]) {
+      setupStackable(makeRecipe({ craftTimeMs }));
+      const job = await service.launch('char-1', 'recipe-1', 2);
+      // durée effective clampée à MIN_CRAFT_TIME_MS (3000) × quantity
+      expect(job.finishAt.getTime() - job.startedAt.getTime()).toBe(3000 * 2);
+      expect(job.craftTimeMs).toBe(3000); // snapshot = durée effective
+    }
+  });
+
+  it('garde Runtime : une durée DB >= 3000 est respectée telle quelle', async () => {
+    setupStackable(makeRecipe({ craftTimeMs: 3000 }));
+    const j3000 = await service.launch('char-1', 'recipe-1', 1);
+    expect(j3000.finishAt.getTime() - j3000.startedAt.getTime()).toBe(3000);
+    expect(j3000.craftTimeMs).toBe(3000);
+
+    setupStackable(makeRecipe({ craftTimeMs: 10000 }));
+    const j10000 = await service.launch('char-1', 'recipe-1', 1);
+    expect(j10000.finishAt.getTime() - j10000.startedAt.getTime()).toBe(10000);
+    expect(j10000.craftTimeMs).toBe(10000);
   });
 
   it('décrémente l’Inventory du montant réservé et snapshote les ingrédients', async () => {
@@ -545,5 +582,22 @@ describe('CraftJobService — launch()', () => {
     mockManager.save.mockImplementationOnce(async () => { throw new Error('save error'); });
 
     await expect(service.claim('char-1', 'job-1')).rejects.toThrow('save error');
+  });
+
+  // ── findDueJobIds — Phase 2 (bornage temps) ─────────────────────────────────
+
+  it('findDueJobIds ne sélectionne que RUNNING avec finishAt <= now (jamais avant finishAt)', async () => {
+    craftJobRepo.find.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    const now = new Date('2026-07-01T00:00:00.000Z');
+
+    const ids = await service.findDueJobIds(now, 50);
+
+    expect(ids).toEqual(['a', 'b']);
+    const arg = craftJobRepo.find.mock.calls[0][0];
+    expect(arg.where.state).toBe(CraftJobState.RUNNING);
+    // finishAt <= now : un job dont finishAt > now n'est jamais retourné.
+    expect(arg.where.finishAt).toEqual(LessThanOrEqual(now));
+    expect(arg.take).toBe(50);
+    expect(arg.order).toEqual({ finishAt: 'ASC' });
   });
 });

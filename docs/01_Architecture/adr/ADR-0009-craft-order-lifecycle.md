@@ -389,6 +389,37 @@ Le DevTools permet aussi de : lister/paginer les jobs, forcer l'annulation
 scheduler), diagnostiquer les incohérences (ingrédient manquant, station
 disparue, instance réservée orpheline).
 
+---
+
+### Décision 9 — Action joueur unique « Fabriquer » + durée minimale (serveur autoritaire)
+
+Le joueur ne choisit jamais la technologie de fabrication. Il n'existe **qu'une
+seule action joueur : « Fabriquer »** (une quantité 1..MAX). Le **serveur décide**
+du workflow ; l'UI n'affiche que le résultat.
+
+- **Durée minimale d'une recette : `MIN_CRAFT_TIME_MS = 3000` (3 s).** Aucune
+  recette joueur ne peut être instantanée. Validé côté serveur (admin
+  create/update + diagnostic `validateCraftingRecipe`) **et** côté DevTools
+  (Recipe Editor : saisie en secondes, min 3, message d'erreur, sauvegarde
+  bloquée). Une recette invalide ne peut pas être sauvegardée.
+- **Toute fabrication joueur crée un CraftJob.** Le craft instantané
+  (`CraftingService.craft`) devient **legacy/interne/admin/tests** : il n'est
+  jamais déclenché par le joueur.
+- **Endpoint unique** `POST /crafting/craft` (routeur autoritaire) : renvoie un
+  résultat **typé** `{ mode: "instant" | "job", … }`. Aujourd'hui il renvoie
+  toujours `mode: "job"`. Si une règle serveur future produit un craft immédiat
+  (premium, NPC, settlement…), **le frontend ne change pas** (il gère déjà les
+  deux modes). L'endpoint de lancement séparé (`POST /crafting/jobs`) est
+  supprimé côté joueur ; restent `GET /crafting/jobs` et
+  `POST /crafting/jobs/:id/claim`.
+
+**Cohérence obligatoire (Runtime ⇄ DevTools ⇄ ADR)** : cette règle métier
+(durée minimale, action unique, joueur toujours en CraftJob) est appliquée par le
+Runtime (validation serveur), reflétée par le DevTools (Recipe Editor + textes) et
+documentée ici. La constante `MIN_CRAFT_TIME_MS` est la source unique côté serveur ;
+le DevTools expose la même valeur en secondes. Aucune de ces règles ne vit dans un
+seul de ces trois endroits.
+
 ## Consequences
 
 Positives :

@@ -14,6 +14,10 @@ export const CRAFT_JOB_COMPLETION_BATCH = 100;
  * (`CraftJobService.complete` : verrou + recheck RUNNING). Une erreur sur un job
  * n'interrompt pas le batch.
  *
+ * Cadence : toutes les 10 s (et non chaque minute) pour rester cohérent avec des
+ * durées de craft courtes — un job n'est jamais complété avant son `finishAt`
+ * (garanti par le filtre `finishAt <= now`), mais l'est au tick 10 s suivant.
+ *
  * INVARIANT ADR-0009 : le scheduler ne crée, ne détruit ni ne déplace aucun Item
  * OUTPUT. Il ne fait qu'évoluer l'état des jobs. La matérialisation est au claim
  * (Phase 3). Crash / redémarrage / double-tick ne peuvent donc jamais dupliquer
@@ -25,7 +29,7 @@ export class CraftJobScheduler {
 
   constructor(private readonly craftJobs: CraftJobService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_SECONDS)
   async handleDueJobs(): Promise<void> {
     let jobIds: string[];
     try {

@@ -1,3 +1,4 @@
+import { CronExpression } from '@nestjs/schedule';
 import { CraftJobScheduler, CRAFT_JOB_COMPLETION_BATCH } from './craft-job.scheduler';
 import { CraftJobState } from './entities/craft-job.entity';
 
@@ -14,6 +15,11 @@ describe('CraftJobScheduler', () => {
     jest.spyOn(scheduler['logger'], 'log').mockImplementation(() => undefined);
     jest.spyOn(scheduler['logger'], 'debug').mockImplementation(() => undefined);
     jest.spyOn(scheduler['logger'], 'error').mockImplementation(() => undefined);
+  });
+
+  it('tourne toutes les 10 secondes (cadence adaptée aux crafts courts)', () => {
+    const meta = Reflect.getMetadata('SCHEDULE_CRON_OPTIONS', CraftJobScheduler.prototype.handleDueJobs);
+    expect(meta?.cronTime).toBe(CronExpression.EVERY_10_SECONDS);
   });
 
   it('sélectionne les jobs dus avec un batch borné', async () => {

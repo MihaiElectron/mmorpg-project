@@ -126,3 +126,34 @@ export function normalizeResults(results: RecipeResult[]): RecipeResult[] {
     chance: result.chance,
   }));
 }
+
+// ── Durée de craft : édition en secondes, stockage/payload en millisecondes ──
+// Évite que « 10 » soit interprété comme 10 ms dans le Recipe Editor.
+//
+// Règle métier (ADR-0009, cohérente Runtime ⇄ DevTools) : aucune recette
+// instantanée — toute fabrication crée un CraftJob. Durée minimale 3 s.
+
+export const MIN_CRAFT_TIME_SECONDS = 3;
+export const MIN_CRAFT_TIME_MS = MIN_CRAFT_TIME_SECONDS * 1000;
+export const MIN_CRAFT_TIME_MESSAGE = "La durée minimale d'une recette est de 3 secondes.";
+
+/** true si la durée (ms) respecte le minimum autorisé. */
+export function isValidCraftTimeMs(ms: number | string | null | undefined): boolean {
+  const n = Number(ms);
+  return Number.isFinite(n) && n >= MIN_CRAFT_TIME_MS;
+}
+
+/** ms → secondes (affichage). Chaîne vide conservée pour un champ vide. */
+export function craftTimeMsToSeconds(ms: number | string | null | undefined): string {
+  if (ms === "" || ms == null) return "";
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return "";
+  return String(n / 1000);
+}
+
+/** secondes → ms (payload). Arrondi à l'entier, jamais négatif. */
+export function craftTimeSecondsToMs(seconds: number | string | null | undefined): number {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 1000);
+}
