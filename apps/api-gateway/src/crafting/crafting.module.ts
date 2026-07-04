@@ -13,7 +13,6 @@ import { CraftingService } from './crafting.service';
 import { CraftJobService } from './craft-job.service';
 import { CraftJobScheduler } from './craft-job.scheduler';
 import { CraftingController } from './crafting.controller';
-import { CraftingGateway } from './crafting.gateway';
 import { SkillsModule } from '../skills/skills.module';
 import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
@@ -42,7 +41,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
     ItemTransferModule,         // pour consommer les ingrédients INSTANCE (CRAFT_CONSUME)
   ],
   controllers: [CraftingController],
-  providers: [CraftingService, CraftJobService, CraftJobScheduler, CraftingGateway],
+  providers: [CraftingService, CraftJobService, CraftJobScheduler],
   exports: [CraftingService, CraftJobService],
 })
 export class CraftingModule {}
