@@ -262,6 +262,16 @@ export default function ActionPanel() {
     <div className="action-panel" ref={panelRef}>
       <div className="action-panel__title">
         {(target.name ?? target.type).replace(/_/g, " ").toUpperCase()}
+        {isCraftStationPanelMode && (
+          <button
+            type="button"
+            className="action-panel__title-close"
+            onClick={closePanel}
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {target.kind === "creature" &&
@@ -347,6 +357,7 @@ export default function ActionPanel() {
         <CraftingRuntimePanel
           station={craftingStation}
           onClose={() => setCraftingStation(null)}
+          hideHeader
         />
       )}
     </div>

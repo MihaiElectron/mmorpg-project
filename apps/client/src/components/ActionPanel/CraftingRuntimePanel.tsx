@@ -38,9 +38,13 @@ function percent(value: number): string {
 type Props = {
   station: CraftingStationTarget;
   onClose: () => void;
+  // Masque l'en-tête interne (titre station + croix) lorsque le composant est
+  // embarqué dans un panneau parent qui titre et ferme déjà la station
+  // (ActionPanel). Défaut false → usage autonome inchangé.
+  hideHeader?: boolean;
 };
 
-export default function CraftingRuntimePanel({ station, onClose }: Props) {
+export default function CraftingRuntimePanel({ station, onClose, hideHeader = false }: Props) {
   const loadCharacter = useCharacterStore((s) => s.loadCharacter);
   const loadSkills = useCharacterStore((s) => s.loadSkills);
   const character = useCharacterStore((s) => s.character);
@@ -237,12 +241,14 @@ export default function CraftingRuntimePanel({ station, onClose }: Props) {
 
   return (
     <div className="action-panel__crafting">
-      <div className="action-panel__crafting-header">
-        <span className="action-panel__crafting-title">{station.name ?? stationType}</span>
-        <button className="action-panel__crafting-close" onClick={onClose} aria-label="Fermer le craft">
-          ×
-        </button>
-      </div>
+      {!hideHeader && (
+        <div className="action-panel__crafting-header">
+          <span className="action-panel__crafting-title">{station.name ?? stationType}</span>
+          <button className="action-panel__crafting-close" onClick={onClose} aria-label="Fermer le craft">
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="action-panel__craft-tabs" role="tablist">
         <button

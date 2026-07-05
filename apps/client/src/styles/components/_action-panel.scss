@@ -19,6 +19,7 @@
   box-shadow: vars.$panel-shadow-float;
 
   &__title {
+    position: relative;
     font-weight: bold;
     font-size: 16px;
     text-align: center;
@@ -26,6 +27,22 @@
     padding-bottom: 8px;
     margin-bottom: 4px;
     color: vars.$color-text-gold;
+  }
+
+  // Croix de fermeture principale (mode craft station uniquement) — alignée à
+  // droite du titre, sans décaler le titre centré.
+  &__title-close {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    width: 24px;
+    height: 24px;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-primary;
+    line-height: 1;
+    cursor: pointer;
   }
 
   // ── Console admin ─────────────────────────────────────────────────────────
