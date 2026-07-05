@@ -24,6 +24,14 @@ import {
   EntitySection,
 } from "./adminPanel.shared";
 import RecipesSection from "./RecipesSection";
+import {
+  PLAYER_PROGRESSION_FIELDS,
+  PLAYER_PRIMARY_STAT_FIELDS,
+  PLAYER_COMBAT_FIELDS,
+  PLAYER_EDITABLE_FIELDS,
+  PLAYER_DERIVED_ROWS,
+  formatDerived,
+} from "./playerStatsFields";
 import RuntimeStatsPanel from "../DevTools/modules/PlayerRuntime/RuntimeStatsPanel";
 import RuntimeInspectorPanel from "../DevTools/modules/PlayerRuntime/RuntimeInspectorPanel";
 import AssetPicker from "../DevTools/AssetPicker";
@@ -304,16 +312,6 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
   },
   ];
 }
-
-// ── Champs stats joueur ───────────────────────────────────────────────────────
-
-const PLAYER_STAT_FIELDS: FieldDef[] = [
-  { key: "level",     label: "Niv",    min: 1 },
-  { key: "health",    label: "HP",     min: 0 },
-  { key: "maxHealth", label: "HP max", min: 1 },
-  { key: "attack",    label: "ATK",    min: 0 },
-  { key: "defense",   label: "DEF",    min: 0 },
-];
 
 // ── Adapters WOM → formes legacy ──────────────────────────────────────────────
 
@@ -879,7 +877,7 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
 
   useEffect(() => { pag.goToPage(1); }, [search]);
 
-  const draft = useDraft(PLAYER_STAT_FIELDS);
+  const draft = useDraft(PLAYER_EDITABLE_FIELDS);
 
   async function onTp(player: any) {
     const socket = getSocket();
@@ -900,7 +898,13 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
     const result = await ackPromise(socket, "admin:update_character", { id: player.id, fields: dirtyFields });
     draft.setSaving((prev) => ({ ...prev, [dk]: false }));
     onResult(result.message, result.success);
-    if (result.success) { Object.assign(player, dirtyFields); draft.clearDraft(dk); }
+    if (result.success) {
+      Object.assign(player, dirtyFields);
+      // Rafraîchit les stats dérivées (calculées serveur) si renvoyées.
+      const serverStats = (result as any).data?.stats;
+      if (serverStats) player.stats = serverStats;
+      draft.clearDraft(dk);
+    }
   }
 
   return (
@@ -980,10 +984,10 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
                         </>
                       )}
 
-                      {/* ── Stats modifiables ── */}
-                      <span className="admin-panel__subsection-label">Stats</span>
+                      {/* ── A. Progression (éditable) ── */}
+                      <span className="admin-panel__subsection-label">Progression</span>
                       <div className="admin-panel__template-stats">
-                        {PLAYER_STAT_FIELDS.map((f) => (
+                        {PLAYER_PROGRESSION_FIELDS.map((f) => (
                           <label key={f.key} className="admin-panel__template-stat">
                             <span className="admin-panel__template-stat-label">{f.label}</span>
                             <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
@@ -992,12 +996,52 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
                           </label>
                         ))}
                       </div>
+
+                      {/* ── B. Stats principales (éditable) ── */}
+                      <span className="admin-panel__subsection-label">Stats principales</span>
+                      <div className="admin-panel__template-stats">
+                        {PLAYER_PRIMARY_STAT_FIELDS.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
+                              value={draft.getDisplayField(dk, f.key, player)}
+                              onChange={(v) => draft.onChange(dk, f.key, v)} />
+                          </label>
+                        ))}
+                      </div>
+
+                      {/* ── C. Combat brut / debug (éditable) ── */}
+                      <span className="admin-panel__subsection-label">Combat brut / debug</span>
+                      <div className="admin-panel__template-stats">
+                        {PLAYER_COMBAT_FIELDS.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
+                              value={draft.getDisplayField(dk, f.key, player)}
+                              onChange={(v) => draft.onChange(dk, f.key, v)} />
+                          </label>
+                        ))}
+                      </div>
+
                       {draft.hasAnyDirty(dk, player) && (
                         <button className="admin-panel__apply-btn"
                           disabled={!!draft.saving[dk]} onClick={() => onApply(player)}>
                           {draft.saving[dk] ? "…" : "Save"}
                         </button>
                       )}
+
+                      {/* ── D. Stats dérivées (lecture seule, calculées serveur) ── */}
+                      <span className="admin-panel__subsection-label">Stats dérivées (serveur)</span>
+                      <div className="admin-panel__player-derived">
+                        {PLAYER_DERIVED_ROWS.map((r) => (
+                          <span key={r.key} className="admin-panel__player-derived-cell">
+                            <span className="admin-panel__player-info-key">{r.label}</span>
+                            <span className="admin-panel__player-info-val">
+                              {formatDerived(player.stats?.derived?.[r.key], r.suffix)}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
 
                       {/* ── Monnaie ── */}
                       <PlayerWalletPanel characterId={dk} onResult={onResult} />

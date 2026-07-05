@@ -855,6 +855,20 @@
     padding: 2px 0;
   }
 
+  &__player-derived {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    padding: 2px 0 4px;
+  }
+
+  &__player-derived-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+  }
+
   &__player-info-key {
     font-size: 0.72rem;
     color: vars.$color-text-muted;
