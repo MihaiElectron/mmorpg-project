@@ -13,6 +13,7 @@ import { SkillsService } from '../skills/skills.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
+import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('characters')
@@ -59,6 +60,16 @@ export class CharacterController {
   async findMySkills(@Request() req) {
     const character = await this.characterService.findFirstByUser(req.user.userId);
     return this.skillsService.getCharacterSkills(character.id);
+  }
+
+  /**
+   * POST /characters/me/stats/allocate
+   * Alloue des points de stats sur le personnage principal de l'utilisateur.
+   * Le characterId n'est jamais fourni par le client (dérivé du JWT).
+   */
+  @Post('me/stats/allocate')
+  allocateStats(@Request() req, @Body() dto: AllocateStatsDto) {
+    return this.characterService.allocateStats(req.user.userId, dto);
   }
 
   /**

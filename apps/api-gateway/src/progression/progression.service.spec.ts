@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ProgressionService, ProgressionSource } from './progression.service';
+import { ProgressionService, ProgressionSource, STAT_POINTS_PER_LEVEL } from './progression.service';
 import { GameConfigService } from '../game-config/game-config.service';
 
 function makeConfig(overrides: Partial<{ characterBaseXpPerLevel: number; characterXpCurveExponent: number; characterMaxLevel: number }> = {}) {
@@ -44,7 +44,7 @@ describe('ProgressionService', () => {
   describe('applyCharacterXpInTx', () => {
     function makeManager(character: any) {
       return {
-        findOne: jest.fn().mockResolvedValue(character),
+        findOne: jest.fn().mockResolvedValue({ unspentStatPoints: 0, ...character }),
         update: jest.fn().mockResolvedValue({}),
       };
     }
@@ -83,6 +83,62 @@ describe('ProgressionService', () => {
       await expect(
         service.applyCharacterXpInTx("inexistant", 50, ProgressionSource.COMBAT, manager as any),
       ).rejects.toThrow("inexistant");
+    });
+  });
+
+  describe('points de stats au level-up', () => {
+    function makeManager(character: any) {
+      return {
+        findOne: jest.fn().mockResolvedValue({ unspentStatPoints: 0, ...character }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+    }
+
+    it("accorde 5 points pour un seul niveau gagne", async () => {
+      const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
+      const result = await service.applyCharacterXpInTx("char-1", 100, ProgressionSource.COMBAT, manager as any);
+      expect(result.gainedLevels).toBe(1);
+      expect(result.unspentStatPoints).toBe(STAT_POINTS_PER_LEVEL);
+    });
+
+    it("accorde 5 points par niveau pour un multi-level", async () => {
+      // base 100, exp 1 (lineaire) : seuils 1->2 = 100, 2->3 = 200, 3->4 = 300
+      gameConfigService.getConfig.mockResolvedValue(makeConfig({ characterXpCurveExponent: 1.0 }));
+      const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
+      // 100 + 200 + 300 = 600 -> 3 niveaux
+      const result = await service.applyCharacterXpInTx("char-1", 600, ProgressionSource.COMBAT, manager as any);
+      expect(result.gainedLevels).toBe(3);
+      expect(result.unspentStatPoints).toBe(3 * STAT_POINTS_PER_LEVEL);
+    });
+
+    it("n'accorde aucun point sans level-up", async () => {
+      const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
+      const result = await service.applyCharacterXpInTx("char-1", 50, ProgressionSource.COMBAT, manager as any);
+      expect(result.gainedLevels).toBe(0);
+      expect(result.unspentStatPoints).toBe(0);
+    });
+
+    it("cumule les points avec ceux deja possedes", async () => {
+      const manager = makeManager({ id: "char-1", level: 1, experience: 0, unspentStatPoints: 12 });
+      const result = await service.applyCharacterXpInTx("char-1", 100, ProgressionSource.COMBAT, manager as any);
+      expect(result.unspentStatPoints).toBe(12 + STAT_POINTS_PER_LEVEL);
+    });
+
+    it("n'accorde aucun point au-dela du niveau maximum", async () => {
+      const manager = makeManager({ id: "char-1", level: 100, experience: 0, unspentStatPoints: 7 });
+      const result = await service.applyCharacterXpInTx("char-1", 99999, ProgressionSource.COMBAT, manager as any);
+      expect(result.gainedLevels).toBe(0);
+      expect(result.unspentStatPoints).toBe(7);
+    });
+
+    it("persiste unspentStatPoints dans le meme update que level/experience", async () => {
+      const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
+      await service.applyCharacterXpInTx("char-1", 100, ProgressionSource.COMBAT, manager as any);
+      expect(manager.update).toHaveBeenCalledWith(
+        expect.anything(),
+        "char-1",
+        expect.objectContaining({ level: 2, unspentStatPoints: STAT_POINTS_PER_LEVEL }),
+      );
     });
   });
 });

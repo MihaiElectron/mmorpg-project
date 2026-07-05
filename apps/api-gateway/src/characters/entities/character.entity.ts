@@ -51,6 +51,38 @@ export class Character {
   @Column({ default: 0 })
   defense: number; // stat finale = baseDefense + Σ équipement
 
+  // ── Stats principales (Progression V1) ────────────────────────────────────
+  // Points permanents alloués par le joueur. L'équipement / buffs / passifs /
+  // debuffs viendront plus tard sous forme de modifiers (voir
+  // CharacterStatsCalculator). Le frontend ne recalcule jamais les stats finales.
+  @Column({ default: 0 })
+  baseStrength: number;
+
+  @Column({ default: 0 })
+  baseVitality: number;
+
+  @Column({ default: 0 })
+  baseEndurance: number;
+
+  @Column({ default: 0 })
+  baseAgility: number;
+
+  @Column({ default: 0 })
+  baseDexterity: number;
+
+  @Column({ default: 0 })
+  baseIntelligence: number;
+
+  @Column({ default: 0 })
+  baseWisdom: number;
+
+  @Column({ default: 0 })
+  baseCritical: number;
+
+  // Points de stats gagnés au level-up et pas encore dépensés.
+  @Column({ default: 0 })
+  unspentStatPoints: number;
+
   // ── Coordonnées WU ───────────────────────────────────────────────────────
   @Column({ type: 'int', nullable: true })
   worldX: number | null;

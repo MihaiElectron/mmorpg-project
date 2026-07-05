@@ -8,6 +8,7 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
@@ -52,7 +53,7 @@ function isJoinWorldPayload(payload: unknown): payload is JoinWorldPayload {
     origin: CLIENT_ORIGIN,
   },
 })
-export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class WorldGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -60,6 +61,11 @@ export class WorldGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly worldService: WorldService,
     private readonly wsAuthService: WsAuthService,
   ) {}
+
+  /** Expose le serveur Socket.IO au WorldService (émission character:reload HTTP). */
+  afterInit(server: Server) {
+    this.worldService.registerServer(server);
+  }
 
   /**
    * Rejette toute connexion sans JWT valide avant d'accepter le moindre

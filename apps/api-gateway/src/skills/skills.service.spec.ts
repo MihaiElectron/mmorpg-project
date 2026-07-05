@@ -48,12 +48,14 @@ describe('SkillsService', () => {
   beforeEach(async () => {
     skillDefRepo = {
       findOne: jest.fn(),
+      find: jest.fn(),
       save: jest.fn(),
       create: jest.fn((x) => x),
     };
 
     playerSkillRepo = {
       findOne: jest.fn(),
+      find: jest.fn(),
       save: jest.fn(),
       create: jest.fn((x) => x),
     };
@@ -315,6 +317,63 @@ describe('SkillsService', () => {
       expect(result.level).toBe(5);
       expect(result.xp).toBe(42);
       expect(playerSkillRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── getCharacterSkills ───────────────────────────────────────────────────
+
+  describe('getCharacterSkills', () => {
+    it("retourne tous les skills enabled pour un personnage neuf (level 1 / xp 0)", async () => {
+      const defs = [
+        makeSkillDef({ id: "def-1", key: "smithing", category: "crafting" }),
+        makeSkillDef({ id: "def-2", key: "mining", category: "gathering" }),
+      ];
+      skillDefRepo.find.mockResolvedValue(defs);
+      playerSkillRepo.find.mockResolvedValue([]); // aucune progression
+
+      const result = await service.getCharacterSkills("char-1");
+
+      expect(result).toHaveLength(2);
+      expect(result.every((s) => s.level === 1 && s.xp === 0)).toBe(true);
+      expect(result.map((s) => s.key).sort()).toEqual(["mining", "smithing"]);
+      // Aucune ligne PlayerSkill créée juste pour l'affichage
+      expect(playerSkillRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("conserve la progression existante d'un skill", async () => {
+      const defs = [
+        makeSkillDef({ id: "def-1", key: "smithing" }),
+        makeSkillDef({ id: "def-2", key: "mining" }),
+      ];
+      skillDefRepo.find.mockResolvedValue(defs);
+      playerSkillRepo.find.mockResolvedValue([
+        makePlayerSkill({ skillDefinitionId: "def-1", level: 4, xp: 120 }),
+      ]);
+
+      const result = await service.getCharacterSkills("char-1");
+
+      const smithing = result.find((s) => s.key === "smithing")!;
+      const mining = result.find((s) => s.key === "mining")!;
+      expect(smithing.level).toBe(4);
+      expect(smithing.xp).toBe(120);
+      // nextLevelXp recalculé depuis le level progressé, pas depuis 1
+      expect(smithing.nextLevelXp).toBe(service.getNextLevelXp(defs[0], 4));
+      expect(mining.level).toBe(1);
+      expect(mining.xp).toBe(0);
+    });
+
+    it("ne retourne pas les skills disabled", async () => {
+      // Le repository ne renvoie que les enabled (where enabled:true).
+      skillDefRepo.find.mockResolvedValue([
+        makeSkillDef({ id: "def-1", key: "smithing", enabled: true }),
+      ]);
+      playerSkillRepo.find.mockResolvedValue([]);
+
+      const result = await service.getCharacterSkills("char-1");
+
+      expect(skillDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
+      expect(result.every((s) => s.enabled)).toBe(true);
+      expect(result.map((s) => s.key)).toEqual(["smithing"]);
     });
   });
 

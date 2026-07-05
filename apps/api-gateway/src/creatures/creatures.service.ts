@@ -6,6 +6,7 @@ import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
@@ -367,7 +368,9 @@ export class CreaturesService implements OnModuleInit {
       this.lastCreatureAutoAttackAt.set(creature.id, now);
       const char = await this.characterRepository.findOne({ where: { id: target.characterId } });
       if (char && char.health > 0) {
-        const dmg = Math.max(template.baseAttack - char.defense, 1);
+        // Défense dérivée serveur (Endurance incluse), jamais la colonne brute.
+        const charDefense = CharacterStatsCalculator.compute(char).derived.defense;
+        const dmg = Math.max(template.baseAttack - charDefense, 1);
         const newHealth = Math.max(char.health - dmg, 0);
         await this.characterRepository.update(char.id, { health: newHealth });
         server.to(target.socketId).emit('character_damaged', {
@@ -518,7 +521,11 @@ export class CreaturesService implements OnModuleInit {
       debugMods,
     );
 
-    const attack = Math.max(character.attack, 5);
+    // Progression V1 : le combat lit les stats DÉRIVÉES serveur, jamais les
+    // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
+    // agilité / dextérité NON branchés en combat V1 (affichage seul).
+    const charStats = CharacterStatsCalculator.compute(character);
+    const attack = Math.max(charStats.derived.physicalAttack, 5);
     const damage = Math.max(attack - derived.defenseTotal, 1);
 
     creature.health = Math.max(creature.health - damage, 0);
@@ -582,7 +589,7 @@ export class CreaturesService implements OnModuleInit {
 
     let riposte: { damage: number; characterHealth: number } | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
-      const riposteDamage = Math.max(derived.attackPower - character.defense, 1);
+      const riposteDamage = Math.max(derived.attackPower - charStats.derived.defense, 1);
       const characterHealth = Math.max(character.health - riposteDamage, 0);
       await this.characterRepository.update(characterId, { health: characterHealth });
       riposte = { damage: riposteDamage, characterHealth };

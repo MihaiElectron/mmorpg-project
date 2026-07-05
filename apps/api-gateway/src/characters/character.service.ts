@@ -19,6 +19,21 @@ import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
+import { CharacterStatsCalculator } from './character-stats-calculator';
+import { AllocateStatsDto } from './dto/allocate-stats.dto';
+import { WorldService } from '../world/world.service';
+
+// Correspondance stat DTO → colonne base* de Character.
+const STAT_COLUMN: Record<keyof AllocateStatsDto, keyof Character> = {
+  strength: 'baseStrength',
+  vitality: 'baseVitality',
+  endurance: 'baseEndurance',
+  agility: 'baseAgility',
+  dexterity: 'baseDexterity',
+  intelligence: 'baseIntelligence',
+  wisdom: 'baseWisdom',
+  critical: 'baseCritical',
+};
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
@@ -40,6 +55,7 @@ export class CharacterService {
     private readonly inventoryProjection: InventoryProjectionService,
     private readonly itemTransfer: ItemTransferService,
     private readonly progression: ProgressionService,
+    private readonly worldService: WorldService,
   ) {}
 
   /**
@@ -93,7 +109,76 @@ export class CharacterService {
     if (!character) throw new NotFoundException(`No character found for user ${userId}`);
     const inventory = await this.inventoryProjection.project(character.id);
     const nextLevelXp = await this.progression.getNextLevelXp(character.level);
-    return Object.assign(character, { inventory, nextLevelXp });
+    const stats = CharacterStatsCalculator.compute(character);
+    return Object.assign(character, { inventory, nextLevelXp, stats });
+  }
+
+  /**
+   * Alloue des points de stats permanents (Progression V1).
+   * - Le personnage ciblé est TOUJOURS celui de l'utilisateur connecté
+   *   (jamais un characterId arbitraire fourni par le client).
+   * - Transaction + verrou pessimiste : la somme allouée est validée contre
+   *   `unspentStatPoints` sous verrou, empêchant toute sur-allocation concurrente.
+   * - Vitalité : les PV courants montent du delta de PV max dérivé (capés).
+   * Renvoie le MÊME format enrichi que GET /characters/me.
+   */
+  async allocateStats(
+    userId: string,
+    dto: AllocateStatsDto,
+  ): Promise<Omit<Character, 'inventory'> & { inventory: InventoryEntryDto[] }> {
+    // Normalise et valide les incréments (entiers >= 0, somme > 0).
+    const increments: Partial<Record<keyof Character, number>> = {};
+    let total = 0;
+    for (const key of Object.keys(STAT_COLUMN) as (keyof AllocateStatsDto)[]) {
+      const raw = dto[key];
+      if (raw === undefined) continue;
+      if (!Number.isInteger(raw) || raw < 0) {
+        throw new BadRequestException(`Valeur invalide pour "${key}" : entier >= 0 requis.`);
+      }
+      if (raw === 0) continue;
+      increments[STAT_COLUMN[key]] = raw;
+      total += raw;
+    }
+    if (total <= 0) {
+      throw new BadRequestException('Aucun point à allouer.');
+    }
+
+    const characterId = await this.dataSource.transaction(async (manager) => {
+      const character = await manager.findOne(Character, {
+        where: { userId },
+        order: { createdAt: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!character) throw new NotFoundException(`No character found for user ${userId}`);
+
+      if (total > character.unspentStatPoints) {
+        throw new BadRequestException(
+          `Points insuffisants : ${total} demandés, ${character.unspentStatPoints} disponibles.`,
+        );
+      }
+
+      // PV max dérivé avant application (pour le delta Vitalité).
+      const oldMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+
+      for (const [column, amount] of Object.entries(increments)) {
+        (character as unknown as Record<string, number>)[column] += amount as number;
+      }
+      character.unspentStatPoints -= total;
+
+      // Vitalité : PV courants +delta, capés au nouveau PV max dérivé.
+      const newMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+      const delta = newMaxHealth - oldMaxHealth;
+      if (delta > 0) {
+        character.health = Math.min(character.health + delta, newMaxHealth);
+      }
+
+      await manager.save(Character, character);
+      return character.id;
+    });
+
+    // Notifie le client connecté et renvoie le format enrichi unique.
+    this.worldService.emitCharacterReload(characterId);
+    return this.findFirstByUserProjected(userId);
   }
 
   /**

@@ -318,6 +318,67 @@ describe('CreaturesService', () => {
       expect(creature.state).toBe('alive');
     });
 
+    it('Force augmente les dégâts via stats.derived.physicalAttack', async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      // physicalAttack = attack(10) + strength(5)*2 = 20 ; defenseTotal creature = 2
+      characterRepository.findOne.mockResolvedValue(
+        makeCharacter({ attack: 10, defense: 3, baseStrength: 5 }),
+      );
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.damage).toBe(18);
+      expect(creature.health).toBe(12);
+    });
+
+    it('Endurance réduit les dégâts reçus (riposte) via stats.derived.defense', async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
+      (service as any).liveCreatures.set(creature.id, creature);
+      // riposte = max(creatureAttackPower(5) - defenseDérivée, 1)
+      // sans endurance : defense = 3 → riposte 2
+      characterRepository.findOne.mockResolvedValue(
+        makeCharacter({ attack: 7, defense: 3, baseEndurance: 0 }),
+      );
+      const noEndurance = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+      expect(noEndurance.success && noEndurance.riposte?.damage).toBe(2);
+
+      // avec endurance 10 : defense = 13 → riposte plancher 1
+      const creature2 = makeCreature({ id: 'creature-2', worldX: 6080, worldY: 12480, mapId: 1, health: 30, state: 'fighting' });
+      (service as any).liveCreatures.set(creature2.id, creature2);
+      characterRepository.findOne.mockResolvedValue(
+        makeCharacter({ id: 'char-2', attack: 7, defense: 3, baseEndurance: 10 }),
+      );
+      const withEndurance = await service.attack(creature2.id, 'char-2', { worldX: 6080, worldY: 12480, mapId: 1 });
+      expect(withEndurance.success && withEndurance.riposte?.damage).toBe(1);
+    });
+
+    it('Critique / Agilité / Dextérité ne sont pas branchés au combat V1', async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      // Ces stats ne doivent pas modifier les dégâts (même valeur que sans elles).
+      characterRepository.findOne.mockResolvedValue(
+        makeCharacter({ attack: 10, defense: 3, baseCritical: 50, baseAgility: 50, baseDexterity: 50 }),
+      );
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      // damage identique au test de base (physicalAttack = attack seul = 10 → 8)
+      expect(result.success && result.damage).toBe(8);
+    });
+
+    it('conserve le minimum de dégâts (1) même avec une attaque faible', async () => {
+      const template = makeTemplate({ baseArmor: 100 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 1, defense: 0 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success && result.damage).toBe(1);
+    });
+
     it("tue l'creature, programme un respawn et efface l'état de patrouille", async () => {
       jest.useFakeTimers();
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 5 });

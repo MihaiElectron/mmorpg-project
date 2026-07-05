@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import {
   wuToIsoScreenX,
@@ -76,6 +77,9 @@ export type JoinedPlayer = {
 export class WorldService implements OnModuleInit {
   private readonly logger = new Logger(WorldService.name);
   private connectedPlayers = new Map<string, ConnectedPlayer>();
+  // Serveur Socket.IO enregistré par WorldGateway.afterInit — permet aux
+  // services HTTP (allocation stats, etc.) d'émettre vers le socket d'un joueur.
+  private server: Server | null = null;
   private movementObservation = new Map<string, MovementObservationState>();
   private movementMetrics: MovementMetrics = {
     totalMoves: 0,
@@ -167,7 +171,9 @@ export class WorldService implements OnModuleInit {
       newWY = wu.worldY;
     } catch { /* position hors isométrie : conserver la WU du point */ }
 
-    const newHealth = character.maxHealth;
+    // Respawn full HP = PV max DÉRIVÉS (Vitalité incluse), pas la colonne brute.
+    const derivedMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+    const newHealth = derivedMaxHealth;
 
     await this.characterRepository.update(characterId, {
       health: newHealth,
@@ -190,7 +196,7 @@ export class WorldService implements OnModuleInit {
           chunkY: wuToChunkIndex(newWY),
           mapId: nearestWU.mapId,
           health: newHealth,
-          maxHealth: character.maxHealth,
+          maxHealth: derivedMaxHealth,
         });
         break;
       }
@@ -387,6 +393,22 @@ export class WorldService implements OnModuleInit {
       if (player.characterId === characterId) return { ...player };
     }
     return null;
+  }
+
+  /** Enregistre le serveur Socket.IO (appelé par WorldGateway au démarrage). */
+  registerServer(server: Server): void {
+    this.server = server;
+  }
+
+  /**
+   * Émet `character:reload` vers le socket du personnage s'il est connecté.
+   * No-op silencieux si le joueur est hors ligne ou si le serveur n'est pas
+   * encore enregistré. Réutilisable par tous les domaines (stats, bank, mail…).
+   */
+  emitCharacterReload(characterId: string): void {
+    if (!this.server) return;
+    const player = this.getConnectedPlayerByCharacterId(characterId);
+    if (player) this.server.to(player.socketId).emit('character:reload');
   }
 
   findPlayerByNameOrId(nameOrId: string): ConnectedPlayer | null {

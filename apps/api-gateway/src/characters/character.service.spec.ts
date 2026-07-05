@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CharacterService } from './character.service';
 import { Character } from './entities/character.entity';
@@ -10,6 +11,7 @@ import { isoScreenToWorldWU, DEFAULT_MAP_ID } from '../common/world-coordinates'
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
+import { WorldService } from '../world/world.service';
 
 function makeRepo() {
   return {
@@ -46,6 +48,7 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
         { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(100) } },
+        { provide: WorldService, useValue: { emitCharacterReload: jest.fn() } },
       ],
     }).compile();
     service = module.get<CharacterService>(CharacterService);
@@ -76,5 +79,204 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
     const created = characterRepo.create.mock.calls[0][0];
     expect(created.worldX).toBe(0);
     expect(created.worldY).toBe(9600);
+  });
+});
+
+describe('CharacterService.findFirstByUserProjected — enrichissement stats (Progression V1)', () => {
+  let service: CharacterService;
+  let characterRepo: ReturnType<typeof makeRepo>;
+
+  function makeCharacter(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'char-1',
+      name: 'Hero',
+      level: 3,
+      health: 100,
+      maxHealth: 100,
+      experience: 40,
+      attack: 12,
+      defense: 6,
+      baseStrength: 5,
+      baseVitality: 4,
+      baseEndurance: 2,
+      baseAgility: 3,
+      baseDexterity: 1,
+      baseIntelligence: 0,
+      baseWisdom: 0,
+      baseCritical: 6,
+      unspentStatPoints: 15,
+      equipment: [],
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    characterRepo = makeRepo();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CharacterService,
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
+        { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
+        { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
+        { provide: getRepositoryToken(Item), useValue: makeRepo() },
+        { provide: DataSource, useValue: {} },
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(283) } },
+        { provide: WorldService, useValue: { emitCharacterReload: jest.fn() } },
+      ],
+    }).compile();
+    service = module.get<CharacterService>(CharacterService);
+  });
+
+  it('expose nextLevelXp, unspentStatPoints et le bloc stats calculé', async () => {
+    characterRepo.findOne.mockResolvedValue(makeCharacter());
+
+    const result = (await service.findFirstByUserProjected('user-1')) as any;
+
+    expect(result.nextLevelXp).toBe(283);
+    expect(result.unspentStatPoints).toBe(15);
+    expect(result.stats).toBeDefined();
+    expect(result.stats.base.strength).toBe(5);
+    // derived : maxHealth 100 + vitality(4)*10, physicalAttack 12 + strength(5)*2
+    expect(result.stats.derived.maxHealth).toBe(140);
+    expect(result.stats.derived.physicalAttack).toBe(22);
+    expect(result.stats.derived.criticalChance).toBe(3);
+  });
+});
+
+describe('CharacterService.allocateStats — allocation de points (Progression V1)', () => {
+  let service: CharacterService;
+  let characterRepo: ReturnType<typeof makeRepo>;
+  let worldService: { emitCharacterReload: jest.Mock };
+  let locked: any; // le Character chargé sous verrou dans la transaction
+  let managerFindOne: jest.Mock;
+  let managerSave: jest.Mock;
+
+  function makeLockedCharacter(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'char-1',
+      userId: 'user-1',
+      level: 5,
+      health: 80,
+      maxHealth: 100,
+      attack: 12,
+      defense: 6,
+      baseStrength: 0,
+      baseVitality: 0,
+      baseEndurance: 0,
+      baseAgility: 0,
+      baseDexterity: 0,
+      baseIntelligence: 0,
+      baseWisdom: 0,
+      baseCritical: 0,
+      unspentStatPoints: 10,
+      equipment: [],
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    characterRepo = makeRepo();
+    worldService = { emitCharacterReload: jest.fn() };
+    managerSave = jest.fn().mockImplementation((_entity, data) => Promise.resolve(data));
+
+    const dataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: any) => {
+        const manager = { findOne: managerFindOne, save: managerSave };
+        return cb(manager);
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CharacterService,
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
+        { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
+        { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
+        { provide: getRepositoryToken(Item), useValue: makeRepo() },
+        { provide: DataSource, useValue: dataSource },
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(283) } },
+        { provide: WorldService, useValue: worldService },
+      ],
+    }).compile();
+    service = module.get<CharacterService>(CharacterService);
+  });
+
+  function armCharacter(overrides: Record<string, unknown> = {}) {
+    locked = makeLockedCharacter(overrides);
+    managerFindOne = jest.fn().mockResolvedValue(locked);
+    // La projection finale relit le personnage muté.
+    characterRepo.findOne.mockImplementation(async () => locked);
+  }
+
+  it('décrémente unspentStatPoints et incrémente les base* (multi-stat)', async () => {
+    armCharacter({ unspentStatPoints: 10 });
+    const result = (await service.allocateStats('user-1', { strength: 3, endurance: 2 })) as any;
+    expect(locked.baseStrength).toBe(3);
+    expect(locked.baseEndurance).toBe(2);
+    expect(locked.unspentStatPoints).toBe(5);
+    // Format enrichi identique à /characters/me
+    expect(result.stats.base.strength).toBe(3);
+    expect(result.nextLevelXp).toBe(283);
+    expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-1');
+  });
+
+  it('refuse une valeur négative', async () => {
+    armCharacter();
+    await expect(service.allocateStats('user-1', { strength: -1 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuse une valeur décimale', async () => {
+    armCharacter();
+    await expect(service.allocateStats('user-1', { strength: 1.5 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuse une somme nulle', async () => {
+    armCharacter();
+    await expect(service.allocateStats('user-1', { strength: 0 })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.allocateStats('user-1', {})).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuse une somme supérieure aux points disponibles', async () => {
+    armCharacter({ unspentStatPoints: 4 });
+    await expect(service.allocateStats('user-1', { strength: 3, vitality: 3 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('cible toujours le personnage de l\'utilisateur connecté (par userId)', async () => {
+    armCharacter();
+    await service.allocateStats('user-1', { strength: 1 });
+    // Le findOne transactionnel filtre sur userId, pas sur un characterId client.
+    expect(managerFindOne).toHaveBeenCalledWith(
+      Character,
+      expect.objectContaining({ where: { userId: 'user-1' }, lock: { mode: 'pessimistic_write' } }),
+    );
+  });
+
+  it('lance NotFoundException si aucun personnage', async () => {
+    locked = null;
+    managerFindOne = jest.fn().mockResolvedValue(null);
+    await expect(service.allocateStats('user-1', { strength: 1 })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('Vitalité et PV courant', () => {
+    it('augmente derived.maxHealth et les PV courants du delta', async () => {
+      armCharacter({ health: 80, maxHealth: 100, baseVitality: 0, unspentStatPoints: 10 });
+      const result = (await service.allocateStats('user-1', { vitality: 2 })) as any;
+      // +2 vitalité → +20 PV max dérivés, PV courants 80 → 100
+      expect(result.stats.derived.maxHealth).toBe(120);
+      expect(locked.health).toBe(100);
+    });
+
+    it('ne dépasse jamais le nouveau PV max dérivé', async () => {
+      armCharacter({ health: 118, maxHealth: 100, baseVitality: 2, unspentStatPoints: 10 });
+      // maxHealth dérivé avant = 120, health 118. +1 vitalité → delta 10, 118+10=128 capé à 130
+      await service.allocateStats('user-1', { vitality: 1 });
+      expect(locked.health).toBe(128);
+      const derivedMax = 100 + locked.baseVitality * 10; // 130
+      expect(locked.health).toBeLessThanOrEqual(derivedMax);
+    });
   });
 });

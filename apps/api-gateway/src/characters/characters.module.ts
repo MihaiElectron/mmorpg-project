@@ -13,6 +13,7 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { SkillsModule } from '../skills/skills.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { ProgressionModule } from '../progression/progression.module';
+import { WorldModule } from '../world/world.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ProgressionModule } from '../progression/progression.module';
     SkillsModule,
     ItemTransferModule,
     ProgressionModule,
+    WorldModule,
   ],
   controllers: [CharacterController],
   providers: [CharacterService],

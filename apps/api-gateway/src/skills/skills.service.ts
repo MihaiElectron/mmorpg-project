@@ -285,27 +285,33 @@ export class SkillsService implements OnModuleInit {
     nextLevelXp: number;
     enabled: boolean;
   }[]> {
-    const playerSkills = await this.playerSkillRepo.find({
-      where: { characterId },
-      relations: ['skillDefinition'],
-      order: { updatedAt: 'DESC' },
-    });
+    // Progression V1 : on part de TOUTES les définitions activées, puis on mappe
+    // la progression du personnage si elle existe. Un skill enabled sans
+    // PlayerSkill est renvoyé avec level=1 / xp=0 — SANS créer de ligne DB.
+    const [definitions, playerSkills] = await Promise.all([
+      this.skillDefinitionRepo.find({ where: { enabled: true } }),
+      this.playerSkillRepo.find({ where: { characterId } }),
+    ]);
 
-    return playerSkills
-      .filter((ps) => ps.skillDefinition != null)
-      .map((ps) => {
-        const sd = ps.skillDefinition;
-        return {
-          skillDefinitionId: sd.id,
-          key: sd.key,
-          name: sd.name,
-          category: sd.category,
-          level: ps.level,
-          xp: ps.xp,
-          nextLevelXp: this.getNextLevelXp(sd, ps.level),
-          enabled: sd.enabled,
-        };
-      });
+    const progressById = new Map(
+      playerSkills.map((ps) => [ps.skillDefinitionId, ps]),
+    );
+
+    return definitions.map((sd) => {
+      const ps = progressById.get(sd.id);
+      const level = ps?.level ?? 1;
+      const xp = ps?.xp ?? 0;
+      return {
+        skillDefinitionId: sd.id,
+        key: sd.key,
+        name: sd.name,
+        category: sd.category,
+        level,
+        xp,
+        nextLevelXp: this.getNextLevelXp(sd, level),
+        enabled: sd.enabled,
+      };
+    });
   }
 
   // ---------------------------------------------------------------------------
