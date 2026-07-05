@@ -28,9 +28,11 @@ describe('AdminService resources', () => {
   let skillDefinitionRepo: Record<string, jest.Mock>;
   let playerSkillRepo: Record<string, jest.Mock>;
   let itemRepo: Record<string, jest.Mock>;
+  let characterRepo: Record<string, jest.Mock>;
   let worldService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
+    characterRepo = BASE_EMPTY_REPO();
     resourceRepo = {
       find: jest.fn(),
       findOne: jest.fn(),
@@ -91,7 +93,7 @@ describe('AdminService resources', () => {
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
-        { provide: getRepositoryToken(Character), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(Resource), useValue: resourceRepo },
         { provide: getRepositoryToken(ResourceTemplate), useValue: resourceTemplateRepo },
         { provide: getRepositoryToken(SkillDefinition), useValue: skillDefinitionRepo },
@@ -135,6 +137,62 @@ describe('AdminService resources', () => {
       invalidCoordinates: 0,
       mapMismatch: 0,
     });
+  });
+
+  // ── Character stats V1 ───────────────────────────────────────────────────────
+
+  function makeCharacterRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'char-1',
+      name: 'Héros',
+      level: 3,
+      experience: 40,
+      health: 80,
+      maxHealth: 100,
+      attack: 12,
+      defense: 6,
+      baseStrength: 5,
+      baseVitality: 4,
+      baseEndurance: 2,
+      baseAgility: 0,
+      baseDexterity: 0,
+      baseIntelligence: 0,
+      baseWisdom: 0,
+      baseCritical: 0,
+      unspentStatPoints: 10,
+      ...overrides,
+    };
+  }
+
+  it('getCharacters enrichit chaque personnage avec stats.derived', async () => {
+    characterRepo.find.mockResolvedValue([makeCharacterRow()]);
+
+    const result = await service.getCharacters();
+
+    expect(result[0].stats).toBeDefined();
+    // derived : maxHealth 100 + vitality(4)*10, physicalAttack 12 + strength(5)*2
+    expect(result[0].stats.derived.maxHealth).toBe(140);
+    expect(result[0].stats.derived.physicalAttack).toBe(22);
+    expect(result[0].stats.base.strength).toBe(5);
+  });
+
+  it('updateCharacter applique les champs et retourne stats recalculées', async () => {
+    const row = makeCharacterRow({ baseStrength: 0 });
+    characterRepo.findOne.mockResolvedValue(row);
+
+    const result = await service.updateCharacter('char-1', { baseStrength: 7, unspentStatPoints: 3 });
+
+    expect(result).not.toBeNull();
+    expect(result!.baseStrength).toBe(7);
+    expect(result!.unspentStatPoints).toBe(3);
+    // physicalAttack = attack(12) + strength(7)*2 = 26
+    expect(result!.stats.derived.physicalAttack).toBe(26);
+  });
+
+  it('updateCharacter retourne null si le personnage est introuvable', async () => {
+    characterRepo.findOne.mockResolvedValue(null);
+    const result = await service.updateCharacter('absent', { level: 5 });
+    expect(result).toBeNull();
   });
 
   // ── updateResourceTemplate ───────────────────────────────────────────────────

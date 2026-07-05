@@ -21,6 +21,7 @@ import { CreatureTemplate } from '../creatures/entities/creature-template.entity
 import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
 import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
+import { CharacterStatsCalculator, CharacterStats } from '../characters/character-stats-calculator';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
@@ -227,7 +228,7 @@ export class AdminService {
 
   // ── Joueurs ───────────────────────────────────────────────────────────────
 
-  async getCharacters(): Promise<Character[]> {
+  async getCharacters(): Promise<(Character & { stats: CharacterStats })[]> {
     const characters = await this.characterRepo.find({ order: { name: 'ASC' } });
     for (const char of characters) {
       const live = this.worldService.getConnectedPlayerByCharacterId(char.id);
@@ -237,21 +238,47 @@ export class AdminService {
         char.mapId = live.mapId;
       }
     }
-    return characters;
+    // Stats dérivées calculées serveur — lecture seule côté DevTools.
+    return characters.map((char) =>
+      Object.assign(char, { stats: CharacterStatsCalculator.compute(char) }),
+    );
   }
 
   findCharacterById(id: string): Promise<Character | null> {
     return this.characterRepo.findOne({ where: { id } });
   }
 
+  // Champs éditables via DevTools : progression, valeurs brutes combat/debug,
+  // stats principales et points non dépensés. Les stats dérivées ne sont JAMAIS
+  // écrites (calculées serveur).
   async updateCharacter(
     id: string,
-    fields: Partial<Pick<Character, 'level' | 'health' | 'maxHealth' | 'attack' | 'defense'>>,
-  ): Promise<Character | null> {
+    fields: Partial<
+      Pick<
+        Character,
+        | 'level'
+        | 'experience'
+        | 'health'
+        | 'maxHealth'
+        | 'attack'
+        | 'defense'
+        | 'baseStrength'
+        | 'baseVitality'
+        | 'baseEndurance'
+        | 'baseAgility'
+        | 'baseDexterity'
+        | 'baseIntelligence'
+        | 'baseWisdom'
+        | 'baseCritical'
+        | 'unspentStatPoints'
+      >
+    >,
+  ): Promise<(Character & { stats: CharacterStats }) | null> {
     const character = await this.characterRepo.findOne({ where: { id } });
     if (!character) return null;
     Object.assign(character, fields);
-    return this.characterRepo.save(character);
+    const saved = await this.characterRepo.save(character);
+    return Object.assign(saved, { stats: CharacterStatsCalculator.compute(saved) });
   }
 
   // ── Templates de ressources ───────────────────────────────────────────────

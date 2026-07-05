@@ -473,12 +473,21 @@ export class AdminGateway implements OnGatewayConnection {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const allowed = ['level', 'health', 'maxHealth', 'attack', 'defense'];
+    const allowed = [
+      // Progression + valeurs brutes combat/debug
+      'level', 'experience', 'health', 'maxHealth', 'attack', 'defense',
+      // Stats principales (Progression V1) + points non dépensés
+      'baseStrength', 'baseVitality', 'baseEndurance', 'baseAgility',
+      'baseDexterity', 'baseIntelligence', 'baseWisdom', 'baseCritical',
+      'unspentStatPoints',
+    ];
     const safe: Record<string, number> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };
       const n = Number(v);
-      if (isNaN(n) || n < 0) return { success: false, message: `Valeur invalide pour "${k}".` };
+      if (isNaN(n) || n < 0 || !Number.isInteger(n)) {
+        return { success: false, message: `Valeur invalide pour "${k}" : entier >= 0 requis.` };
+      }
       safe[k] = n;
     }
 

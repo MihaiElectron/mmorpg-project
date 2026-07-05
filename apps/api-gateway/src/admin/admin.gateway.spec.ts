@@ -505,3 +505,89 @@ describe("admin:teleport — coordonnées explicites (TP vers point)", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ─── admin:update_character — stats joueur V1 ────────────────────────────────
+
+function makeUpdateCharacterGateway() {
+  const adminServiceMock = {
+    updateCharacter: jest.fn().mockImplementation(async (id: string, fields: Record<string, number>) => ({
+      id,
+      name: "Héros",
+      ...fields,
+    })),
+  };
+  const worldService = { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null) };
+
+  const gw = new AdminGateway(
+    {} as unknown as CreaturesService,
+    worldService as unknown as WorldService,
+    adminServiceMock as unknown as AdminService,
+    {} as unknown as ResourcesService,
+    {} as unknown as import('../buildings/buildings.service').BuildingsService,
+    { authenticate: jest.fn() } as unknown as WsAuthService,
+    {} as unknown as import('../economy/economy.service').EconomyService,
+    {} as unknown as import('typeorm').DataSource,
+    {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
+    {} as unknown as import('../items/item.service').ItemService,
+    {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
+  );
+  (gw as any).server = { emit: jest.fn() };
+  return { gw, adminServiceMock };
+}
+
+describe("AdminGateway — admin:update_character (stats joueur V1)", () => {
+  it("refuse si role != admin", async () => {
+    const { gw, adminServiceMock } = makeUpdateCharacterGateway();
+    const result = await (gw as any).onUpdateCharacter(makeClient({ role: "user" }), {
+      id: "char-1",
+      fields: { baseStrength: 3 },
+    });
+    expect(result.success).toBe(false);
+    expect(adminServiceMock.updateCharacter).not.toHaveBeenCalled();
+  });
+
+  it("accepte experience, baseStrength et unspentStatPoints", async () => {
+    const { gw, adminServiceMock } = makeUpdateCharacterGateway();
+    const result = await (gw as any).onUpdateCharacter(makeClient({ role: "admin" }), {
+      id: "char-1",
+      fields: { experience: 120, baseStrength: 5, unspentStatPoints: 0 },
+    });
+    expect(result.success).toBe(true);
+    expect(adminServiceMock.updateCharacter).toHaveBeenCalledWith("char-1", {
+      experience: 120,
+      baseStrength: 5,
+      unspentStatPoints: 0,
+    });
+  });
+
+  it("refuse un champ inconnu (ex: une stat dérivée)", async () => {
+    const { gw, adminServiceMock } = makeUpdateCharacterGateway();
+    const result = await (gw as any).onUpdateCharacter(makeClient({ role: "admin" }), {
+      id: "char-1",
+      fields: { physicalAttack: 50 },
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/non modifiable/i);
+    expect(adminServiceMock.updateCharacter).not.toHaveBeenCalled();
+  });
+
+  it("refuse une valeur négative", async () => {
+    const { gw, adminServiceMock } = makeUpdateCharacterGateway();
+    const result = await (gw as any).onUpdateCharacter(makeClient({ role: "admin" }), {
+      id: "char-1",
+      fields: { baseVitality: -2 },
+    });
+    expect(result.success).toBe(false);
+    expect(adminServiceMock.updateCharacter).not.toHaveBeenCalled();
+  });
+
+  it("refuse une valeur décimale", async () => {
+    const { gw, adminServiceMock } = makeUpdateCharacterGateway();
+    const result = await (gw as any).onUpdateCharacter(makeClient({ role: "admin" }), {
+      id: "char-1",
+      fields: { baseAgility: 1.5 },
+    });
+    expect(result.success).toBe(false);
+    expect(adminServiceMock.updateCharacter).not.toHaveBeenCalled();
+  });
+});
