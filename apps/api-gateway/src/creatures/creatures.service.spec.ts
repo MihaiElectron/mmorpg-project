@@ -300,6 +300,153 @@ describe('CreaturesService', () => {
       expect(result).toEqual({ success: false, error: 'Character is dead' });
     });
 
+    // ── Portée mêlée (MELEE_RANGE_WU = 1280, distance Chebyshev) ──────────────
+    // Les cas historiques attaquent au MÊME WU que la créature (distance 0) et
+    // ne couvrent donc pas la portée réelle. On ajoute des distances explicites,
+    // dont la tuile adjacente (1024 WU) qui était refusée avant le correctif.
+    describe('portée mêlée (Chebyshev WU)', () => {
+      // Créature de référence : (6080, 12480), mapId 1.
+      const CREATURE_WU = { worldX: 6080, worldY: 12480, mapId: 1 };
+      const MELEE_RANGE_WU = 1280; // doit rester synchronisé avec le service
+      const TILE_SIZE_WU = 1024;
+
+      function armCreature(overrides: Partial<Creature> = {}) {
+        const creature = makeCreature({ ...CREATURE_WU, health: 30, ...overrides });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+        return creature;
+      }
+
+      it('accepte à distance 0 WU (même case)', async () => {
+        const creature = armCreature();
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+        expect(result.success).toBe(true);
+      });
+
+      it('accepte sur une tuile adjacente (1024 WU) — non-régression principale', async () => {
+        const creature = armCreature();
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU, // cheb = 1024
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+      });
+
+      it('accepte à la distance exacte MELEE_RANGE_WU (1280)', async () => {
+        const creature = armCreature();
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + MELEE_RANGE_WU, // cheb = 1280
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+      });
+
+      it('refuse à MELEE_RANGE_WU + 1 (1281) et ne modifie pas les PV', async () => {
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + MELEE_RANGE_WU + 1, // cheb = 1281
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result).toEqual({ success: false, error: 'Target out of range' });
+        expect(creature.health).toBe(30); // PV inchangés → aucun creature_hit émis par la gateway
+      });
+
+      it('refuse si le mapId diffère, même à distance 0 WU', async () => {
+        const creature = armCreature();
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX,
+          worldY: CREATURE_WU.worldY,
+          mapId: 2, // créature sur mapId 1
+        });
+        expect(result).toEqual({ success: false, error: 'Target out of range' });
+        expect(creature.health).toBe(30);
+      });
+
+      it('à portée : calcule les dégâts, diminue les PV et retourne le succès', async () => {
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU, // adjacent, à portée
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.damage).toBe(8); // max(max(10,5) - 2, 1)
+          expect(result.dto.health).toBe(22);
+        }
+        expect(creature.health).toBe(22);
+      });
+    });
+
+    // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────
+    // resolveAttackRange ne doit JAMAIS produire une portée effective 0.
+    describe("portée d'arme équipée (fallback sécurisé)", () => {
+      const CREATURE_WU = { worldX: 6080, worldY: 12480, mapId: 1 };
+      const MELEE_RANGE_WU = 1280;
+      const TILE_SIZE_WU = 1024;
+      const ADJACENT = { worldX: CREATURE_WU.worldX + TILE_SIZE_WU, worldY: CREATURE_WU.worldY, mapId: 1 }; // cheb 1024
+
+      function armWith(range: number | null | undefined, slot = EquipmentSlot.RIGHT_HAND) {
+        const item = { id: 'w', type: 'weapon', weaponType: null, range } as any;
+        const equipment = [{ slot, item }] as any;
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, equipment }));
+        return creature;
+      }
+
+      it('mêlée range = 0 → fallback MELEE_RANGE_WU (tuile adjacente acceptée)', async () => {
+        const creature = armWith(0);
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result.success).toBe(true);
+      });
+
+      it('mêlée range = null → fallback MELEE_RANGE_WU', async () => {
+        const creature = armWith(null);
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result.success).toBe(true);
+      });
+
+      it('mêlée range négatif → fallback MELEE_RANGE_WU', async () => {
+        const creature = armWith(-10);
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result.success).toBe(true);
+      });
+
+      it('mêlée range = NaN → fallback MELEE_RANGE_WU', async () => {
+        const creature = armWith(NaN);
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result.success).toBe(true);
+      });
+
+      it('mêlée range = 46 → 736 WU : trop court, tuile adjacente (1024) refusée', async () => {
+        const creature = armWith(46); // 46 × 16 = 736 WU < 1024
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result).toEqual({ success: false, error: 'Target out of range' });
+        expect(creature.health).toBe(30);
+      });
+
+      it('mêlée range = 80 → 1280 WU : tuile adjacente acceptée', async () => {
+        const creature = armWith(80); // 80 × 16 = 1280 WU
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+        expect(result.success).toBe(true);
+      });
+
+      it('distance range = 0 → fallback RANGED_RANGE_DEFAULT (attaque lointaine acceptée)', async () => {
+        const creature = armWith(0, EquipmentSlot.RANGED_WEAPON);
+        // RANGED_RANGE_DEFAULT = 300 px → 4800 WU. Attaque à 2000 WU acceptée.
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + 2000,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+      });
+    });
+
     it('applique les dégâts et retourne un succès', async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);

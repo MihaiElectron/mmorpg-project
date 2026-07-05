@@ -6,9 +6,12 @@ import {
   ALL_FILTER,
   buildItemCreateInput,
   buildItemPatch,
+  describeRange,
   draftFromItem,
   filterItems,
+  isRangeInvalid,
   isValidItemDraft,
+  meleeRangeWarning,
   uniqueSorted,
 } from "./itemEditorFilters";
 import type {
@@ -22,6 +25,46 @@ import "./ItemsModule.scss";
 
 function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
+/**
+ * Champ "Range" d'arme : input entier >= 1 + aide de conversion px→WU→tuiles
+ * + avertissement mêlée + blocage dur si invalide. Champ vide = portée par
+ * défaut serveur (jamais transformé en 0).
+ */
+function RangeField({
+  draft,
+  onChange,
+}: {
+  draft: ItemEditorDraft;
+  onChange: (value: string) => void;
+}) {
+  const desc = describeRange(draft.range);
+  const invalid = isRangeInvalid(draft.range);
+  const warning = meleeRangeWarning(draft);
+  return (
+    <label className="item-editor__field">
+      <span className="item-editor__label">Range (px)</span>
+      <input
+        className="item-editor__input item-editor__input--num"
+        type="number"
+        min={1}
+        step={1}
+        value={draft.range}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="défaut serveur"
+      />
+      {desc && (
+        <span className="item-editor__hint">
+          {desc.px} px → {desc.wu} WU → {desc.tiles.toFixed(2)} tuile
+        </span>
+      )}
+      {invalid && (
+        <span className="item-editor__error">Range doit être un entier ≥ 1 (vide = défaut serveur).</span>
+      )}
+      {warning && <span className="item-editor__warning">{warning}</span>}
+    </label>
+  );
 }
 
 function emptyDraft(): ItemEditorDraft {
@@ -158,8 +201,8 @@ export default function ItemsModule() {
   }, [items, query, typeFilter, categoryFilter, enabledFilter]);
   const patch = selectedItem ? buildItemPatch(selectedItem, draft) : {};
   const dirty = Object.keys(patch).length > 0;
-  const valid = isValidItemDraft(draft);
-  const createValid = isValidItemDraft(createDraft);
+  const valid = isValidItemDraft(draft) && !isRangeInvalid(draft.range);
+  const createValid = isValidItemDraft(createDraft) && !isRangeInvalid(createDraft.range);
   const used = hasGameplayUsage(usageStats);
 
   function updateDraft(key: keyof ItemEditorDraft, value: string) {
@@ -330,16 +373,7 @@ export default function ItemsModule() {
               placeholder="0"
             />
           </label>
-          <label className="item-editor__field">
-            <span className="item-editor__label">Range</span>
-            <input
-              className="item-editor__input item-editor__input--num"
-              type="number"
-              value={createDraft.range}
-              onChange={(e) => updateCreateDraft("range", e.target.value)}
-              placeholder=""
-            />
-          </label>
+          <RangeField draft={createDraft} onChange={(v) => updateCreateDraft("range", v)} />
           <label className="item-editor__field">
             <span className="item-editor__label">Type d&apos;arme</span>
             <input
@@ -585,16 +619,7 @@ export default function ItemsModule() {
                   />
                 </label>
 
-                <label className="item-editor__field">
-                  <span className="item-editor__label">Range</span>
-                  <input
-                    className="item-editor__input item-editor__input--num"
-                    type="number"
-                    value={draft.range}
-                    onChange={(e) => updateDraft("range", e.target.value)}
-                    placeholder=""
-                  />
-                </label>
+                <RangeField draft={draft} onChange={(v) => updateDraft("range", v)} />
 
                 <label className="item-editor__field">
                   <span className="item-editor__label">Type d&apos;arme</span>

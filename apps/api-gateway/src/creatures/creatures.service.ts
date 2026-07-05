@@ -24,9 +24,11 @@ import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 
-const MELEE_RANGE = 60;    // pixels — IA uniquement (patrouille, auto-attaque)
-// Portée mêlée pour attack() en WU — temporaire (legacyRadiusToWU(60) = 960)
-const MELEE_RANGE_WU = 960;
+// Portée mêlée par défaut pour attack() en WU (distance Chebyshev).
+// 1280 WU = 1,25 tuile (TILE_SIZE_WU = 1024) : couvre un attaquant sur une tuile
+// adjacente (1024 WU en Chebyshev) avec une marge de synchronisation. Le serveur
+// reste la seule autorité de distance ; ne jamais faire confiance au client.
+const MELEE_RANGE_WU = 1280;
 
 const RANGED_RANGE_DEFAULT = 300;
 const ATTACK_COOLDOWN_MS = 700;
@@ -504,6 +506,10 @@ export class CreaturesService implements OnModuleInit {
     if (creature.worldX == null || creature.worldY == null) {
       return { success: false, error: 'Target out of range' };
     }
+    // Cartes différentes → jamais à portée (anti-exploit inter-map).
+    if (creature.mapId != null && attackerPosition.mapId !== creature.mapId) {
+      return { success: false, error: 'Target out of range' };
+    }
     const distance = chebyshevDistanceWU(attackerPosition, { worldX: creature.worldX, worldY: creature.worldY });
     if (distance > range) return { success: false, error: 'Target out of range' };
 
@@ -641,13 +647,31 @@ export class CreaturesService implements OnModuleInit {
     };
   }
 
+  /**
+   * Portée effective d'une arme en WU, avec fallback sécurisé.
+   * Une portée non finie / null / <= 0 (donnée mal configurée en DevTools ou DB)
+   * ne doit JAMAIS produire une portée effective 0 ou négative : on retombe sur
+   * le défaut métier. Le serveur reste la seule autorité de distance.
+   */
+  private static safeWeaponRangeWU(rawRange: number | null | undefined, defaultWU: number): number {
+    if (typeof rawRange === 'number' && Number.isFinite(rawRange) && rawRange > 0) {
+      return legacyRadiusToWU(rawRange);
+    }
+    return defaultWU;
+  }
+
   private resolveAttackRange(character: Character): number {
     const equipment = character.equipment ?? [];
 
     const ranged = equipment.find(
       (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
     );
-    if (ranged) return legacyRadiusToWU(ranged.item.range ?? RANGED_RANGE_DEFAULT);
+    if (ranged) {
+      return CreaturesService.safeWeaponRangeWU(
+        ranged.item.range,
+        legacyRadiusToWU(RANGED_RANGE_DEFAULT),
+      );
+    }
 
     const melee = equipment.find(
       (eq) =>
@@ -655,7 +679,9 @@ export class CreaturesService implements OnModuleInit {
           (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
         eq.item?.type === 'weapon',
     );
-    if (melee) return legacyRadiusToWU(melee.item.range ?? MELEE_RANGE);
+    // Fallback mêlée = MELEE_RANGE_WU (1280 WU = 1,25 tuile), jamais le legacy
+    // 60 px (960 WU) qui serait plus court qu'une tuile.
+    if (melee) return CreaturesService.safeWeaponRangeWU(melee.item.range, MELEE_RANGE_WU);
 
     return MELEE_RANGE_WU;
   }

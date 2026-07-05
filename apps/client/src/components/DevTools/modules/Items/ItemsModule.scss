@@ -446,6 +446,18 @@
     color: #8b9bb5;
   }
 
+  &__warning {
+    margin: 2px 0 0;
+    font-size: 0.68rem;
+    color: #d1a45f;
+  }
+
+  &__error {
+    margin: 2px 0 0;
+    font-size: 0.68rem;
+    color: #e74c3c;
+  }
+
   &__block-title {
     margin: 0 0 4px;
     font-size: 0.74rem;

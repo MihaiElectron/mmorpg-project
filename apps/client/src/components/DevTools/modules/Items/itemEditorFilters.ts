@@ -51,9 +51,15 @@ export function draftFromItem(item: ItemCatalogEntry): ItemEditorDraft {
   };
 }
 
+/** Coerce une valeur de draft en string sûre (undefined/null/non-string → ""). */
+function asString(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
 function parseNum(s: string): number | null {
-  const n = parseFloat(s);
-  return s.trim() === "" || isNaN(n) ? null : n;
+  const str = asString(s);
+  const n = parseFloat(str);
+  return str.trim() === "" || isNaN(n) ? null : n;
 }
 
 export function buildItemPatch(
@@ -103,9 +109,9 @@ export function buildItemCreateInput(
     category: draft.category.trim(),
   };
 
-  if (draft.image.trim()) input.image = draft.image.trim();
+  if (asString(draft.image).trim()) input.image = asString(draft.image).trim();
   if (draft.objectMode) input.objectMode = draft.objectMode;
-  const slot = draft.slot.trim();
+  const slot = asString(draft.slot).trim();
   if (slot) input.slot = slot;
   const attack = parseNum(draft.attack);
   if (attack != null) input.attack = attack;
@@ -113,8 +119,61 @@ export function buildItemCreateInput(
   if (defense != null) input.defense = defense;
   const range = parseNum(draft.range);
   if (range != null) input.range = range;
-  const weaponType = draft.weaponType.trim() || null;
+  const weaponType = asString(draft.weaponType).trim() || null;
   if (weaponType) input.weaponType = weaponType;
 
   return input;
+}
+
+// ── Portée d'arme : conversion & validation (Progression / Combat V1) ─────────
+// item.range est un rayon legacy en pixels. legacyRadiusToWU(px) = px × 16.
+export const PX_TO_WU = 16;
+export const TILE_SIZE_WU = 1024;
+// Portée mêlée recommandée : 80 px = 1280 WU = 1,25 tuile (couvre la tuile adjacente).
+export const MELEE_MIN_RECOMMENDED_PX = 80;
+const MELEE_SLOTS = ["right-hand", "left-hand"];
+
+export function rangePxToWU(px: number): number {
+  return px * PX_TO_WU;
+}
+
+export function rangeWUToTiles(wu: number): number {
+  return wu / TILE_SIZE_WU;
+}
+
+/** Décrit une portée px en WU + tuiles pour l'aide DevTools. null si champ vide. */
+export function describeRange(
+  rangeStr: string,
+): { px: number; wu: number; tiles: number } | null {
+  const px = parseNum(rangeStr);
+  if (px == null) return null;
+  const wu = rangePxToWU(px);
+  return { px, wu, tiles: rangeWUToTiles(wu) };
+}
+
+/** Une arme de mêlée = type "weapon" équipée en main gauche/droite. */
+export function isMeleeWeaponDraft(draft: ItemEditorDraft): boolean {
+  return draft.type.trim() === "weapon" && MELEE_SLOTS.includes(draft.slot.trim());
+}
+
+/**
+ * Blocage dur : range renseignée mais invalide (non entière ou < 1).
+ * Champ vide = valide (utilise le défaut serveur). Aligné DTO @IsInt @Min(1).
+ */
+export function isRangeInvalid(rangeStr: string): boolean {
+  const px = parseNum(rangeStr);
+  if (px == null) return false;
+  return !Number.isInteger(px) || px < 1;
+}
+
+/**
+ * Avertissement NON bloquant : arme de mêlée avec une portée valide mais
+ * inférieure au minimum recommandé (80 px). null si rien à signaler.
+ */
+export function meleeRangeWarning(draft: ItemEditorDraft): string | null {
+  if (!isMeleeWeaponDraft(draft)) return null;
+  const px = parseNum(draft.range);
+  if (px == null || px < 1) return null; // vide/invalide géré ailleurs
+  if (px >= MELEE_MIN_RECOMMENDED_PX) return null;
+  return "Portée inférieure à 1,25 tuile : cette arme peut refuser des attaques adjacentes selon la position.";
 }

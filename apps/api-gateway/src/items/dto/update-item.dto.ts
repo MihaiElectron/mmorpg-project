@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ObjectMode } from '../entities/item.entity';
 import { EquipmentSlot } from '../../characters/dto/equip-item.dto';
 
@@ -27,8 +27,10 @@ export class UpdateItemDto {
   @IsNumber()
   defense?: number;
 
+  // Voir CreateItemDto.range : entier >= 1 si fourni, sinon défaut serveur.
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
   range?: number;
 
   @IsOptional()
