@@ -338,3 +338,54 @@ describe("character.store — equipItem (choix endpoint)", () => {
     expect(url).toContain("/characters/char-1/equip");
   });
 });
+
+describe("character.store — allocateStats", () => {
+  let store;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorageMock.getItem.mockReturnValue("test-token");
+    store = getCharacterStore();
+    store.setState({ character: { id: "char-1", unspentStatPoints: 5 } });
+  });
+
+  it("POST vers /characters/me/stats/allocate avec le payload fourni", async () => {
+    const serverCharacter = { id: "char-1", unspentStatPoints: 3, stats: { base: { strength: 2 } } };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => serverCharacter });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await store.getState().allocateStats({ strength: 2 });
+
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toContain("/characters/me/stats/allocate");
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ strength: 2 });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("met à jour le character depuis la réponse serveur (autoritaire)", async () => {
+    const serverCharacter = { id: "char-1", unspentStatPoints: 1, stats: { base: { strength: 4 } } };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => serverCharacter });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await store.getState().allocateStats({ strength: 4 });
+
+    expect(store.getState().character).toEqual(serverCharacter);
+  });
+
+  it("renvoie l'erreur serveur sans modifier le character en cas de rejet", async () => {
+    const before = store.getState().character;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ message: "Points insuffisants" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await store.getState().allocateStats({ strength: 99 });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Points insuffisants");
+    expect(store.getState().character).toBe(before);
+  });
+});

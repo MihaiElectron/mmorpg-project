@@ -50,7 +50,7 @@ export default function SkillsTab() {
   if (skills.length === 0) {
     return (
       <div className="skills-tab">
-        <p className="skills-tab__empty">Aucun skill acquis pour l'instant.</p>
+        <p className="skills-tab__empty">Aucun skill disponible.</p>
       </div>
     );
   }

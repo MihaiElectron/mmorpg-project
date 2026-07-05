@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import CharacterLayer from "../CharacterLayer/CharacterLayer";
 import Inventory from "../Inventory/Inventory";
 import SkillsTab from "./SkillsTab";
+import StatsTab from "./StatsTab";
 import { useCharacterStore } from "../../store/character.store";
 
 const TABS = [
   { id: "perso",        label: "Perso" },
+  { id: "stats",        label: "Stats" },
   { id: "skills",       label: "Skills" },
   { id: "talents",      label: "Talents" },
   { id: "achievements", label: "Succès" },
@@ -64,6 +66,12 @@ export default function CharacterLayout() {
             <Inventory />
           </div>
         </>
+      )}
+
+      {activeTab === "stats" && isOpen && (
+        <div className="character-layout__content character-layout__content--full">
+          <StatsTab />
+        </div>
       )}
 
       {activeTab === "skills" && isOpen && (

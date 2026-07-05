@@ -108,6 +108,30 @@ const storeLogic = (set, get) => ({
     });
   },
 
+  allocateStats: async (payload) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return { ok: false, error: "Non authentifié" };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/stats/allocate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        let msg = `Allocation impossible (HTTP ${res.status})`;
+        try { const body = await res.json(); if (body?.message) msg = Array.isArray(body.message) ? body.message.join(", ") : body.message; } catch { /* ignore */ }
+        return { ok: false, error: msg };
+      }
+      // Réponse serveur = même format que GET /characters/me (serveur autoritaire).
+      const data = await res.json();
+      set({ character: data });
+      return { ok: true };
+    } catch (err) {
+      console.error("[CharacterStore] allocateStats error:", err);
+      return { ok: false, error: "Erreur réseau" };
+    }
+  },
+
   loadBalance: async () => {
     try {
       const token = localStorage.getItem("token");
