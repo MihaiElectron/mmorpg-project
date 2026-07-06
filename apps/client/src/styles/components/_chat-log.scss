@@ -1,0 +1,130 @@
+@use '../abstracts/variables' as vars;
+
+.chat-log {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  width: 340px;
+  max-width: 40vw;
+  background: vars.$panel-header-bg;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  backdrop-filter: blur(2px);
+
+  &--collapsed {
+    width: auto;
+  }
+
+  // ── En-tête / onglets ───────────────────────────────────────────────────────
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    border-bottom: 1px solid vars.$panel-border-subtle;
+  }
+
+  &__tabs {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  &__tab {
+    background: transparent;
+    border: none;
+    color: vars.$color-text-muted;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: vars.$panel-radius-sm;
+    cursor: pointer;
+
+    &:hover {
+      color: vars.$color-text-primary;
+      background: vars.$panel-inner-bg;
+    }
+
+    &--active {
+      color: vars.$color-text-gold;
+      background: vars.$panel-inner-bg;
+    }
+  }
+
+  &__toggle {
+    background: transparent;
+    border: none;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+
+    &:hover {
+      color: vars.$color-text-primary;
+    }
+  }
+
+  // ── Corps ───────────────────────────────────────────────────────────────────
+
+  &__body {
+    padding: 6px 8px;
+    height: 160px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__line {
+    font-size: 0.78rem;
+    line-height: 1.3;
+    color: vars.$color-text-primary;
+    word-break: break-word;
+  }
+
+  &__empty {
+    color: vars.$color-text-muted;
+    font-size: 0.78rem;
+    font-style: italic;
+    margin: 4px 0;
+  }
+
+  // ── Onglet Chat (désactivé V1) ──────────────────────────────────────────────
+
+  &__chat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+
+  &__input {
+    margin-top: auto;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+}

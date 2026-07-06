@@ -26,6 +26,8 @@ import {
   resolveFloatingColor,
   showFloatingCombatText,
 } from "../combat/floatingText";
+import { formatCombatLogMessage } from "../combat/combatLogMessage";
+import { getCombatLogStore } from "../../store/combatLog.store";
 import { estimateStationReach } from "../../components/ActionPanel/craftingRuntime";
 import Pathfinder from "../utils/pathfinding";
 import {
@@ -1151,6 +1153,20 @@ export default class WorldScene extends Phaser.Scene {
     // Ne modifie PAS les HP : ceux-ci restent gérés par creature_update /
     // character_damaged. Le client n'affiche que ce que le serveur émet.
     this.socket.on("combat:event", (event) => {
+      // 1) Journal de combat (React/Zustand) — n'altère pas les PV.
+      const localId = getCharacterStore().getState().character?.id;
+      const logMessage = formatCombatLogMessage(event, {
+        localCharacterId: localId,
+        resolveName: (actorType, id) =>
+          actorType === "creature"
+            ? this.creatureSprites.get(id)?.creature?.type ?? null
+            : null,
+      });
+      if (logMessage) {
+        getCombatLogStore().getState().pushLog({ category: "combat", message: logMessage });
+      }
+
+      // 2) Dégâts flottants (feedback visuel).
       const text = formatFloatingCombatText(event);
       if (!text) return;
 
@@ -1158,7 +1174,6 @@ export default class WorldScene extends Phaser.Scene {
       // Fallback = position monde de l'event (entité absente/morte).
       let anchor = null;
       if (event.targetType === "player") {
-        const localId = getCharacterStore().getState().character?.id;
         anchor = event.targetId === localId
           ? this.player
           : this.remotePlayers.get(event.targetId)?.sprite ?? null;
