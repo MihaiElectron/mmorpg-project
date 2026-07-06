@@ -33,6 +33,7 @@ export function mapStackToEntry(inv: Inventory, sets: EquippedSets): InventoryEn
       category: inv.item.category,
       image: inv.item.image ?? null,
       objectMode: inv.item.objectMode,
+      slot: inv.item.slot ?? null,
     },
   };
 }
@@ -58,6 +59,7 @@ export function mapInstanceToEntry(
       category: item.category,
       image: item.image ?? null,
       objectMode: item.objectMode,
+      slot: item.slot ?? null,
     },
   };
 }

@@ -32,6 +32,7 @@ function makeGateway(wsAuth: Partial<WsAuthService>) {
     {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
+    {} as unknown as import('../inventory/inventory.service').InventoryService,
   );
 }
 
@@ -130,6 +131,7 @@ describe('AdminGateway — handlers refusent les non-admins', () => {
       {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
       {} as unknown as import('../items/item.service').ItemService,
       {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
+      {} as unknown as import('../inventory/inventory.service').InventoryService,
     );
     (gateway as any).server = { emit: jest.fn() };
   });
@@ -198,6 +200,7 @@ function makeAddBalanceGateway(overrides: {
     {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
+    {} as unknown as import('../inventory/inventory.service').InventoryService,
   );
   (gw as any).server = { emit: jest.fn() };
 
@@ -406,6 +409,7 @@ function makeTeleportGateway(opts: {
     {} as unknown as import("../item-materialization/item-materialization.service").ItemMaterializationService,
     {} as unknown as import("../items/item.service").ItemService,
     {} as unknown as import("../item-transfer/item-transfer.service").ItemTransferService,
+    {} as unknown as import("../inventory/inventory.service").InventoryService,
   );
   (gw as any).server = { to: jest.fn().mockReturnThis(), emit: jest.fn(), except: jest.fn().mockReturnThis() };
   return { gw, worldService, adminService };
@@ -545,6 +549,7 @@ function makeUpdateCharacterGateway() {
     {} as unknown as import('../item-materialization/item-materialization.service').ItemMaterializationService,
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
+    {} as unknown as import('../inventory/inventory.service').InventoryService,
   );
   (gw as any).server = { emit: jest.fn() };
   return { gw, adminServiceMock };
@@ -604,5 +609,135 @@ describe("AdminGateway — admin:update_character (stats joueur V1)", () => {
     });
     expect(result.success).toBe(false);
     expect(adminServiceMock.updateCharacter).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Inventaire / Équipement joueur (Player Inspector) ─────────────────────────
+
+function makeInventoryGateway(inventoryService: Record<string, jest.Mock>) {
+  const worldService = {
+    getConnectedPlayerByCharacterId: jest.fn().mockReturnValue({ socketId: "sock-x" }),
+    emitAdminCharacterDirty: jest.fn(),
+  };
+  const gw = new AdminGateway(
+    {} as unknown as CreaturesService,
+    worldService as unknown as WorldService,
+    {} as unknown as AdminService,
+    {} as unknown as ResourcesService,
+    {} as unknown as import("../buildings/buildings.service").BuildingsService,
+    { authenticate: jest.fn() } as unknown as WsAuthService,
+    {} as unknown as import("../economy/economy.service").EconomyService,
+    {} as unknown as import("typeorm").DataSource,
+    {} as unknown as import("../item-materialization/item-materialization.service").ItemMaterializationService,
+    {} as unknown as import("../items/item.service").ItemService,
+    {} as unknown as import("../item-transfer/item-transfer.service").ItemTransferService,
+    inventoryService as unknown as import("../inventory/inventory.service").InventoryService,
+  );
+  const emit = jest.fn();
+  (gw as any).server = { to: jest.fn().mockReturnValue({ emit }) };
+  return { gw, worldService, emit };
+}
+
+describe("AdminGateway — admin:update_inventory_slots", () => {
+  it("refuse si role !== admin", async () => {
+    const svc = { updateSlotsAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUpdateInventorySlots(makeClient({ role: "user" }), {
+      characterId: "c1",
+      entries: [{ kind: "stack", id: "s1", slotIndex: 0 }],
+    });
+    expect(res.success).toBe(false);
+    expect(svc.updateSlotsAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it("refuse un payload sans entries", async () => {
+    const svc = { updateSlotsAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUpdateInventorySlots(makeClient({ role: "admin" }), { characterId: "c1", entries: [] });
+    expect(res.success).toBe(false);
+    expect(svc.updateSlotsAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it("refuse un slotIndex négatif", async () => {
+    const svc = { updateSlotsAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUpdateInventorySlots(makeClient({ role: "admin" }), {
+      characterId: "c1",
+      entries: [{ kind: "stack", id: "s1", slotIndex: -1 }],
+    });
+    expect(res.success).toBe(false);
+    expect(svc.updateSlotsAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it("délègue au service et émet character:reload", async () => {
+    const svc = { updateSlotsAsAdmin: jest.fn().mockResolvedValue([{ id: "s1" }]) };
+    const { gw, emit } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUpdateInventorySlots(makeClient({ role: "admin" }), {
+      characterId: "c1",
+      entries: [{ kind: "stack", id: "s1", slotIndex: 3 }],
+    });
+    expect(res.success).toBe(true);
+    expect(svc.updateSlotsAsAdmin).toHaveBeenCalledWith("c1", { entries: [{ kind: "stack", id: "s1", slotIndex: 3 }] });
+    expect(emit).toHaveBeenCalledWith("character:reload");
+  });
+});
+
+describe("AdminGateway — admin:unequip_item", () => {
+  it("refuse si role !== admin", async () => {
+    const svc = { unequipItemAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUnequipItem(makeClient({ role: "user" }), { characterId: "c1", slot: "right-hand" });
+    expect(res.success).toBe(false);
+    expect(svc.unequipItemAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it("refuse sans slot", async () => {
+    const svc = { unequipItemAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUnequipItem(makeClient({ role: "admin" }), { characterId: "c1" });
+    expect(res.success).toBe(false);
+  });
+
+  it("délègue au service (avec targetSlotIndex) et émet reload", async () => {
+    const svc = { unequipItemAsAdmin: jest.fn().mockResolvedValue([]) };
+    const { gw, emit } = makeInventoryGateway(svc);
+    const res = await (gw as any).onUnequipItem(makeClient({ role: "admin" }), { characterId: "c1", slot: "right-hand", targetSlotIndex: 2 });
+    expect(res.success).toBe(true);
+    expect(svc.unequipItemAsAdmin).toHaveBeenCalledWith("c1", "right-hand", 2);
+    expect(emit).toHaveBeenCalledWith("character:reload");
+  });
+});
+
+describe("AdminGateway — admin:equip_item", () => {
+  it("refuse si role !== admin", async () => {
+    const svc = { equipItemInstanceAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onEquipItem(makeClient({ role: "user" }), { characterId: "c1", instanceId: "i1" });
+    expect(res.success).toBe(false);
+    expect(svc.equipItemInstanceAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it("refuse sans instanceId", async () => {
+    const svc = { equipItemInstanceAsAdmin: jest.fn() };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onEquipItem(makeClient({ role: "admin" }), { characterId: "c1" });
+    expect(res.success).toBe(false);
+  });
+
+  it("propage l'échec service (item incompatible) proprement", async () => {
+    const svc = { equipItemInstanceAsAdmin: jest.fn().mockRejectedValue(new Error("Slot incompatible")) };
+    const { gw } = makeInventoryGateway(svc);
+    const res = await (gw as any).onEquipItem(makeClient({ role: "admin" }), { characterId: "c1", instanceId: "i1", targetSlot: "boots" });
+    expect(res.success).toBe(false);
+    expect(res.message).toContain("incompatible");
+  });
+
+  it("délègue au service (avec targetSlot) et émet reload", async () => {
+    const svc = { equipItemInstanceAsAdmin: jest.fn().mockResolvedValue([]) };
+    const { gw, emit } = makeInventoryGateway(svc);
+    const res = await (gw as any).onEquipItem(makeClient({ role: "admin" }), { characterId: "c1", instanceId: "i1", targetSlot: "left-ring" });
+    expect(res.success).toBe(true);
+    expect(svc.equipItemInstanceAsAdmin).toHaveBeenCalledWith("c1", "i1", "left-ring");
+    expect(emit).toHaveBeenCalledWith("character:reload");
   });
 });

@@ -57,4 +57,13 @@
     color: #e74c3c;
     font-style: normal;
   }
+
+  &__wallet {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 2px 0 4px;
+  }
 }

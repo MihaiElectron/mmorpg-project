@@ -849,3 +849,87 @@ describe("InventoryService.updateSlots — persistance des positions", () => {
     expect(result).toBe(projection);
   });
 });
+
+describe("InventoryService — chemins ADMIN (sans userId)", () => {
+  it("updateSlotsAsAdmin refuse un personnage introuvable", async () => {
+    const characterRepo = { findOneBy: jest.fn().mockResolvedValue(null) };
+    const service = makeEquipService({ characterRepo });
+    await expect(
+      service.updateSlotsAsAdmin("char-1", { entries: [{ kind: "stack", id: "s1", slotIndex: 0 }] }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("updateSlotsAsAdmin refuse un doublon de slotIndex", async () => {
+    const service = makeEquipService();
+    await expect(
+      service.updateSlotsAsAdmin("char-1", {
+        entries: [
+          { kind: "stack", id: "s1", slotIndex: 1 },
+          { kind: "stack", id: "s2", slotIndex: 1 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("updateSlotsAsAdmin met à jour, émet dirty et retourne la projection", async () => {
+    const stackRow = { id: "s1", character: { id: "char-1" }, slotIndex: null as number | null };
+    const manager = makeManager({
+      findOne: jest.fn().mockResolvedValue(stackRow),
+      save: jest.fn(async (_e, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const worldService = { emitAdminCharacterDirty: jest.fn() };
+    const projection = [{ id: "s1", slotIndex: 4 }];
+    const inventoryProjection = { project: jest.fn().mockResolvedValue(projection) };
+    const service = makeEquipService({ dataSource, worldService, inventoryProjection });
+
+    const res = await service.updateSlotsAsAdmin("char-1", { entries: [{ kind: "stack", id: "s1", slotIndex: 4 }] });
+
+    expect(stackRow.slotIndex).toBe(4);
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith("char-1", "inventory");
+    expect(res).toBe(projection);
+  });
+
+  it("equipItemInstanceAsAdmin refuse une instance qui n'appartient pas au personnage", async () => {
+    const manager = makeManager({
+      findOne: jest.fn().mockResolvedValue({ id: "i1", itemId: "it1", ownerId: "autre" }),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+    await expect(service.equipItemInstanceAsAdmin("char-1", "i1")).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("equipItemInstanceAsAdmin refuse un slot cible incompatible", async () => {
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce({ id: "i1", itemId: "it1", ownerId: "char-1" })
+        .mockResolvedValueOnce({ id: "it1", slot: "right-hand" }),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+    await expect(
+      service.equipItemInstanceAsAdmin("char-1", "i1", "boots"),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("unequipItemAsAdmin refuse un personnage introuvable", async () => {
+    const characterRepo = { findOneBy: jest.fn().mockResolvedValue(null) };
+    const service = makeEquipService({ characterRepo });
+    await expect(service.unequipItemAsAdmin("char-1", "right-hand")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("unequipItemAsAdmin déséquipe puis applique le slotIndex ciblé", async () => {
+    const projection = [{ id: "i1", slotIndex: 5 }];
+    const inventoryProjection = { project: jest.fn().mockResolvedValue(projection) };
+    const service = makeEquipService({ inventoryProjection });
+    const unequipped = Object.assign(new ItemInstance(), { id: "i1" });
+    jest.spyOn(service, "unequipItem").mockResolvedValue(unequipped);
+    const applySpy = jest.spyOn(service as any, "applySlotUpdates").mockResolvedValue([]);
+
+    const res = await service.unequipItemAsAdmin("char-1", "right-hand", 5);
+
+    expect(service.unequipItem).toHaveBeenCalledWith("char-1", "right-hand");
+    expect(applySpy).toHaveBeenCalledWith("char-1", { entries: [{ kind: "instance", id: "i1", slotIndex: 5 }] });
+    expect(res).toBe(projection);
+  });
+});

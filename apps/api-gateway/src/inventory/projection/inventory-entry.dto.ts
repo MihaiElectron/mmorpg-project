@@ -5,6 +5,8 @@ export interface ItemSummary {
   category: string;
   image: string | null;
   objectMode: string;
+  /** Slot d'équipement cible de l'item (null si non équipable). */
+  slot: string | null;
 }
 
 export interface InventoryEntryDto {

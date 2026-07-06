@@ -7,8 +7,8 @@
  * - minimum MIN_SLOT_COUNT slots visibles ;
  * - grille dynamique : visibleSlotCount = max(MIN_SLOT_COUNT, inventory.length) ;
  * - AUCUNE entrée d'inventaire projetée n'est jamais perdue au rendu ;
- * - conserve le tri de session (positions existantes de prevSlotMap) tant qu'elles
- *   restent dans les limites de la grille ; sinon l'entrée est re-placée ;
+ * - le slotIndex persisté (serveur autoritaire) prime toujours sur la position
+ *   de session ; prevSlotMap ne positionne que les entrées SANS slotIndex ;
  * - un stack (STACKABLE) et une instance (ItemInstance) comptent chacun pour
  *   exactement UNE entrée = UN slot.
  */
@@ -41,23 +41,26 @@ export function buildSlotMap(prevSlotMap, inventory, minCount = MIN_SLOT_COUNT) 
   const existingIds = new Set(entries.map((inv) => inv.id));
   const placed = new Set();
 
-  // 1. Positions de SESSION (prev) prioritaires : conserve le tri en cours (drag)
-  //    tant que l'entrée existe et reste dans les limites.
-  prev.forEach((id, index) => {
-    if (index < size && id != null && existingIds.has(id) && !placed.has(id)) {
-      next[index] = id;
-      placed.add(id);
-    }
-  });
-
-  // 2. Position PERSISTÉE (slotIndex absolu) : place chaque entrée à son slot si
-  //    libre. Assure la parité joueur ↔ miroir admin après reload/refetch.
+  // 1. Position PERSISTÉE (slotIndex absolu) — SERVEUR AUTORITAIRE. Prioritaire
+  //    sur la session : une modification serveur (réordonnancement admin, reload)
+  //    doit toujours l'emporter. Le drag joueur est resynchronisé via le même
+  //    slotIndex persisté, donc `prev` et `slotIndex` coïncident après sauvegarde.
   entries.forEach((inv) => {
     if (placed.has(inv.id)) return;
     const idx = inv?.slotIndex;
     if (Number.isInteger(idx) && idx >= 0 && idx < size && next[idx] == null) {
       next[idx] = inv.id;
       placed.add(inv.id);
+    }
+  });
+
+  // 2. Positions de SESSION (prev) — uniquement pour les entrées SANS slotIndex
+  //    persisté (jamais déplacées) : conserve leur ordre courant tant qu'elles
+  //    existent et que le slot reste libre.
+  prev.forEach((id, index) => {
+    if (index < size && id != null && existingIds.has(id) && !placed.has(id) && next[index] == null) {
+      next[index] = id;
+      placed.add(id);
     }
   });
 

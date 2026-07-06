@@ -19,6 +19,7 @@ import { Item } from '../items/entities/item.entity';
 import { WorldService } from '../world/world.service';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { SkillsService } from '../skills/skills.service';
+import { EconomyService } from '../economy/economy.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
 
@@ -94,6 +95,7 @@ describe('AdminService resources', () => {
         AdminService,
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+        { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -220,11 +222,13 @@ describe('AdminService resources', () => {
     expect(typeof result!.character.combat.attackRangeWU).toBe('number');
     // équipement mappé compact par slot
     expect(result!.equipment).toEqual([
-      { slot: 'right-hand', itemInstanceId: 'inst-1', itemId: 'sword', name: 'Épée', image: null, type: 'weapon' },
+      { slot: 'right-hand', itemInstanceId: 'inst-1', itemId: 'sword', name: 'Épée', image: null, type: 'weapon', equipSlot: null, objectMode: null },
     ]);
     // inventaire/skills via services délégués (mocks → tableaux vides)
     expect(result!.inventory).toEqual([]);
     expect(result!.skills).toEqual([]);
+    // wallet lecture seule (mock readBalanceBronze → 0n)
+    expect(result!.character.wallet).toEqual({ gold: 0, silver: 0, bronze: 0 });
   });
 
   it('getCharacterDetails retourne null si le personnage est introuvable', async () => {
@@ -532,6 +536,7 @@ describe('AdminService — createSkillDefinition', () => {
         AdminService,
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+        { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -636,6 +641,7 @@ describe('AdminService — updateSkillDefinition', () => {
         AdminService,
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+        { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -710,6 +716,7 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       AdminService,
       { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
       { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+      { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1057,6 +1064,7 @@ describe('createCreatureTemplate', () => {
         AdminService,
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+        { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1137,6 +1145,7 @@ describe('createResourceTemplate', () => {
         AdminService,
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
+        { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },

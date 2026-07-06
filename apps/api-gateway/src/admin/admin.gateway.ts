@@ -25,6 +25,8 @@ import { ItemMaterializationService } from '../item-materialization/item-materia
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import { ItemService } from '../items/item.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { InventorySlotAssignmentDto } from '../inventory/dto/update-inventory-slots.dto';
 
 type AddBalancePayload = {
   characterId: string;
@@ -59,6 +61,9 @@ type BuildingUpdatePayload = { id: string; fields: Record<string, unknown> };
 
 type CmdResult = { success: boolean; message: string; data?: unknown };
 type GiveItemPayload = { characterId: string; itemId: string; quantity?: number };
+type UpdateInventorySlotsPayload = { characterId: string; entries: InventorySlotAssignmentDto[] };
+type UnequipItemPayload = { characterId: string; slot: string; targetSlotIndex?: number };
+type EquipItemPayload = { characterId: string; instanceId: string; targetSlot?: string };
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class AdminGateway implements OnGatewayConnection {
@@ -77,6 +82,7 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly itemMaterializationService: ItemMaterializationService,
     private readonly itemService: ItemService,
     private readonly itemTransferService: ItemTransferService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   private emitReloadIfConnected(characterId: string): void {
@@ -660,6 +666,89 @@ export class AdminGateway implements OnGatewayConnection {
       };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de l\'injection.' };
+    }
+  }
+
+  // ── Inventaire / Équipement joueur (Player Inspector) ──────────────────────
+  //
+  // Toutes ces mutations passent par InventoryService (→ ItemTransferService,
+  // recalculateEquipmentStats, projection serveur). Rôle admin vérifié ici ;
+  // aucune écriture DB directe, aucune logique métier dans le gateway.
+  // Après succès : character:reload (joueur ciblé) + admin dirty (émis par le
+  // service). Priorité admin : la transaction serveur fait foi ; une action
+  // joueur sur un état périmé échoue proprement ou est écrasée par le reload.
+
+  @SubscribeMessage('admin:update_inventory_slots')
+  async onUpdateInventorySlots(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: UpdateInventorySlotsPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { characterId, entries } = payload ?? {};
+    if (!characterId) return { success: false, message: 'characterId requis.' };
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return { success: false, message: 'entries requis (tableau non vide).' };
+    }
+    for (const e of entries) {
+      if (!e || (e.kind !== 'stack' && e.kind !== 'instance') || typeof e.id !== 'string' || !e.id) {
+        return { success: false, message: 'Chaque entrée requiert kind ("stack"|"instance") et id.' };
+      }
+      if (!Number.isInteger(e.slotIndex) || e.slotIndex < 0) {
+        return { success: false, message: 'slotIndex doit être un entier >= 0.' };
+      }
+    }
+
+    try {
+      const projection = await this.inventoryService.updateSlotsAsAdmin(characterId, { entries });
+      this.emitReloadIfConnected(characterId);
+      return { success: true, message: 'Inventaire réordonné.', data: projection };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors du réordonnancement.' };
+    }
+  }
+
+  @SubscribeMessage('admin:unequip_item')
+  async onUnequipItem(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: UnequipItemPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { characterId, slot, targetSlotIndex } = payload ?? {};
+    if (!characterId || !slot) return { success: false, message: 'characterId et slot requis.' };
+    if (targetSlotIndex != null && (!Number.isInteger(targetSlotIndex) || targetSlotIndex < 0)) {
+      return { success: false, message: 'targetSlotIndex doit être un entier >= 0.' };
+    }
+
+    try {
+      const projection = await this.inventoryService.unequipItemAsAdmin(characterId, slot, targetSlotIndex);
+      this.emitReloadIfConnected(characterId);
+      return { success: true, message: `Slot "${slot}" déséquipé.`, data: projection };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors du déséquipement.' };
+    }
+  }
+
+  @SubscribeMessage('admin:equip_item')
+  async onEquipItem(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: EquipItemPayload,
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const { characterId, instanceId, targetSlot } = payload ?? {};
+    if (!characterId || !instanceId) return { success: false, message: 'characterId et instanceId requis.' };
+    if (targetSlot != null && (typeof targetSlot !== 'string' || targetSlot.trim() === '')) {
+      return { success: false, message: 'targetSlot doit être une chaîne non vide si fourni.' };
+    }
+
+    try {
+      const projection = await this.inventoryService.equipItemInstanceAsAdmin(characterId, instanceId, targetSlot);
+      this.emitReloadIfConnected(characterId);
+      return { success: true, message: 'Item équipé.', data: projection };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors de l\'équipement.' };
     }
   }
 

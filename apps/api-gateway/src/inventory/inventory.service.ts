@@ -67,7 +67,34 @@ export class InventoryService {
     if (!character || character.userId !== userId) {
       throw new ForbiddenException('Personnage introuvable ou accès refusé.');
     }
+    return this.applySlotUpdates(characterId, dto);
+  }
 
+  /**
+   * Variante ADMIN de {@link updateSlots} : le rôle admin est vérifié en amont
+   * (gateway), on ne filtre donc PAS par userId joueur. Toute la validation
+   * métier (appartenance stack/instance au personnage, container, doublons)
+   * reste appliquée par {@link applySlotUpdates}. Retourne la projection fraîche.
+   */
+  async updateSlotsAsAdmin(
+    characterId: string,
+    dto: UpdateInventorySlotsDto,
+  ): Promise<InventoryEntryDto[]> {
+    const character = await this.characterRepository.findOneBy({ id: characterId });
+    if (!character) throw new NotFoundException(`Personnage "${characterId}" introuvable.`);
+    return this.applySlotUpdates(characterId, dto);
+  }
+
+  /**
+   * Cœur transactionnel de la réécriture des slotIndex, SANS contrôle d'accès
+   * (l'appelant — joueur ou admin — l'a déjà fait). Ne touche que slotIndex,
+   * jamais ownership/container/state/quantité, ne crée/supprime rien. Émet
+   * l'invalidation admin et retourne la projection fraîche.
+   */
+  private async applySlotUpdates(
+    characterId: string,
+    dto: UpdateInventorySlotsDto,
+  ): Promise<InventoryEntryDto[]> {
     // Pas de doublon de slotIndex dans le payload.
     const seen = new Set<number>();
     for (const e of dto.entries) {
@@ -185,16 +212,64 @@ export class InventoryService {
     if (!character || character.userId !== userId) {
       throw new ForbiddenException('Personnage introuvable ou accès refusé.');
     }
-    const equippedResult = await this.dataSource.transaction(async (manager) => {
+    const equippedResult = await this.equipInstanceTransaction(characterId, instanceId);
+    // Invalidation live du Player Inspector admin (equip INSTANCE).
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return equippedResult;
+  }
+
+  /**
+   * Variante ADMIN de {@link equipItemInstance} : rôle vérifié en amont (gateway),
+   * pas de filtre userId joueur. `requestedSlot` optionnel : si fourni il est
+   * validé compatible (même slot ou paire L/R) avant usage ; sinon résolution
+   * automatique L/R. Passe par le même cœur métier (ItemTransferService + EQUIP +
+   * recalculateEquipmentStats). Retourne la projection fraîche.
+   */
+  async equipItemInstanceAsAdmin(
+    characterId: string,
+    instanceId: string,
+    requestedSlot?: string | null,
+  ): Promise<InventoryEntryDto[]> {
+    const character = await this.characterRepository.findOneBy({ id: characterId });
+    if (!character) throw new NotFoundException(`Personnage "${characterId}" introuvable.`);
+    await this.equipInstanceTransaction(characterId, instanceId, requestedSlot ?? undefined);
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return this.inventoryProjection.project(characterId);
+  }
+
+  /**
+   * Cœur transactionnel de l'équipement d'une ItemInstance, SANS contrôle
+   * d'accès (l'appelant l'a déjà fait). `requestedSlot` optionnel force le slot
+   * cible (validé compatible avec item.slot) au lieu de la résolution L/R.
+   */
+  private async equipInstanceTransaction(
+    characterId: string,
+    instanceId: string,
+    requestedSlot?: string,
+  ): Promise<ItemInstance> {
+    return this.dataSource.transaction(async (manager) => {
       // Lecture sans verrou pour résoudre itemId/slot (itemId est immuable)
       const rawInstance = await manager.findOne(ItemInstance, { where: { id: instanceId } });
       if (!rawInstance) throw new NotFoundException(`ItemInstance ${instanceId} not found`);
+      if (rawInstance.ownerId !== characterId) {
+        throw new BadRequestException(`Instance ${instanceId} n'appartient pas au personnage ${characterId}.`);
+      }
 
       const item = await manager.findOne(Item, { where: { id: rawInstance.itemId } });
       if (!item) throw new NotFoundException('Item not found');
       if (!item.slot) throw new BadRequestException('Item has no slot defined');
 
-      const targetSlot = await this.resolveEquipSlot(manager, characterId, item.slot);
+      let targetSlot: string;
+      if (requestedSlot) {
+        if (!this.isSlotCompatible(item.slot, requestedSlot)) {
+          throw new BadRequestException(
+            `Slot "${requestedSlot}" incompatible avec l'item (slot natif "${item.slot}").`,
+          );
+        }
+        targetSlot = requestedSlot;
+      } else {
+        targetSlot = await this.resolveEquipSlot(manager, characterId, item.slot);
+      }
 
       const existing = await manager.findOne(CharacterEquipment, {
         where: { characterId, slot: targetSlot },
@@ -233,9 +308,16 @@ export class InventoryService {
       await recalculateEquipmentStats(manager, characterId);
       return equipped;
     });
-    // Invalidation live du Player Inspector admin (equip INSTANCE).
-    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
-    return equippedResult;
+  }
+
+  /**
+   * Compatibilité item.slot ↔ slot cible : identique, ou membre de la même
+   * paire gauche/droite (earring, ring, bracelet). Miroir de la règle client.
+   */
+  private isSlotCompatible(itemSlot: string, targetSlot: string): boolean {
+    if (itemSlot === targetSlot) return true;
+    const pair = SLOT_PAIRS.find((p) => p.includes(itemSlot));
+    return Boolean(pair && pair.includes(targetSlot));
   }
 
   private async resolveEquipSlot(
@@ -342,6 +424,33 @@ export class InventoryService {
     // Invalidation live du Player Inspector admin (unequip).
     this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
     return result;
+  }
+
+  /**
+   * Variante ADMIN du déséquipement : rôle vérifié en amont (gateway).
+   * Réutilise {@link unequipItem} (ItemTransferService + recalculateEquipmentStats).
+   * Si `targetSlotIndex` est fourni, applique ensuite ce slotIndex à l'item
+   * déséquipé via {@link applySlotUpdates} (transactionnel). Retourne la
+   * projection fraîche.
+   */
+  async unequipItemAsAdmin(
+    characterId: string,
+    slot: string,
+    targetSlotIndex?: number | null,
+  ): Promise<InventoryEntryDto[]> {
+    const character = await this.characterRepository.findOneBy({ id: characterId });
+    if (!character) throw new NotFoundException(`Personnage "${characterId}" introuvable.`);
+
+    const result = await this.unequipItem(characterId, slot); // dirty('equipment')
+
+    if (targetSlotIndex != null && Number.isInteger(targetSlotIndex) && targetSlotIndex >= 0) {
+      const kind = result instanceof ItemInstance ? 'instance' : 'stack';
+      await this.applySlotUpdates(characterId, {
+        entries: [{ kind, id: result.id, slotIndex: targetSlotIndex }],
+      });
+    }
+
+    return this.inventoryProjection.project(characterId);
   }
 
   // ---------------------------------------------------------------------------

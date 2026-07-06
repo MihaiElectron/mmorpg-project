@@ -86,15 +86,25 @@ describe("buildSlotMap", () => {
     expect(result[2]).toBe("b");
   });
 
-  it("slotIndex de session (prev) prioritaire sur slotIndex persistant", () => {
+  it("slotIndex persistant (serveur) prioritaire sur la position de session", () => {
     const prev = new Array(MIN_SLOT_COUNT).fill(null);
-    prev[0] = "a"; // l'utilisateur vient de placer "a" en 0
+    prev[0] = "a"; // ancienne position de session
     const entries = [
       { id: "a", instanceId: null, quantity: 1, slotIndex: 5, item: { id: "i-a" } },
     ];
     const result = buildSlotMap(prev, entries);
-    expect(result[0]).toBe("a"); // session gagne
-    expect(result[5]).toBeNull();
+    expect(result[5]).toBe("a"); // serveur autoritaire gagne
+    expect(result[0]).toBeNull();
+  });
+
+  it("prev positionne uniquement les entrées SANS slotIndex", () => {
+    const prev = new Array(MIN_SLOT_COUNT).fill(null);
+    prev[3] = "a";
+    const entries = [
+      { id: "a", instanceId: null, quantity: 1, slotIndex: null, item: { id: "i-a" } },
+    ];
+    const result = buildSlotMap(prev, entries);
+    expect(result[3]).toBe("a"); // pas de slotIndex → la session s'applique
   });
 
   it("conserve la position de session d'une entrée existante", () => {

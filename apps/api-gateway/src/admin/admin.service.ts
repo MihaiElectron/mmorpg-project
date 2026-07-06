@@ -26,6 +26,7 @@ import { resolveEffectiveAttackRangeWU } from '../characters/attack-range.helper
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { SkillsService } from '../skills/skills.service';
+import { EconomyService } from '../economy/economy.service';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
@@ -53,6 +54,9 @@ export interface AdminEquipmentEntry {
   name: string | null;
   image: string | null;
   type: string | null;
+  /** Slot d'équipement natif de l'item (compatibilité), null si absent. */
+  equipSlot: string | null;
+  objectMode: string | null;
 }
 
 export interface AdminCharacterDetails {
@@ -69,8 +73,12 @@ export interface AdminCharacterDetails {
     worldX: number | null;
     worldY: number | null;
     mapId: number | null;
+    // stats.derived (physicalAttack/defense) = valeurs finales serveur (parité
+    // avec le panneau joueur, aligné lui aussi sur stats.derived).
     stats: CharacterStats;
     combat: { attackRangeWU: number };
+    // Solde lecture seule (aucune création de wallet). Mêmes unités que le joueur.
+    wallet: { gold: number; silver: number; bronze: number };
   };
   inventory: InventoryEntryDto[];
   equipment: AdminEquipmentEntry[];
@@ -129,6 +137,7 @@ export class AdminService {
     private readonly worldService: WorldService,
     private readonly inventoryProjection: InventoryProjectionService,
     private readonly skillsService: SkillsService,
+    private readonly economyService: EconomyService,
   ) {}
 
   // ── Assets — sandbox filesystem ──────────────────────────────────────────
@@ -338,10 +347,17 @@ export class AdminService {
       character.mapId = live.mapId;
     }
 
-    const [inventory, skills] = await Promise.all([
+    const [inventory, skills, balanceBronze] = await Promise.all([
       this.inventoryProjection.project(character.id),
       this.skillsService.getCharacterSkills(character.id),
+      // Lecture PURE : ne crée jamais de wallet par simple consultation.
+      this.economyService.readBalanceBronze('character', character.id),
     ]);
+    const wallet = {
+      gold: Number(balanceBronze / 10_000n),
+      silver: Number((balanceBronze % 10_000n) / 100n),
+      bronze: Number(balanceBronze % 100n),
+    };
 
     const equipment = (character.equipment ?? []).map((eq) => ({
       slot: eq.slot,
@@ -350,6 +366,8 @@ export class AdminService {
       name: eq.item?.name ?? null,
       image: eq.item?.image ?? null,
       type: eq.item?.type ?? null,
+      equipSlot: eq.item?.slot ?? null,
+      objectMode: eq.item?.objectMode ?? null,
     }));
 
     return {
@@ -369,6 +387,7 @@ export class AdminService {
         // stats.base = stats de base ; stats.derived = calculées serveur (lecture seule).
         stats: CharacterStatsCalculator.compute(character),
         combat: { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) },
+        wallet,
       },
       inventory,
       equipment,

@@ -76,6 +76,17 @@ export class EconomyService {
     return BigInt(wallet.balanceBronze);
   }
 
+  /**
+   * Lecture PURE du solde d'un propriétaire (aucun side-effect : ne crée jamais
+   * de wallet). Retourne 0 si le wallet n'existe pas encore. Destiné aux
+   * snapshots lecture seule (ex. miroir admin) qui ne doivent pas matérialiser
+   * un wallet par simple consultation.
+   */
+  async readBalanceBronze(ownerType: string, ownerId: string): Promise<bigint> {
+    const wallet = await this.wallets.findOne({ where: { ownerType, ownerId } });
+    return wallet ? BigInt(wallet.balanceBronze) : 0n;
+  }
+
   async credit(params: CreditParams): Promise<EconomicTransaction> {
     this.assertPositiveAmount(params.amountBronze);
 
