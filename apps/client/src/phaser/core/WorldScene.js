@@ -804,6 +804,9 @@ export default class WorldScene extends Phaser.Scene {
       window.removeEventListener("keydown", this.windowKeyDownHandler);
       window.removeEventListener("keyup", this.windowKeyUpHandler);
       this.game.canvas.removeEventListener("mouseleave", this.canvasMouseLeaveHandler);
+      // Cleanup socket + timers : "shutdown" est le seul hook réellement émis
+      // par Phaser au teardown de la scène (destroy() custom n'était jamais appelé).
+      this.shutdownCleanup();
     });
   }
 
@@ -2353,7 +2356,11 @@ export default class WorldScene extends Phaser.Scene {
     this.redrawWorldItemOverlay();
   }
 
-  destroy() {
+  shutdownCleanup() {
+    // Stoppe l'auto-attaque : sinon l'interval de 300 ms continue d'émettre
+    // attack_creature après le teardown de la scène.
+    this.stopAutoAttack();
+
     if (this.socket) {
       this.socket.off("connect");
       this.socket.off("resources");
@@ -2377,6 +2384,11 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("player_joined");
       this.socket.off("player_moved");
       this.socket.off("player_left");
+      this.socket.off("character_xp_update");
+      this.socket.off("skill_update");
+      this.socket.off("character_damaged");
+      this.socket.off("character_teleport");
+      this.socket.off("character_respawn");
     }
 
     if (this.gatherIndicator) {
@@ -2403,6 +2415,5 @@ export default class WorldScene extends Phaser.Scene {
     this.playerHpBar = null;
     this.clearCreatures();
     this.clearRemotePlayers();
-    super.destroy();
   }
 }

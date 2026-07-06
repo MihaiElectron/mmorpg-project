@@ -91,6 +91,12 @@ function WorldPage() {
         phaserGameRef.current.destroy(true);
         phaserGameRef.current = null;
       }
+      // Fermer le socket : sinon chaque remontage empile un socket connecté
+      // (handlers serveur/clients dupliqués, fuite réseau).
+      socket.disconnect();
+      if (window.game && window.game.socket === socket) {
+        window.game = null;
+      }
     };
   }, [token, phaserInitialized]);
 

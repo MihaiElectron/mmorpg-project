@@ -61,7 +61,6 @@ export function useDraggableResizable(getInitial) {
   const stop = useCallback(() => {
     interaction.current = null;
     window.removeEventListener("mousemove", onMouseMove);
-    window.removeEventListener("mouseup", stop);
   }, [onMouseMove]);
 
   const begin = useCallback(
@@ -76,7 +75,8 @@ export function useDraggableResizable(getInitial) {
         startRect: { ...rect },
       };
       window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", stop);
+      // `once` : le listener mouseup se retire tout seul après l'interaction.
+      window.addEventListener("mouseup", stop, { once: true });
     },
     [rect, onMouseMove, stop],
   );
@@ -93,7 +93,13 @@ export function useDraggableResizable(getInitial) {
   const startResize = useCallback((event, dir) => begin(event, "resize", dir), [begin]);
 
   // Sécurité : retirer les listeners si le composant est démonté en pleine interaction.
-  useEffect(() => stop, [stop]);
+  useEffect(
+    () => () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", stop);
+    },
+    [onMouseMove, stop],
+  );
 
   return { rect, startDrag, startResize };
 }
