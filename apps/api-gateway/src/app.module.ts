@@ -66,7 +66,8 @@ import { TradeModule } from './trade/trade.module';
         // Charge automatiquement TOUTES les entités du projet
         entities: [__dirname + '/**/*.entity.{ts,js}'],
 
-        synchronize: true, // auto-create/update tables pour dev
+        // Auto-sync du schéma réservé au dev : en production, migrations uniquement.
+        synchronize: config.get<string>('NODE_ENV') !== 'production',
       }),
     }),
 
