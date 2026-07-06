@@ -246,21 +246,23 @@ const storeLogic = (set, get) => ({
     try {
       const token = localStorage.getItem("token");
       const character = get().character;
-      if (!token || !character) return;
+      if (!token || !character) return { ok: false };
       const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory/${character.id}/unequip/${encodeURIComponent(slot)}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         await get().loadCharacter();
-      } else {
-        let msg = `Déséquipement impossible (HTTP ${res.status})`;
-        try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
-        console.error("[CharacterStore] unequipItem failed:", msg);
-        alert(msg);
+        return { ok: true };
       }
+      let msg = `Déséquipement impossible (HTTP ${res.status})`;
+      try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
+      console.error("[CharacterStore] unequipItem failed:", msg);
+      alert(msg);
+      return { ok: false };
     } catch (err) {
       console.error("[CharacterStore] unequipItem error:", err);
+      return { ok: false };
     }
   },
 });

@@ -2,7 +2,7 @@
  * Inventory.jsx
  */
 import { useEffect, useRef, useState } from "react";
-import { useCharacterStore } from "../../store/character.store";
+import { useCharacterStore, getCharacterStore } from "../../store/character.store";
 import { getDevToolsSocket } from "../DevTools/devtoolsBridge";
 import {
   buildInventoryWorldDropPayload,
@@ -116,10 +116,14 @@ export default function Inventory() {
   // ── Drop inventaire → inventaire (réorganisation) ─────────────────────────
 
   function handleSlotDragOver(event, slotIndex) {
-    if (!event.dataTransfer.types.includes("application/x-inventory-item")) return;
-    if (draggedSlotIndex === slotIndex) return;
+    const types = event.dataTransfer.types;
+    const isInventory = types.includes("application/x-inventory-item");
+    const isEquipment = types.includes("application/x-equipment-slot");
+    if (!isInventory && !isEquipment) return;
+    // Réorganisation : ignorer la case d'origine. Équipement : toute case est cible.
+    if (isInventory && draggedSlotIndex === slotIndex) return;
     event.preventDefault();
-    event.stopPropagation(); // empêche le handler world-drop window
+    event.stopPropagation(); // empêche le handler world-drop / section
     event.dataTransfer.dropEffect = "move";
     setDragOverSlotIndex(slotIndex);
   }
@@ -131,30 +135,80 @@ export default function Inventory() {
   }
 
   // Construit le payload de persistance (kind/id/slotIndex) depuis un slotMap.
-  function buildSlotsPayload(map) {
+  function buildSlotsPayload(map, inv = safeInventory) {
     const entries = [];
     map.forEach((id, index) => {
       if (id == null) return;
-      const inv = safeInventory.find((e) => e.id === id);
-      if (!inv) return;
+      const entry = inv.find((e) => e.id === id);
+      if (!entry) return;
       entries.push({
-        kind: inv.instanceId ? "instance" : "stack",
-        id: inv.instanceId ?? inv.id,
+        kind: entry.instanceId ? "instance" : "stack",
+        id: entry.instanceId ?? entry.id,
         slotIndex: index,
       });
     });
     return entries;
   }
 
+  function resetDragState() {
+    setDraggedEntry(null);
+    setDraggedSlotIndex(null);
+    setDragOverSlotIndex(null);
+    clearDragEquipSource();
+  }
+
+  // Déséquipe un item (serveur autoritaire via ItemTransferService) puis le place
+  // dans la case ciblée et persiste l'ordre. En cas de refus serveur, rien n'est
+  // perdu : loadCharacter() a rechargé l'état réel.
+  async function unequipToSlot(rawEquip, toIndex) {
+    let slot;
+    let instanceId;
+    try {
+      ({ slot, instanceId } = JSON.parse(rawEquip));
+    } catch (e) {
+      console.error("[Inventory] equipment drop parse error", e);
+      return;
+    }
+    if (!slot) return;
+    const res = await unequipItem(slot);
+    if (!res?.ok) return; // refus serveur : état rechargé, pas de perte ni doublon
+    if (!instanceId) return; // sans instanceId, pas de placement ciblé (placement auto)
+
+    // L'instance déséquipée est désormais dans l'inventaire (même instanceId).
+    const fresh = getCharacterStore().getState().inventory ?? [];
+    const newEntry = fresh.find((e) => e.instanceId === instanceId);
+    if (!newEntry) return; // déjà cohérent côté serveur, pas de placement forcé
+
+    const prev = [...slotMap];
+    // Épingle la case ciblée uniquement si elle est libre (sinon placement auto).
+    if (toIndex < prev.length && prev[toIndex] == null) {
+      for (let i = 0; i < prev.length; i++) {
+        if (prev[i] === newEntry.id) prev[i] = null;
+      }
+      prev[toIndex] = newEntry.id;
+    }
+    const finalMap = buildSlotMap(prev, fresh);
+    setSlotMap(finalMap); // optimistic
+    await saveInventorySlots(buildSlotsPayload(finalMap, fresh));
+  }
+
   function handleSlotDrop(event, toIndex) {
     event.preventDefault();
     event.stopPropagation();
     setDragOverSlotIndex(null);
+
+    // Cas 1 : drop d'un item ÉQUIPÉ sur une case → déséquiper + placer.
+    if (event.dataTransfer.types.includes("application/x-equipment-slot")) {
+      const raw = event.dataTransfer.getData("application/x-equipment-slot");
+      resetDragState();
+      if (raw) unequipToSlot(raw, toIndex);
+      return;
+    }
+
+    // Cas 2 : réorganisation inventaire → inventaire.
     const fromIndex = draggedSlotIndex;
     if (fromIndex === null || fromIndex === toIndex) {
-      setDraggedEntry(null);
-      setDraggedSlotIndex(null);
-      clearDragEquipSource();
+      resetDragState();
       return;
     }
     const next = [...slotMap];
@@ -162,9 +216,7 @@ export default function Inventory() {
     setSlotMap(next); // optimistic UI
     // Persistance serveur (source de vérité). Resync depuis la projection fraîche.
     saveInventorySlots(buildSlotsPayload(next));
-    setDraggedEntry(null);
-    setDraggedSlotIndex(null);
-    clearDragEquipSource();
+    resetDragState();
   }
 
   // ── Drop équipement → inventaire (déséquiper par drag) ────────────────────

@@ -3,13 +3,6 @@
 .inventory-section {
   margin-top: 0;
   padding: 2px 0;
-  transition: outline 0.1s;
-
-  &--drag-over {
-    outline: 2px solid vars.$color-text-gold;
-    outline-offset: 2px;
-    border-radius: vars.$panel-radius-sm;
-  }
 
   h3 {
     margin-bottom: 10px;
