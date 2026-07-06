@@ -57,11 +57,9 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | TD-017 | Guild Storage MVP — propriétaire uniquement, stacks non supportés | Medium | Guild V2 |
 | TD-018 | Housing MVP — propriétaire uniquement, stacks non supportés | Medium | Housing V2 |
 | TD-019 | Trade MVP — expiration session absente, stacks non supportés | Medium | Trade V2 |
-| — | `auth.controller.spec.ts` — 1 test pré-existant en échec (AuthService manquant) | High | avant CI/prod |
 | — | `RespawnPoint.radius` en pixels (drift respawn) — `legacyRadiusToWU()` disponible | Low | WU cleanup |
 | — | Templates IA (`aggroRadius`, `patrolRadius`, `speedMin/Max`) encore en pixels en DB | Medium | WU cleanup |
 | — | `mapId` hardcodé à `1` dans DevToolsStore/WorldScene | Medium | multi-cartes |
-| — | `wuToScreen` dupliquée dans `WorldScene.js` (`resolveScreen()` local) | Low | TS migration WorldScene |
 | — | Double console admin (`ActionPanel.tsx` + `AdminPanelWOM.tsx`) | Low | — |
 | — | `server.emit` broadcast global — pas de rooms/zones | Medium | montée en charge |
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |

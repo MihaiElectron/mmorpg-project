@@ -159,6 +159,7 @@ If a contradiction is found:
 
 - [Development Workflow](09_Workflow/development.md) - Status: Draft - Documentation planned for development workflow.
 - [AI Assistant Workflow](09_Workflow/ai-assistant-workflow.md) - Status: Draft - Documentation planned for AI assistant workflow.
+- [AI Agent Rules](09_Workflow/ai-agent-rules.md) - Status: Implemented - Checklists operationnelles pour agents IA (regles, checklists par domaine, anti-patterns).
 - [Documentation Guidelines](09_Workflow/documentation-guidelines.md) - Status: Draft - Documentation planned for documentation guidelines.
 - [Review Checklist](09_Workflow/review-checklist.md) - Status: Draft - Documentation planned for review checklists.
 

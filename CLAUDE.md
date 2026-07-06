@@ -226,17 +226,13 @@ peut etre obsolete de plusieurs minutes de deplacement.
 Cas concernes : teleportation vers joueur, inspection position, follow, kick
 avec position contextuelle, debug distance, deplacement force.
 
-Regression connue (a corriger) : `WorldScene.loadBuildings()` et
-`WorldScene.loadCraftingStations()` appellent `/admin/buildings/world-objects`
-et `/admin/crafting-stations/world-objects` — endpoints admin protegés par
-`@Roles(ADMIN)`. Un joueur non-admin recoit 403 et ne voit pas les batiments
-ni la forge. Correction : exposer des endpoints runtime lecture seule.
-
-Regression connue (a corriger) : le panneau admin "TP vers joueur" lit la
-position depuis `GET /admin/characters` (DB) et non depuis `ConnectedPlayer`
-en memoire. L'admin arrive a la derniere position persistee, pas a la position
-live. Correction : utiliser la position live du `ConnectedPlayer` quand le
-joueur est connecte.
+Regressions historiques corrigees (audit 2026-07-06) : `loadBuildings()` /
+`loadCraftingStations()` appellent desormais les endpoints runtime
+(`/buildings/world-objects`, `/crafting/stations/world-objects`) et
+`admin:teleport` lit la position live du `ConnectedPlayer` (fallback DB si
+hors ligne). Exception restante : `WorldScene.redrawCreatureSpawnOverlay()`
+fetch `/admin/creature-spawns/world-objects` depuis la scene joueur (overlay
+DevTools) — a deplacer hors de la scene ou exposer en runtime read-only.
 
 ## Architecture Runtime
 
