@@ -25,6 +25,7 @@ export function mapStackToEntry(inv: Inventory, sets: EquippedSets): InventoryEn
     instanceId: null,
     quantity: inv.quantity,
     equipped: sets.equippedItemIds.has(inv.item.id),
+    slotIndex: inv.slotIndex ?? null,
     item: {
       id: inv.item.id,
       name: inv.item.name,
@@ -49,6 +50,7 @@ export function mapInstanceToEntry(
     instanceId: instance.id,
     quantity,
     equipped: sets.equippedInstanceIds.has(instance.id),
+    slotIndex: instance.slotIndex ?? null,
     item: {
       id: item.id,
       name: item.name,

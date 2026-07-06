@@ -1,7 +1,8 @@
-import { Controller, Post, Body, Param, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Param, Get, UseGuards, Request } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
+import { UpdateInventorySlotsDto } from './dto/update-inventory-slots.dto';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
@@ -36,6 +37,15 @@ export class InventoryController {
     @Param('slot') slot: string,
   ) {
     return this.inventoryService.unequipItem(characterId, slot);
+  }
+
+  @Patch(':characterId/slots')
+  updateSlots(
+    @Param('characterId') characterId: string,
+    @Body() dto: UpdateInventorySlotsDto,
+    @Request() req: { user: { userId: string } },
+  ) {
+    return this.inventoryService.updateSlots(characterId, req.user.userId, dto);
   }
 
   @Get(':characterId')

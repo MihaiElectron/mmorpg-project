@@ -13,5 +13,7 @@ export interface InventoryEntryDto {
   instanceId: string | null;
   quantity: number;
   equipped: boolean;
+  /** Position visuelle persistée dans la grille (absolue), null si non définie. */
+  slotIndex: number | null;
   item: ItemSummary;
 }

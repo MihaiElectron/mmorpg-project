@@ -34,6 +34,8 @@ export class InventoryProjectionService {
       this.inventoryRepository.find({
         where: { character: { id: characterId } },
         relations: ['item'],
+        // Base déterministe pour le repli (entrées sans slotIndex).
+        order: { createdAt: 'ASC', id: 'ASC' },
       }),
       // Seules les instances réellement en inventaire sont projetées.
       // Une instance EQUIPPED vit dans le container EQUIPMENT et ne doit
@@ -43,6 +45,7 @@ export class InventoryProjectionService {
         where: [
           { ownerId: characterId, containerType: ItemInstanceContainerType.INVENTORY },
         ],
+        order: { createdAt: 'ASC', id: 'ASC' },
       }),
       this.equipmentRepository.find({ where: { characterId } }),
     ]);
@@ -75,6 +78,18 @@ export class InventoryProjectionService {
       })
       .filter((e): e is InventoryEntryDto => e !== null);
 
-    return [...stackEntries, ...instanceEntries];
+    // Ordre stable et identique pour /characters/me et /admin/characters/:id/details :
+    // 1) entrées avec slotIndex non null, par slotIndex ASC ;
+    // 2) puis entrées sans slotIndex, dans l'ordre createdAt/id (tri stable JS).
+    const combined = [...stackEntries, ...instanceEntries];
+    combined.sort((a, b) => {
+      const aHas = a.slotIndex != null;
+      const bHas = b.slotIndex != null;
+      if (aHas && bHas) return (a.slotIndex as number) - (b.slotIndex as number);
+      if (aHas) return -1;
+      if (bHas) return 1;
+      return 0;
+    });
+    return combined;
   }
 }

@@ -200,4 +200,19 @@ describe("InventoryProjectionService", () => {
     expect(result[0].id).toBe("inv-1");
     expect(result[1].id).toBe("inst-1");
   });
+  it("ordonne par slotIndex ASC puis entrées sans slotIndex en dernier", async () => {
+    const invA = { id: "inv-A", quantity: 1, equipped: false, slotIndex: 1, item: item1 } as unknown as Inventory;
+    const invB = { id: "inv-B", quantity: 1, equipped: false, slotIndex: 0, item: item1 } as unknown as Inventory;
+    const invC = { id: "inv-C", quantity: 1, equipped: false, slotIndex: null, item: item1 } as unknown as Inventory;
+    inventoryRepo.find.mockResolvedValue([invA, invB, invC]);
+    instanceRepo.find.mockResolvedValue([]);
+    equipmentRepo.find.mockResolvedValue([]);
+
+    const result = await service.project("char-1");
+
+    expect(result.map((e) => e.id)).toEqual(["inv-B", "inv-A", "inv-C"]);
+    expect(result[0].slotIndex).toBe(0);
+    expect(result[1].slotIndex).toBe(1);
+    expect(result[2].slotIndex).toBeNull();
+  });
 });

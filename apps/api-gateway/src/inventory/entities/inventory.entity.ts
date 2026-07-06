@@ -41,6 +41,12 @@ export class Inventory {
   @Column({ type: 'boolean', default: false })
   equipped: boolean;
 
+  // Position visuelle persistante dans la grille d'inventaire (absolue).
+  // Nullable : compatibilité avec les lignes existantes (ordre de repli par
+  // createdAt/id tant que non défini). Migration prod à créer (synchronize=true en dev).
+  @Column({ type: 'integer', nullable: true, default: null })
+  slotIndex: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -13,6 +13,8 @@ import {
   ItemInstanceState,
 } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
+import { WorldService } from '../world/world.service';
+import { InventoryProjectionService } from './projection/inventory-projection.service';
 
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -59,8 +61,14 @@ describe('InventoryService — findItemForLoot', () => {
           provide: getRepositoryToken(CharacterEquipment),
           useValue: { findOne: jest.fn(), save: jest.fn(), delete: jest.fn() },
         },
+        {
+          provide: getRepositoryToken(ItemInstance),
+          useValue: { findOne: jest.fn(), save: jest.fn() },
+        },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        { provide: WorldService, useValue: { emitAdminCharacterDirty: jest.fn() } },
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
@@ -162,21 +170,30 @@ function makeEquipService(overrides: {
   equipmentRepo?: Record<string, jest.Mock>;
   dataSource?: { transaction: jest.Mock };
   itemTransfer?: { transfer: jest.Mock };
+  worldService?: { emitAdminCharacterDirty: jest.Mock };
+  instanceRepo?: Record<string, jest.Mock>;
+  inventoryProjection?: { project: jest.Mock };
 } = {}): InventoryService {
   const inventoryRepo = overrides.inventoryRepo ?? { findOne: jest.fn(), save: jest.fn(), create: jest.fn((x) => x), find: jest.fn().mockResolvedValue([]) };
   const characterRepo = overrides.characterRepo ?? { findOneBy: jest.fn().mockResolvedValue(DEFAULT_CHARACTER) };
   const itemRepo = overrides.itemRepo ?? { findOne: jest.fn(), findOneBy: jest.fn() };
   const equipmentRepo = overrides.equipmentRepo ?? { findOne: jest.fn(), save: jest.fn(), delete: jest.fn() };
+  const instanceRepo = overrides.instanceRepo ?? { findOne: jest.fn(), save: jest.fn() };
   const dataSource = overrides.dataSource ?? { transaction: jest.fn() };
   const itemTransfer = overrides.itemTransfer ?? { transfer: jest.fn().mockResolvedValue(makeInstance()) };
+  const worldService = overrides.worldService ?? { emitAdminCharacterDirty: jest.fn() };
+  const inventoryProjection = overrides.inventoryProjection ?? { project: jest.fn().mockResolvedValue([]) };
 
   return new InventoryService(
     inventoryRepo as any,
     characterRepo as any,
     itemRepo as any,
     equipmentRepo as any,
+    instanceRepo as any,
     dataSource as any,
     itemTransfer as unknown as ItemTransferService,
+    worldService as any,
+    inventoryProjection as any,
   );
 }
 
@@ -321,12 +338,15 @@ describe("InventoryService.unequipItem — Equipment Runtime V2", () => {
       delete: jest.fn(),
     });
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
-    const service = makeEquipService({ dataSource });
+    const worldService = { emitAdminCharacterDirty: jest.fn() };
+    const service = makeEquipService({ dataSource, worldService });
 
     const result = await service.unequipItem(characterId, slot);
 
     expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot });
     expect((result as Inventory).equipped).toBe(false);
+    // Invalidation live du Player Inspector admin.
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith(characterId, "equipment");
   });
 
   it("refuse si aucune CharacterEquipment n existe pour le slot", async () => {
@@ -378,7 +398,8 @@ describe("InventoryService.equipItemInstance — Equipment Runtime V2", () => {
       create: jest.fn((_, v) => v),
     });
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
-    const service = makeEquipService({ dataSource, itemTransfer });
+    const worldService = { emitAdminCharacterDirty: jest.fn() };
+    const service = makeEquipService({ dataSource, itemTransfer, worldService });
 
     const result = await service.equipItemInstance(characterId, instance.id, DEFAULT_USER_ID);
 
@@ -386,6 +407,8 @@ describe("InventoryService.equipItemInstance — Equipment Runtime V2", () => {
       CharacterEquipment,
       expect.objectContaining({ characterId, itemId: weaponItem.id, slot: "weapon", itemInstanceId: instance.id }),
     );
+    // Invalidation live du Player Inspector admin (equip INSTANCE).
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith(characterId, "equipment");
     expect(itemTransfer.transfer).toHaveBeenCalledWith(
       manager, instance.id,
       expect.objectContaining({ requesterId: characterId, transition: { type: "EQUIP", characterId } }),
@@ -747,5 +770,82 @@ describe("InventoryService.equipItemInstance — auto-slot ring et bracelet", ()
       CharacterEquipment,
       expect.objectContaining({ slot: "right-bracelet" }),
     );
+  });
+});
+
+describe("InventoryService.updateSlots — persistance des positions", () => {
+  const characterId = "char-1";
+
+  it("refuse si le personnage n'appartient pas à l'utilisateur", async () => {
+    const characterRepo = { findOneBy: jest.fn().mockResolvedValue({ id: characterId, userId: "autre" }) };
+    const service = makeEquipService({ characterRepo });
+    await expect(
+      service.updateSlots(characterId, DEFAULT_USER_ID, { entries: [{ kind: "stack", id: "s1", slotIndex: 0 }] }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("refuse un slotIndex dupliqué dans le payload", async () => {
+    const service = makeEquipService();
+    await expect(
+      service.updateSlots(characterId, DEFAULT_USER_ID, {
+        entries: [
+          { kind: "stack", id: "s1", slotIndex: 2 },
+          { kind: "stack", id: "s2", slotIndex: 2 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuse un stack n'appartenant pas au personnage", async () => {
+    const manager = makeManager({
+      findOne: jest.fn().mockResolvedValue({ id: "s1", character: { id: "autre-perso" } }),
+      save: jest.fn(),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+    await expect(
+      service.updateSlots(characterId, DEFAULT_USER_ID, { entries: [{ kind: "stack", id: "s1", slotIndex: 0 }] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuse une instance n'appartenant pas au personnage / hors inventaire", async () => {
+    const manager = makeManager({
+      findOne: jest.fn().mockResolvedValue({ id: "i1", ownerId: "autre-perso", containerType: "INVENTORY", state: "AVAILABLE" }),
+      save: jest.fn(),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+    await expect(
+      service.updateSlots(characterId, DEFAULT_USER_ID, { entries: [{ kind: "instance", id: "i1", slotIndex: 0 }] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("met à jour slotIndex (stack + instance), émet dirty et retourne la projection fraîche", async () => {
+    const stackRow = { id: "s1", character: { id: characterId }, slotIndex: null as number | null };
+    const instRow = { id: "i1", ownerId: characterId, containerType: "INVENTORY", state: "AVAILABLE", slotIndex: null as number | null };
+    const manager = makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(stackRow)   // stack
+        .mockResolvedValueOnce(instRow),   // instance
+      save: jest.fn(async (_e, v) => v),
+    });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const worldService = { emitAdminCharacterDirty: jest.fn() };
+    const projection = [{ id: "s1", slotIndex: 0 }];
+    const inventoryProjection = { project: jest.fn().mockResolvedValue(projection) };
+    const service = makeEquipService({ dataSource, worldService, inventoryProjection });
+
+    const result = await service.updateSlots(characterId, DEFAULT_USER_ID, {
+      entries: [
+        { kind: "stack", id: "s1", slotIndex: 0 },
+        { kind: "instance", id: "i1", slotIndex: 1 },
+      ],
+    });
+
+    expect(stackRow.slotIndex).toBe(0);
+    expect(instRow.slotIndex).toBe(1);
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith(characterId, "inventory");
+    expect(inventoryProjection.project).toHaveBeenCalledWith(characterId);
+    expect(result).toBe(projection);
   });
 });

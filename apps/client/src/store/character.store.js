@@ -77,6 +77,7 @@ const storeLogic = (set, get) => ({
           instanceId: inv.instanceId ?? null,
           quantity: inv.quantity,
           equipped: inv.equipped,
+          slotIndex: inv.slotIndex ?? null,
           item: inv.item,
         }));
       set({ character: data, equipment: equipmentMap, inventory });
@@ -159,6 +160,43 @@ const storeLogic = (set, get) => ({
       set({ skills: data });
     } catch (err) {
       console.error("[CharacterStore] loadSkills error:", err);
+    }
+  },
+
+  // Persiste l'ordre visuel de l'inventaire (slotIndex) côté serveur. Le serveur
+  // reste la source de vérité : on resynchronise depuis la projection fraîche
+  // retournée. En cas d'erreur, on recharge /characters/me pour restaurer.
+  saveInventorySlots: async (entries) => {
+    try {
+      const token = localStorage.getItem("token");
+      const character = get().character;
+      if (!token || !character || !Array.isArray(entries) || entries.length === 0) return { ok: false };
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory/${character.id}/slots`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entries }),
+      });
+      if (!res.ok) {
+        await get().loadCharacter();
+        return { ok: false };
+      }
+      const projection = await res.json();
+      const inventory = (projection || [])
+        .filter((inv) => !inv.equipped)
+        .map((inv) => ({
+          id: inv.id,
+          instanceId: inv.instanceId ?? null,
+          quantity: inv.quantity,
+          equipped: inv.equipped,
+          slotIndex: inv.slotIndex ?? null,
+          item: inv.item,
+        }));
+      set({ inventory });
+      return { ok: true };
+    } catch (err) {
+      console.error("[CharacterStore] saveInventorySlots error:", err);
+      await get().loadCharacter();
+      return { ok: false };
     }
   },
 

@@ -76,6 +76,11 @@ export class ItemInstance {
   @Column({ type: 'int', nullable: true, default: null })
   quantity: number | null;
 
+  // Position visuelle persistante dans la grille d'inventaire (absolue).
+  // Nullable : compatibilité données existantes. Migration prod à créer.
+  @Column({ type: 'int', nullable: true, default: null })
+  slotIndex: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

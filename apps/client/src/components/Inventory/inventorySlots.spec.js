@@ -25,18 +25,18 @@ describe("buildSlotMap", () => {
     expect(filledIds(result)).toHaveLength(3);
   });
 
-  it("affiche 18 items sur exactement 18 slots", () => {
-    const entries = makeEntries(18);
+  it("affiche MIN_SLOT_COUNT items sur exactement MIN_SLOT_COUNT slots", () => {
+    const entries = makeEntries(MIN_SLOT_COUNT);
     const result = buildSlotMap([], entries);
-    expect(result).toHaveLength(18);
+    expect(result).toHaveLength(MIN_SLOT_COUNT);
     expect(new Set(filledIds(result))).toEqual(new Set(entries.map((e) => e.id)));
   });
 
-  it("étend la grille pour 19 items (aucune entrée droppée)", () => {
-    const entries = makeEntries(19);
+  it("étend la grille au-delà de MIN_SLOT_COUNT (aucune entrée droppée)", () => {
+    const entries = makeEntries(MIN_SLOT_COUNT + 1);
     const result = buildSlotMap([], entries);
-    expect(result).toHaveLength(19);
-    expect(filledIds(result)).toHaveLength(19);
+    expect(result).toHaveLength(MIN_SLOT_COUNT + 1);
+    expect(filledIds(result)).toHaveLength(MIN_SLOT_COUNT + 1);
     for (const entry of entries) {
       expect(result).toContain(entry.id);
     }
@@ -73,6 +73,28 @@ describe("buildSlotMap", () => {
     const result = buildSlotMap([], entries);
     expect(result).toHaveLength(50);
     expect(new Set(filledIds(result))).toEqual(new Set(entries.map((e) => e.id)));
+  });
+
+  it("place les entrées à leur slotIndex persistant (parité joueur/admin)", () => {
+    const entries = [
+      { id: "a", instanceId: null, quantity: 1, slotIndex: 5, item: { id: "i-a" } },
+      { id: "b", instanceId: null, quantity: 1, slotIndex: 2, item: { id: "i-b" } },
+    ];
+    // prev vide (miroir admin / reload) → placement par slotIndex absolu.
+    const result = buildSlotMap([], entries);
+    expect(result[5]).toBe("a");
+    expect(result[2]).toBe("b");
+  });
+
+  it("slotIndex de session (prev) prioritaire sur slotIndex persistant", () => {
+    const prev = new Array(MIN_SLOT_COUNT).fill(null);
+    prev[0] = "a"; // l'utilisateur vient de placer "a" en 0
+    const entries = [
+      { id: "a", instanceId: null, quantity: 1, slotIndex: 5, item: { id: "i-a" } },
+    ];
+    const result = buildSlotMap(prev, entries);
+    expect(result[0]).toBe("a"); // session gagne
+    expect(result[5]).toBeNull();
   });
 
   it("conserve la position de session d'une entrée existante", () => {

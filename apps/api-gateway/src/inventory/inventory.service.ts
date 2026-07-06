@@ -14,9 +14,13 @@ import { Inventory } from './entities/inventory.entity';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { Character } from '../characters/entities/character.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
-import { ItemInstance } from '../item-instances/entities/item-instance.entity';
+import { ItemInstance, ItemInstanceContainerType, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { recalculateEquipmentStats } from '../characters/equipment-stats.helper';
+import { WorldService } from '../world/world.service';
+import { InventoryProjectionService } from './projection/inventory-projection.service';
+import { InventoryEntryDto } from './projection/inventory-entry.dto';
+import { UpdateInventorySlotsDto } from './dto/update-inventory-slots.dto';
 
 const SLOT_PAIRS: [string, string][] = [
   ['left-earring', 'right-earring'],
@@ -39,9 +43,74 @@ export class InventoryService {
     @InjectRepository(CharacterEquipment)
     private readonly equipmentRepository: Repository<CharacterEquipment>,
 
+    @InjectRepository(ItemInstance)
+    private readonly instanceRepository: Repository<ItemInstance>,
+
     private readonly dataSource: DataSource,
     private readonly itemTransfer: ItemTransferService,
+    private readonly worldService: WorldService,
+    private readonly inventoryProjection: InventoryProjectionService,
   ) {}
+
+  /**
+   * Réordonne les positions visuelles (slotIndex) de l'inventaire d'un
+   * personnage. LECTURE/écriture STRICTEMENT limitée à slotIndex : ne touche
+   * ni ownership, ni container, ni state, ni quantité, ne crée/supprime rien.
+   * Serveur autoritaire : ownership vérifié, ids validés, doublons refusés.
+   */
+  async updateSlots(
+    characterId: string,
+    userId: string,
+    dto: UpdateInventorySlotsDto,
+  ): Promise<InventoryEntryDto[]> {
+    const character = await this.characterRepository.findOneBy({ id: characterId });
+    if (!character || character.userId !== userId) {
+      throw new ForbiddenException('Personnage introuvable ou accès refusé.');
+    }
+
+    // Pas de doublon de slotIndex dans le payload.
+    const seen = new Set<number>();
+    for (const e of dto.entries) {
+      if (seen.has(e.slotIndex)) {
+        throw new BadRequestException(`slotIndex dupliqué: ${e.slotIndex}`);
+      }
+      seen.add(e.slotIndex);
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      for (const e of dto.entries) {
+        if (e.kind === 'stack') {
+          const inv = await manager.findOne(Inventory, {
+            where: { id: e.id },
+            relations: ['character'],
+          });
+          if (!inv || inv.character?.id !== characterId) {
+            throw new BadRequestException(`Stack ${e.id} n'appartient pas au personnage.`);
+          }
+          inv.slotIndex = e.slotIndex; // seule mutation
+          await manager.save(Inventory, inv);
+        } else {
+          const inst = await manager.findOne(ItemInstance, { where: { id: e.id } });
+          if (
+            !inst ||
+            inst.ownerId !== characterId ||
+            inst.containerType !== ItemInstanceContainerType.INVENTORY ||
+            inst.state === ItemInstanceState.EQUIPPED ||
+            inst.state === ItemInstanceState.DESTROYED
+          ) {
+            throw new BadRequestException(`Instance ${e.id} invalide ou hors inventaire du personnage.`);
+          }
+          inst.slotIndex = e.slotIndex; // seule mutation
+          await manager.save(ItemInstance, inst);
+        }
+      }
+    });
+
+    // Miroir admin live (pas de nouveau socket). Le client appelant resynchronise
+    // depuis la projection fraîche retournée.
+    this.worldService.emitAdminCharacterDirty(characterId, 'inventory');
+    return this.inventoryProjection.project(characterId);
+  }
 
   // ---------------------------------------------------------------------------
   // Ajouter un item dans l'inventaire
@@ -116,7 +185,7 @@ export class InventoryService {
     if (!character || character.userId !== userId) {
       throw new ForbiddenException('Personnage introuvable ou accès refusé.');
     }
-    return this.dataSource.transaction(async (manager) => {
+    const equippedResult = await this.dataSource.transaction(async (manager) => {
       // Lecture sans verrou pour résoudre itemId/slot (itemId est immuable)
       const rawInstance = await manager.findOne(ItemInstance, { where: { id: instanceId } });
       if (!rawInstance) throw new NotFoundException(`ItemInstance ${instanceId} not found`);
@@ -164,6 +233,9 @@ export class InventoryService {
       await recalculateEquipmentStats(manager, characterId);
       return equipped;
     });
+    // Invalidation live du Player Inspector admin (equip INSTANCE).
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return equippedResult;
   }
 
   private async resolveEquipSlot(
@@ -240,7 +312,7 @@ export class InventoryService {
   // — Sinon : met à jour Inventory.equipped à false (chemin legacy stack).
   // ---------------------------------------------------------------------------
   async unequipItem(characterId: string, slot: string): Promise<Inventory | ItemInstance> {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const equipment = await manager.findOne(CharacterEquipment, {
         where: { characterId, slot },
       });
@@ -267,6 +339,9 @@ export class InventoryService {
       await recalculateEquipmentStats(manager, characterId);
       return saved;
     });
+    // Invalidation live du Player Inspector admin (unequip).
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return result;
   }
 
   // ---------------------------------------------------------------------------

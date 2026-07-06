@@ -17,6 +17,7 @@ export default function Inventory() {
   const unequipItem = useCharacterStore((s) => s.unequipItem);
   const setDragEquipSource = useCharacterStore((s) => s.setDragEquipSource);
   const clearDragEquipSource = useCharacterStore((s) => s.clearDragEquipSource);
+  const saveInventorySlots = useCharacterStore((s) => s.saveInventorySlots);
 
   const [draggedEntry, setDraggedEntry] = useState(null);
   const [draggedSlotIndex, setDraggedSlotIndex] = useState(null);
@@ -129,17 +130,38 @@ export default function Inventory() {
     }
   }
 
+  // Construit le payload de persistance (kind/id/slotIndex) depuis un slotMap.
+  function buildSlotsPayload(map) {
+    const entries = [];
+    map.forEach((id, index) => {
+      if (id == null) return;
+      const inv = safeInventory.find((e) => e.id === id);
+      if (!inv) return;
+      entries.push({
+        kind: inv.instanceId ? "instance" : "stack",
+        id: inv.instanceId ?? inv.id,
+        slotIndex: index,
+      });
+    });
+    return entries;
+  }
+
   function handleSlotDrop(event, toIndex) {
     event.preventDefault();
     event.stopPropagation();
     setDragOverSlotIndex(null);
     const fromIndex = draggedSlotIndex;
-    if (fromIndex === null || fromIndex === toIndex) return;
-    setSlotMap((prev) => {
-      const next = [...prev];
-      [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
-      return next;
-    });
+    if (fromIndex === null || fromIndex === toIndex) {
+      setDraggedEntry(null);
+      setDraggedSlotIndex(null);
+      clearDragEquipSource();
+      return;
+    }
+    const next = [...slotMap];
+    [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+    setSlotMap(next); // optimistic UI
+    // Persistance serveur (source de vérité). Resync depuis la projection fraîche.
+    saveInventorySlots(buildSlotsPayload(next));
     setDraggedEntry(null);
     setDraggedSlotIndex(null);
     clearDragEquipSource();
