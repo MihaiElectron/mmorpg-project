@@ -182,6 +182,7 @@ export class CharacterService {
 
     // Notifie le client connecté et renvoie le format enrichi unique.
     this.worldService.emitCharacterReload(characterId);
+    this.worldService.emitAdminCharacterDirty(characterId, 'stats');
     return this.findFirstByUserProjected(userId);
   }
 
@@ -252,7 +253,7 @@ export class CharacterService {
       }
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       // 1. Récupérer l'item actuellement équipé dans CE slot (s'il existe)
       const currentlyEquipped = await manager
         .createQueryBuilder(CharacterEquipment, 'eq')
@@ -313,6 +314,8 @@ export class CharacterService {
         throw new NotFoundException(`Character ${characterId} not found`);
       return updatedCharacter;
     });
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return result;
   }
 
   /**
@@ -327,7 +330,7 @@ export class CharacterService {
   ): Promise<Character> {
     await this.findOne(characterId, userId);
 
-    return await this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       // 1. Récupérer l'item équipé dans CE slot
       const equippedItem = await manager
         .createQueryBuilder(CharacterEquipment, 'eq')
@@ -380,6 +383,8 @@ export class CharacterService {
         throw new NotFoundException(`Character ${characterId} not found`);
       return updatedCharacter;
     });
+    this.worldService.emitAdminCharacterDirty(characterId, 'equipment');
+    return result;
   }
 
   private async recalculateStats(

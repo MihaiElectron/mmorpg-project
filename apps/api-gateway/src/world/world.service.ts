@@ -5,6 +5,14 @@ import { WorldSocket } from '../types/world-socket';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
+import { ADMIN_ROOM } from '../common/socket-rooms';
+
+export type AdminCharacterDirtyReason =
+  | 'equipment'
+  | 'stats'
+  | 'inventory'
+  | 'wallet'
+  | 'unknown';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { RespawnPoint } from './entities/respawn-point.entity';
@@ -409,6 +417,20 @@ export class WorldService implements OnModuleInit {
     if (!this.server) return;
     const player = this.getConnectedPlayerByCharacterId(characterId);
     if (player) this.server.to(player.socketId).emit('character:reload');
+  }
+
+  /**
+   * Émet un signal léger d'invalidation vers la room admin uniquement, pour que
+   * les Player Inspector ouverts sur ce personnage refetch leur snapshot.
+   * Payload minimal (aucun snapshot diffusé). No-op si serveur non enregistré.
+   */
+  emitAdminCharacterDirty(characterId: string, reason: AdminCharacterDirtyReason): void {
+    if (!this.server) return;
+    this.server.to(ADMIN_ROOM).emit('admin:character_details_dirty', {
+      characterId,
+      reason,
+      updatedAt: Date.now(),
+    });
   }
 
   findPlayerByNameOrId(nameOrId: string): ConnectedPlayer | null {

@@ -1,0 +1,60 @@
+@use '../abstracts/variables' as vars;
+
+// Wrapper minimal du miroir personnage admin (read-only). Le rendu interne
+// réutilise les classes existantes (character-layer__*, inventory-*).
+.admin-character-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+
+  &__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid vars.$panel-border-subtle;
+    padding-bottom: 4px;
+  }
+
+  &__tab {
+    background: transparent;
+    border: none;
+    color: vars.$color-text-muted;
+    font-size: 0.74rem;
+    padding: 3px 8px;
+    border-radius: vars.$panel-radius-sm;
+    cursor: pointer;
+
+    &:hover {
+      color: vars.$color-text-primary;
+      background: vars.$panel-inner-bg;
+    }
+
+    &--active {
+      color: vars.$color-text-gold;
+      background: vars.$panel-inner-bg;
+    }
+  }
+
+  &__perso {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__soon,
+  &__error {
+    font-size: 0.76rem;
+    font-style: italic;
+    margin: 6px 0;
+  }
+
+  &__soon {
+    color: vars.$color-text-muted;
+  }
+
+  &__error {
+    color: #e74c3c;
+    font-style: normal;
+  }
+}

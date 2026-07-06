@@ -16,7 +16,7 @@ import { BuildingsService } from '../buildings/buildings.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
-import { getMapRoomId } from '../common/socket-rooms';
+import { getMapRoomId, ADMIN_ROOM } from '../common/socket-rooms';
 import { toBuildingWorldObject } from '../buildings/adapters/building-world-object.adapter';
 import { EconomyService } from '../economy/economy.service';
 import { TransactionType } from '../economy/entities/economic-transaction.entity';
@@ -92,6 +92,13 @@ export class AdminGateway implements OnGatewayConnection {
     }
     client.data.userId = auth.userId;
     client.data.role = auth.role;
+
+    // Room admin : jointure SERVEUR conditionnée au rôle JWT vérifié.
+    // Un client ne peut pas la rejoindre lui-même ; seuls les admins reçoivent
+    // les signaux `admin:character_details_dirty`.
+    if (auth.role === 'admin') {
+      client.join(ADMIN_ROOM);
+    }
   }
 
   @SubscribeMessage('admin:spawn')
@@ -495,6 +502,7 @@ export class AdminGateway implements OnGatewayConnection {
     if (!updated) return { success: false, message: `Personnage "${id}" introuvable.` };
 
     this.emitReloadIfConnected(id);
+    this.worldService.emitAdminCharacterDirty(id, 'stats');
     const changes = Object.entries(safe).map(([k, v]) => `${k}→${v}`).join(', ');
     return { success: true, message: `"${updated.name}" mis à jour : ${changes}.`, data: updated };
   }
@@ -598,6 +606,7 @@ export class AdminGateway implements OnGatewayConnection {
       const s = Number((newTotal % 10_000n) / 100n);
       const b = Number(newTotal % 100n);
       this.emitReloadIfConnected(characterId);
+      this.worldService.emitAdminCharacterDirty(characterId, 'wallet');
       const sign = direction === 'credit' ? '+' : direction === 'debit' ? '-' : '=';
       return {
         success: true,
@@ -641,6 +650,7 @@ export class AdminGateway implements OnGatewayConnection {
       }
 
       this.emitReloadIfConnected(characterId);
+      this.worldService.emitAdminCharacterDirty(characterId, 'inventory');
 
       const total = result.stacks.length + result.instances.length;
       return {
@@ -685,7 +695,10 @@ export class AdminGateway implements OnGatewayConnection {
 
     try {
       const { characterId, itemName } = await this.itemService.deleteInventoryStack(inventoryId);
-      if (characterId) this.emitReloadIfConnected(characterId);
+      if (characterId) {
+        this.emitReloadIfConnected(characterId);
+        this.worldService.emitAdminCharacterDirty(characterId, 'inventory');
+      }
       return { success: true, message: `Stack "${itemName}" supprimée.` };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la suppression.' };
@@ -709,7 +722,10 @@ export class AdminGateway implements OnGatewayConnection {
           transition: { type: 'ADMIN_DESTROY' },
         }),
       );
-      if (instance.ownerId) this.emitReloadIfConnected(instance.ownerId);
+      if (instance.ownerId) {
+        this.emitReloadIfConnected(instance.ownerId);
+        this.worldService.emitAdminCharacterDirty(instance.ownerId, 'inventory');
+      }
       return { success: true, message: `Instance "${itemInstanceId}" détruite (DESTROYED).` };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la destruction.' };
@@ -733,7 +749,10 @@ export class AdminGateway implements OnGatewayConnection {
           transition: { type: 'REPAIR_ORPHAN_EQUIPPED' },
         }),
       );
-      if (instance.ownerId) this.emitReloadIfConnected(instance.ownerId);
+      if (instance.ownerId) {
+        this.emitReloadIfConnected(instance.ownerId);
+        this.worldService.emitAdminCharacterDirty(instance.ownerId, 'equipment');
+      }
       return { success: true, message: `Instance "${itemInstanceId}" réparée (AVAILABLE/INVENTORY).` };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la réparation.' };

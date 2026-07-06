@@ -48,7 +48,7 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
         { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(100) } },
-        { provide: WorldService, useValue: { emitCharacterReload: jest.fn() } },
+        { provide: WorldService, useValue: { emitCharacterReload: jest.fn(), emitAdminCharacterDirty: jest.fn() } },
       ],
     }).compile();
     service = module.get<CharacterService>(CharacterService);
@@ -123,7 +123,7 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
         { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(283) } },
-        { provide: WorldService, useValue: { emitCharacterReload: jest.fn() } },
+        { provide: WorldService, useValue: { emitCharacterReload: jest.fn(), emitAdminCharacterDirty: jest.fn() } },
       ],
     }).compile();
     service = module.get<CharacterService>(CharacterService);
@@ -168,7 +168,7 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
 describe('CharacterService.allocateStats — allocation de points (Progression V1)', () => {
   let service: CharacterService;
   let characterRepo: ReturnType<typeof makeRepo>;
-  let worldService: { emitCharacterReload: jest.Mock };
+  let worldService: { emitCharacterReload: jest.Mock; emitAdminCharacterDirty: jest.Mock };
   let locked: any; // le Character chargé sous verrou dans la transaction
   let managerFindOne: jest.Mock;
   let managerSave: jest.Mock;
@@ -198,7 +198,7 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
 
   beforeEach(async () => {
     characterRepo = makeRepo();
-    worldService = { emitCharacterReload: jest.fn() };
+    worldService = { emitCharacterReload: jest.fn(), emitAdminCharacterDirty: jest.fn() };
     managerSave = jest.fn().mockImplementation((_entity, data) => Promise.resolve(data));
 
     const dataSource = {

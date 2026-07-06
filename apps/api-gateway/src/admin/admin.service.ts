@@ -22,6 +22,10 @@ import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
 import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator, CharacterStats } from '../characters/character-stats-calculator';
+import { resolveEffectiveAttackRangeWU } from '../characters/attack-range.helper';
+import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
+import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
+import { SkillsService } from '../skills/skills.service';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
 import { SkillDefinition } from '../skills/entities/skill-definition.entity';
@@ -40,6 +44,37 @@ export interface AssetNode {
   size?: number;
   mime?: string;
   children?: AssetNode[];
+}
+
+export interface AdminEquipmentEntry {
+  slot: string;
+  itemInstanceId: string | null;
+  itemId: string | null;
+  name: string | null;
+  image: string | null;
+  type: string | null;
+}
+
+export interface AdminCharacterDetails {
+  character: {
+    id: string;
+    name: string;
+    sex: string;
+    level: number;
+    experience: number;
+    health: number;
+    maxHealth: number;
+    unspentStatPoints: number;
+    connected: boolean;
+    worldX: number | null;
+    worldY: number | null;
+    mapId: number | null;
+    stats: CharacterStats;
+    combat: { attackRangeWU: number };
+  };
+  inventory: InventoryEntryDto[];
+  equipment: AdminEquipmentEntry[];
+  skills: Awaited<ReturnType<SkillsService['getCharacterSkills']>>;
 }
 
 interface LootPoolEntryPatch {
@@ -92,6 +127,8 @@ export class AdminService {
     @InjectRepository(Item)
     private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
+    private readonly inventoryProjection: InventoryProjectionService,
+    private readonly skillsService: SkillsService,
   ) {}
 
   // ── Assets — sandbox filesystem ──────────────────────────────────────────
@@ -279,6 +316,64 @@ export class AdminService {
     Object.assign(character, fields);
     const saved = await this.characterRepo.save(character);
     return Object.assign(saved, { stats: CharacterStatsCalculator.compute(saved) });
+  }
+
+  /**
+   * Inspection admin READ-ONLY d'un personnage ciblé (Player Inspector Phase 1).
+   * Snapshot compact délégué aux services existants — aucune mutation, aucun
+   * recalcul côté client. Position live superposée depuis le runtime.
+   */
+  async getCharacterDetails(id: string): Promise<AdminCharacterDetails | null> {
+    const character = await this.characterRepo.findOne({
+      where: { id },
+      relations: ['equipment', 'equipment.item'],
+    });
+    if (!character) return null;
+
+    // Position live (runtime) si connecté, sinon DB (dernière persistée).
+    const live = this.worldService.getConnectedPlayerByCharacterId(character.id);
+    if (live) {
+      character.worldX = live.worldX;
+      character.worldY = live.worldY;
+      character.mapId = live.mapId;
+    }
+
+    const [inventory, skills] = await Promise.all([
+      this.inventoryProjection.project(character.id),
+      this.skillsService.getCharacterSkills(character.id),
+    ]);
+
+    const equipment = (character.equipment ?? []).map((eq) => ({
+      slot: eq.slot,
+      itemInstanceId: eq.itemInstanceId ?? null,
+      itemId: eq.item?.id ?? null,
+      name: eq.item?.name ?? null,
+      image: eq.item?.image ?? null,
+      type: eq.item?.type ?? null,
+    }));
+
+    return {
+      character: {
+        id: character.id,
+        name: character.name,
+        sex: character.sex,
+        level: character.level,
+        experience: character.experience,
+        health: character.health,
+        maxHealth: character.maxHealth,
+        unspentStatPoints: character.unspentStatPoints,
+        connected: !!live,
+        worldX: character.worldX,
+        worldY: character.worldY,
+        mapId: character.mapId,
+        // stats.base = stats de base ; stats.derived = calculées serveur (lecture seule).
+        stats: CharacterStatsCalculator.compute(character),
+        combat: { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) },
+      },
+      inventory,
+      equipment,
+      skills,
+    };
   }
 
   // ── Templates de ressources ───────────────────────────────────────────────

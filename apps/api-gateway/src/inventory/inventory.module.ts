@@ -18,11 +18,13 @@ import { Item } from '../items/entities/item.entity';
 import { InventoryProjectionService } from './projection/inventory-projection.service';
 import { InventoryEntryResolverService } from './resolution/inventory-entry-resolver.service';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
+import { WorldModule } from '../world/world.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Inventory, Character, Item, ItemInstance, CharacterEquipment]),
     ItemTransferModule,
+    WorldModule,
   ],
   providers: [InventoryService, InventoryProjectionService, InventoryEntryResolverService],
   controllers: [InventoryController],

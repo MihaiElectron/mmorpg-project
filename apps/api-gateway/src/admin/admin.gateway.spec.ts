@@ -15,6 +15,7 @@ function makeClient(data: Record<string, unknown> = {}): WorldSocket {
     data,
     disconnect: jest.fn(),
     emit: jest.fn(),
+    join: jest.fn(),
   } as unknown as WorldSocket;
 }
 
@@ -73,6 +74,20 @@ describe('AdminGateway — handleConnection', () => {
 
     expect(client.disconnect).not.toHaveBeenCalled();
     expect(client.data.role).toBe('user');
+  });
+
+  it('un admin rejoint la room admin (jointure serveur)', async () => {
+    const wsAuth = { authenticate: jest.fn().mockResolvedValue({ userId: 'u-1', role: 'admin' }) };
+    const client = makeClient();
+    await makeGateway(wsAuth).handleConnection(client);
+    expect(client.join).toHaveBeenCalledWith('admin');
+  });
+
+  it("un non-admin ne rejoint PAS la room admin", async () => {
+    const wsAuth = { authenticate: jest.fn().mockResolvedValue({ userId: 'u-2', role: 'user' }) };
+    const client = makeClient();
+    await makeGateway(wsAuth).handleConnection(client);
+    expect(client.join).not.toHaveBeenCalled();
   });
 
   it('le rôle vient du JWT serveur, pas de client.data pré-existant', async () => {
@@ -173,7 +188,7 @@ function makeAddBalanceGateway(overrides: {
 
   const gw = new AdminGateway(
     {} as unknown as CreaturesService,
-    { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null) } as unknown as WorldService,
+    { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null), emitAdminCharacterDirty: jest.fn() } as unknown as WorldService,
     adminServiceMock as unknown as AdminService,
     {} as unknown as ResourcesService,
     {} as unknown as import('../buildings/buildings.service').BuildingsService,
@@ -516,7 +531,7 @@ function makeUpdateCharacterGateway() {
       ...fields,
     })),
   };
-  const worldService = { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null) };
+  const worldService = { getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null), emitAdminCharacterDirty: jest.fn() };
 
   const gw = new AdminGateway(
     {} as unknown as CreaturesService,

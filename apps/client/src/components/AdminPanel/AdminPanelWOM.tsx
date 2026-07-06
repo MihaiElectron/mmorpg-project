@@ -24,6 +24,7 @@ import {
   EntitySection,
 } from "./adminPanel.shared";
 import RecipesSection from "./RecipesSection";
+import AdminCharacterPanel from "./AdminCharacterPanel";
 import {
   PLAYER_PROGRESSION_FIELDS,
   PLAYER_PRIMARY_STAT_FIELDS,
@@ -1048,6 +1049,9 @@ function PlayerSection({ players, items, onResult }: { players: any[]; items: Ca
 
                       {/* ── Inventaire ── */}
                       <PlayerInventoryPanel characterId={dk} items={items} onResult={onResult} />
+
+                      {/* ── Miroir personnage read-only (Phase 1bis-A) ── */}
+                      <AdminCharacterPanel characterId={dk} />
 
                       {/* ── Debug runtime ── */}
                       <PlayerDebugRuntimePanel />

@@ -26,6 +26,8 @@ import { EconomyModule } from '../economy/economy.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 import { ItemModule } from '../items/item.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
+import { InventoryModule } from '../inventory/inventory.module';
+import { SkillsModule } from '../skills/skills.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
     ItemMaterializationModule,
     ItemModule,
     ItemTransferModule,
+    InventoryModule,
+    SkillsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

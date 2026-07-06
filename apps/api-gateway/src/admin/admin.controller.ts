@@ -77,6 +77,13 @@ export class AdminController {
   @Get('characters')
   getCharacters() { return this.adminService.getCharacters(); }
 
+  @Get('characters/:id/details')
+  async getCharacterDetails(@Param('id') id: string) {
+    const details = await this.adminService.getCharacterDetails(id);
+    if (!details) throw new NotFoundException(`Personnage "${id}" introuvable.`);
+    return details;
+  }
+
   @Patch('characters/:id')
   async updateCharacter(@Param('id') id: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateCharacter(id, fields);

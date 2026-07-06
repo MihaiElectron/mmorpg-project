@@ -17,6 +17,8 @@ import { CraftingStationTemplate } from '../crafting/entities/crafting-station-t
 import { CraftingStation } from '../crafting/entities/crafting-station.entity';
 import { Item } from '../items/entities/item.entity';
 import { WorldService } from '../world/world.service';
+import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
+import { SkillsService } from '../skills/skills.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
 
@@ -90,6 +92,8 @@ describe('AdminService resources', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -192,6 +196,40 @@ describe('AdminService resources', () => {
   it('updateCharacter retourne null si le personnage est introuvable', async () => {
     characterRepo.findOne.mockResolvedValue(null);
     const result = await service.updateCharacter('absent', { level: 5 });
+    expect(result).toBeNull();
+  });
+
+  // ── getCharacterDetails (Player Inspector read-only) ──────────────────────────
+
+  it('getCharacterDetails retourne un snapshot inventaire/équipement/skills/stats', async () => {
+    characterRepo.findOne.mockResolvedValue(
+      makeCharacterRow({
+        equipment: [
+          { slot: 'right-hand', itemInstanceId: 'inst-1', item: { id: 'sword', name: 'Épée', image: null, type: 'weapon' } },
+        ],
+      }),
+    );
+
+    const result = await service.getCharacterDetails('char-1');
+
+    expect(result).not.toBeNull();
+    expect(result!.character.id).toBe('char-1');
+    expect(result!.character.connected).toBe(false); // worldService mock → non connecté
+    // stats dérivées calculées serveur (lecture seule)
+    expect(result!.character.stats.derived.physicalAttack).toBe(22); // attack 12 + strength(5)*2
+    expect(typeof result!.character.combat.attackRangeWU).toBe('number');
+    // équipement mappé compact par slot
+    expect(result!.equipment).toEqual([
+      { slot: 'right-hand', itemInstanceId: 'inst-1', itemId: 'sword', name: 'Épée', image: null, type: 'weapon' },
+    ]);
+    // inventaire/skills via services délégués (mocks → tableaux vides)
+    expect(result!.inventory).toEqual([]);
+    expect(result!.skills).toEqual([]);
+  });
+
+  it('getCharacterDetails retourne null si le personnage est introuvable', async () => {
+    characterRepo.findOne.mockResolvedValue(null);
+    const result = await service.getCharacterDetails('absent');
     expect(result).toBeNull();
   });
 
@@ -492,6 +530,8 @@ describe('AdminService — createSkillDefinition', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -594,6 +634,8 @@ describe('AdminService — updateSkillDefinition', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -666,6 +708,8 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
   return Test.createTestingModule({
     providers: [
       AdminService,
+      { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+      { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1011,6 +1055,8 @@ describe('createCreatureTemplate', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1089,6 +1135,8 @@ describe('createResourceTemplate', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
