@@ -31,9 +31,6 @@ function makeInstanceEntry(overrides = {}) {
 }
 
 describe("character.store — equipItem", () => {
-  let get;
-  let set;
-
   beforeEach(() => {
     vi.resetAllMocks();
     localStorageMock.getItem.mockReturnValue("test-token");

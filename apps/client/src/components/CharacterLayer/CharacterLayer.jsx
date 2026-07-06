@@ -87,7 +87,7 @@ export default function CharacterLayer() {
     }
   }
 
-  function handleSlotDrop(event, targetSlot) {
+  function handleSlotDrop(event) {
     event.preventDefault();
     event.stopPropagation();
     setDragOverSlot(null);
@@ -137,7 +137,7 @@ export default function CharacterLayer() {
               onDragEnd={item ? handleDragEndFromSlot : undefined}
               onDragOver={(e) => handleSlotDragOver(e, slot)}
               onDragLeave={handleSlotDragLeave}
-              onDrop={(e) => handleSlotDrop(e, slot)}
+              onDrop={(e) => handleSlotDrop(e)}
               onDoubleClick={() => handleUnequip(slot)}
               title={item ? `Double-clic pour déséquiper ${item.name}` : `Slot ${slot} vide`}
             >
