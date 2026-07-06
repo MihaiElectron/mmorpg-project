@@ -21,6 +21,11 @@ import {
   chebyshevDistanceWU,
 } from "../utils/worldCoordinates";
 import { getAutoAttackRangeDecision } from "../combat/autoAttackDecision";
+import {
+  formatFloatingCombatText,
+  resolveFloatingColor,
+  showFloatingCombatText,
+} from "../combat/floatingText";
 import { estimateStationReach } from "../../components/ActionPanel/craftingRuntime";
 import Pathfinder from "../utils/pathfinding";
 import {
@@ -1140,6 +1145,45 @@ export default class WorldScene extends Phaser.Scene {
       if (!this.playerHpBar && this.player) {
         this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
       }
+    });
+
+    // combat:event = feedback visuel V1 uniquement (dégâts flottants / "Mort").
+    // Ne modifie PAS les HP : ceux-ci restent gérés par creature_update /
+    // character_damaged. Le client n'affiche que ce que le serveur émet.
+    this.socket.on("combat:event", (event) => {
+      const text = formatFloatingCombatText(event);
+      if (!text) return;
+
+      // Ancre = sprite vivant de la cible → le texte suit l'entité mobile.
+      // Fallback = position monde de l'event (entité absente/morte).
+      let anchor = null;
+      if (event.targetType === "player") {
+        const localId = getCharacterStore().getState().character?.id;
+        anchor = event.targetId === localId
+          ? this.player
+          : this.remotePlayers.get(event.targetId)?.sprite ?? null;
+      } else if (event.targetType === "creature") {
+        anchor = this.creatureSprites.get(event.targetId)?.sprite ?? null;
+      }
+
+      // Position de repli en coordonnées écran.
+      let fallback = null;
+      if (anchor && typeof anchor.x === "number") {
+        fallback = { x: anchor.x, y: anchor.y };
+      } else if (typeof event.worldX === "number" && typeof event.worldY === "number") {
+        fallback = worldWUToScreen(event.worldX, event.worldY);
+      } else {
+        return;
+      }
+
+      showFloatingCombatText(this, {
+        text,
+        anchor,
+        fallbackX: fallback.x,
+        fallbackY: fallback.y,
+        offsetY: -40, // au-dessus de l'entité
+        color: resolveFloatingColor(event),
+      });
     });
 
     this.socket.on("character_teleport", (data) => {
@@ -2280,6 +2324,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("gather_tick");
       this.socket.off("gather_stopped");
       this.socket.off("creature_update");
+      this.socket.off("combat:event");
       this.socket.off("crafting_station_update");
       this.socket.off("building_update");
       this.socket.off("current_players");

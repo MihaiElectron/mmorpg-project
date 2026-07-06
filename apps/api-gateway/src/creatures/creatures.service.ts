@@ -380,15 +380,18 @@ export class CreaturesService implements OnModuleInit {
           health: newHealth,
         });
         // Combat Event V1 : auto-attaque créature → joueur (room map).
-        server.to(getMapRoomId(char.mapId ?? DEFAULT_MAP_ID)).emit(COMBAT_EVENT, makeCombatEvent({
+        // Position = état runtime live du joueur (`target`), jamais la ligne DB
+        // (`char`) qui est la position persistée (respawn / dernière sauvegarde).
+        const targetMapId = target.mapId ?? char.mapId ?? DEFAULT_MAP_ID;
+        server.to(getMapRoomId(targetMapId)).emit(COMBAT_EVENT, makeCombatEvent({
           type: 'damage',
           amount: dmg,
           sourceType: 'creature',
           sourceId: creature.id,
           targetType: 'player',
           targetId: char.id,
-          worldX: char.worldX ?? 0,
-          worldY: char.worldY ?? 0,
+          worldX: target.worldX ?? char.worldX ?? 0,
+          worldY: target.worldY ?? char.worldY ?? 0,
           text: `-${dmg}`,
         }));
         if (newHealth === 0) {

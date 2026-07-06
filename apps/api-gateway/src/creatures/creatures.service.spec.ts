@@ -1462,6 +1462,37 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(state.targetCharacterId).toBe("char-1");
     });
 
+    it("auto-attack → combat:event utilise la position RUNTIME du joueur, pas la DB (respawn/stale)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      const state = {
+        dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0,
+        targetCharacterId: "char-1",
+      };
+      // Position runtime live du joueur = même case que la créature.
+      const player = makePlayer(6080, 12480);
+      // Position DB (persistée = respawn) volontairement différente.
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0, worldX: 999, worldY: 888, mapId: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const emits: { event: string; payload: any }[] = [];
+      const mockServer = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, state, makeTemplate(), [player], Date.now(), mockServer);
+
+      const combatEvents = emits.filter((e) => e.event === "combat:event");
+      expect(combatEvents).toHaveLength(1);
+      expect(combatEvents[0].payload).toMatchObject({
+        type: "damage",
+        targetType: "player",
+        targetId: "char-1",
+        worldX: 6080, // position runtime (target), pas 999 (DB)
+        worldY: 12480,
+      });
+      // Ancien event conservé
+      expect(emits.some((e) => e.event === "character_damaged")).toBe(true);
+    });
+
     it("auto-attack tue le joueur → état alive, targetCharacterId undefined, respawnCharacter appelé", async () => {
       // creature et joueur au même point → dist=0 ≤ MELEE_RANGE_WU → auto-attack
       // char defense=0, template baseAttack=5 → dmg=5 > char.health=1 → kill
