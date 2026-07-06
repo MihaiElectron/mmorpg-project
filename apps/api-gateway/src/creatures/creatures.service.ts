@@ -8,6 +8,7 @@ import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
+import { calculateCombatDamage } from './combat-damage.calculator';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
@@ -528,10 +529,16 @@ export class CreaturesService implements OnModuleInit {
     // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
     // agilité / dextérité NON branchés en combat V1 (affichage seul).
     const charStats = CharacterStatsCalculator.compute(character);
-    const attack = Math.max(charStats.derived.physicalAttack, 5);
-    const damage = Math.max(attack - derived.defenseTotal, 1);
+    const damageResult = calculateCombatDamage({
+      attackerValue: charStats.derived.physicalAttack,
+      targetDefense: derived.defenseTotal,
+      minimumAttack: 5,
+      minimumDamage: 1,
+      hpBefore: creature.health,
+    });
+    const damage = damageResult.finalDamage;
 
-    creature.health = Math.max(creature.health - damage, 0);
+    creature.health = damageResult.hpAfter;
     if (creature.health === 0) {
       creature.state = 'dead';
       this.patrolStates.delete(creature.id);
@@ -592,8 +599,16 @@ export class CreaturesService implements OnModuleInit {
 
     let riposte: { damage: number; characterHealth: number } | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
-      const riposteDamage = Math.max(derived.attackPower - charStats.derived.defense, 1);
-      const characterHealth = Math.max(character.health - riposteDamage, 0);
+      // Riposte : aucun plancher d'attaque (minimumAttack = 0), plancher dégâts 1.
+      const riposteResult = calculateCombatDamage({
+        attackerValue: derived.attackPower,
+        targetDefense: charStats.derived.defense,
+        minimumAttack: 0,
+        minimumDamage: 1,
+        hpBefore: character.health,
+      });
+      const riposteDamage = riposteResult.finalDamage;
+      const characterHealth = riposteResult.hpAfter;
       await this.characterRepository.update(characterId, { health: characterHealth });
       riposte = { damage: riposteDamage, characterHealth };
       if (characterHealth === 0 && this.server) {
