@@ -7,6 +7,7 @@ import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
@@ -24,13 +25,9 @@ import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 
-// Portée mêlée par défaut pour attack() en WU (distance Chebyshev).
-// 1280 WU = 1,25 tuile (TILE_SIZE_WU = 1024) : couvre un attaquant sur une tuile
-// adjacente (1024 WU en Chebyshev) avec une marge de synchronisation. Le serveur
-// reste la seule autorité de distance ; ne jamais faire confiance au client.
-const MELEE_RANGE_WU = 1280;
-
-const RANGED_RANGE_DEFAULT = 300;
+// Portée mêlée par défaut en WU (distance Chebyshev) — source unique dans le
+// helper partagé avec la projection /characters/me. Encore utilisée ici pour
+// les décisions IA (poursuite, riposte).
 const ATTACK_COOLDOWN_MS = 700;
 const AUTO_ATTACK_COOLDOWN_MS = 1500;
 const PATROL_TICK_MS = 200;
@@ -647,43 +644,10 @@ export class CreaturesService implements OnModuleInit {
     };
   }
 
-  /**
-   * Portée effective d'une arme en WU, avec fallback sécurisé.
-   * Une portée non finie / null / <= 0 (donnée mal configurée en DevTools ou DB)
-   * ne doit JAMAIS produire une portée effective 0 ou négative : on retombe sur
-   * le défaut métier. Le serveur reste la seule autorité de distance.
-   */
-  private static safeWeaponRangeWU(rawRange: number | null | undefined, defaultWU: number): number {
-    if (typeof rawRange === 'number' && Number.isFinite(rawRange) && rawRange > 0) {
-      return legacyRadiusToWU(rawRange);
-    }
-    return defaultWU;
-  }
-
+  // Portée effective : déléguée au helper serveur unique (partagé avec la
+  // projection /characters/me). Aucune règle de portée dupliquée ici.
   private resolveAttackRange(character: Character): number {
-    const equipment = character.equipment ?? [];
-
-    const ranged = equipment.find(
-      (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
-    );
-    if (ranged) {
-      return CreaturesService.safeWeaponRangeWU(
-        ranged.item.range,
-        legacyRadiusToWU(RANGED_RANGE_DEFAULT),
-      );
-    }
-
-    const melee = equipment.find(
-      (eq) =>
-        ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
-          (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
-        eq.item?.type === 'weapon',
-    );
-    // Fallback mêlée = MELEE_RANGE_WU (1280 WU = 1,25 tuile), jamais le legacy
-    // 60 px (960 WU) qui serait plus court qu'une tuile.
-    if (melee) return CreaturesService.safeWeaponRangeWU(melee.item.range, MELEE_RANGE_WU);
-
-    return MELEE_RANGE_WU;
+    return resolveEffectiveAttackRangeWU(character.equipment);
   }
 
   // -------------------------------------------------------------------------

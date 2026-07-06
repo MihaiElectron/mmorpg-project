@@ -143,6 +143,26 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
     expect(result.stats.derived.physicalAttack).toBe(22);
     expect(result.stats.derived.criticalChance).toBe(3);
   });
+
+  it('expose combat.attackRangeWU = 1280 sans arme équipée', async () => {
+    characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment: [] }));
+    const result = (await service.findFirstByUserProjected('user-1')) as any;
+    expect(result.combat).toEqual({ attackRangeWU: 1280 });
+  });
+
+  it('expose combat.attackRangeWU = 1280 pour une arme de mêlée range 80', async () => {
+    const equipment = [{ slot: 'right-hand', item: { type: 'weapon', range: 80 } }];
+    characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment }));
+    const result = (await service.findFirstByUserProjected('user-1')) as any;
+    expect(result.combat.attackRangeWU).toBe(1280); // 80 × 16
+  });
+
+  it('expose combat.attackRangeWU = 4800 pour une arme à distance range 300', async () => {
+    const equipment = [{ slot: 'ranged-weapon', item: { type: 'weapon', range: 300 } }];
+    characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment }));
+    const result = (await service.findFirstByUserProjected('user-1')) as any;
+    expect(result.combat.attackRangeWU).toBe(4800); // 300 × 16
+  });
 });
 
 describe('CharacterService.allocateStats — allocation de points (Progression V1)', () => {

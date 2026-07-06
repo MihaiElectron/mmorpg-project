@@ -20,6 +20,7 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { CharacterStatsCalculator } from './character-stats-calculator';
+import { resolveEffectiveAttackRangeWU } from './attack-range.helper';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { WorldService } from '../world/world.service';
 
@@ -110,7 +111,10 @@ export class CharacterService {
     const inventory = await this.inventoryProjection.project(character.id);
     const nextLevelXp = await this.progression.getNextLevelXp(character.level);
     const stats = CharacterStatsCalculator.compute(character);
-    return Object.assign(character, { inventory, nextLevelXp, stats });
+    // Bloc combat séparé de stats.derived : portée effective issue de
+    // l'équipement + règles combat (source serveur unique pour l'auto-attaque).
+    const combat = { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) };
+    return Object.assign(character, { inventory, nextLevelXp, stats, combat });
   }
 
   /**
