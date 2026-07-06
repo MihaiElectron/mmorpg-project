@@ -7,10 +7,29 @@ import {
   worldWUToTile,
   worldWUToNavCell,
   navCellToWorldWU,
+  chebyshevDistanceWU,
   NAV_CELL_SIZE_WU,
   NAV_CELLS_PER_TILE,
   TILE_SIZE_WU,
 } from "./worldCoordinates";
+
+describe("chebyshevDistanceWU", () => {
+  it("distance 0 quand les points coïncident", () => {
+    expect(chebyshevDistanceWU({ worldX: 100, worldY: 200 }, { worldX: 100, worldY: 200 })).toBe(0);
+  });
+  it("distance horizontale = |dx|", () => {
+    expect(chebyshevDistanceWU({ worldX: 0, worldY: 0 }, { worldX: 1024, worldY: 0 })).toBe(1024);
+  });
+  it("distance verticale = |dy|", () => {
+    expect(chebyshevDistanceWU({ worldX: 0, worldY: 0 }, { worldX: 0, worldY: 1500 })).toBe(1500);
+  });
+  it("distance diagonale = max(|dx|, |dy|)", () => {
+    expect(chebyshevDistanceWU({ worldX: 0, worldY: 0 }, { worldX: 700, worldY: 1200 })).toBe(1200);
+  });
+  it("gère les coordonnées négatives", () => {
+    expect(chebyshevDistanceWU({ worldX: -500, worldY: 0 }, { worldX: 500, worldY: -300 })).toBe(1000);
+  });
+});
 
 describe("worldCoordinates", () => {
   it("convertit screen vers WU puis revient au même pixel", () => {

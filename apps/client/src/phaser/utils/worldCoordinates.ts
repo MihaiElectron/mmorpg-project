@@ -35,6 +35,15 @@ export function screenToWorldWU(
   };
 }
 
+/**
+ * Distance Chebyshev (L∞) entre deux points WU — MÊME métrique que le serveur
+ * (`chebyshevDistanceWU` backend). Utilisée pour la décision d'auto-attaque afin
+ * de coller à la validation serveur (portée en WU, pas en pixels écran).
+ */
+export function chebyshevDistanceWU(a: WorldWUPoint, b: WorldWUPoint): number {
+  return Math.max(Math.abs(a.worldX - b.worldX), Math.abs(a.worldY - b.worldY));
+}
+
 export function worldWUToTile(worldX: number, worldY: number): TilePoint {
   return {
     tileX: worldX >> TILE_SHIFT,

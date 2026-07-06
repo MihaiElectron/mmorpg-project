@@ -18,7 +18,9 @@ import {
   worldWUToChunk,
   worldWUToScreen,
   worldWUToTile,
+  chebyshevDistanceWU,
 } from "../utils/worldCoordinates";
+import { getAutoAttackRangeDecision } from "../combat/autoAttackDecision";
 import { estimateStationReach } from "../../components/ActionPanel/craftingRuntime";
 import Pathfinder from "../utils/pathfinding";
 import {
@@ -423,22 +425,30 @@ export default class WorldScene extends Phaser.Scene {
       const entry = this.creatureSprites.get(targetId);
       if (!entry) return;
 
-      const creatureScreen = worldWUToScreen(entry.creature.worldX, entry.creature.worldY);
-      const dist = Math.hypot(
-        creatureScreen.x - this.player.x,
-        creatureScreen.y - this.player.y,
-      );
+      // Décision en WU (métrique serveur), portée effective relue à chaque tick
+      // pour refléter un changement d'arme (equip/unequip → character:reload).
+      const playerWU = screenToWorldWU(this.player.x, this.player.y);
+      const creatureWU = { worldX: entry.creature.worldX, worldY: entry.creature.worldY };
+      const distanceWU = chebyshevDistanceWU(playerWU, creatureWU);
+      const attackRangeWU = character.combat?.attackRangeWU;
+      const { canAttack, shouldChase } = getAutoAttackRangeDecision({ distanceWU, attackRangeWU });
 
-      // Poursuite continue : replanifier vers la position actuelle de la créature
-      if (dist > 60 && this.controller) {
+      if (shouldChase && this.controller) {
+        // Hors portée → avancer vers la cible, ne pas frapper.
+        const creatureScreen = worldWUToScreen(entry.creature.worldX, entry.creature.worldY);
         this.controller.moveTo(creatureScreen.x, creatureScreen.y);
+      } else if (this.controller) {
+        // À portée → stopper le déplacement automatique (ne pas coller la cible).
+        this.controller.cancelMouseMove();
       }
 
-      // Attaque toutes les 750 ms (le serveur vérifie aussi le cooldown)
-      const now = Date.now();
-      if (now - lastAttackEmitAt >= ATTACK_INTERVAL_MS) {
-        lastAttackEmitAt = now;
-        this.socket.emit("attack_creature", { targetId, characterId: character.id });
+      // Attaque toutes les 750 ms, uniquement si à portée (le serveur revalide).
+      if (canAttack) {
+        const now = Date.now();
+        if (now - lastAttackEmitAt >= ATTACK_INTERVAL_MS) {
+          lastAttackEmitAt = now;
+          this.socket.emit("attack_creature", { targetId, characterId: character.id });
+        }
       }
     };
 
