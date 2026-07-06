@@ -9,6 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
 import { calculateCombatDamage } from './combat-damage.calculator';
+import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
@@ -378,6 +379,18 @@ export class CreaturesService implements OnModuleInit {
           damage: dmg,
           health: newHealth,
         });
+        // Combat Event V1 : auto-attaque créature → joueur (room map).
+        server.to(getMapRoomId(char.mapId ?? DEFAULT_MAP_ID)).emit(COMBAT_EVENT, makeCombatEvent({
+          type: 'damage',
+          amount: dmg,
+          sourceType: 'creature',
+          sourceId: creature.id,
+          targetType: 'player',
+          targetId: char.id,
+          worldX: char.worldX ?? 0,
+          worldY: char.worldY ?? 0,
+          text: `-${dmg}`,
+        }));
         if (newHealth === 0) {
           await this.worldService.respawnCharacter(char.id, server);
           // Cible tuée → abandon immédiat (évite de chasser le joueur respawné)

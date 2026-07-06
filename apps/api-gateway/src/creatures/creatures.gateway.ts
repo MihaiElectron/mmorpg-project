@@ -18,6 +18,7 @@ import { ItemInstanceSource } from '../item-instances/enums/item-instance-source
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
+import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 
 @WebSocketGateway({ cors: { origin: CLIENT_ORIGIN } })
 export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
@@ -78,6 +79,33 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
 
     client.emit('creature_hit', { ...result.dto, damage: result.damage, attackerId: result.attackerId });
     this.server.to(getMapRoomId(result.dto.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', result.dto);
+
+    // Combat Event V1 (room-scoped) — ajouté en parallèle des events existants.
+    const creatureRoom = getMapRoomId(result.dto.mapId ?? DEFAULT_MAP_ID);
+    this.server.to(creatureRoom).emit(COMBAT_EVENT, makeCombatEvent({
+      type: 'damage',
+      amount: result.damage,
+      sourceType: 'player',
+      sourceId: result.attackerId,
+      targetType: 'creature',
+      targetId: result.dto.id,
+      worldX: result.dto.worldX ?? 0,
+      worldY: result.dto.worldY ?? 0,
+      text: `-${result.damage}`,
+    }));
+    if (result.dto.state === 'dead') {
+      this.server.to(creatureRoom).emit(COMBAT_EVENT, makeCombatEvent({
+        type: 'death',
+        sourceType: 'player',
+        sourceId: result.attackerId,
+        targetType: 'creature',
+        targetId: result.dto.id,
+        worldX: result.dto.worldX ?? 0,
+        worldY: result.dto.worldY ?? 0,
+        text: 'Mort',
+      }));
+    }
+
     if (result.characterXpUpdate) {
       client.emit('character_xp_update', result.characterXpUpdate);
     }
@@ -91,6 +119,18 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
         damage: result.riposte.damage,
         health: result.riposte.characterHealth,
       });
+      // Combat Event V1 : riposte créature → joueur (position = joueur touché).
+      this.server.to(getMapRoomId(player.mapId ?? DEFAULT_MAP_ID)).emit(COMBAT_EVENT, makeCombatEvent({
+        type: 'damage',
+        amount: result.riposte.damage,
+        sourceType: 'creature',
+        sourceId: payload.targetId,
+        targetType: 'player',
+        targetId: player.characterId,
+        worldX: player.worldX ?? 0,
+        worldY: player.worldY ?? 0,
+        text: `-${result.riposte.damage}`,
+      }));
     }
 
     if (result.loot && result.loot.length > 0) {
