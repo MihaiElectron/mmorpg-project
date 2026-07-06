@@ -2,10 +2,7 @@
 
 .chat-log {
   position: fixed;
-  left: 12px;
-  bottom: 12px;
-  width: 340px;
-  max-width: 40vw;
+  // La géométrie (left/top/width/height) est pilotée en JS (drag/resize).
   background: vars.$panel-header-bg;
   border: 1px solid vars.$panel-border;
   border-radius: vars.$panel-radius;
@@ -14,12 +11,9 @@
   flex-direction: column;
   z-index: 40;
   backdrop-filter: blur(2px);
+  user-select: none;
 
-  &--collapsed {
-    width: auto;
-  }
-
-  // ── En-tête / onglets ───────────────────────────────────────────────────────
+  // ── En-tête / onglets (zone de déplacement) ─────────────────────────────────
 
   &__header {
     display: flex;
@@ -28,6 +22,7 @@
     gap: 8px;
     padding: 4px 6px;
     border-bottom: 1px solid vars.$panel-border-subtle;
+    cursor: move;
   }
 
   &__tabs {
@@ -73,7 +68,8 @@
 
   &__body {
     padding: 6px 8px;
-    height: 160px;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -126,5 +122,26 @@
       cursor: not-allowed;
       opacity: 0.6;
     }
+  }
+
+  // ── Poignées de redimensionnement (4 côtés + 4 coins) ───────────────────────
+
+  &__resize {
+    position: absolute;
+    z-index: 1;
+    $edge: 6px;   // épaisseur des côtés
+    $corner: 12px; // taille des coins
+
+    // Côtés
+    &--n { top: -($edge * 0.5); left: $corner; right: $corner; height: $edge; cursor: ns-resize; }
+    &--s { bottom: -($edge * 0.5); left: $corner; right: $corner; height: $edge; cursor: ns-resize; }
+    &--e { right: -($edge * 0.5); top: $corner; bottom: $corner; width: $edge; cursor: ew-resize; }
+    &--w { left: -($edge * 0.5); top: $corner; bottom: $corner; width: $edge; cursor: ew-resize; }
+
+    // Coins
+    &--ne { top: -($edge * 0.5); right: -($edge * 0.5); width: $corner; height: $corner; cursor: nesw-resize; }
+    &--nw { top: -($edge * 0.5); left: -($edge * 0.5); width: $corner; height: $corner; cursor: nwse-resize; }
+    &--se { bottom: -($edge * 0.5); right: -($edge * 0.5); width: $corner; height: $corner; cursor: nwse-resize; }
+    &--sw { bottom: -($edge * 0.5); left: -($edge * 0.5); width: $corner; height: $corner; cursor: nesw-resize; }
   }
 }
