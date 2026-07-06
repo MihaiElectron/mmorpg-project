@@ -26,7 +26,11 @@ import {
   resolveFloatingColor,
   showFloatingCombatText,
 } from "../combat/floatingText";
-import { formatCombatLogMessage } from "../combat/combatLogMessage";
+import {
+  formatCombatLogMessage,
+  formatCreatureStateTransition,
+  formatLootMessage,
+} from "../combat/combatLogMessage";
 import { getCombatLogStore } from "../../store/combatLog.store";
 import { estimateStationReach } from "../../components/ActionPanel/craftingRuntime";
 import Pathfinder from "../utils/pathfinding";
@@ -1041,6 +1045,12 @@ export default class WorldScene extends Phaser.Scene {
         name: (data.lootItemId || data.itemId).replace("_", " "),
         image: `/assets/images/items/${data.lootItemId || data.itemId}.png`,
       });
+      const lootMsg = formatLootMessage({
+        itemId: data.itemId,
+        lootItemId: data.lootItemId,
+        quantity: data.quantity,
+      });
+      if (lootMsg) getCombatLogStore().getState().pushLog({ category: "loot", message: lootMsg });
     });
 
     this.socket.on("resource_loot", (data) => {
@@ -1057,6 +1067,13 @@ export default class WorldScene extends Phaser.Scene {
         name: itemName,
         image: itemImage,
       });
+      const lootMsg = formatLootMessage({
+        itemId,
+        lootItemId: data.lootItemId,
+        name: item.name,
+        quantity: data.quantity,
+      });
+      if (lootMsg) getCombatLogStore().getState().pushLog({ category: "loot", message: lootMsg });
     });
 
     this.socket.on("resource_update", (data) => {
@@ -1078,6 +1095,19 @@ export default class WorldScene extends Phaser.Scene {
     });
 
     this.socket.on("creature_update", (creature) => {
+      // Journal : uniquement sur TRANSITION d'état (jamais sur update de position).
+      // L'état précédent est lu AVANT upsertCreature (qui l'écrase).
+      const prevEntry = this.creatureSprites.get(creature.id);
+      const prevState = prevEntry?.creature?.state;
+      const nextState = creature.state;
+      if (prevState && nextState && prevState !== nextState) {
+        const name = (prevEntry?.creature?.type) ?? creature.type ?? null;
+        const transitionMsg = formatCreatureStateTransition(prevState, nextState, name);
+        if (transitionMsg) {
+          getCombatLogStore().getState().pushLog({ category: "event", message: transitionMsg });
+        }
+      }
+
       if (creature.state === "dead") {
         this.removeCreature(creature.id);
         if (this.autoAttackTargetId === creature.id) {

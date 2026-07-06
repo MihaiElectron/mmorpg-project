@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCombatLogStore } from "../../store/combatLog.store";
 import { useDraggableResizable } from "./useDraggableResizable";
+import { formatClock } from "../../phaser/combat/timeFormat";
 
 const TABS = [
   { id: "combat", label: "Combat" },
@@ -29,11 +30,12 @@ function initialRect() {
   return { x: 12, y: Math.max(12, vh - height - 12), width: Math.min(width, vw), height };
 }
 
-function CombatTab() {
+// Liste de logs filtrée par catégories, avec horodatage local HH:mm:ss.
+function LogList({ categories, emptyText }) {
   const entries = useCombatLogStore((s) => s.entries);
-  const combatEntries = useMemo(
-    () => entries.filter((e) => e.category === "combat"),
-    [entries],
+  const filtered = useMemo(
+    () => entries.filter((e) => categories.includes(e.category)),
+    [entries, categories],
   );
   const listRef = useRef(null);
 
@@ -41,22 +43,26 @@ function CombatTab() {
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [combatEntries.length]);
+  }, [filtered.length]);
 
-  if (combatEntries.length === 0) {
-    return <p className="chat-log__empty">Aucun combat pour le moment.</p>;
+  if (filtered.length === 0) {
+    return <p className="chat-log__empty">{emptyText}</p>;
   }
 
   return (
     <ul className="chat-log__list" ref={listRef}>
-      {combatEntries.map((entry) => (
+      {filtered.map((entry) => (
         <li key={entry.id} className="chat-log__line">
-          {entry.message}
+          <span className="chat-log__time">{formatClock(entry.createdAt)}</span>
+          <span className="chat-log__message">{entry.message}</span>
         </li>
       ))}
     </ul>
   );
 }
+
+const COMBAT_CATEGORIES = ["combat"];
+const EVENT_CATEGORIES = ["event", "loot"];
 
 function PlaceholderTab({ text }) {
   return <p className="chat-log__empty">{text}</p>;
@@ -121,9 +127,11 @@ export default function ChatLogWindow() {
 
       {open && (
         <div className="chat-log__body">
-          {activeTab === "combat" && <CombatTab />}
+          {activeTab === "combat" && (
+            <LogList categories={COMBAT_CATEGORIES} emptyText="Aucun combat pour le moment." />
+          )}
           {activeTab === "events" && (
-            <PlaceholderTab text="Aucun événement pour le moment." />
+            <LogList categories={EVENT_CATEGORIES} emptyText="Aucun événement pour le moment." />
           )}
           {activeTab === "chat" && <ChatTab />}
           {activeTab === "guild" && (

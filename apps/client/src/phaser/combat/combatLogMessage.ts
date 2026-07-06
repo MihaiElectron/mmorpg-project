@@ -76,3 +76,56 @@ export function formatCombatLogMessage(
 
   return null;
 }
+
+/**
+ * Message lisible d'une transition d'état de créature (catégorie "event").
+ * N'est appelé QUE lorsqu'un changement d'état réel est détecté côté client
+ * (jamais sur un update de position). Retourne null si la mort est déjà couverte
+ * par `combat:event death` (on ne logge pas deux fois la mort).
+ */
+export function formatCreatureStateTransition(
+  prevState: string | undefined,
+  nextState: string | undefined,
+  creatureName?: string | null,
+): string | null {
+  if (!prevState || !nextState || prevState === nextState) return null;
+
+  const name = creatureName && creatureName.length > 0 ? creatureName : "la créature";
+
+  // La mort est déjà journalisée via combat:event (type "death").
+  if (nextState === "dead") return null;
+
+  if (prevState === "alive" && nextState === "fighting") return `${name} engage le combat`;
+  if (prevState === "fighting" && nextState === "escaping") return `${name} s'enfuit`;
+  if (prevState === "escaping" && nextState === "alive") return `${name} abandonne et retourne à sa zone`;
+  if (prevState === "fighting" && nextState === "alive") return `${name} abandonne le combat`;
+
+  return `${name} change d'état : ${prevState} → ${nextState}`;
+}
+
+export interface LootLogPayload {
+  itemId?: string;
+  lootItemId?: string;
+  name?: string;
+  quantity?: number;
+}
+
+/**
+ * Message lisible d'un loot reçu par le joueur (catégorie "loot").
+ * N'utilise QUE les infos présentes dans l'event serveur ; n'invente rien.
+ */
+export function formatLootMessage(payload: LootLogPayload | null | undefined): string | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const rawName = payload.name || payload.lootItemId || payload.itemId || null;
+  const name = rawName ? rawName.replace(/_/g, " ") : null;
+
+  const hasQty =
+    typeof payload.quantity === "number" && Number.isFinite(payload.quantity) && payload.quantity > 0;
+
+  // Ne jamais inventer un montant : sans quantité valide, on n'affiche pas "1 ×".
+  if (hasQty) {
+    return `Vous obtenez ${Math.floor(payload.quantity as number)} × ${name ?? "objet"}`;
+  }
+  return name ? `Vous obtenez ${name}` : "Vous obtenez un objet";
+}
