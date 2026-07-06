@@ -10,16 +10,24 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Post()
-  addItem(@Body() dto: CreateInventoryDto) {
-    return this.inventoryService.addItem(dto);
+  addItem(
+    @Body() dto: CreateInventoryDto,
+    @Request() req: { user: { userId: string } },
+  ) {
+    return this.inventoryService.addItem(dto, req.user.userId);
   }
 
   @Post(':characterId/equip/:itemId')
   equipItem(
     @Param('characterId') characterId: string,
     @Param('itemId') itemId: string,
+    @Request() req: { user: { userId: string } },
   ) {
-    return this.inventoryService.equipItem(characterId, itemId);
+    return this.inventoryService.equipItem(
+      characterId,
+      itemId,
+      req.user.userId,
+    );
   }
 
   @Post(':characterId/equip-instance/:instanceId')
@@ -35,8 +43,13 @@ export class InventoryController {
   unequipItem(
     @Param('characterId') characterId: string,
     @Param('slot') slot: string,
+    @Request() req: { user: { userId: string } },
   ) {
-    return this.inventoryService.unequipItem(characterId, slot);
+    return this.inventoryService.unequipItem(
+      characterId,
+      slot,
+      req.user.userId,
+    );
   }
 
   @Patch(':characterId/slots')
@@ -49,7 +62,10 @@ export class InventoryController {
   }
 
   @Get(':characterId')
-  getInventory(@Param('characterId') characterId: string) {
-    return this.inventoryService.getInventory(characterId);
+  getInventory(
+    @Param('characterId') characterId: string,
+    @Request() req: { user: { userId: string } },
+  ) {
+    return this.inventoryService.getInventory(characterId, req.user.userId);
   }
 }

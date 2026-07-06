@@ -139,14 +139,32 @@ export class InventoryService {
     return this.inventoryProjection.project(characterId);
   }
 
+  /**
+   * Garde d'ownership commune aux endpoints joueur : le personnage doit
+   * exister et appartenir à l'utilisateur authentifié (JWT). Ne pas utiliser
+   * pour les chemins admin (rôle vérifié en amont par la gateway).
+   */
+  private async assertCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<Character> {
+    const character = await this.characterRepository.findOneBy({
+      id: characterId,
+    });
+    if (!character || character.userId !== userId) {
+      throw new ForbiddenException('Personnage introuvable ou accès refusé.');
+    }
+    return character;
+  }
+
   // ---------------------------------------------------------------------------
   // Ajouter un item dans l'inventaire
   // ---------------------------------------------------------------------------
-  async addItem(dto: CreateInventoryDto): Promise<Inventory> {
-    const character = await this.characterRepository.findOneBy({
-      id: dto.characterId,
-    });
-    if (!character) throw new NotFoundException('Character not found');
+  async addItem(dto: CreateInventoryDto, userId: string): Promise<Inventory> {
+    const character = await this.assertCharacterOwnership(
+      dto.characterId,
+      userId,
+    );
 
     const item = await this.findItemForLoot(dto.itemId);
     if (!item) throw new NotFoundException('Item not found');
@@ -339,7 +357,12 @@ export class InventoryService {
   // Crée une ligne CharacterEquipment (source de vérité).
   // Met aussi à jour Inventory.equipped (transitoire — requis par WorldItemService.findInventoryForUpdate).
   // ---------------------------------------------------------------------------
-  async equipItem(characterId: string, itemId: string): Promise<Inventory> {
+  async equipItem(
+    characterId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<Inventory> {
+    await this.assertCharacterOwnership(characterId, userId);
     const item = await this.itemRepository.findOne({ where: { id: itemId } });
     if (!item) throw new NotFoundException(`Item ${itemId} not found`);
     if (!item.slot) throw new BadRequestException('Item has no slot defined');
@@ -393,7 +416,23 @@ export class InventoryService {
   // — Si CharacterEquipment.itemInstanceId est set : transition AVAILABLE/INVENTORY (chemin INSTANCE).
   // — Sinon : met à jour Inventory.equipped à false (chemin legacy stack).
   // ---------------------------------------------------------------------------
-  async unequipItem(characterId: string, slot: string): Promise<Inventory | ItemInstance> {
+  async unequipItem(
+    characterId: string,
+    slot: string,
+    userId: string,
+  ): Promise<Inventory | ItemInstance> {
+    await this.assertCharacterOwnership(characterId, userId);
+    return this.unequipItemCore(characterId, slot);
+  }
+
+  /**
+   * Cœur du déséquipement, SANS contrôle d'ownership : l'appelant (joueur via
+   * {@link unequipItem}, admin via {@link unequipItemAsAdmin}) l'a déjà fait.
+   */
+  private async unequipItemCore(
+    characterId: string,
+    slot: string,
+  ): Promise<Inventory | ItemInstance> {
     const result = await this.dataSource.transaction(async (manager) => {
       const equipment = await manager.findOne(CharacterEquipment, {
         where: { characterId, slot },
@@ -428,7 +467,7 @@ export class InventoryService {
 
   /**
    * Variante ADMIN du déséquipement : rôle vérifié en amont (gateway).
-   * Réutilise {@link unequipItem} (ItemTransferService + recalculateEquipmentStats).
+   * Réutilise {@link unequipItemCore} (ItemTransferService + recalculateEquipmentStats).
    * Si `targetSlotIndex` est fourni, applique ensuite ce slotIndex à l'item
    * déséquipé via {@link applySlotUpdates} (transactionnel). Retourne la
    * projection fraîche.
@@ -441,7 +480,7 @@ export class InventoryService {
     const character = await this.characterRepository.findOneBy({ id: characterId });
     if (!character) throw new NotFoundException(`Personnage "${characterId}" introuvable.`);
 
-    const result = await this.unequipItem(characterId, slot); // dirty('equipment')
+    const result = await this.unequipItemCore(characterId, slot); // dirty('equipment')
 
     if (targetSlotIndex != null && Number.isInteger(targetSlotIndex) && targetSlotIndex >= 0) {
       const kind = result instanceof ItemInstance ? 'instance' : 'stack';
@@ -456,7 +495,11 @@ export class InventoryService {
   // ---------------------------------------------------------------------------
   // Récupérer l'inventaire complet d'un personnage
   // ---------------------------------------------------------------------------
-  async getInventory(characterId: string): Promise<Inventory[]> {
+  async getInventory(
+    characterId: string,
+    userId: string,
+  ): Promise<Inventory[]> {
+    await this.assertCharacterOwnership(characterId, userId);
     return this.inventoryRepository.find({
       where: { character: { id: characterId } },
       relations: ['item'],

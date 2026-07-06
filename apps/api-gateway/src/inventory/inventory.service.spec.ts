@@ -252,7 +252,7 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
       dataSource,
     });
 
-    const result = await service.equipItem(characterId, weaponItem.id);
+    const result = await service.equipItem(characterId, weaponItem.id, DEFAULT_USER_ID);
 
     expect(manager.save).toHaveBeenCalledWith(CharacterEquipment, expect.objectContaining({ characterId, itemId: weaponItem.id, slot: "weapon" }));
     expect(result.equipped).toBe(true);
@@ -277,7 +277,7 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
       dataSource,
     });
 
-    await service.equipItem(characterId, weaponItem.id);
+    await service.equipItem(characterId, weaponItem.id, DEFAULT_USER_ID);
 
     expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot: "weapon" });
     expect(oldInv.equipped).toBe(false);
@@ -289,7 +289,7 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
       itemRepo: { findOne: jest.fn().mockResolvedValue(noSlotItem), findOneBy: jest.fn() },
     });
 
-    await expect(service.equipItem(characterId, noSlotItem.id)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.equipItem(characterId, noSlotItem.id, DEFAULT_USER_ID)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("refuse si l item n est pas dans l inventaire du personnage", async () => {
@@ -307,7 +307,7 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
       dataSource,
     });
 
-    await expect(service.equipItem(characterId, weaponItem.id)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.equipItem(characterId, weaponItem.id, DEFAULT_USER_ID)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("refuse le chemin legacy pour un item INSTANCE (doit passer par equip-instance)", async () => {
@@ -318,7 +318,7 @@ describe("InventoryService.equipItem — Equipment Runtime V2", () => {
       itemRepo: { findOne: jest.fn().mockResolvedValue(instanceItem), findOneBy: jest.fn() },
     });
 
-    await expect(service.equipItem(characterId, instanceItem.id)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.equipItem(characterId, instanceItem.id, DEFAULT_USER_ID)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
@@ -341,7 +341,7 @@ describe("InventoryService.unequipItem — Equipment Runtime V2", () => {
     const worldService = { emitAdminCharacterDirty: jest.fn() };
     const service = makeEquipService({ dataSource, worldService });
 
-    const result = await service.unequipItem(characterId, slot);
+    const result = await service.unequipItem(characterId, slot, DEFAULT_USER_ID);
 
     expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot });
     expect((result as Inventory).equipped).toBe(false);
@@ -356,7 +356,7 @@ describe("InventoryService.unequipItem — Equipment Runtime V2", () => {
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const service = makeEquipService({ dataSource });
 
-    await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.unequipItem(characterId, slot, DEFAULT_USER_ID)).rejects.toBeInstanceOf(NotFoundException);
     expect(manager.delete).not.toHaveBeenCalled();
   });
 
@@ -372,7 +372,7 @@ describe("InventoryService.unequipItem — Equipment Runtime V2", () => {
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const service = makeEquipService({ dataSource });
 
-    await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.unequipItem(characterId, slot, DEFAULT_USER_ID)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -666,7 +666,7 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const service = makeEquipService({ dataSource, itemTransfer });
 
-    const result = await service.unequipItem(characterId, slot);
+    const result = await service.unequipItem(characterId, slot, DEFAULT_USER_ID);
 
     expect(manager.delete).toHaveBeenCalledWith(CharacterEquipment, { characterId, slot });
     expect(itemTransfer.transfer).toHaveBeenCalledWith(
@@ -693,7 +693,7 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const service = makeEquipService({ dataSource, itemTransfer });
 
-    await service.unequipItem(characterId, slot);
+    await service.unequipItem(characterId, slot, DEFAULT_USER_ID);
 
     expect(manager.update).toHaveBeenCalledWith(
       Character, { id: characterId }, { attack: 10, defense: 5 },
@@ -711,7 +711,7 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const service = makeEquipService({ dataSource, itemTransfer });
 
-    await expect(service.unequipItem(characterId, slot)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.unequipItem(characterId, slot, DEFAULT_USER_ID)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -923,13 +923,39 @@ describe("InventoryService — chemins ADMIN (sans userId)", () => {
     const inventoryProjection = { project: jest.fn().mockResolvedValue(projection) };
     const service = makeEquipService({ inventoryProjection });
     const unequipped = Object.assign(new ItemInstance(), { id: "i1" });
-    jest.spyOn(service, "unequipItem").mockResolvedValue(unequipped);
+    const coreSpy = jest.spyOn(service as any, "unequipItemCore").mockResolvedValue(unequipped);
     const applySpy = jest.spyOn(service as any, "applySlotUpdates").mockResolvedValue([]);
 
     const res = await service.unequipItemAsAdmin("char-1", "right-hand", 5);
 
-    expect(service.unequipItem).toHaveBeenCalledWith("char-1", "right-hand");
+    expect(coreSpy).toHaveBeenCalledWith("char-1", "right-hand");
     expect(applySpy).toHaveBeenCalledWith("char-1", { entries: [{ kind: "instance", id: "i1", slotIndex: 5 }] });
     expect(res).toBe(projection);
+  });
+});
+
+describe("InventoryService — ownership (audit sécurité)", () => {
+  const OTHER_CHAR_REPO = () => ({ findOneBy: jest.fn().mockResolvedValue({ id: "char-1", userId: "other-user" }) });
+
+  it("equipItem refuse un personnage appartenant à un autre utilisateur", async () => {
+    const service = makeEquipService({ characterRepo: OTHER_CHAR_REPO() });
+    await expect(service.equipItem("char-1", "item-1", DEFAULT_USER_ID)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("unequipItem refuse un personnage appartenant à un autre utilisateur", async () => {
+    const service = makeEquipService({ characterRepo: OTHER_CHAR_REPO() });
+    await expect(service.unequipItem("char-1", "right-hand", DEFAULT_USER_ID)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("getInventory refuse un personnage appartenant à un autre utilisateur", async () => {
+    const service = makeEquipService({ characterRepo: OTHER_CHAR_REPO() });
+    await expect(service.getInventory("char-1", DEFAULT_USER_ID)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("addItem refuse un personnage appartenant à un autre utilisateur", async () => {
+    const service = makeEquipService({ characterRepo: OTHER_CHAR_REPO() });
+    await expect(
+      service.addItem({ characterId: "char-1", itemId: "item-1", quantity: 1 } as any, DEFAULT_USER_ID),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
