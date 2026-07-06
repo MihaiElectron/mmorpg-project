@@ -36,10 +36,62 @@ export type ConnectedPlayer = {
   direction?: string;
 };
 
-export const MAX_REASONABLE_SPEED_WU_PER_SEC = 10_000;
 export const MAX_REASONABLE_MOVE_DISTANCE_WU = 8_192;
 export const MAX_REASONABLE_POSITION = 134_217_728;
 const MOVE_SUSPECT_LOG_THROTTLE_MS = 10_000;
+
+// ---------------------------------------------------------------------------
+// M4 Phase A — validation serveur bloquante de player_move (ADR-0003, option C).
+// Le client PROPOSE une position ; le serveur n'accepte que les déplacements
+// atteignables à la vitesse serveur dans le temps écoulé. Tout rejet laisse la
+// position runtime inchangée et déclenche une correction vers le seul émetteur.
+// ---------------------------------------------------------------------------
+
+/**
+ * Vitesse maximale légitime du joueur, en WU/s, possédée par le serveur.
+ * Calibrage : le client se déplace à 100 px/s (Player.js) ; en projection iso
+ * 1 px écran = 16 WU (axe X) ou 32 WU (axe Y). Le pire cas légitime est la
+ * diagonale clavier (100 px/s sur chaque axe) : hypot(100×16, 100×32) ≈ 3578
+ * WU/s. Arrondi à 3600. À terme, cette valeur doit devenir une stat dérivée
+ * par personnage (effectiveSpeed, ADR-0003 §3).
+ */
+export const PLAYER_BASE_SPEED_WU_PER_SEC = 3_600;
+
+/** Marge de tolérance (jitter réseau, arrondis px→WU) appliquée au budget de distance. */
+export const PLAYER_MOVE_TOLERANCE_MULTIPLIER = 1.5;
+
+/**
+ * Bornes du delta-temps utilisé par le distance gate :
+ * - plancher (MIN) : deux propositions très rapprochées ne donnent pas un
+ *   budget quasi nul sujet au bruit d'horodatage ;
+ * - plafond (MAX) : un joueur silencieux (AFK, onglet en pause) n'accumule pas
+ *   un budget de distance illimité — le saut max par mouvement accepté reste
+ *   PLAYER_BASE_SPEED × tolérance × 1 s ≈ 5 400 WU (~5 tiles).
+ */
+export const PLAYER_MOVE_MIN_DT_MS = 25;
+export const PLAYER_MOVE_MAX_DT_MS = 1_000;
+
+/**
+ * Rate-limit serveur : le client légitime émet au plus toutes les 80 ms
+ * (WorldScene.syncLocalPlayer). En dessous de cet intervalle, la proposition
+ * est ignorée silencieusement (aucune correction émise : éviter qu'un spam de
+ * player_move se transforme en spam de player_position_correction).
+ */
+export const PLAYER_MOVE_MIN_INTERVAL_MS = 30;
+
+export type MovementRejectionReason =
+  | 'invalid_payload'
+  | 'map_mismatch'
+  | 'speed_limit'
+  | 'rate_limit';
+
+export type UpdatePlayerResult =
+  | { status: 'accepted'; player: ConnectedPlayer }
+  | {
+      status: 'rejected';
+      player: ConnectedPlayer;
+      reason: MovementRejectionReason;
+    };
 
 export type MovementSuspectType =
   | 'TELEPORT_SUSPECT'
@@ -49,23 +101,18 @@ export type MovementSuspectType =
 
 export type MovementMetrics = {
   totalMoves: number;
+  rejectedMoves: number;
   suspectTeleports: number;
   suspectSpeed: number;
   invalidCoordinates: number;
   mapMismatch: number;
 };
 
-type MovementMetricSample = {
-  characterId: string;
-  deltaTimeMs: number;
-  deltaWorldX: number;
-  deltaWorldY: number;
-  distanceWU: number;
-  speedWUPerSec: number;
-};
-
 type MovementObservationState = {
-  lastObservedAt: number;
+  /** Dernier mouvement ACCEPTÉ (ou position forcée : join, teleport, respawn). */
+  lastValidatedAt: number;
+  /** Dernière proposition reçue, acceptée ou non (rate-limit). */
+  lastProposalAt: number;
   lastSuspectLogAt: Partial<Record<MovementSuspectType, number>>;
 };
 
@@ -91,6 +138,7 @@ export class WorldService implements OnModuleInit {
   private movementObservation = new Map<string, MovementObservationState>();
   private movementMetrics: MovementMetrics = {
     totalMoves: 0,
+    rejectedMoves: 0,
     suspectTeleports: 0,
     suspectSpeed: 0,
     invalidCoordinates: 0,
@@ -196,6 +244,8 @@ export class WorldService implements OnModuleInit {
         player.worldX  = newWX;
         player.worldY  = newWY;
         player.mapId   = nearestWU.mapId;
+        // Mouvement forcé serveur : resynchroniser le distance gate (cf. teleport).
+        this.resyncMovementValidation(player.socketId);
         server.to(player.socketId).emit('character_respawn', {
           characterId,
           worldX: newWX,
@@ -258,7 +308,8 @@ export class WorldService implements OnModuleInit {
 
     this.connectedPlayers.set(client.id, player);
     this.movementObservation.set(client.id, {
-      lastObservedAt: Date.now(),
+      lastValidatedAt: Date.now(),
+      lastProposalAt: 0,
       lastSuspectLogAt: {},
     });
     client.data.player = {
@@ -274,50 +325,102 @@ export class WorldService implements OnModuleInit {
     return { player, previousSocketId };
   }
 
+  /**
+   * M4 Phase A — pipeline de validation bloquant (ADR-0003, option C).
+   * Le client propose une position ; la position runtime (`ConnectedPlayer`,
+   * lue par combat/récolte/aggro/interactions) n'est mise à jour QUE si la
+   * proposition passe toutes les vérifications. Tout rejet laisse la position
+   * serveur inchangée ; la gateway émet alors `player_position_correction`
+   * au seul client fautif (sauf rate_limit : drop silencieux).
+   */
   updatePlayer(
     client: WorldSocket,
     payload: { worldX: number; worldY: number; mapId: number; direction?: string },
-  ): ConnectedPlayer | null {
+  ): UpdatePlayerResult | null {
     const player = this.connectedPlayers.get(client.id);
     if (!player) return null;
 
     const now = Date.now();
-    const previousWorldX = player.worldX;
-    const previousWorldY = player.worldY;
-    const previousMapId = player.mapId;
     const state = this.getMovementObservationState(client.id, now);
-    const deltaTimeMs = Math.max(now - state.lastObservedAt, 0);
-
     this.movementMetrics.totalMoves++;
+
+    // 1) Payload invalide : coordonnées non finies ou hors plage plausible.
     if (this.hasInvalidMovementCoordinate(payload)) {
-      this.recordMovementSuspect(client.id, player.characterId, 'INVALID_COORDINATE', now, {
-        worldX: payload.worldX,
-        worldY: payload.worldY,
-        mapId: payload.mapId,
-      });
+      this.recordMovementSuspect(
+        client.id,
+        player.characterId,
+        'INVALID_COORDINATE',
+        now,
+        {
+          worldX: payload.worldX,
+          worldY: payload.worldY,
+          mapId: payload.mapId,
+        },
+      );
+      return this.rejectMovement(player, 'invalid_payload');
     }
 
+    // 2) Rate-limit : proposition trop rapprochée de la précédente (spam).
+    const sinceLastProposalMs = now - state.lastProposalAt;
+    state.lastProposalAt = now;
+    if (sinceLastProposalMs < PLAYER_MOVE_MIN_INTERVAL_MS) {
+      return this.rejectMovement(player, 'rate_limit');
+    }
+
+    // 3) mapId : Phase A — aucun changement de map via player_move. La map
+    //    serveur (chargée depuis la DB au join) reste la vérité.
+    if (payload.mapId !== player.mapId) {
+      this.recordMovementSuspect(
+        client.id,
+        player.characterId,
+        'MAP_MISMATCH',
+        now,
+        {
+          previousMapId: player.mapId,
+          receivedMapId: payload.mapId,
+        },
+      );
+      return this.rejectMovement(player, 'map_mismatch');
+    }
+
+    // 4) Distance gate : le déplacement doit être atteignable à la vitesse
+    //    serveur dans le temps écoulé depuis le dernier mouvement validé.
+    const deltaTimeMs = Math.min(
+      Math.max(now - state.lastValidatedAt, PLAYER_MOVE_MIN_DT_MS),
+      PLAYER_MOVE_MAX_DT_MS,
+    );
+    const distanceWU = Math.hypot(
+      payload.worldX - player.worldX,
+      payload.worldY - player.worldY,
+    );
+    const allowanceWU =
+      PLAYER_BASE_SPEED_WU_PER_SEC *
+      PLAYER_MOVE_TOLERANCE_MULTIPLIER *
+      (deltaTimeMs / 1000);
+    if (distanceWU > allowanceWU) {
+      const suspectType: MovementSuspectType =
+        distanceWU > MAX_REASONABLE_MOVE_DISTANCE_WU
+          ? 'TELEPORT_SUSPECT'
+          : 'SPEED_SUSPECT';
+      this.recordMovementSuspect(
+        client.id,
+        player.characterId,
+        suspectType,
+        now,
+        {
+          deltaTimeMs,
+          distanceWU,
+          allowanceWU,
+        },
+      );
+      return this.rejectMovement(player, 'speed_limit');
+    }
+
+    // Mouvement accepté : la proposition devient la nouvelle position validée.
+    player.worldX = payload.worldX;
+    player.worldY = payload.worldY;
     player.direction = payload.direction ?? player.direction;
-
-    if (
-      Number.isFinite(payload.worldX) &&
-      Number.isFinite(payload.worldY) &&
-      Number.isFinite(payload.mapId)
-    ) {
-      // Chemin WU direct — seule source de vérité depuis P5
-      player.worldX = payload.worldX;
-      player.worldY = payload.worldY;
-      player.mapId  = payload.mapId;
-    }
-
-    this.observeMovementDelta(client.id, player, {
-      previousWorldX,
-      previousWorldY,
-      previousMapId,
-      deltaTimeMs,
-      now,
-      payload,
-    });
+    state.lastValidatedAt = now;
 
     client.data.player = {
       characterId: player.characterId,
@@ -329,7 +432,15 @@ export class WorldService implements OnModuleInit {
       direction: player.direction,
     };
 
-    return player;
+    return { status: 'accepted', player };
+  }
+
+  private rejectMovement(
+    player: ConnectedPlayer,
+    reason: MovementRejectionReason,
+  ): UpdatePlayerResult {
+    this.movementMetrics.rejectedMoves++;
+    return { status: 'rejected', player, reason };
   }
 
   removePlayer(client: WorldSocket): ConnectedPlayer | undefined {
@@ -367,6 +478,7 @@ export class WorldService implements OnModuleInit {
   resetMovementMetrics(): MovementMetrics {
     this.movementMetrics = {
       totalMoves: 0,
+      rejectedMoves: 0,
       suspectTeleports: 0,
       suspectSpeed: 0,
       invalidCoordinates: 0,
@@ -458,6 +570,9 @@ export class WorldService implements OnModuleInit {
       if (player.characterId === characterId) {
         player.worldX = targetWorldX;
         player.worldY = targetWorldY;
+        // Mouvement forcé serveur : resynchroniser le distance gate pour que le
+        // prochain player_move légitime ne soit pas mesuré depuis l'ancienne position.
+        this.resyncMovementValidation(player.socketId);
         const teleportMapId = player.mapId;
 
         await this.characterRepository.update(characterId, {
@@ -512,10 +627,21 @@ export class WorldService implements OnModuleInit {
   ): MovementObservationState {
     let state = this.movementObservation.get(socketId);
     if (!state) {
-      state = { lastObservedAt: now, lastSuspectLogAt: {} };
+      state = { lastValidatedAt: now, lastProposalAt: 0, lastSuspectLogAt: {} };
       this.movementObservation.set(socketId, state);
     }
     return state;
+  }
+
+  /**
+   * Resynchronise le distance gate après un mouvement forcé d'origine serveur
+   * (teleport admin, respawn). Sans cela, le premier player_move légitime après
+   * la position forcée serait mesuré depuis l'ANCIENNE position et faussement
+   * rejeté/flaggé (bug identifié à l'audit M4).
+   */
+  private resyncMovementValidation(socketId: string): void {
+    const state = this.getMovementObservationState(socketId, Date.now());
+    state.lastValidatedAt = Date.now();
   }
 
   private hasInvalidMovementCoordinate(
@@ -527,59 +653,6 @@ export class WorldService implements OnModuleInit {
     if (Math.abs(payload.worldX) > MAX_REASONABLE_POSITION) return true;
     if (Math.abs(payload.worldY) > MAX_REASONABLE_POSITION) return true;
     return false;
-  }
-
-  private observeMovementDelta(
-    socketId: string,
-    player: ConnectedPlayer,
-    context: {
-      previousWorldX: number;
-      previousWorldY: number;
-      previousMapId: number;
-      deltaTimeMs: number;
-      now: number;
-      payload: { mapId?: number };
-    },
-  ): void {
-    const deltaWorldX = player.worldX - context.previousWorldX;
-    const deltaWorldY = player.worldY - context.previousWorldY;
-    const distanceWU = Math.hypot(deltaWorldX, deltaWorldY);
-    const speedWUPerSec = context.deltaTimeMs > 0
-      ? distanceWU / (context.deltaTimeMs / 1000)
-      : 0;
-
-    const sample: MovementMetricSample = {
-      characterId: player.characterId,
-      deltaTimeMs: context.deltaTimeMs,
-      deltaWorldX,
-      deltaWorldY,
-      distanceWU,
-      speedWUPerSec,
-    };
-
-    if (distanceWU > MAX_REASONABLE_MOVE_DISTANCE_WU) {
-      this.recordMovementSuspect(socketId, player.characterId, 'TELEPORT_SUSPECT', context.now, sample);
-    }
-
-    if (
-      context.deltaTimeMs > 0 &&
-      speedWUPerSec > MAX_REASONABLE_SPEED_WU_PER_SEC
-    ) {
-      this.recordMovementSuspect(socketId, player.characterId, 'SPEED_SUSPECT', context.now, sample);
-    }
-
-    if (
-      Number.isFinite(context.payload.mapId) &&
-      context.payload.mapId !== context.previousMapId
-    ) {
-      this.recordMovementSuspect(socketId, player.characterId, 'MAP_MISMATCH', context.now, {
-        previousMapId: context.previousMapId,
-        receivedMapId: context.payload.mapId,
-      });
-    }
-
-    const state = this.getMovementObservationState(socketId, context.now);
-    state.lastObservedAt = context.now;
   }
 
   private recordMovementSuspect(

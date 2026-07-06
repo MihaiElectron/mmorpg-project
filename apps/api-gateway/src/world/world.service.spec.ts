@@ -37,364 +37,447 @@ function injectPlayer(svc: WorldService, socket: WorldSocket, player: ConnectedP
   (svc as any).connectedPlayers.set(socket.id, player);
 }
 
-// ─── updatePlayer — cas normaux ───────────────────────────────────────────────
+// ─── Helpers mouvement (M4 Phase A) ──────────────────────────────────────────
 
-describe('WorldService.updatePlayer — payload WU-only (P5)', () => {
-  it('met à jour worldX/worldY/mapId depuis un payload WU', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
-    expect(player.mapId).toBe(1);
+// Prépare l'état d'observation pour simuler un joueur déjà en mouvement :
+// dernier mouvement validé il y a `validatedAgoMs`, dernière proposition il y
+// a `proposalAgoMs` (échappe au rate-limit par défaut).
+function primeMovement(
+  svc: WorldService,
+  socketId: string,
+  opts: { validatedAgoMs?: number; proposalAgoMs?: number } = {},
+) {
+  const now = Date.now();
+  (svc as any).movementObservation.set(socketId, {
+    lastValidatedAt: now - (opts.validatedAgoMs ?? 200),
+    lastProposalAt: now - (opts.proposalAgoMs ?? 200),
+    lastSuspectLogAt: {},
   });
+}
 
-  it('met à jour la direction sans affecter la position si seulement direction change', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000, direction: 'down' });
-    injectPlayer(svc, socket, player);
+function silenceMovementLogs(svc: WorldService) {
+  jest.spyOn((svc as any).logger, 'warn').mockImplementation(() => undefined);
+}
 
-    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1, direction: 'up' });
+// ─── updatePlayer — validation M4 Phase A : mouvements acceptés ──────────────
 
-    expect(player.direction).toBe('up');
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('conserve la direction précédente si non fournie', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ direction: 'left' });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
-
-    expect(player.direction).toBe('left');
-  });
-
-  it('met à jour mapId depuis le payload WU', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 2 });
-
-    expect(player.mapId).toBe(2);
-  });
-
-  it('client.data.player reçoit worldX/worldY/mapId mis à jour', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 4000, worldY: 8800, mapId: 1 });
-
-    expect(socket.data.player.worldX).toBe(4000);
-    expect(socket.data.player.worldY).toBe(8800);
-    expect(socket.data.player.mapId).toBe(1);
-  });
-
-  it('client.data.player garde worldX/worldY si payload invalide (worldX NaN)', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1 });
-
-    expect(socket.data.player.worldX).toBe(1600);
-    expect(socket.data.player.worldY).toBe(8000);
-    expect(socket.data.player.mapId).toBe(1);
-  });
-
-  it('retourne le ConnectedPlayer mis à jour', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer();
-    injectPlayer(svc, socket, player);
-
-    const result = svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
-
-    expect(result).toBe(player);
-  });
-
-  it('retourne null si le socket est inconnu', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-
-    const result = svc.updatePlayer(socket, { worldX: 1600, worldY: 8000, mapId: 1 });
-
-    expect(result).toBeNull();
-  });
-});
-
-// ─── updatePlayer — garde-fous NaN / Infinity ─────────────────────────────────
-
-describe('WorldService.updatePlayer — garde-fous coordonnées invalides', () => {
-  it('NaN dans worldX : worldX/Y conservent leur valeur précédente', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: NaN, worldY: 8000, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('NaN dans worldY : position conservée', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 1600, worldY: NaN, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('Infinity dans worldX : position conservée', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: Infinity, worldY: 8000, mapId: 1 });
-
-    expect(player.worldX).toBe(1600);
-  });
-
-  it('-Infinity dans worldY : position conservée', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 1600, worldY: -Infinity, mapId: 1 });
-
-    expect(player.worldY).toBe(8000);
-  });
-
-  it('payload invalide : client.data.player garde les coordonnées précédentes', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1600, worldY: 8000 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1 });
-
-    expect(socket.data.player.worldX).toBe(1600);
-    expect(socket.data.player.worldY).toBe(8000);
-  });
-
-  it('payload invalide : retourne quand même le player (direction mise à jour)', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ direction: 'down' });
-    injectPlayer(svc, socket, player);
-
-    const result = svc.updatePlayer(socket, { worldX: NaN, worldY: NaN, mapId: 1, direction: 'right' });
-
-    expect(result).toBe(player);
-    expect(player.direction).toBe('right');
-  });
-});
-
-// ─── updatePlayer — chemin WU (seul chemin depuis P5) ────────────────────────
-
-describe('WorldService.updatePlayer — chemin WU', () => {
-  it('met à jour worldX/worldY/mapId', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: 1 });
-
-    expect(player.worldX).toBe(6080);
-    expect(player.worldY).toBe(12480);
-    expect(player.mapId).toBe(1);
-  });
-
-  it('met à jour mapId', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: 2 });
-
-    expect(player.mapId).toBe(2);
-  });
-
-  it('position inchangée si worldX est NaN (payload invalide ignoré)', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: NaN, worldY: 12480, mapId: 1 });
-
-    expect(player.worldX).toBe(0);
-    expect(player.worldY).toBe(0);
-  });
-
-  it('position inchangée si mapId est NaN (payload invalide ignoré)', () => {
-    const svc = makeService();
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
-    injectPlayer(svc, socket, player);
-
-    svc.updatePlayer(socket, { worldX: 6080, worldY: 12480, mapId: NaN });
-
-    expect(player.worldX).toBe(0);
-    expect(player.worldY).toBe(0);
-  });
-});
-
-// ─── updatePlayer — instrumentation passive Movement Authority P1 ─────────────
-
-describe('WorldService.updatePlayer — métriques passives mouvement', () => {
+describe('WorldService.updatePlayer — mouvements acceptés', () => {
   let nowSpy: jest.SpyInstance<number, []>;
 
   beforeEach(() => {
-    nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
   });
 
   afterEach(() => {
     nowSpy.mockRestore();
   });
 
-  function silenceMovementLogs(svc: WorldService) {
-    jest.spyOn((svc as any).logger, 'warn').mockImplementation(() => undefined);
-  }
+  it('accepte un déplacement plausible et met à jour la position runtime', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
 
-  it('compte un mouvement normal sans anomalie et sans rejet', () => {
+    const result = svc.updatePlayer(socket, {
+      worldX: 1700,
+      worldY: 8100,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({ status: 'accepted', player });
+    expect(player.worldX).toBe(1700);
+    expect(player.worldY).toBe(8100);
+    expect(socket.data.player.worldX).toBe(1700);
+    expect(socket.data.player.worldY).toBe(8100);
+  });
+
+  it('met à jour la direction et la conserve si non fournie', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({
+      worldX: 1600,
+      worldY: 8000,
+      direction: 'left',
+    });
+    injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id);
+
+    svc.updatePlayer(socket, {
+      worldX: 1650,
+      worldY: 8000,
+      mapId: 1,
+      direction: 'up',
+    });
+    expect(player.direction).toBe('up');
+
+    primeMovement(svc, socket.id);
+    svc.updatePlayer(socket, { worldX: 1700, worldY: 8000, mapId: 1 });
+    expect(player.direction).toBe('up');
+  });
+
+  it('premier mouvement après join : un petit déplacement ne subit aucun faux rejet', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+    // Pas de primeMovement : l'état est créé paresseusement comme au join
+    // (lastValidatedAt = maintenant). Le plancher PLAYER_MOVE_MIN_DT_MS
+    // garantit un budget minimal.
+
+    const result = svc.updatePlayer(socket, {
+      worldX: 1700,
+      worldY: 8000,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({ status: 'accepted', player });
+    expect(player.worldX).toBe(1700);
+  });
+
+  it('retourne null si le socket est inconnu', () => {
+    const svc = makeService();
+    const socket = makeSocket();
+
+    const result = svc.updatePlayer(socket, {
+      worldX: 1600,
+      worldY: 8000,
+      mapId: 1,
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
+// ─── updatePlayer — rejets : payload invalide ─────────────────────────────────
+
+describe('WorldService.updatePlayer — rejet payload invalide', () => {
+  function rejectCase(payload: {
+    worldX: number;
+    worldY: number;
+    mapId: number;
+  }) {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
-    const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
+    const player = makePlayer({
+      worldX: 1600,
+      worldY: 8000,
+      mapId: 1,
+      direction: 'down',
+    });
+    socket.data.player = { ...player };
     injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id);
 
-    const result = svc.updatePlayer(socket, { worldX: 1_700, worldY: 8_100, mapId: 1 });
+    const result = svc.updatePlayer(socket, payload);
+    return { svc, socket, player, result };
+  }
 
-    expect(result).toBe(player);
-    expect(player.worldX).toBe(1_700);
-    expect(player.worldY).toBe(8_100);
-    expect(svc.getMovementMetrics()).toEqual({
-      totalMoves: 1,
-      suspectTeleports: 0,
-      suspectSpeed: 0,
-      invalidCoordinates: 0,
-      mapMismatch: 0,
+  it('worldX NaN : rejet invalid_payload, position et miroir socket inchangés', () => {
+    const { svc, socket, player, result } = rejectCase({
+      worldX: NaN,
+      worldY: 8000,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'invalid_payload',
+    });
+    expect(player.worldX).toBe(1600);
+    expect(player.worldY).toBe(8000);
+    expect(socket.data.player.worldX).toBe(1600);
+    expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
+    expect(svc.getMovementMetrics().rejectedMoves).toBe(1);
+  });
+
+  it('Infinity dans worldX : rejet invalid_payload', () => {
+    const { player, result } = rejectCase({
+      worldX: Infinity,
+      worldY: 8000,
+      mapId: 1,
+    });
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'invalid_payload',
+    });
+    expect(player.worldX).toBe(1600);
+  });
+
+  it('mapId NaN : rejet invalid_payload', () => {
+    const { player, result } = rejectCase({
+      worldX: 1600,
+      worldY: 8000,
+      mapId: NaN,
+    });
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'invalid_payload',
     });
   });
 
-  it('détecte une vitesse suspecte mais accepte le mouvement', () => {
+  it('position au-delà de MAX_REASONABLE_POSITION : rejet invalid_payload', () => {
+    const { player, result } = rejectCase({
+      worldX: MAX_REASONABLE_POSITION + 1,
+      worldY: 0,
+      mapId: 1,
+    });
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'invalid_payload',
+    });
+    expect(player.worldX).toBe(1600);
+  });
+
+  it('payload rejeté ne modifie pas la direction', () => {
+    const { player } = rejectCase({ worldX: NaN, worldY: NaN, mapId: 1 });
+    expect(player.direction).toBe('down');
+  });
+});
+
+// ─── updatePlayer — rejets : mapId incohérent ────────────────────────────────
+
+describe('WorldService.updatePlayer — rejet map_mismatch', () => {
+  it('un mapId différent du mapId serveur est rejeté et ne change pas la map', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id);
+
+    const result = svc.updatePlayer(socket, {
+      worldX: 1600,
+      worldY: 8000,
+      mapId: 2,
+    });
+
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'map_mismatch',
+    });
+    expect(player.mapId).toBe(1);
+    expect(svc.getMovementMetrics().mapMismatch).toBe(1);
+    expect(svc.getMovementMetrics().rejectedMoves).toBe(1);
+  });
+});
+
+// ─── updatePlayer — rejets : distance gate (téléportation / speedhack) ───────
+
+describe('WorldService.updatePlayer — rejet distance gate', () => {
+  let nowSpy: jest.SpyInstance<number, []>;
+
+  beforeEach(() => {
+    nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  });
+
+  afterEach(() => {
+    nowSpy.mockRestore();
+  });
+
+  it('téléportation évidente rejetée : position inchangée, pas de mise à jour du miroir', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
+    socket.data.player = { ...player };
+    injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
+
+    const result = svc.updatePlayer(socket, {
+      worldX: 50_000,
+      worldY: 0,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'speed_limit',
+    });
+    expect(player.worldX).toBe(0);
+    expect(player.worldY).toBe(0);
+    expect(socket.data.player.worldX).toBe(0);
+    expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
+    expect(svc.getMovementMetrics().rejectedMoves).toBe(1);
+  });
+
+  it('speedhack modéré (~x2) rejeté en SPEED_SUSPECT', () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
+    // dt = 200 ms → budget = 3600 × 1.5 × 0.2 = 1080 WU. 2000 WU ≈ x2 la
+    // vitesse légitime max : doit être rejeté.
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
 
-    svc.updatePlayer(socket, { worldX: 0, worldY: 0, mapId: 1 });
-    nowSpy.mockReturnValue(1_100);
-    const result = svc.updatePlayer(socket, { worldX: 2_000, worldY: 0, mapId: 1 });
+    const result = svc.updatePlayer(socket, {
+      worldX: 2_000,
+      worldY: 0,
+      mapId: 1,
+    });
 
-    expect(result).toBe(player);
-    expect(player.worldX).toBe(2_000);
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'speed_limit',
+    });
+    expect(player.worldX).toBe(0);
     expect(svc.getMovementMetrics().suspectSpeed).toBe(1);
   });
 
-  it('détecte une téléportation suspecte mais accepte le mouvement', () => {
+  it('un dt très long est capé : pas de saut illimité après une longue inactivité', () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
+    // 1 h sans mouvement validé : le budget reste capé à
+    // 3600 × 1.5 × (PLAYER_MOVE_MAX_DT_MS / 1000) = 5 400 WU.
+    primeMovement(svc, socket.id, { validatedAgoMs: 3_600_000 });
 
-    const result = svc.updatePlayer(socket, { worldX: 10_000, worldY: 0, mapId: 1 });
+    const rejected = svc.updatePlayer(socket, {
+      worldX: 8_000,
+      worldY: 0,
+      mapId: 1,
+    });
+    expect(rejected).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'speed_limit',
+    });
+    expect(player.worldX).toBe(0);
 
-    expect(result).toBe(player);
-    expect(player.worldX).toBe(10_000);
-    expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
+    primeMovement(svc, socket.id, { validatedAgoMs: 3_600_000 });
+    const accepted = svc.updatePlayer(socket, {
+      worldX: 5_000,
+      worldY: 0,
+      mapId: 1,
+    });
+    expect(accepted).toEqual({ status: 'accepted', player });
+    expect(player.worldX).toBe(5_000);
   });
 
-  it('détecte des coordonnées invalides (worldX NaN) et ne met pas à jour la position', () => {
+  it('un déplacement dans le budget juste après un rejet reste accepté', () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
 
-    const result = svc.updatePlayer(socket, { worldX: NaN, worldY: 12_480, mapId: 1 });
+    svc.updatePlayer(socket, { worldX: 50_000, worldY: 0, mapId: 1 }); // rejeté
 
-    expect(result).toBe(player);
-    expect(player.worldX).toBe(0);   // inchangé
-    expect(player.worldY).toBe(0);
-    expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
+    const result = svc.updatePlayer(socket, {
+      worldX: 100,
+      worldY: 100,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({ status: 'accepted', player });
+    expect(player.worldX).toBe(100);
   });
+});
 
-  it('détecte une position hors plage raisonnable sans rejet', () => {
+// ─── updatePlayer — rejets : rate-limit serveur ───────────────────────────────
+
+describe('WorldService.updatePlayer — rate-limit', () => {
+  it('une proposition trop rapprochée est rejetée en rate_limit sans compteur suspect', () => {
+    const svc = makeService();
+    silenceMovementLogs(svc);
+    const socket = makeSocket();
+    const player = makePlayer({ worldX: 1600, worldY: 8000, mapId: 1 });
+    injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id, { proposalAgoMs: 5 });
+
+    const result = svc.updatePlayer(socket, {
+      worldX: 1650,
+      worldY: 8000,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({
+      status: 'rejected',
+      player,
+      reason: 'rate_limit',
+    });
+    expect(player.worldX).toBe(1600);
+    const metrics = svc.getMovementMetrics();
+    expect(metrics.rejectedMoves).toBe(1);
+    expect(metrics.suspectTeleports).toBe(0);
+    expect(metrics.suspectSpeed).toBe(0);
+    expect(metrics.invalidCoordinates).toBe(0);
+  });
+});
+
+// ─── updatePlayer — resynchronisation après mouvement forcé ──────────────────
+
+describe('WorldService.updatePlayer — resynchronisation après teleport', () => {
+  it('un mouvement légitime juste après teleportCharacter est accepté (pas de faux suspect)', async () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id, { validatedAgoMs: 200 });
 
-    const hugeWorldX = MAX_REASONABLE_POSITION + 1;
-    const result = svc.updatePlayer(socket, { worldX: hugeWorldX, worldY: 0, mapId: 1 });
+    const emit = jest.fn();
+    const server = {
+      to: jest.fn().mockReturnValue({ emit }),
+      except: jest.fn().mockReturnValue({ emit }),
+    } as any;
 
-    expect(result).toBe(player);
-    expect(player.worldX).toBe(hugeWorldX);
-    expect(svc.getMovementMetrics().invalidCoordinates).toBe(1);
+    await svc.teleportCharacter(player.characterId, 40_000, 40_000, server);
+    expect(player.worldX).toBe(40_000);
+
+    // Petit déplacement depuis la NOUVELLE position : doit passer sans rejet.
+    const result = svc.updatePlayer(socket, {
+      worldX: 40_100,
+      worldY: 40_050,
+      mapId: 1,
+    });
+
+    expect(result).toEqual({ status: 'accepted', player });
+    expect(player.worldX).toBe(40_100);
+    expect(svc.getMovementMetrics().rejectedMoves).toBe(0);
+    expect(svc.getMovementMetrics().suspectTeleports).toBe(0);
   });
+});
 
-  it('détecte un map mismatch mais conserve le comportement actuel', () => {
-    const svc = makeService();
-    silenceMovementLogs(svc);
-    const socket = makeSocket();
-    const player = makePlayer({ worldX: 1_600, worldY: 8_000, mapId: 1 });
-    injectPlayer(svc, socket, player);
+// ─── métriques : reset ────────────────────────────────────────────────────────
 
-    const result = svc.updatePlayer(socket, { worldX: 1_600, worldY: 8_000, mapId: 2 });
-
-    expect(result).toBe(player);
-    expect(player.mapId).toBe(2);
-    expect(svc.getMovementMetrics().mapMismatch).toBe(1);
-  });
-
-  it('resetMovementMetrics remet les compteurs à zéro sans toucher les joueurs connectés', () => {
+describe('WorldService — métriques mouvement', () => {
+  it('resetMovementMetrics remet tous les compteurs à zéro sans toucher les joueurs', () => {
     const svc = makeService();
     silenceMovementLogs(svc);
     const socket = makeSocket();
     const player = makePlayer({ worldX: 0, worldY: 0, mapId: 1 });
     injectPlayer(svc, socket, player);
+    primeMovement(svc, socket.id);
 
-    svc.updatePlayer(socket, { worldX: 10_000, worldY: 0, mapId: 1 });
+    svc.updatePlayer(socket, { worldX: 50_000, worldY: 0, mapId: 1 }); // rejeté
 
-    expect(svc.getMovementMetrics().suspectTeleports).toBe(1);
+    expect(svc.getMovementMetrics().rejectedMoves).toBe(1);
 
     const reset = svc.resetMovementMetrics();
 
     expect(reset).toEqual({
       totalMoves: 0,
+      rejectedMoves: 0,
       suspectTeleports: 0,
       suspectSpeed: 0,
       invalidCoordinates: 0,
       mapMismatch: 0,
     });
     expect(svc.getAllConnectedPlayers()).toHaveLength(1);
-    expect(player.worldX).toBe(10_000);
   });
 });
 

@@ -1244,6 +1244,27 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    // M4 Phase A — le serveur a rejeté un player_move : il renvoie sa dernière
+    // position validée. On s'y recale immédiatement (serveur autoritaire) et on
+    // stoppe le déplacement en cours pour ne pas re-proposer la position rejetée.
+    this.socket.on("player_position_correction", (data) => {
+      if (!this.player) return;
+      const { x, y } = resolveScreen(data);
+      this.controller?.cancelMouseMove?.();
+      this.player.setVelocity?.(0);
+      this.player.setPosition(x, y);
+      this.cameras.main.centerOn(x, y);
+      // Mémoriser la position corrigée au format WU émis par syncLocalPlayer :
+      // le prochain tick ne réémet pas tant que le joueur n'a pas rebougé.
+      this.lastSyncedPosition = {
+        worldX: data.worldX,
+        worldY: data.worldY,
+        mapId: data.mapId,
+        direction: this.player.direction,
+      };
+      updateLocalCharacterPosition(data);
+    });
+
     this.socket.on("character_respawn", (data) => {
       getCharacterStore().getState().setHealth(data.health);
       destroyHpBar(this.playerHpBar);
@@ -2389,6 +2410,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("character_damaged");
       this.socket.off("character_teleport");
       this.socket.off("character_respawn");
+      this.socket.off("player_position_correction");
     }
 
     if (this.gatherIndicator) {

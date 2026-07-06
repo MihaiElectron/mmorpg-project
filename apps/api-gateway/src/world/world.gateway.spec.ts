@@ -125,37 +125,87 @@ describe('WorldGateway — rooms par mapId', () => {
   });
 
   describe('player_move', () => {
-    it("player_moved est émis dans la room du joueur, pas en broadcast global", () => {
+    it('mouvement accepté : player_moved est émis dans la room du joueur, pas en broadcast global', () => {
       const player = makePlayer({ mapId: 1 });
       const worldService = {
-        updatePlayer: jest.fn().mockReturnValue(player),
+        updatePlayer: jest.fn().mockReturnValue({ status: 'accepted', player }),
       };
       const { gateway } = makeGateway(worldService);
       const client = makeClient({
         data: { player: { mapId: 1 } },
       });
 
-      gateway.handlePlayerMove(client, { worldX: 1024, worldY: 2048, mapId: 1 });
+      gateway.handlePlayerMove(client, {
+        worldX: 1024,
+        worldY: 2048,
+        mapId: 1,
+      });
 
       const broadcastTo = (client.broadcast as any).to;
       expect(broadcastTo).toHaveBeenCalledWith(getMapRoomId(1));
       expect((client.broadcast as any).emit).not.toHaveBeenCalled();
+      expect(client.emit).not.toHaveBeenCalledWith(
+        'player_position_correction',
+        expect.anything(),
+      );
     });
 
-    it("change de room si mapId change lors d'un player_move", () => {
-      const player = makePlayer({ mapId: 2 });
+    it('mouvement rejeté : player_position_correction émis au seul client fautif, pas de player_moved', () => {
+      const player = makePlayer({ mapId: 1, worldX: 1600, worldY: 8000 });
       const worldService = {
-        updatePlayer: jest.fn().mockReturnValue(player),
+        updatePlayer: jest.fn().mockReturnValue({
+          status: 'rejected',
+          player,
+          reason: 'speed_limit',
+        }),
       };
       const { gateway } = makeGateway(worldService);
       const client = makeClient({
         data: { player: { mapId: 1 } },
       });
 
-      gateway.handlePlayerMove(client, { worldX: 1024, worldY: 2048, mapId: 2 });
+      gateway.handlePlayerMove(client, {
+        worldX: 999_999,
+        worldY: 0,
+        mapId: 1,
+      });
 
-      expect(client.leave).toHaveBeenCalledWith(getMapRoomId(1));
-      expect(client.join).toHaveBeenCalledWith(getMapRoomId(2));
+      expect(client.emit).toHaveBeenCalledWith(
+        'player_position_correction',
+        expect.objectContaining({
+          worldX: 1600,
+          worldY: 8000,
+          mapId: 1,
+          reason: 'speed_limit',
+          serverTime: expect.any(Number),
+        }),
+      );
+      // Aucun broadcast : ni la room ni les autres clients ne voient le rejet.
+      expect((client.broadcast as any).to).not.toHaveBeenCalled();
+    });
+
+    it('mouvement rejeté en rate_limit : drop silencieux, aucune correction émise', () => {
+      const player = makePlayer({ mapId: 1 });
+      const worldService = {
+        updatePlayer: jest.fn().mockReturnValue({
+          status: 'rejected',
+          player,
+          reason: 'rate_limit',
+        }),
+      };
+      const { gateway } = makeGateway(worldService);
+      const client = makeClient({
+        data: { player: { mapId: 1 } },
+      });
+
+      gateway.handlePlayerMove(client, {
+        worldX: 1024,
+        worldY: 2048,
+        mapId: 1,
+      });
+
+      expect(client.emit).not.toHaveBeenCalled();
+      expect((client.broadcast as any).to).not.toHaveBeenCalled();
     });
   });
 

@@ -135,24 +135,29 @@ export class WorldGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
     @ConnectedSocket() client: WorldSocket,
     @MessageBody() payload: { worldX: number; worldY: number; mapId: number; direction?: string },
   ) {
-    if (
-      !payload ||
-      !Number.isFinite(payload.worldX) ||
-      !Number.isFinite(payload.worldY) ||
-      !Number.isFinite(payload.mapId)
-    ) {
+    if (!payload) return;
+
+    // M4 Phase A : le serveur valide la proposition (payload invalide, spam,
+    // mapId, distance/vitesse) — voir WorldService.updatePlayer.
+    const result = this.worldService.updatePlayer(client, payload);
+    if (!result) return;
+
+    if (result.status === 'rejected') {
+      // Correction émise UNIQUEMENT au client fautif, jamais broadcastée.
+      // rate_limit : drop silencieux (pas d'amplification spam → corrections).
+      if (result.reason !== 'rate_limit') {
+        client.emit('player_position_correction', {
+          worldX: result.player.worldX,
+          worldY: result.player.worldY,
+          mapId: result.player.mapId,
+          reason: result.reason,
+          serverTime: Date.now(),
+        });
+      }
       return;
     }
 
-    const previousMapId = client.data.player?.mapId;
-    const player = this.worldService.updatePlayer(client, payload);
-    if (!player) return;
-
-    if (previousMapId !== player.mapId) {
-      if (previousMapId != null) client.leave(getMapRoomId(previousMapId));
-      client.join(getMapRoomId(player.mapId));
-    }
-
+    const player = result.player;
     client.broadcast.to(getMapRoomId(player.mapId)).emit('player_moved', playerBroadcast(player));
   }
 
