@@ -32,6 +32,7 @@ lire l'ADR du domaine ou demander validation.
 13. **Frontend : SCSS uniquement.** Style inline autorisé seulement pour la géométrie dynamique (ex. `width: pct%`).
 14. **Assets hors scope** : ne jamais mélanger assets, docs et code dans un même commit ; exclure explicitement les dossiers d'assets en cours.
 15. **Ownership systématique** : tout endpoint joueur dérive le personnage du JWT (`req.user.userId`) et vérifie `character.userId === userId` (pattern : `InventoryService.assertCharacterOwnership`). Les variantes admin (`*AsAdmin`) sont séparées et role-gated en amont.
+16. **Mouvement joueur : ne jamais réintroduire un `player_move` client-autoritaire.** Le client propose, le serveur valide/corrige (`WorldService.updatePlayer`, ADR-0003). Tout rejet laisse la position serveur inchangée et émet `player_position_correction` au seul fautif. Les mouvements forcés (teleport admin, respawn) passent hors pipeline mais doivent resynchroniser le distance gate (`resyncMovementValidation`).
 
 ## Checklist avant modification d'un domaine
 

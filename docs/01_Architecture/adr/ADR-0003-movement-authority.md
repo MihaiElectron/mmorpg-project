@@ -2,14 +2,15 @@
 
 ## Metadata
 
-- Status: Draft
-- Decision status: Proposed
+- Status: Accepted
+- Decision status: Accepted
 - Owner: Project
-- Last updated: 2026-06-21
+- Last updated: 2026-07-07
 - Date proposed: 2026-06-21
-- Date accepted: N/A
-- Approved by: TBD
-- Approval reference: TBD
+- Date accepted: 2026-07-07
+- Approved by: Project owner
+- Approval reference: M4 Phase A livrée et validée en jeu — commit cea4395
+  (feat(world): valider les déplacements joueur côté serveur)
 - Depends on:
   - docs/01_Architecture/adr/ADR-0001-world-coordinate-system.md
   - docs/01_Architecture/adr/ADR-0002-entity-positioning.md
@@ -267,8 +268,8 @@ display technique only.
 
 ### 5. Payload contract (target state)
 
-The current `player_move` payload `{ x, y, direction }` in pixel units must be
-replaced. The target payload is:
+The historical `player_move` payload `{ x, y, direction }` in pixel units has
+been replaced (migration P5). The payload in production is:
 
 ```
 player_move: {
@@ -306,8 +307,10 @@ player_position_correction: {
 }
 ```
 
-The event name `player_position_correction` is proposed here. The final name
-is an open question.
+The event name `player_position_correction` is confirmed (implemented in
+Phase A). The payload carries `mapId`, `reason`
+(`invalid_payload | map_mismatch | speed_limit`) and `serverTime`; no sequence
+number yet (deferred to full prediction/reconciliation).
 
 ### 6. Forced movement (server-initiated)
 
@@ -432,6 +435,57 @@ without the full complexity of server-side movement integration.
 
 ---
 
+## Implementation status — M4 Phase A (Implemented, 2026-07-07)
+
+Le cœur de cette décision (option C : le client propose, le serveur
+valide/corrige) est implémenté depuis le commit `cea4395`. État réel :
+
+- **Payload réel** (WU depuis la migration P5, contrairement au contexte
+  historique en pixels décrit plus haut) :
+  `player_move { worldX: number, worldY: number, mapId: number, direction?: string }`.
+  Note : `mapId` est un `number` (pas une `string` comme proposé initialement).
+- **Pipeline serveur bloquant** (`WorldService.updatePlayer`) — un rejet laisse
+  la position runtime inchangée, n'émet aucun `player_moved` et n'écrit jamais
+  en DB :
+  1. payload invalide (non-fini, hors plage plausible) → rejet `invalid_payload` ;
+  2. rate-limit serveur (`PLAYER_MOVE_MIN_INTERVAL_MS = 30`) → rejet
+     `rate_limit`, drop silencieux (aucune correction émise, anti-amplification) ;
+  3. `mapId` différent du mapId serveur → rejet `map_mismatch` (aucun
+     changement de map via `player_move`) ;
+  4. distance gate → rejet `speed_limit` si
+     `distance > PLAYER_BASE_SPEED_WU_PER_SEC × PLAYER_MOVE_TOLERANCE_MULTIPLIER × dt`.
+- **Vitesse V1 = constante serveur** : `PLAYER_BASE_SPEED_WU_PER_SEC = 3600`
+  (calibrée sur le client à 100 px/s, pire cas diagonal iso ≈ 3578 WU/s),
+  `PLAYER_MOVE_TOLERANCE_MULTIPLIER = 1.5`, `dt` borné à
+  `[PLAYER_MOVE_MIN_DT_MS = 25, PLAYER_MOVE_MAX_DT_MS = 1000]` ms (un joueur
+  inactif n'accumule pas de budget de saut illimité).
+- **Event de correction implémenté** :
+  `player_position_correction { worldX, worldY, mapId, reason, serverTime }`,
+  émis uniquement au client fautif, jamais broadcasté. Côté client
+  (`WorldScene`) : snap immédiat sur la position serveur + arrêt du déplacement
+  en cours (pas de re-proposition de la position rejetée, pas de boucle).
+- **Consommateurs protégés** : combat, récolte, aggro, pickup, craft et
+  interactions bâtiments lisent `ConnectedPlayer` runtime, désormais garanti
+  validé par le pipeline.
+- **Mouvements forcés serveur hors pipeline** (§6) : `admin:teleport` (rôle
+  vérifié serveur) et respawn restent appliqués inconditionnellement, avec
+  resynchronisation du distance gate (`resyncMovementValidation`) pour éviter
+  tout faux rejet du mouvement légitime suivant. Les futures transitions de
+  map serveur suivront le même chemin.
+
+**Limites restantes (hors Phase A)** :
+
+- pas encore de map bounds serveur (étape 1.6) ;
+- pas encore de walkability serveur (étapes 1.4–1.5) ;
+- `mapId` encore hardcodé à `1` côté client (`WorldScene.syncLocalPlayer`) —
+  sans impact d'autorité : le serveur ne le croit plus ;
+- la vitesse n'est pas encore issue des stats personnage (`effectiveSpeed`
+  par personnage, §3) — constante serveur globale en V1 ;
+- un client patient peut encore dériver à ~1.5× la vitesse légitime (borne du
+  budget) : c'est la limite assumée du modèle distance gate.
+
+---
+
 ## Migration plan
 
 The following migrations are required to implement this ADR. They are listed
@@ -485,18 +539,18 @@ These items are not defined by this ADR but block its implementation.
 
 The following questions are not resolved by this ADR.
 
-1. **Tolerance factor for the distance gate.** What multiplier accommodates
-   realistic network jitter without allowing speed hacking to pass? This
-   requires measurement under real conditions.
+1. **Tolerance factor for the distance gate.** *Résolu (Phase A, valeur
+   initiale)* : `1.5`, validé en jeu sans faux rejet constaté. À recalibrer
+   par mesure si des corrections apparaissent en conditions réseau réelles.
 
-2. **Correction event name and payload.** `player_position_correction` is
-   proposed here. Should it also carry `mapId`? Should it include a sequence
-   number for future reconciliation?
+2. **Correction event name and payload.** *Résolu (Phase A)* :
+   `player_position_correction { worldX, worldY, mapId, reason, serverTime }`.
+   Pas de numéro de séquence (différé à la prédiction/réconciliation complète).
 
-3. **Client correction UX.** Should the client snap immediately to the
-   corrected position, or interpolate smoothly? Snapping is simpler but
-   visually jarring. Interpolation is smoother but may allow brief periods
-   of divergence.
+3. **Client correction UX.** *Résolu (Phase A)* : snap immédiat + arrêt du
+   déplacement en cours (`cancelMouseMove`). Un joueur légitime ne reçoit
+   normalement jamais de correction ; l'interpolation douce reste une option
+   future si les faux positifs deviennent mesurables.
 
 4. **Full prediction + reconciliation.** When does the project need sequence
    numbers and server-side input replay? What player count or latency
@@ -540,8 +594,8 @@ The following questions are not resolved by this ADR.
 - [x] Creature model analyzed as reference implementation.
 - [x] Security impact reviewed.
 - [x] Performance impact reviewed.
-- [ ] Human approval recorded.
-- [ ] Related documentation updated (deferred until this ADR is accepted).
+- [x] Human approval recorded.
+- [x] Related documentation updated (STATUS.md, ai-agent-rules.md, CLAUDE.md).
 
 ---
 
@@ -639,16 +693,19 @@ rooms (future) will reduce the broadcast cost independently of this ADR.
 
 ## TODO
 
-- [ ] Obtain human approval and record it in `Approved by` and
-  `Approval reference`.
-- [ ] Set `Decision status` to `Accepted` after human validation.
-- [ ] Set `Date accepted` after human validation.
-- [ ] Resolve Phase 0 prerequisites (ADR-0001, ADR-0002) before beginning
-  Phase 1 implementation.
+- [x] Obtain human approval and record it in `Approved by` and
+  `Approval reference`. (2026-07-07, commit cea4395)
+- [x] Set `Decision status` to `Accepted` after human validation.
+- [x] Set `Date accepted` after human validation.
+- [x] Resolve Phase 0 prerequisites (ADR-0001, ADR-0002) — migration WU P0–P7
+  soldée.
+- [x] Answer open question 1 (tolerance factor) — 1.5 en production,
+  recalibrage par mesure si nécessaire.
+- [x] Implement `player_position_correction` client handler (step 1.7) —
+  livré avec le distance gate (step 1.3) dans le même commit.
 - [ ] Answer open questions 6 and 7 (tile collision format on server) before
-  implementing step 1.4.
-- [ ] Answer open question 1 (tolerance factor) before activating step 1.3 in
-  production.
-- [ ] Implement `player_position_correction` client handler (step 1.7) before
-  activating the server-side distance gate (step 1.3) to avoid uncorrected
-  client drift.
+  implementing steps 1.4–1.5 (walkability, Phase C).
+- [ ] Implement map bounds check (step 1.6, Phase C).
+- [ ] Replace the global `PLAYER_BASE_SPEED_WU_PER_SEC` constant with a
+  per-character server-owned `effectiveSpeed` (§3) when speed becomes a
+  character stat.

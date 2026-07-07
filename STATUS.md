@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-07-01_
+_Dernière mise à jour : 2026-07-07_
 _Branche : main — État : développement local_
 
 ---
@@ -9,6 +9,7 @@ _Branche : main — État : développement local_
 
 Backend NestJS + PostgreSQL opérationnels. Frontend React/Vite + Phaser connecté via Socket.IO.
 Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` source de vérité unique).
+**Mouvement serveur autoritaire — M4 Phase A livrée (ADR-0003 Accepted, commit cea4395)** : `player_move` est validé côté serveur (`WorldService.updatePlayer` — payload invalide, rate-limit 30 ms, mapId, distance gate 3600 WU/s × 1.5, dt borné 25–1000 ms). Tout rejet laisse la position runtime inchangée, n'écrit rien en DB et émet `player_position_correction` au seul client fautif (le client snap et stoppe son déplacement). Téléportation et speedhack via `player_move` fermés ; combat/récolte/aggro lisent une position runtime validée. `admin:teleport`/respawn = mouvements forcés serveur hors pipeline, avec resync du distance gate. Restent Phase C : bounds/walkability serveur.
 **Runtime V2 terminé** : `ItemTransferService` couvre 20 transitions sur 10 domaines, verrou pessimiste systématique.
 **Building Runtime implémenté** : `BuildingTemplate`/`Building`, WOM adapter, CRUD admin, rendu WorldScene, WindowManager, Auction/Mail connectés aux buildings avec validation distance.
 **Market Lots implémentés** : objets STACKABLE vendables via l'Auction House — pipeline Inventory → LOT → Auction → Mail → Claim → Inventory validé en base (5 cas + 6 contrôles de sécurité).
@@ -60,6 +61,9 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | `RespawnPoint.radius` en pixels (drift respawn) — `legacyRadiusToWU()` disponible | Low | WU cleanup |
 | — | Templates IA (`aggroRadius`, `patrolRadius`, `speedMin/Max`) encore en pixels en DB | Medium | WU cleanup |
 | — | `mapId` hardcodé à `1` dans DevToolsStore/WorldScene | Medium | multi-cartes |
+| — | M4 Phase C — bounds et walkability serveur absents (le distance gate ne vérifie ni les limites de map ni les collisions) | Medium | M4 Phase C |
+| — | `admin:teleport` téléporte l'admin lui-même (cible = source de coordonnées uniquement), sans mapId ni reset combat ni `character:reload` — refonte multi-cible prévue | Low | Admin teleport V2 |
+| — | Vitesse joueur = constante serveur globale (`PLAYER_BASE_SPEED_WU_PER_SEC`), pas encore une stat dérivée par personnage | Low | Progression/Movement |
 | — | Double console admin (`ActionPanel.tsx` + `AdminPanelWOM.tsx`) | Low | — |
 | — | `server.emit` broadcast global — pas de rooms/zones | Medium | montée en charge |
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |

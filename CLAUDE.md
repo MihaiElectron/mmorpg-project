@@ -319,6 +319,9 @@ qu'elle decrit.
 - Valider les payloads entrants, surtout WebSocket et HTTP.
 - Ne jamais faire confiance au client pour les degats, positions critiques,
   inventaire, loot, autorisations ou ownership.
+- Mouvement joueur : le client propose, le serveur valide/corrige
+  (`WorldService.updatePlayer`, ADR-0003). Ne jamais reintroduire un
+  `player_move` accepte sans validation.
 - Garder les calculs metier cote serveur.
 - Verifier l'appartenance d'une ressource/personnage/action quand c'est
   pertinent.
