@@ -1,13 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ProgressionService, ProgressionSource, STAT_POINTS_PER_LEVEL } from './progression.service';
+import { ProgressionService, ProgressionSource } from './progression.service';
 import { GameConfigService } from '../game-config/game-config.service';
 
-function makeConfig(overrides: Partial<{ characterBaseXpPerLevel: number; characterXpCurveExponent: number; characterMaxLevel: number }> = {}) {
+const STAT_POINTS_PER_LEVEL = 5;
+
+function makeConfig(overrides: Partial<Record<string, number>> = {}) {
   return {
     id: 1,
-    characterBaseXpPerLevel: 100,
-    characterXpCurveExponent: 1.5,
+    // Modèle XP par tranches (ADR-0018). Multiplicateur 2 en tranche 1-10 pour
+    // des seuils ronds dans les tests : 1->2=100, 2->3=200, 3->4=400...
+    startingXp: 100,
+    xpMultiplierLevel1To10: 2,
+    xpMultiplierLevel11To30: 1.5,
+    xpMultiplierLevel31To60: 1.25,
+    xpMultiplierLevel61To120: 1.1,
     characterMaxLevel: 100,
+    characterCurrentLevelCap: 60,
+    statPointsAtLevelOne: 3,
+    statPointsPerLevel: STAT_POINTS_PER_LEVEL,
+    masteryNaturalCap: 1000,
+    masteryOvercap: 2000,
     ...overrides,
   };
 }
@@ -30,14 +42,13 @@ describe('ProgressionService', () => {
   });
 
   describe('getNextLevelXp', () => {
-    it("retourne la bonne valeur pour le niveau 1", async () => {
-      // Math.round(100 * 1^1.5) = 100
+    it("retourne le cout de la marche 1 -> 2 (startingXp)", async () => {
       expect(await service.getNextLevelXp(1)).toBe(100);
     });
 
-    it("retourne la bonne valeur pour le niveau 2", async () => {
-      // Math.round(100 * 2^1.5) = Math.round(100 * 2.828) = 283
-      expect(await service.getNextLevelXp(2)).toBe(283);
+    it("retourne le cout de la marche 2 -> 3 (multiplicateur de tranche)", async () => {
+      // 100 * 2 = 200
+      expect(await service.getNextLevelXp(2)).toBe(200);
     });
   });
 
@@ -94,19 +105,18 @@ describe('ProgressionService', () => {
       };
     }
 
-    it("accorde 5 points pour un seul niveau gagne", async () => {
+    it("accorde les points configures pour un seul niveau gagne", async () => {
       const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
       const result = await service.applyCharacterXpInTx("char-1", 100, ProgressionSource.COMBAT, manager as any);
       expect(result.gainedLevels).toBe(1);
       expect(result.unspentStatPoints).toBe(STAT_POINTS_PER_LEVEL);
     });
 
-    it("accorde 5 points par niveau pour un multi-level", async () => {
-      // base 100, exp 1 (lineaire) : seuils 1->2 = 100, 2->3 = 200, 3->4 = 300
-      gameConfigService.getConfig.mockResolvedValue(makeConfig({ characterXpCurveExponent: 1.0 }));
+    it("accorde les points configures par niveau pour un multi-level", async () => {
+      // Tranche 1-10, multiplicateur 2 : 1->2=100, 2->3=200, 3->4=400.
+      // 100 + 200 + 400 = 700 -> 3 niveaux gagnes.
       const manager = makeManager({ id: "char-1", level: 1, experience: 0 });
-      // 100 + 200 + 300 = 600 -> 3 niveaux
-      const result = await service.applyCharacterXpInTx("char-1", 600, ProgressionSource.COMBAT, manager as any);
+      const result = await service.applyCharacterXpInTx("char-1", 700, ProgressionSource.COMBAT, manager as any);
       expect(result.gainedLevels).toBe(3);
       expect(result.unspentStatPoints).toBe(3 * STAT_POINTS_PER_LEVEL);
     });

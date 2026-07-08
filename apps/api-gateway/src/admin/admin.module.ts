@@ -28,6 +28,7 @@ import { ItemModule } from '../items/item.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SkillsModule } from '../skills/skills.module';
+import { GameConfigModule } from '../game-config/game-config.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { SkillsModule } from '../skills/skills.module';
     ItemTransferModule,
     InventoryModule,
     SkillsModule,
+    GameConfigModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

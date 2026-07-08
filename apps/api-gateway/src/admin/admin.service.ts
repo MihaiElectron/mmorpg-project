@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import * as fs from 'fs';
 import * as nodePath from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, MoreThan, In } from 'typeorm';
+import { DataSource, Repository, Not, MoreThan, In } from 'typeorm';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { MIN_CRAFT_TIME_MS, MIN_CRAFT_TIME_MESSAGE } from '../crafting/crafting.constants';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
@@ -33,6 +33,15 @@ import { SkillDefinition } from '../skills/entities/skill-definition.entity';
 import { PlayerSkill } from '../skills/entities/player-skill.entity';
 import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../skills/adapters/skill-definition-world-object.adapter';
 import { type MovementMetrics, WorldService } from '../world/world.service';
+import { GameConfigService } from '../game-config/game-config.service';
+import { GameConfig } from '../game-config/game-config.entity';
+import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
+import { RecalculateCharacterStatPointsDto } from '../game-config/dto/recalculate-character-stat-points.dto';
+import {
+  xpToReachLevel,
+  cumulativeXpToLevel,
+  totalStatPointsForLevel,
+} from '../progression/progression.formula';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
 import { toCreatureWorldObject, CreatureWorldObject } from '../creatures/adapters/creature-world-object.adapter';
@@ -57,6 +66,76 @@ export interface AdminEquipmentEntry {
   /** Slot d'équipement natif de l'item (compatibilité), null si absent. */
   equipSlot: string | null;
   objectMode: string | null;
+}
+
+/** Un échantillon de progression calculé serveur pour l'aperçu Studio (niveaux fixes). */
+export interface GameConfigSample {
+  level: number;
+  totalStatPoints: number;
+  /** XP requise pour la marche (level - 1) → level. 0 pour le niveau 1. */
+  xpToReachLevel: number;
+  /** XP cumulée depuis le niveau 1 jusqu'à ce niveau inclus. */
+  cumulativeXp: number;
+}
+
+/**
+ * Simulation XP pour un niveau cible demandé explicitement par le Studio
+ * (zone "Simulation XP" du panneau Character Progression).
+ */
+export interface GameConfigSimulation {
+  previousLevel: number;
+  targetLevel: number;
+  xpForTransition: number;
+  cumulativeXpToTarget: number;
+}
+
+/** Résultat d'aperçu des règles globales (aucune écriture, aucun recalcul). */
+export interface GameConfigPreview {
+  current: GameConfig;
+  draft: GameConfig;
+  affectedCharacterCount: number;
+  samples: GameConfigSample[];
+  simulation: GameConfigSimulation;
+  resetExecuted: false;
+  note: string;
+}
+
+/**
+ * Colonnes Character portant les 8 stats primaires distribuées par le joueur
+ * (Progression V1). Seule liste utilisée pour le reset destructif — ne pas
+ * dupliquer ailleurs ; réutiliser cette constante pour toute évolution future.
+ */
+const ADMIN_STAT_POINT_FIELDS = [
+  'baseStrength',
+  'baseVitality',
+  'baseEndurance',
+  'baseAgility',
+  'baseDexterity',
+  'baseIntelligence',
+  'baseWisdom',
+  'baseCritical',
+] as const satisfies readonly (keyof Character)[];
+
+/** Une erreur ligne par ligne rencontrée pendant le recalcul (best-effort). */
+export interface StatPointsRecalculationError {
+  characterId: string;
+  message: string;
+}
+
+/**
+ * Rapport du recalcul global des points de stats (ADR-0018 §1, Étape 1B).
+ * Action destructive : les stats primaires distribuées sont remises à 0 et
+ * `unspentStatPoints` est recalculé depuis `GameConfig` + le niveau courant.
+ */
+export interface StatPointsRecalculationReport {
+  processedCharacterCount: number;
+  totalCharacterCount: number;
+  /** Somme, avant recalcul, des points dépensés + non dépensés de tous les personnages. */
+  oldDistributedTotal: number;
+  /** Somme, après recalcul, des points disponibles (unspentStatPoints) de tous les personnages. */
+  newAvailableTotal: number;
+  errors: StatPointsRecalculationError[];
+  executedAt: string;
 }
 
 export interface AdminCharacterDetails {
@@ -138,7 +217,161 @@ export class AdminService {
     private readonly inventoryProjection: InventoryProjectionService,
     private readonly skillsService: SkillsService,
     private readonly economyService: EconomyService,
+    private readonly gameConfigService: GameConfigService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  // ── Règles globales de progression (GameConfig — ADR-0018, Étape 1A) ────────
+
+  /** Lecture des règles globales courantes. */
+  async getGameConfig(): Promise<GameConfig> {
+    return this.gameConfigService.getConfig();
+  }
+
+  /**
+   * Applique un brouillon de règles globales. Le serveur reste seul décideur ;
+   * aucun recalcul destructif des personnages n'est exécuté en Étape 1A.
+   */
+  async updateGameConfig(dto: UpdateGameConfigDto): Promise<GameConfig> {
+    return this.gameConfigService.updateConfig(dto);
+  }
+
+  /**
+   * Aperçu serveur d'un brouillon de règles globales, SANS écriture ni
+   * recalcul. Toutes les valeurs d'exemple et la simulation sont calculées
+   * côté serveur à partir des formules pures de progression — le Studio ne
+   * recalcule rien.
+   *
+   * `targetLevel` pilote la zone "Simulation XP" du panneau Studio (transition
+   * previousLevel → targetLevel). Par défaut, simule le passage vers le cap de
+   * niveau courant du brouillon.
+   */
+  async previewGameConfig(
+    dto: UpdateGameConfigDto,
+    targetLevel?: number,
+  ): Promise<GameConfigPreview> {
+    const current = await this.gameConfigService.getConfig();
+    const draft = { ...current, ...dto } as GameConfig;
+
+    const affectedCharacterCount = await this.characterRepo.count();
+
+    // Échantillons fixes demandés par le design Studio (lisibilité par palier).
+    const sampleLevels = [1, 10, 30, 60, 120].filter(
+      (level) => level <= draft.characterMaxLevel,
+    );
+    if (!sampleLevels.includes(draft.characterMaxLevel)) {
+      sampleLevels.push(draft.characterMaxLevel);
+    }
+
+    const samples: GameConfigSample[] = sampleLevels.map((level) => ({
+      level,
+      totalStatPoints: totalStatPointsForLevel(level, draft),
+      xpToReachLevel: xpToReachLevel(level, draft),
+      cumulativeXp: cumulativeXpToLevel(level, draft),
+    }));
+
+    const resolvedTargetLevel = Math.min(
+      Math.max(2, targetLevel ?? draft.characterCurrentLevelCap),
+      draft.characterMaxLevel,
+    );
+    const simulation: GameConfigSimulation = {
+      previousLevel: resolvedTargetLevel - 1,
+      targetLevel: resolvedTargetLevel,
+      xpForTransition: xpToReachLevel(resolvedTargetLevel, draft),
+      cumulativeXpToTarget: cumulativeXpToLevel(resolvedTargetLevel, draft),
+    };
+
+    return {
+      current,
+      draft,
+      affectedCharacterCount,
+      samples,
+      simulation,
+      resetExecuted: false,
+      note:
+        'Aperçu uniquement. Aucune écriture effectuée par cette requête. ' +
+        'Le reset global / réaffectation des points des personnages existants ' +
+        "n'est PAS exécuté en Étape 1A (ADR-0018 §1).",
+    };
+  }
+
+  /**
+   * Recalcul global DESTRUCTIF des points de stats de tous les personnages
+   * (ADR-0018 §1, Étape 1B).
+   *
+   * Pour chaque personnage :
+   *   - les 8 stats primaires distribuées (base{Strength,Vitality,Endurance,
+   *     Agility,Dexterity,Intelligence,Wisdom,Critical}) sont remises à 0 ;
+   *   - `unspentStatPoints` est recalculé depuis GameConfig courant + le
+   *     niveau actuel via `totalStatPointsForLevel` — la MÊME formule pure que
+   *     l'aperçu Studio (pas de système parallèle).
+   *
+   * Les stats dérivées (physicalAttack, defense, maxHealth…) ne sont pas
+   * stockées : elles sont recalculées à la volée par `CharacterStatsCalculator`
+   * à la prochaine lecture, donc automatiquement à jour après ce reset.
+   *
+   * Exige `confirm: true` explicite. Exécuté en une seule transaction DataSource
+   * (tout ou rien) — `errors` reste réservé aux anomalies ligne par ligne qui
+   * n'empêchent pas la transaction de committer.
+   */
+  async recalculateCharacterStatPoints(
+    dto: RecalculateCharacterStatPointsDto,
+  ): Promise<StatPointsRecalculationReport> {
+    if (dto?.confirm !== true) {
+      throw new BadRequestException(
+        'confirm=true requis explicitement pour cette action destructive.',
+      );
+    }
+
+    const cfg = await this.gameConfigService.getConfig();
+    const errors: StatPointsRecalculationError[] = [];
+    let processedCharacterCount = 0;
+    let oldDistributedTotal = 0;
+    let newAvailableTotal = 0;
+
+    const characters = await this.characterRepo.find();
+
+    await this.dataSource.transaction(async (manager) => {
+      for (const character of characters) {
+        try {
+          const oldDistributed =
+            ADMIN_STAT_POINT_FIELDS.reduce(
+              (sum, field) => sum + (character[field] ?? 0),
+              0,
+            ) + (character.unspentStatPoints ?? 0);
+
+          const newUnspent = totalStatPointsForLevel(character.level, cfg);
+
+          const resetFields = Object.fromEntries(
+            ADMIN_STAT_POINT_FIELDS.map((field) => [field, 0]),
+          );
+
+          await manager.update(Character, character.id, {
+            ...resetFields,
+            unspentStatPoints: newUnspent,
+          });
+
+          oldDistributedTotal += oldDistributed;
+          newAvailableTotal += newUnspent;
+          processedCharacterCount++;
+        } catch (err) {
+          errors.push({
+            characterId: character.id,
+            message: err instanceof Error ? err.message : 'Erreur inconnue.',
+          });
+        }
+      }
+    });
+
+    return {
+      processedCharacterCount,
+      totalCharacterCount: characters.length,
+      oldDistributedTotal,
+      newAvailableTotal,
+      errors,
+      executedAt: new Date().toISOString(),
+    };
+  }
 
   // ── Assets — sandbox filesystem ──────────────────────────────────────────
 

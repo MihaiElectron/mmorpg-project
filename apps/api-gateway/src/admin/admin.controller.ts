@@ -7,6 +7,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
+import { RecalculateCharacterStatPointsDto } from '../game-config/dto/recalculate-character-stat-points.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -89,6 +91,38 @@ export class AdminController {
     const updated = await this.adminService.updateCharacter(id, fields);
     if (!updated) throw new NotFoundException(`Personnage "${id}" introuvable.`);
     return updated;
+  }
+
+  // ── Règles globales de progression (GameConfig — ADR-0018, Étape 1A) ────────
+
+  @Get('game-config')
+  getGameConfig() { return this.adminService.getGameConfig(); }
+
+  @Post('game-config/preview')
+  previewGameConfig(
+    @Body() dto: UpdateGameConfigDto,
+    @Query('targetLevel') targetLevel?: string,
+  ) {
+    const parsed = targetLevel != null ? Number(targetLevel) : undefined;
+    return this.adminService.previewGameConfig(
+      dto,
+      parsed != null && Number.isFinite(parsed) ? parsed : undefined,
+    );
+  }
+
+  @Patch('game-config')
+  updateGameConfig(@Body() dto: UpdateGameConfigDto) {
+    return this.adminService.updateGameConfig(dto);
+  }
+
+  /**
+   * Action destructive : remet à 0 les stats primaires distribuées de tous
+   * les personnages et recalcule `unspentStatPoints` depuis GameConfig +
+   * niveau courant. Exige `{ confirm: true }` (ADR-0018 §1, Étape 1B).
+   */
+  @Post('game-config/recalculate-character-stat-points')
+  recalculateCharacterStatPoints(@Body() dto: RecalculateCharacterStatPointsDto) {
+    return this.adminService.recalculateCharacterStatPoints(dto);
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

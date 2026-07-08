@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { GameConfigService } from '../game-config/game-config.service';
 import { Character } from '../characters/entities/character.entity';
+import { xpToAdvanceFromLevel } from './progression.formula';
 
 export enum ProgressionSource {
   COMBAT      = 'COMBAT',
@@ -22,19 +23,13 @@ export interface CharacterXpResult {
   unspentStatPoints: number;
 }
 
-/**
- * Points de stats accordés par niveau gagné (Progression V1).
- * Constante serveur — non éditable via DevTools en V1.
- */
-export const STAT_POINTS_PER_LEVEL = 5;
-
 @Injectable()
 export class ProgressionService {
   constructor(private readonly gameConfigService: GameConfigService) {}
 
   async getNextLevelXp(level: number): Promise<number> {
     const cfg = await this.gameConfigService.getConfig();
-    return Math.round(cfg.characterBaseXpPerLevel * Math.pow(level, cfg.characterXpCurveExponent));
+    return xpToAdvanceFromLevel(level, cfg);
   }
 
   async applyCharacterXpInTx(
@@ -50,16 +45,14 @@ export class ProgressionService {
     if (!character) throw new Error(`Character ${characterId} introuvable.`);
 
     const cfg = await this.gameConfigService.getConfig();
-    const base = cfg.characterBaseXpPerLevel;
-    const exp  = cfg.characterXpCurveExponent;
-    const max  = cfg.characterMaxLevel;
+    const max = cfg.characterMaxLevel;
 
     let { level, experience } = character;
     const startLevel = level;
     experience += amount;
 
     while (level < max) {
-      const needed = Math.round(base * Math.pow(level, exp));
+      const needed = xpToAdvanceFromLevel(level, cfg);
       if (experience < needed) break;
       experience -= needed;
       level++;
@@ -71,8 +64,10 @@ export class ProgressionService {
     // Points de stats accordés dans la MÊME transaction/verrou que le level-up,
     // proportionnels au nombre de niveaux réellement gagnés (multi-level géré,
     // aucune double attribution : basé sur startLevel figé sous verrou).
+    // Le nombre par niveau est désormais une règle globale configurable
+    // (GameConfig.statPointsPerLevel, ADR-0018) — plus de constante hardcodée.
     const unspentStatPoints =
-      character.unspentStatPoints + gainedLevels * STAT_POINTS_PER_LEVEL;
+      character.unspentStatPoints + gainedLevels * cfg.statPointsPerLevel;
 
     await manager.update(Character, characterId, {
       level,
@@ -80,9 +75,7 @@ export class ProgressionService {
       unspentStatPoints,
     });
 
-    const nextLevelXp = level < max
-      ? Math.round(base * Math.pow(level, exp))
-      : 0;
+    const nextLevelXp = level < max ? xpToAdvanceFromLevel(level, cfg) : 0;
 
     return { level, experience, nextLevelXp, leveledUp, gainedLevels, unspentStatPoints };
   }

@@ -27,6 +27,22 @@ export class GameConfigService implements OnModuleInit {
     return config;
   }
 
+  /**
+   * Applique un patch partiel sur le singleton (id=1) et invalide le cache.
+   * Seul point d'écriture des règles globales. Aucun recalcul de personnage
+   * n'est déclenché ici (ADR-0018 §1 — hors Étape 1A).
+   */
+  async updateConfig(patch: Partial<GameConfig>): Promise<GameConfig> {
+    const current = await this.getConfig();
+    // On ignore toute tentative de changer la clé primaire.
+    const { id: _ignore, ...safePatch } = patch;
+    const merged = this.repo.merge(current, safePatch);
+    merged.id = 1;
+    const saved = await this.repo.save(merged);
+    this.invalidateCache();
+    return saved;
+  }
+
   invalidateCache(): void {
     this.cachedConfig = null;
   }

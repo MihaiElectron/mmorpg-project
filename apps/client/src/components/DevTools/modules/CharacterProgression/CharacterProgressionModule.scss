@@ -1,0 +1,317 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+.character-progression {
+  @include m.panel-section;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__header {
+    align-items: center;
+    border-bottom: 1px solid vars.$panel-border;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding-bottom: 6px;
+    user-select: none;
+  }
+
+  &__title {
+    align-items: center;
+    color: vars.$color-text-gold;
+    display: flex;
+    font-size: 0.85rem;
+    font-weight: bold;
+    gap: 6px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  &__chevron {
+    color: vars.$color-text-muted;
+    font-size: 0.65rem;
+    letter-spacing: 0;
+  }
+
+  &__count,
+  &__status,
+  &__message {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+  }
+
+  &__status {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    padding: 6px 8px;
+  }
+
+  &__status--error,
+  &__message--error {
+    color: #e74c3c;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__note {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    padding: 6px 8px;
+  }
+
+  &__note--warn {
+    border-left: 3px solid #e0a44a;
+    color: #e0a44a;
+  }
+
+  &__group {
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 10px;
+  }
+
+  &__group-title {
+    color: vars.$color-text-gold;
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    padding: 0 4px;
+    text-transform: uppercase;
+  }
+
+  &__group--simulation {
+    border-color: vars.$color-text-gold;
+  }
+
+  &__simulation-result {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 4px;
+  }
+
+  &__simulation-transition {
+    color: vars.$color-text-gold;
+    font-family: vars.$coords-font-family;
+    font-size: 0.85rem;
+    font-weight: bold;
+  }
+
+  &__simulation-xp {
+    font-family: vars.$coords-font-family;
+    font-size: 0.78rem;
+  }
+
+  &__simulation-cumulative {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+  }
+
+  &__field {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 1fr 90px auto;
+  }
+
+  &__label {
+    font-size: 0.75rem;
+  }
+
+  &__input {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+    width: 100%;
+  }
+
+  &__field-current {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  &__field--modified &__input {
+    border-color: #e0a44a;
+  }
+
+  &__field--modified &__field-current {
+    color: #e0a44a;
+  }
+
+  &__field--invalid &__input {
+    border-color: #e74c3c;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  &__btn {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 5px 12px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+  }
+
+  &__btn--primary {
+    border-color: vars.$color-text-gold;
+    color: vars.$color-text-gold;
+  }
+
+  &__preview {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  &__preview-head {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  &__preview-title {
+    color: vars.$color-text-gold;
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  &__preview-stale {
+    color: #e0a44a;
+    font-size: 0.68rem;
+  }
+
+  &__preview-line {
+    font-size: 0.72rem;
+  }
+
+  &__samples {
+    border-collapse: collapse;
+    font-family: vars.$coords-font-family;
+    font-size: 0.7rem;
+    width: 100%;
+
+    th,
+    td {
+      border-bottom: 1px solid vars.$panel-border;
+      padding: 4px 6px;
+      text-align: left;
+    }
+
+    th {
+      color: vars.$color-text-muted;
+      font-weight: normal;
+    }
+  }
+
+  &__preview-note {
+    color: vars.$color-text-muted;
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
+
+  // ── Zone danger — recalcul global des points de stats (ADR-0018 §1) ────────
+  // Volontairement distincte des sections de règles globales ci-dessus : bordure
+  // rouge, fond dédié, jamais mélangée avec "Appliquer" / "Aperçu".
+  &__danger-zone {
+    background: rgba(231, 76, 60, 0.08);
+    border: 1px solid #e74c3c;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 10px 12px;
+  }
+
+  &__danger-title {
+    color: #e74c3c;
+    font-size: 0.78rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  &__danger-text {
+    color: vars.$color-text-primary;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  &__danger-actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  &__btn--danger {
+    border-color: #e74c3c;
+    color: #e74c3c;
+
+    &:hover:not(:disabled) {
+      background: rgba(231, 76, 60, 0.15);
+    }
+  }
+
+  &__danger-report {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  &__danger-errors {
+    color: #e74c3c;
+    font-size: 0.7rem;
+
+    ul {
+      margin: 4px 0 0;
+      padding-left: 16px;
+    }
+  }
+}

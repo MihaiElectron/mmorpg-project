@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { AdminService } from './admin.service';
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { CreatureSpawn } from '../creatures/entities/creature-spawn.entity';
@@ -20,8 +21,19 @@ import { WorldService } from '../world/world.service';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { SkillsService } from '../skills/skills.service';
 import { EconomyService } from '../economy/economy.service';
+import { GameConfigService } from '../game-config/game-config.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
+
+// Fake DataSource dont `.transaction()` exécute réellement le callback avec un
+// manager minimal (`update` mocké) — suffisant pour tester recalculateCharacterStatPoints
+// sans DB réelle.
+const makeFakeDataSource = () => ({
+  transaction: jest.fn().mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+    const manager = { update: jest.fn().mockResolvedValue({}) };
+    return cb(manager);
+  }),
+});
 
 describe('AdminService resources', () => {
   let service: AdminService;
@@ -96,6 +108,8 @@ describe('AdminService resources', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+        { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -537,6 +551,8 @@ describe('AdminService — createSkillDefinition', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+        { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -642,6 +658,8 @@ describe('AdminService — updateSkillDefinition', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+        { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -717,6 +735,8 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
       { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
       { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+      { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+      { provide: DataSource, useValue: makeFakeDataSource() },
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1065,6 +1085,8 @@ describe('createCreatureTemplate', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+        { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1146,6 +1168,8 @@ describe('createResourceTemplate', () => {
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: SkillsService, useValue: { getCharacterSkills: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
+        { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
@@ -1299,5 +1323,147 @@ describe('createResourceTemplate', () => {
       expect(ws.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("char-online");
       expect(ws.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("char-offline");
     });
+  });
+});
+
+describe('AdminService — recalculateCharacterStatPoints', () => {
+  let service: AdminService;
+  let characterRepo: Record<string, jest.Mock>;
+  let gameConfigService: { getConfig: jest.Mock };
+  let fakeDataSource: ReturnType<typeof makeFakeDataSource>;
+
+  function makeCharacter(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'char-1',
+      level: 5,
+      baseStrength: 3,
+      baseVitality: 2,
+      baseEndurance: 1,
+      baseAgility: 0,
+      baseDexterity: 0,
+      baseIntelligence: 0,
+      baseWisdom: 0,
+      baseCritical: 0,
+      unspentStatPoints: 4,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    characterRepo = { ...BASE_EMPTY_REPO(), find: jest.fn().mockResolvedValue([makeCharacter()]) };
+    gameConfigService = {
+      getConfig: jest.fn().mockResolvedValue({
+        statPointsAtLevelOne: 3,
+        statPointsPerLevel: 3,
+      }),
+    };
+    fakeDataSource = makeFakeDataSource();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: InventoryProjectionService, useValue: {} },
+        { provide: SkillsService, useValue: {} },
+        { provide: EconomyService, useValue: {} },
+        { provide: GameConfigService, useValue: gameConfigService },
+        { provide: DataSource, useValue: fakeDataSource },
+        { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Creature), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
+        { provide: getRepositoryToken(Resource), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(ResourceTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(SkillDefinition), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(PlayerSkill), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingRecipe), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingIngredient), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingResult), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
+        { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
+        { provide: WorldService, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get<AdminService>(AdminService);
+  });
+
+  it("rejette sans confirm: true", async () => {
+    await expect(
+      service.recalculateCharacterStatPoints({ confirm: false } as any),
+    ).rejects.toThrow(BadRequestException);
+    expect(fakeDataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejette un payload sans confirm", async () => {
+    await expect(
+      service.recalculateCharacterStatPoints({} as any),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it("remet a 0 les stats primaires et recalcule unspentStatPoints via GameConfig", async () => {
+    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+
+    // niveau 5 : 3 + (5-1)*3 = 15
+    expect(report.processedCharacterCount).toBe(1);
+    expect(report.totalCharacterCount).toBe(1);
+    expect(report.newAvailableTotal).toBe(15);
+    // ancien total = (3+2+1+0+0+0+0+0) + unspentStatPoints(4) = 10
+    expect(report.oldDistributedTotal).toBe(10);
+    expect(report.errors).toEqual([]);
+    expect(typeof report.executedAt).toBe('string');
+  });
+
+  it("appelle manager.update avec les 8 stats a 0 et le nouveau total", async () => {
+    const updateSpy = jest.fn().mockResolvedValue({});
+    (service as any).dataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => {
+        return cb({ update: updateSpy });
+      }),
+    };
+
+    await service.recalculateCharacterStatPoints({ confirm: true });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      Character,
+      'char-1',
+      expect.objectContaining({
+        baseStrength: 0,
+        baseVitality: 0,
+        baseEndurance: 0,
+        baseAgility: 0,
+        baseDexterity: 0,
+        baseIntelligence: 0,
+        baseWisdom: 0,
+        baseCritical: 0,
+        unspentStatPoints: 15,
+      }),
+    );
+  });
+
+  it("traite plusieurs personnages et cumule les totaux", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1', level: 5, unspentStatPoints: 4 }),
+      makeCharacter({ id: 'char-2', level: 10, baseStrength: 10, unspentStatPoints: 0 }),
+    ]);
+
+    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+
+    expect(report.processedCharacterCount).toBe(2);
+    // char-2 niveau 10 : 3 + 9*3 = 30 ; char-1 niveau 5 : 15
+    expect(report.newAvailableTotal).toBe(15 + 30);
+  });
+
+  it("continue et rapporte une erreur si manager.update echoue pour un personnage", async () => {
+    fakeDataSource.transaction = jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => {
+      const manager = { update: jest.fn().mockRejectedValue(new Error('DB down')) };
+      return cb(manager);
+    });
+    (service as any).dataSource = fakeDataSource;
+
+    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+
+    expect(report.processedCharacterCount).toBe(0);
+    expect(report.errors).toEqual([{ characterId: 'char-1', message: 'DB down' }]);
   });
 });
