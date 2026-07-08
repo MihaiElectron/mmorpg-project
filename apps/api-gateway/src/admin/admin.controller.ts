@@ -79,6 +79,14 @@ export class AdminController {
   @Get('characters')
   getCharacters() { return this.adminService.getCharacters(); }
 
+  /** Une seule ligne (même forme qu'un élément de la liste) — refresh ciblé DevTools. */
+  @Get('characters/:id')
+  async getCharacterRow(@Param('id') id: string) {
+    const row = await this.adminService.getCharacterRow(id);
+    if (!row) throw new NotFoundException(`Personnage "${id}" introuvable.`);
+    return row;
+  }
+
   @Get('characters/:id/details')
   async getCharacterDetails(@Param('id') id: string) {
     const details = await this.adminService.getCharacterDetails(id);

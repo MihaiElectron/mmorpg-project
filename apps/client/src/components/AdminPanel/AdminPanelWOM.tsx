@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { getDevToolsStore, useDevToolsStore } from "../../store/devtools.store";
 import { parseCommand } from "../../phaser/admin/commandParser";
 import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
@@ -859,18 +859,72 @@ function PlayerInventoryPanel({
 
 // ── PlayerSection — inspecteur joueurs ────────────────────────────────────────
 
-function PlayerSection({ players, items, onResult }: { players: any[]; items: CatalogItem[]; onResult: (text: string, ok: boolean) => void }) {
+function PlayerSection({
+  players,
+  items,
+  onResult,
+  onPlayerRowUpdated,
+}: {
+  players: any[];
+  items: CatalogItem[];
+  onResult: (text: string, ok: boolean) => void;
+  onPlayerRowUpdated: (row: any) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Set toujours synchronisé avec `expanded`, lu depuis le listener socket
+  // (évite une closure figée sur `expanded` dans l'effet monté une seule fois).
+  const expandedRef = useRef<Set<string>>(new Set());
+  useEffect(() => { expandedRef.current = expanded; }, [expanded]);
+
+  // Refresh CIBLÉ d'un seul joueur (GET /admin/characters/:id — pas la liste
+  // complète). Appelé à l'ouverture d'une ligne et sur événement dirty pour
+  // un joueur déjà ouvert uniquement — évite la surcharge à l'échelle de
+  // centaines de joueurs connectés.
+  const refreshPlayerRow = useCallback((id: string) => {
+    const token = localStorage.getItem("token") ?? "";
+    if (!token) return;
+    fetchAdmin<any>(`/admin/characters/${id}`, token)
+      .then(onPlayerRowUpdated)
+      .catch(() => {});
+  }, [onPlayerRowUpdated]);
 
   function togglePlayer(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      const opening = !next.has(id);
+      if (opening) next.add(id); else next.delete(id);
       return next;
     });
+    // À l'ouverture : garantir des données fraîches (le joueur a pu changer
+    // pendant qu'il était replié, sans qu'aucun refetch n'ait eu lieu).
+    if (!expanded.has(id)) refreshPlayerRow(id);
   }
+
+  // Écoute le signal existant `admin:character_details_dirty` (aucun nouvel
+  // événement) ; ne déclenche un refresh que pour un joueur DÉJÀ OUVERT — les
+  // lignes repliées ne sont jamais refetchées en arrière-plan.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const onDirty = (event: { characterId?: string }) => {
+      const id = event?.characterId;
+      if (!id || !expandedRef.current.has(id)) return;
+      const existing = timers.get(id);
+      if (existing) clearTimeout(existing);
+      timers.set(id, setTimeout(() => {
+        timers.delete(id);
+        refreshPlayerRow(id);
+      }, 200));
+    };
+    socket.on("admin:character_details_dirty", onDirty);
+    return () => {
+      socket.off("admin:character_details_dirty", onDirty);
+      timers.forEach(clearTimeout);
+    };
+  }, [refreshPlayerRow]);
 
   const filtered = players.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const pag = usePagination(filtered.length);
@@ -1078,6 +1132,21 @@ export default function AdminPanelWOM() {
   };
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
+
+  // Patch cible d'UNE ligne "players" (pas de refetch de la liste complete) —
+  // passe a PlayerSection, qui l'appelle uniquement pour le joueur
+  // selectionne/ouvert (evite la surcharge a l'echelle de centaines de
+  // joueurs). Reutilise le patron immuable deja utilise pour sectionData.
+  const patchPlayerRow = useCallback((row: any) => {
+    setSectionData((prev) => {
+      const players = prev.players ?? [];
+      const idx = players.findIndex((p: any) => p.id === row.id);
+      if (idx === -1) return prev;
+      const next = players.slice();
+      next[idx] = row;
+      return { ...prev, players: next };
+    });
+  }, []);
   const [groupData,    setGroupData]    = useState<Record<string, any[]>>({});
   const [instanceData, setInstanceData] = useState<Record<string, any[]>>({});
   const [error,   setError]   = useState<string | null>(null);
@@ -1940,7 +2009,7 @@ export default function AdminPanelWOM() {
         />
       ))}
 
-      <PlayerSection players={sectionData["players"] ?? []} items={items} onResult={pushResult} />
+      <PlayerSection players={sectionData["players"] ?? []} items={items} onResult={pushResult} onPlayerRowUpdated={patchPlayerRow} />
 
       <section className="admin-panel__section">
         <div className="admin-panel__dual-header">

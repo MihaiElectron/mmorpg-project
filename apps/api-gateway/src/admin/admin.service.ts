@@ -415,13 +415,18 @@ export class AdminService {
     });
 
     // Émission après commit uniquement (jamais pendant la transaction).
-    // `emitCharacterReload` ne fait rien si le personnage n'est pas connecté.
+    // `emitCharacterReload` ne fait rien si le personnage n'est pas connecté
+    // (rafraîchit le panneau joueur). `emitAdminCharacterDirty` est diffusé à
+    // la room admin pour TOUS les personnages traités, connectés ou non —
+    // le DevTools (liste Joueurs, miroir Perso) doit refléter le recalcul
+    // même pour un personnage hors ligne.
     let notifiedConnectedCharacterCount = 0;
     for (const characterId of processedCharacterIds) {
       if (this.worldService.getConnectedPlayerByCharacterId(characterId)) {
         notifiedConnectedCharacterCount++;
       }
       this.worldService.emitCharacterReload(characterId);
+      this.worldService.emitAdminCharacterDirty(characterId, 'stats');
     }
 
     return {
@@ -571,20 +576,38 @@ export class AdminService {
 
   // ── Joueurs ───────────────────────────────────────────────────────────────
 
+  /**
+   * Enrichit une ligne Character : position live (ConnectedPlayer si connecté,
+   * sinon DB) + stats dérivées calculées serveur. Utilisé par `getCharacters`
+   * (liste complète) et `getCharacterRow` (une seule ligne, refresh ciblé
+   * DevTools) — logique unique, jamais dupliquée.
+   */
+  private enrichCharacterRow(char: Character): Character & { stats: CharacterStats } {
+    const live = this.worldService.getConnectedPlayerByCharacterId(char.id);
+    if (live) {
+      char.worldX = live.worldX;
+      char.worldY = live.worldY;
+      char.mapId = live.mapId;
+    }
+    return Object.assign(char, { stats: CharacterStatsCalculator.compute(char) });
+  }
+
   async getCharacters(): Promise<(Character & { stats: CharacterStats })[]> {
     const characters = await this.characterRepo.find({ order: { name: 'ASC' } });
-    for (const char of characters) {
-      const live = this.worldService.getConnectedPlayerByCharacterId(char.id);
-      if (live) {
-        char.worldX = live.worldX;
-        char.worldY = live.worldY;
-        char.mapId = live.mapId;
-      }
-    }
-    // Stats dérivées calculées serveur — lecture seule côté DevTools.
-    return characters.map((char) =>
-      Object.assign(char, { stats: CharacterStatsCalculator.compute(char) }),
-    );
+    return characters.map((char) => this.enrichCharacterRow(char));
+  }
+
+  /**
+   * Une seule ligne Character enrichie (même forme qu'un élément de
+   * `getCharacters()`). Permet au DevTools de rafraîchir un joueur précis
+   * (sélection/ouverture, ou événement `admin:character_details_dirty`)
+   * sans recharger la liste complète — évite la surcharge à grande échelle
+   * (ex. 500 joueurs).
+   */
+  async getCharacterRow(id: string): Promise<(Character & { stats: CharacterStats }) | null> {
+    const character = await this.characterRepo.findOne({ where: { id } });
+    if (!character) return null;
+    return this.enrichCharacterRow(character);
   }
 
   findCharacterById(id: string): Promise<Character | null> {
@@ -594,6 +617,17 @@ export class AdminService {
   // Champs éditables via DevTools : progression, valeurs brutes combat/debug,
   // stats principales et points non dépensés. Les stats dérivées ne sont JAMAIS
   // écrites (calculées serveur).
+  //
+  // `level`/`experience` : si l'un des deux est édité, on ne les écrit jamais
+  // tels quels. On les recompose en `cumulativeExperience` (avec la valeur de
+  // l'autre champ inchangée si non édité), puis on re-dérive `level` et
+  // `experience` depuis cette XP cumulée et la courbe XP ACTUELLE
+  // (`levelFromCumulativeXp` / `experienceIntoCurrentLevel` — mêmes fonctions
+  // pures que le gain d'XP normal et le recalcul global admin, ADR-0018 §1).
+  // Garantit que `cumulativeExperience` reste la source de vérité unique :
+  // un gain d'XP normal ultérieur repart d'un état cohérent, jamais divergent.
+  // `unspentStatPoints` n'est JAMAIS recalculé automatiquement ici — il reste
+  // un levier admin explicite et distinct (édité séparément si besoin).
   async updateCharacter(
     id: string,
     fields: Partial<
@@ -619,7 +653,19 @@ export class AdminService {
   ): Promise<(Character & { stats: CharacterStats }) | null> {
     const character = await this.characterRepo.findOne({ where: { id } });
     if (!character) return null;
-    Object.assign(character, fields);
+
+    let patch: Partial<Character> = fields;
+    if ('level' in fields || 'experience' in fields) {
+      const cfg = await this.gameConfigService.getConfig();
+      const draftLevel = fields.level ?? character.level;
+      const draftExperience = fields.experience ?? character.experience;
+      const cumulativeExperience = cumulativeXpToLevel(draftLevel, cfg) + draftExperience;
+      const newLevel = levelFromCumulativeXp(cumulativeExperience, cfg);
+      const newExperience = experienceIntoCurrentLevel(cumulativeExperience, newLevel, cfg);
+      patch = { ...fields, level: newLevel, experience: newExperience, cumulativeExperience };
+    }
+
+    Object.assign(character, patch);
     const saved = await this.characterRepo.save(character);
     return Object.assign(saved, { stats: CharacterStatsCalculator.compute(saved) });
   }

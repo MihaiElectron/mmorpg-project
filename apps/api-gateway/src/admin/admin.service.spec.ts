@@ -215,6 +215,70 @@ describe('AdminService resources', () => {
     expect(result).toBeNull();
   });
 
+  describe('updateCharacter — cohérence level/experience/cumulativeExperience', () => {
+    // Courbe ronde : 1->2=100, 2->3=200, 3->4=400. cumulativeXpToLevel(3)=300.
+    function progressionConfig(overrides: Record<string, unknown> = {}) {
+      return {
+        startingXp: 100,
+        xpMultiplierLevel1To10: 2,
+        xpMultiplierLevel11To30: 1.5,
+        xpMultiplierLevel31To60: 1.25,
+        xpMultiplierLevel61To120: 1.1,
+        characterMaxLevel: 120,
+        characterCurrentLevelCap: 60,
+        ...overrides,
+      };
+    }
+
+    it("edite experience seule : recalcule level si le seuil est franchi sous la courbe actuelle", async () => {
+      (service as any).gameConfigService = {
+        getConfig: jest.fn().mockResolvedValue(progressionConfig()),
+      };
+      // level=3 (cumulativeXpToLevel(3)=300), experience editee a 500
+      // -> cumulative = 300+500 = 800 -> level 4 (cumulativeXpToLevel(4)=700<=800)
+      // -> experience recalculee = 800-700 = 100.
+      const row = makeCharacterRow({ level: 3, experience: 40 });
+      characterRepo.findOne.mockResolvedValue(row);
+
+      const result = await service.updateCharacter('char-1', { experience: 500 });
+
+      expect(result!.level).toBe(4);
+      expect(result!.experience).toBe(100);
+      expect((result as any).cumulativeExperience).toBe(800);
+    });
+
+    it("edite level seul : conserve l'experience courante dans le recalcul", async () => {
+      (service as any).gameConfigService = {
+        getConfig: jest.fn().mockResolvedValue(progressionConfig()),
+      };
+      // level edite a 3, experience courante inchangee (40)
+      // -> cumulative = cumulativeXpToLevel(3)=300 + 40 = 340 -> reste level 3
+      // -> experience recalculee = 340-300 = 40 (round-trip, coherent).
+      const row = makeCharacterRow({ level: 1, experience: 40 });
+      characterRepo.findOne.mockResolvedValue(row);
+
+      const result = await service.updateCharacter('char-1', { level: 3 });
+
+      expect(result!.level).toBe(3);
+      expect(result!.experience).toBe(40);
+    });
+
+    it("ne recalcule jamais level/experience si aucun des deux champs n'est edite", async () => {
+      (service as any).gameConfigService = {
+        getConfig: jest.fn(),
+      };
+      const row = makeCharacterRow({ level: 3, experience: 40 });
+      characterRepo.findOne.mockResolvedValue(row);
+
+      const result = await service.updateCharacter('char-1', { baseStrength: 9 });
+
+      expect(result!.level).toBe(3);
+      expect(result!.experience).toBe(40);
+      // gameConfigService jamais interroge (aucun cout inutile).
+      expect((service as any).gameConfigService.getConfig).not.toHaveBeenCalled();
+    });
+  });
+
   // ── getCharacterDetails (Player Inspector read-only) ──────────────────────────
 
   it('getCharacterDetails retourne un snapshot inventaire/équipement/skills/stats', async () => {
@@ -1324,6 +1388,46 @@ describe('createResourceTemplate', () => {
       expect(ws.getConnectedPlayerByCharacterId).toHaveBeenCalledWith("char-offline");
     });
   });
+
+  describe('getCharacterRow — refresh cible une seule ligne (pas de liste complete)', () => {
+    const makeChar = (id: string, x: number, y: number, m: number) =>
+      ({ id, name: `char-${id}`, worldX: x, worldY: y, mapId: m, level: 3, experience: 40 } as any);
+
+    beforeEach(() => {
+      (service as any).characterRepo = {
+        findOne: jest.fn().mockResolvedValue(makeChar("char-online", 1024, 2048, 1)),
+        find: jest.fn(), // ne doit jamais etre appele par getCharacterRow
+      };
+      (service as any).worldService = {
+        getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
+      };
+    });
+
+    it("retourne null si le personnage est introuvable", async () => {
+      (service as any).characterRepo.findOne.mockResolvedValue(null);
+      const result = await service.getCharacterRow("absent");
+      expect(result).toBeNull();
+    });
+
+    it("enrichit la ligne avec la position live si connecte", async () => {
+      (service as any).worldService.getConnectedPlayerByCharacterId.mockReturnValue({
+        worldX: 9999, worldY: 8888, mapId: 2,
+      });
+
+      const result = await service.getCharacterRow("char-online");
+
+      expect(result!.worldX).toBe(9999);
+      expect(result!.worldY).toBe(8888);
+      expect(result!.mapId).toBe(2);
+      expect(result!.stats).toBeDefined();
+    });
+
+    it("n'interroge jamais characterRepo.find (pas de chargement de la liste complete)", async () => {
+      await service.getCharacterRow("char-online");
+      expect((service as any).characterRepo.find).not.toHaveBeenCalled();
+      expect((service as any).characterRepo.findOne).toHaveBeenCalledWith({ where: { id: "char-online" } });
+    });
+  });
 });
 
 describe('AdminService — recalculateCharacterProgression', () => {
@@ -1334,6 +1438,7 @@ describe('AdminService — recalculateCharacterProgression', () => {
   let worldService: {
     getConnectedPlayerByCharacterId: jest.Mock;
     emitCharacterReload: jest.Mock;
+    emitAdminCharacterDirty: jest.Mock;
   };
 
   // Courbe simple et ronde pour des seuils faciles à vérifier à la main :
@@ -1384,6 +1489,7 @@ describe('AdminService — recalculateCharacterProgression', () => {
     worldService = {
       getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
       emitCharacterReload: jest.fn(),
+      emitAdminCharacterDirty: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -1577,6 +1683,21 @@ describe('AdminService — recalculateCharacterProgression', () => {
     expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-1');
     expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-2');
     expect(worldService.emitCharacterReload).toHaveBeenCalledTimes(2);
+  });
+
+  it("notifie admin:character_details_dirty pour chaque personnage traite, meme hors ligne (DevTools)", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1' }),
+      makeCharacter({ id: 'char-2' }),
+    ]);
+    // Aucun des deux n'est connecte.
+    worldService.getConnectedPlayerByCharacterId.mockReturnValue(null);
+
+    await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith('char-1', 'stats');
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith('char-2', 'stats');
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledTimes(2);
   });
 
   it("compte uniquement les personnages reellement connectes dans le rapport", async () => {
