@@ -36,8 +36,19 @@ export class Character {
   @Column({ default: 100 })
   maxHealth: number;
 
+  // XP restante dans le niveau courant (partielle). Recalculée à chaque gain
+  // depuis `cumulativeExperience` (jamais décrémentée manuellement) —
+  // conservée pour compatibilité avec l'UI existante (panneau personnage).
   @Column({ default: 0 })
   experience: number;
+
+  // XP totale gagnée depuis la création du personnage, jamais décrémentée.
+  // Source de vérité pour recalculer `level` sous une nouvelle courbe XP
+  // (ADR-0018). Pour les personnages créés avant ce champ, une valeur à 0
+  // déclenche un backfill estimé au premier gain d'XP ou au premier recalcul
+  // admin — voir `ProgressionService`/`AdminService.recalculateCharacterProgression`.
+  @Column({ default: 0 })
+  cumulativeExperience: number;
 
   @Column({ default: 0 })
   baseAttack: number;

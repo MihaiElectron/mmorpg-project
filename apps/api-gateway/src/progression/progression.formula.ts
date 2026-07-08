@@ -87,10 +87,101 @@ export function cumulativeXpToLevel(targetLevel: number, p: ProgressionParams): 
  * ayant atteint `level`, sans aucune allocation :
  *   statPointsAtLevelOne + (level - 1) × statPointsPerLevel
  *
- * Utilisé pour l'aperçu Studio. Le recalcul/réaffectation réel des
- * personnages existants n'est PAS exécuté en Étape 1A (ADR-0018 §1).
+ * Utilisé pour l'aperçu Studio et le recalcul global admin (ADR-0018 §1).
  */
 export function totalStatPointsForLevel(level: number, p: ProgressionParams): number {
   const effectiveLevel = Math.max(1, level);
   return p.statPointsAtLevelOne + (effectiveLevel - 1) * p.statPointsPerLevel;
+}
+
+/**
+ * Niveau maximum atteignable par la progression normale : le plus petit des
+ * deux bornes (cap de niveau actuellement débloqué, niveau max absolu).
+ * `characterCurrentLevelCap` (ex. 60 au lancement) borne la progression
+ * normale ; `characterMaxLevel` (ex. 120) est la limite absolue réservée à un
+ * déblocage futur (ADR-0018 §1).
+ */
+function effectiveLevelCap(p: ProgressionParams): number {
+  return Math.min(p.characterCurrentLevelCap, p.characterMaxLevel);
+}
+
+/**
+ * Recalcule le niveau atteint à partir d'une XP cumulée totale et de la
+ * courbe XP courante (source de vérité pour tout recalcul de progression,
+ * ADR-0018 §1).
+ *
+ * Cherche le plus grand `level` tel que `cumulativeXpToLevel(level, p) <=
+ * cumulativeExperience`, borné à `[1, effectiveLevelCap(p)]`. Un personnage
+ * ayant cumulé plus d'XP que nécessaire pour atteindre le cap reste au cap —
+ * l'excédent est visible via `experienceIntoCurrentLevel` (peut dépasser
+ * `nextLevelXpForLevel(cap)`, ce qui indique un excédent gelé au cap).
+ */
+export function levelFromCumulativeXp(
+  cumulativeExperience: number,
+  p: ProgressionParams,
+): number {
+  const cap = Math.max(1, effectiveLevelCap(p));
+  const xp = Math.max(0, cumulativeExperience);
+
+  let level = 1;
+  while (level < cap && cumulativeXpToLevel(level + 1, p) <= xp) {
+    level++;
+  }
+  return level;
+}
+
+/**
+ * XP restante dans le niveau courant (partielle, pour compatibilité avec le
+ * champ `Character.experience` existant) :
+ *   experienceIntoCurrentLevel = cumulativeExperience - cumulativeXpToLevel(level, p)
+ *
+ * `level` doit être cohérent avec `cumulativeExperience` (typiquement le
+ * résultat de `levelFromCumulativeXp`). Jamais négatif.
+ */
+export function experienceIntoCurrentLevel(
+  cumulativeExperience: number,
+  level: number,
+  p: ProgressionParams,
+): number {
+  const xp = Math.max(0, cumulativeExperience);
+  return Math.max(0, xp - cumulativeXpToLevel(level, p));
+}
+
+/**
+ * XP nécessaire pour avancer du niveau `level` au niveau `level + 1`.
+ * Alias explicite de `xpToAdvanceFromLevel` — ne duplique pas la formule,
+ * uniquement un nom plus lisible pour les appelants du recalcul de
+ * progression (`levelFromCumulativeXp` / `experienceIntoCurrentLevel`).
+ * 0 si `level` a atteint le cap effectif (aucune marche suivante).
+ */
+export function nextLevelXpForLevel(level: number, p: ProgressionParams): number {
+  if (level >= effectiveLevelCap(p)) return 0;
+  return xpToAdvanceFromLevel(level, p);
+}
+
+/** Sous-ensemble de Character nécessaire à `resolveCumulativeExperience`. */
+export interface CharacterCumulativeXpSource {
+  level: number;
+  experience: number;
+  cumulativeExperience: number;
+}
+
+/**
+ * Reconstitue l'XP cumulée d'un personnage qui n'a jamais été migré vers ce
+ * modèle (`cumulativeExperience` encore à 0 alors qu'il a déjà `level`/
+ * `experience`). Backfill ESTIMÉ à partir de la courbe XP actuellement en
+ * vigueur au moment de l'appel — voir `Character.entity.ts`. Réutilisée par
+ * le gain d'XP normal (`ProgressionService`) et le recalcul admin
+ * (`AdminService.recalculateCharacterProgression`) : point d'implémentation
+ * unique, jamais dupliqué.
+ *
+ * Idempotent : si `cumulativeExperience` est déjà > 0, elle est retournée
+ * telle quelle — jamais recalculée ni écrasée.
+ */
+export function resolveCumulativeExperience(
+  character: CharacterCumulativeXpSource,
+  p: ProgressionParams,
+): number {
+  if (character.cumulativeExperience > 0) return character.cumulativeExperience;
+  return cumulativeXpToLevel(character.level, p) + character.experience;
 }

@@ -36,11 +36,14 @@ import { type MovementMetrics, WorldService } from '../world/world.service';
 import { GameConfigService } from '../game-config/game-config.service';
 import { GameConfig } from '../game-config/game-config.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
-import { RecalculateCharacterStatPointsDto } from '../game-config/dto/recalculate-character-stat-points.dto';
+import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
 import {
   xpToReachLevel,
   cumulativeXpToLevel,
   totalStatPointsForLevel,
+  levelFromCumulativeXp,
+  experienceIntoCurrentLevel,
+  resolveCumulativeExperience,
 } from '../progression/progression.formula';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { toResourceWorldObject, ResourceWorldObject } from '../resources/adapters/resource-world-object.adapter';
@@ -117,24 +120,32 @@ const ADMIN_STAT_POINT_FIELDS = [
 ] as const satisfies readonly (keyof Character)[];
 
 /** Une erreur ligne par ligne rencontrée pendant le recalcul (best-effort). */
-export interface StatPointsRecalculationError {
+export interface CharacterProgressionRecalculationError {
   characterId: string;
   message: string;
 }
 
 /**
- * Rapport du recalcul global des points de stats (ADR-0018 §1, Étape 1B).
- * Action destructive : les stats primaires distribuées sont remises à 0 et
- * `unspentStatPoints` est recalculé depuis `GameConfig` + le niveau courant.
+ * Rapport du recalcul global de progression des personnages (ADR-0018 §1).
+ * Action destructive : pour chaque personnage, `level`/`experience` sont
+ * recalculés depuis `cumulativeExperience` + la courbe XP actuelle, les
+ * stats primaires distribuées sont remises à 0 et `unspentStatPoints` est
+ * recalculé depuis le nouveau niveau.
  */
-export interface StatPointsRecalculationReport {
+export interface CharacterProgressionRecalculationReport {
   processedCharacterCount: number;
   totalCharacterCount: number;
+  /** Nombre de personnages dont le niveau a réellement changé. */
+  levelsChangedCount: number;
+  /** Somme de l'XP cumulée (existante ou backfillée) utilisée pour le recalcul. */
+  totalCumulativeExperienceUsed: number;
   /** Somme, avant recalcul, des points dépensés + non dépensés de tous les personnages. */
   oldDistributedTotal: number;
   /** Somme, après recalcul, des points disponibles (unspentStatPoints) de tous les personnages. */
   newAvailableTotal: number;
-  errors: StatPointsRecalculationError[];
+  /** Nombre de personnages connectés notifiés en temps réel (`character:reload`). */
+  notifiedConnectedCharacterCount: number;
+  errors: CharacterProgressionRecalculationError[];
   executedAt: string;
 }
 
@@ -296,27 +307,46 @@ export class AdminService {
   }
 
   /**
-   * Recalcul global DESTRUCTIF des points de stats de tous les personnages
-   * (ADR-0018 §1, Étape 1B).
+   * Recalcul global DESTRUCTIF de la progression de tous les personnages
+   * (ADR-0018 §1).
    *
    * Pour chaque personnage :
+   *   - `cumulativeExperience` est lue (ou backfillée si encore à 0 — voir
+   *     `resolveCumulativeExperience`, backfill ESTIMÉ depuis la courbe
+   *     actuellement en vigueur, jamais écrasé si déjà > 0) ;
+   *   - `level` est recalculé via `levelFromCumulativeXp` depuis cette XP
+   *     cumulée et la courbe XP actuelle (respecte `characterCurrentLevelCap`
+   *     et `characterMaxLevel`) ;
+   *   - `experience` (XP partielle dans le niveau courant) est recalculée via
+   *     `experienceIntoCurrentLevel` ;
    *   - les 8 stats primaires distribuées (base{Strength,Vitality,Endurance,
    *     Agility,Dexterity,Intelligence,Wisdom,Critical}) sont remises à 0 ;
-   *   - `unspentStatPoints` est recalculé depuis GameConfig courant + le
-   *     niveau actuel via `totalStatPointsForLevel` — la MÊME formule pure que
-   *     l'aperçu Studio (pas de système parallèle).
+   *   - `unspentStatPoints` est recalculé depuis le NOUVEAU niveau via
+   *     `totalStatPointsForLevel` — la MÊME formule pure que l'aperçu Studio
+   *     (pas de système parallèle) ;
+   *   - `health` est clampé à `maxHealth` (colonne brute) si nécessaire : après
+   *     reset, la Vitalité contribuant 0 aux dérivées, `maxHealth` dérivée
+   *     redevient exactement `character.maxHealth` — pas de recalcul complet
+   *     via `CharacterStatsCalculator` nécessaire pour ce clamp ciblé.
    *
-   * Les stats dérivées (physicalAttack, defense, maxHealth…) ne sont pas
-   * stockées : elles sont recalculées à la volée par `CharacterStatsCalculator`
-   * à la prochaine lecture, donc automatiquement à jour après ce reset.
+   * Les autres stats dérivées (physicalAttack, defense…) ne sont pas stockées :
+   * elles sont recalculées à la volée par `CharacterStatsCalculator` à la
+   * prochaine lecture, donc automatiquement à jour après ce reset.
    *
    * Exige `confirm: true` explicite. Exécuté en une seule transaction DataSource
    * (tout ou rien) — `errors` reste réservé aux anomalies ligne par ligne qui
    * n'empêchent pas la transaction de committer.
+   *
+   * Après commit, notifie chaque personnage traité via `character:reload`
+   * (`WorldService.emitCharacterReload`, réutilisé tel quel — no-op silencieux
+   * si hors ligne). Le client se contente de refetch `GET /characters/me` :
+   * level, experience, unspentStatPoints, stats de base remises à 0 et
+   * `stats.derived` recalculées y sont déjà tous exposés par le serveur, donc
+   * aucun payload dédié n'est nécessaire et le client ne recalcule rien.
    */
-  async recalculateCharacterStatPoints(
-    dto: RecalculateCharacterStatPointsDto,
-  ): Promise<StatPointsRecalculationReport> {
+  async recalculateCharacterProgression(
+    dto: RecalculateCharacterProgressionDto,
+  ): Promise<CharacterProgressionRecalculationReport> {
     if (dto?.confirm !== true) {
       throw new BadRequestException(
         'confirm=true requis explicitement pour cette action destructive.',
@@ -324,8 +354,11 @@ export class AdminService {
     }
 
     const cfg = await this.gameConfigService.getConfig();
-    const errors: StatPointsRecalculationError[] = [];
+    const errors: CharacterProgressionRecalculationError[] = [];
+    const processedCharacterIds: string[] = [];
     let processedCharacterCount = 0;
+    let levelsChangedCount = 0;
+    let totalCumulativeExperienceUsed = 0;
     let oldDistributedTotal = 0;
     let newAvailableTotal = 0;
 
@@ -340,20 +373,38 @@ export class AdminService {
               0,
             ) + (character.unspentStatPoints ?? 0);
 
-          const newUnspent = totalStatPointsForLevel(character.level, cfg);
+          const cumulativeExperience = resolveCumulativeExperience(character, cfg);
+          const newLevel = levelFromCumulativeXp(cumulativeExperience, cfg);
+          const newExperience = experienceIntoCurrentLevel(cumulativeExperience, newLevel, cfg);
+          const newUnspent = totalStatPointsForLevel(newLevel, cfg);
 
           const resetFields = Object.fromEntries(
             ADMIN_STAT_POINT_FIELDS.map((field) => [field, 0]),
           );
 
+          // Clamp santé ciblé : Vitalité=0 après reset -> maxHealth dérivée =
+          // character.maxHealth (colonne brute, sans bonus). Ne recalcule pas
+          // le pipeline complet CharacterStatsCalculator pour ce seul clamp.
+          const healthPatch =
+            character.health > character.maxHealth
+              ? { health: character.maxHealth }
+              : {};
+
           await manager.update(Character, character.id, {
             ...resetFields,
+            level: newLevel,
+            experience: newExperience,
+            cumulativeExperience,
             unspentStatPoints: newUnspent,
+            ...healthPatch,
           });
 
+          if (newLevel !== character.level) levelsChangedCount++;
+          totalCumulativeExperienceUsed += cumulativeExperience;
           oldDistributedTotal += oldDistributed;
           newAvailableTotal += newUnspent;
           processedCharacterCount++;
+          processedCharacterIds.push(character.id);
         } catch (err) {
           errors.push({
             characterId: character.id,
@@ -363,11 +414,24 @@ export class AdminService {
       }
     });
 
+    // Émission après commit uniquement (jamais pendant la transaction).
+    // `emitCharacterReload` ne fait rien si le personnage n'est pas connecté.
+    let notifiedConnectedCharacterCount = 0;
+    for (const characterId of processedCharacterIds) {
+      if (this.worldService.getConnectedPlayerByCharacterId(characterId)) {
+        notifiedConnectedCharacterCount++;
+      }
+      this.worldService.emitCharacterReload(characterId);
+    }
+
     return {
       processedCharacterCount,
       totalCharacterCount: characters.length,
+      levelsChangedCount,
+      totalCumulativeExperienceUsed,
       oldDistributedTotal,
       newAvailableTotal,
+      notifiedConnectedCharacterCount,
       errors,
       executedAt: new Date().toISOString(),
     };

@@ -26,7 +26,7 @@ import { GameConfigService } from '../game-config/game-config.service';
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
 
 // Fake DataSource dont `.transaction()` exécute réellement le callback avec un
-// manager minimal (`update` mocké) — suffisant pour tester recalculateCharacterStatPoints
+// manager minimal (`update` mocké) — suffisant pour tester recalculateCharacterProgression
 // sans DB réelle.
 const makeFakeDataSource = () => ({
   transaction: jest.fn().mockImplementation(async (cb: (manager: any) => Promise<any>) => {
@@ -1326,16 +1326,42 @@ describe('createResourceTemplate', () => {
   });
 });
 
-describe('AdminService — recalculateCharacterStatPoints', () => {
+describe('AdminService — recalculateCharacterProgression', () => {
   let service: AdminService;
   let characterRepo: Record<string, jest.Mock>;
   let gameConfigService: { getConfig: jest.Mock };
   let fakeDataSource: ReturnType<typeof makeFakeDataSource>;
+  let worldService: {
+    getConnectedPlayerByCharacterId: jest.Mock;
+    emitCharacterReload: jest.Mock;
+  };
+
+  // Courbe simple et ronde pour des seuils faciles à vérifier à la main :
+  // tranche 1-10, multiplicateur 2 -> 1->2=100, 2->3=200, 3->4=400, 4->5=800.
+  // cumulativeXpToLevel(5) = 100+200+400+800 = 1500.
+  function makeConfig(overrides: Record<string, unknown> = {}) {
+    return {
+      startingXp: 100,
+      xpMultiplierLevel1To10: 2,
+      xpMultiplierLevel11To30: 1.5,
+      xpMultiplierLevel31To60: 1.25,
+      xpMultiplierLevel61To120: 1.1,
+      characterMaxLevel: 120,
+      characterCurrentLevelCap: 60,
+      statPointsAtLevelOne: 3,
+      statPointsPerLevel: 3,
+      ...overrides,
+    };
+  }
 
   function makeCharacter(overrides: Record<string, unknown> = {}) {
     return {
       id: 'char-1',
       level: 5,
+      experience: 50,
+      cumulativeExperience: 0,
+      health: 100,
+      maxHealth: 100,
       baseStrength: 3,
       baseVitality: 2,
       baseEndurance: 1,
@@ -1352,12 +1378,13 @@ describe('AdminService — recalculateCharacterStatPoints', () => {
   beforeEach(async () => {
     characterRepo = { ...BASE_EMPTY_REPO(), find: jest.fn().mockResolvedValue([makeCharacter()]) };
     gameConfigService = {
-      getConfig: jest.fn().mockResolvedValue({
-        statPointsAtLevelOne: 3,
-        statPointsPerLevel: 3,
-      }),
+      getConfig: jest.fn().mockResolvedValue(makeConfig()),
     };
     fakeDataSource = makeFakeDataSource();
+    worldService = {
+      getConnectedPlayerByCharacterId: jest.fn().mockReturnValue(null),
+      emitCharacterReload: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -1381,7 +1408,7 @@ describe('AdminService — recalculateCharacterStatPoints', () => {
         { provide: getRepositoryToken(CraftingStationTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CraftingStation), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(Item), useValue: BASE_EMPTY_REPO() },
-        { provide: WorldService, useValue: {} },
+        { provide: WorldService, useValue: worldService },
       ],
     }).compile();
 
@@ -1390,44 +1417,83 @@ describe('AdminService — recalculateCharacterStatPoints', () => {
 
   it("rejette sans confirm: true", async () => {
     await expect(
-      service.recalculateCharacterStatPoints({ confirm: false } as any),
+      service.recalculateCharacterProgression({ confirm: false } as any),
     ).rejects.toThrow(BadRequestException);
     expect(fakeDataSource.transaction).not.toHaveBeenCalled();
   });
 
   it("rejette un payload sans confirm", async () => {
     await expect(
-      service.recalculateCharacterStatPoints({} as any),
+      service.recalculateCharacterProgression({} as any),
     ).rejects.toThrow(BadRequestException);
   });
 
-  it("remet a 0 les stats primaires et recalcule unspentStatPoints via GameConfig", async () => {
-    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+  it("backfill l'XP cumulee (cumulativeExperience=0) et reste stable si la courbe est inchangee", async () => {
+    // level=5, experience=50, cumulativeExperience=0 -> backfill =
+    // cumulativeXpToLevel(5)=1500 + 50 = 1550. Avec la MEME courbe, le niveau
+    // recalcule doit rester 5 et experience doit revenir a 50 (round-trip).
+    const report = await service.recalculateCharacterProgression({ confirm: true });
 
-    // niveau 5 : 3 + (5-1)*3 = 15
     expect(report.processedCharacterCount).toBe(1);
-    expect(report.totalCharacterCount).toBe(1);
+    expect(report.levelsChangedCount).toBe(0);
+    expect(report.totalCumulativeExperienceUsed).toBe(1550);
+    // niveau 5 inchange : 3 + (5-1)*3 = 15
     expect(report.newAvailableTotal).toBe(15);
-    // ancien total = (3+2+1+0+0+0+0+0) + unspentStatPoints(4) = 10
-    expect(report.oldDistributedTotal).toBe(10);
-    expect(report.errors).toEqual([]);
-    expect(typeof report.executedAt).toBe('string');
   });
 
-  it("appelle manager.update avec les 8 stats a 0 et le nouveau total", async () => {
+  it("ne re-derive pas cumulativeExperience si elle est deja > 0 (jamais ecrasee)", async () => {
     const updateSpy = jest.fn().mockResolvedValue({});
     (service as any).dataSource = {
-      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => {
-        return cb({ update: updateSpy });
-      }),
+      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => cb({ update: updateSpy })),
     };
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ cumulativeExperience: 999, level: 1, experience: 0 }),
+    ]);
 
-    await service.recalculateCharacterStatPoints({ confirm: true });
+    await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      Character,
+      'char-1',
+      expect.objectContaining({ cumulativeExperience: 999 }),
+    );
+  });
+
+  it("recalcule le niveau depuis l'XP cumulee existante sous la nouvelle courbe (peut descendre)", async () => {
+    // Courbe plus raide : 1->2=100, 2->3=300, 3->4=900, 4->5=2700, 5->6=8100.
+    // cumulativeXpToLevel(5)=1300+2700=4000 ; (6)=4000+8100=12100.
+    gameConfigService.getConfig.mockResolvedValue(makeConfig({ xpMultiplierLevel1To10: 3 }));
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ level: 8, experience: 10, cumulativeExperience: 5000 }),
+    ]);
+
+    const report = await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(report.levelsChangedCount).toBe(1);
+    // level attendu = 5 (cumulativeXpToLevel(5)=4000<=5000 < cumulativeXpToLevel(6)=12100)
+    // niveau 5 : 3 + 4*3 = 15
+    expect(report.newAvailableTotal).toBe(15);
+  });
+
+  it("met a jour level/experience/cumulativeExperience dans le meme manager.update que le reset", async () => {
+    const updateSpy = jest.fn().mockResolvedValue({});
+    (service as any).dataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => cb({ update: updateSpy })),
+    };
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ level: 8, experience: 10, cumulativeExperience: 5000 }),
+    ]);
+    gameConfigService.getConfig.mockResolvedValue(makeConfig({ xpMultiplierLevel1To10: 3 }));
+
+    await service.recalculateCharacterProgression({ confirm: true });
 
     expect(updateSpy).toHaveBeenCalledWith(
       Character,
       'char-1',
       expect.objectContaining({
+        level: 5,
+        experience: 1000, // 5000 - cumulativeXpToLevel(5)=4000
+        cumulativeExperience: 5000,
         baseStrength: 0,
         baseVitality: 0,
         baseEndurance: 0,
@@ -1441,16 +1507,49 @@ describe('AdminService — recalculateCharacterStatPoints', () => {
     );
   });
 
-  it("traite plusieurs personnages et cumule les totaux", async () => {
+  it("clampe health a maxHealth si health depasse maxHealth apres reset", async () => {
+    const updateSpy = jest.fn().mockResolvedValue({});
+    (service as any).dataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => cb({ update: updateSpy })),
+    };
     characterRepo.find.mockResolvedValue([
-      makeCharacter({ id: 'char-1', level: 5, unspentStatPoints: 4 }),
-      makeCharacter({ id: 'char-2', level: 10, baseStrength: 10, unspentStatPoints: 0 }),
+      makeCharacter({ health: 150, maxHealth: 100 }),
     ]);
 
-    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+    await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      Character,
+      'char-1',
+      expect.objectContaining({ health: 100 }),
+    );
+  });
+
+  it("ne touche pas health si elle est deja <= maxHealth", async () => {
+    const updateSpy = jest.fn().mockResolvedValue({});
+    (service as any).dataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => cb({ update: updateSpy })),
+    };
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ health: 80, maxHealth: 100 }),
+    ]);
+
+    await service.recalculateCharacterProgression({ confirm: true });
+
+    const [, , patch] = updateSpy.mock.calls[0];
+    expect(patch).not.toHaveProperty('health');
+  });
+
+  it("traite plusieurs personnages et cumule les totaux", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1', level: 5, experience: 50, unspentStatPoints: 4 }),
+      makeCharacter({ id: 'char-2', level: 10, experience: 0, baseStrength: 10, unspentStatPoints: 0 }),
+    ]);
+
+    const report = await service.recalculateCharacterProgression({ confirm: true });
 
     expect(report.processedCharacterCount).toBe(2);
-    // char-2 niveau 10 : 3 + 9*3 = 30 ; char-1 niveau 5 : 15
+    // char-1 reste niveau 5 (15 pts) ; char-2 niveau 10 inchange (3 + 9*3 = 30 pts)
     expect(report.newAvailableTotal).toBe(15 + 30);
   });
 
@@ -1461,9 +1560,60 @@ describe('AdminService — recalculateCharacterStatPoints', () => {
     });
     (service as any).dataSource = fakeDataSource;
 
-    const report = await service.recalculateCharacterStatPoints({ confirm: true });
+    const report = await service.recalculateCharacterProgression({ confirm: true });
 
     expect(report.processedCharacterCount).toBe(0);
     expect(report.errors).toEqual([{ characterId: 'char-1', message: 'DB down' }]);
+  });
+
+  it("notifie character:reload pour chaque personnage traite (connecte ou non)", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1' }),
+      makeCharacter({ id: 'char-2' }),
+    ]);
+
+    await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-1');
+    expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-2');
+    expect(worldService.emitCharacterReload).toHaveBeenCalledTimes(2);
+  });
+
+  it("compte uniquement les personnages reellement connectes dans le rapport", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1' }),
+      makeCharacter({ id: 'char-2' }),
+    ]);
+    worldService.getConnectedPlayerByCharacterId.mockImplementation((id: string) =>
+      id === 'char-1' ? { characterId: 'char-1', socketId: 'sock-1' } : null,
+    );
+
+    const report = await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(report.notifiedConnectedCharacterCount).toBe(1);
+  });
+
+  it("n'emet character:reload que pour les personnages effectivement traites (erreur exclue)", async () => {
+    characterRepo.find.mockResolvedValue([
+      makeCharacter({ id: 'char-1' }),
+      makeCharacter({ id: 'char-2' }),
+    ]);
+    fakeDataSource.transaction = jest.fn().mockImplementation(async (cb: (m: any) => Promise<any>) => {
+      const manager = {
+        update: jest.fn().mockImplementation((_entity: unknown, id: string) => {
+          if (id === 'char-2') return Promise.reject(new Error('DB down'));
+          return Promise.resolve({});
+        }),
+      };
+      return cb(manager);
+    });
+    (service as any).dataSource = fakeDataSource;
+
+    const report = await service.recalculateCharacterProgression({ confirm: true });
+
+    expect(report.errors).toEqual([{ characterId: 'char-2', message: 'DB down' }]);
+    expect(worldService.emitCharacterReload).toHaveBeenCalledWith('char-1');
+    expect(worldService.emitCharacterReload).not.toHaveBeenCalledWith('char-2');
+    expect(worldService.emitCharacterReload).toHaveBeenCalledTimes(1);
   });
 });

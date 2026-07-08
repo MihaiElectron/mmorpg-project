@@ -3,14 +3,14 @@ import {
   fetchGameConfig,
   previewGameConfig,
   updateGameConfig,
-  recalculateCharacterStatPoints,
+  recalculateCharacterProgression,
 } from "./characterProgressionApi";
 import {
   FIELD_GROUPS,
   type GameConfigDto,
   type GameConfigField,
   type GameConfigPreview,
-  type StatPointsRecalculationReport,
+  type CharacterProgressionRecalculationReport,
 } from "./characterProgression.types";
 import "./CharacterProgressionModule.scss";
 
@@ -46,7 +46,7 @@ export default function CharacterProgressionModule() {
   // indépendante de "Appliquer" / "Aperçu".
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [recalcMessage, setRecalcMessage] = useState<string | null>(null);
-  const [recalcReport, setRecalcReport] = useState<StatPointsRecalculationReport | null>(null);
+  const [recalcReport, setRecalcReport] = useState<CharacterProgressionRecalculationReport | null>(null);
 
   useEffect(() => {
     if (!open || current) return;
@@ -143,16 +143,17 @@ export default function CharacterProgressionModule() {
 
   async function handleRecalculate() {
     const confirmed = window.confirm(
-      "Action irréversible : cela va remettre à 0 les stats primaires " +
-        "distribuées de TOUS les personnages et recalculer leurs points " +
-        "disponibles depuis les règles globales actuelles. Les joueurs " +
-        "devront redistribuer leurs points. Continuer ?",
+      "Action irréversible : cela va recalculer le niveau de TOUS les " +
+        "personnages selon leur XP cumulée et la courbe XP actuelle, " +
+        "remettre à 0 leurs stats primaires distribuées et recalculer " +
+        "leurs points disponibles. Les joueurs devront redistribuer " +
+        "leurs points. Continuer ?",
     );
     if (!confirmed) return;
     setRecalcBusy(true);
     setRecalcMessage(null);
     try {
-      const report = await recalculateCharacterStatPoints();
+      const report = await recalculateCharacterProgression();
       setRecalcReport(report);
       setRecalcMessage(
         `Recalcul terminé : ${report.processedCharacterCount}/${report.totalCharacterCount} personnage(s) traité(s).`,
@@ -378,19 +379,15 @@ export default function CharacterProgressionModule() {
 
               <section
                 className="character-progression__danger-zone"
-                aria-label="Zone danger — recalcul des points de stats"
+                aria-label="Zone danger — recalcul de la progression"
               >
                 <h4 className="character-progression__danger-title">
                   ⚠ Zone danger
                 </h4>
                 <p className="character-progression__danger-text">
-                  Action destructive sur les répartitions de stats. Remet à 0
-                  les stats primaires distribuées de tous les personnages et
-                  recalcule leurs points disponibles depuis les règles
-                  globales actuelles ({current.statPointsAtLevelOne} au niveau 1,
-                  {" "}
-                  {current.statPointsPerLevel} par niveau). Les joueurs devront
-                  redistribuer leurs points.
+                  Cette action recalcule le niveau des personnages selon leur
+                  XP cumulée et la courbe XP actuelle, remet les stats
+                  attribuées à zéro et rend les points disponibles.
                 </p>
                 <div className="character-progression__danger-actions">
                   {recalcMessage && (
@@ -411,7 +408,7 @@ export default function CharacterProgressionModule() {
                     onClick={handleRecalculate}
                     disabled={recalcBusy}
                   >
-                    Recalculer les points de tous les personnages
+                    Recalculer la progression de tous les personnages
                   </button>
                 </div>
 
@@ -421,10 +418,19 @@ export default function CharacterProgressionModule() {
                       Personnages traités : {recalcReport.processedCharacterCount} / {recalcReport.totalCharacterCount}
                     </p>
                     <p className="character-progression__preview-line">
+                      Niveaux modifiés : {recalcReport.levelsChangedCount}
+                    </p>
+                    <p className="character-progression__preview-line">
+                      XP cumulée totale utilisée : {recalcReport.totalCumulativeExperienceUsed}
+                    </p>
+                    <p className="character-progression__preview-line">
                       Ancienne somme de points distribués : {recalcReport.oldDistributedTotal}
                     </p>
                     <p className="character-progression__preview-line">
                       Nouveau total disponible : {recalcReport.newAvailableTotal}
+                    </p>
+                    <p className="character-progression__preview-line">
+                      Joueurs connectés notifiés en temps réel : {recalcReport.notifiedConnectedCharacterCount}
                     </p>
                     {recalcReport.errors.length > 0 && (
                       <div className="character-progression__danger-errors">

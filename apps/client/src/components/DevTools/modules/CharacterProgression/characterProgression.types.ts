@@ -121,20 +121,27 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
 ];
 
-// ── Recalcul global des points de stats (ADR-0018 §1, Étape 1B) ─────────────
-// Action destructive, séparée des règles globales ci-dessus. Le client ne
-// calcule rien : uniquement le rapport retourné par le serveur.
+// ── Recalcul global de la progression des personnages (ADR-0018 §1) ────────
+// Action destructive : recalcule level/experience depuis l'XP cumulée et la
+// courbe XP actuelle, remet les stats primaires à 0, recalcule les points
+// disponibles. Le client ne calcule rien : uniquement le rapport serveur.
 
-export interface StatPointsRecalculationError {
+export interface CharacterProgressionRecalculationError {
   characterId: string;
   message: string;
 }
 
-export interface StatPointsRecalculationReport {
+export interface CharacterProgressionRecalculationReport {
   processedCharacterCount: number;
   totalCharacterCount: number;
+  /** Nombre de personnages dont le niveau a réellement changé. */
+  levelsChangedCount: number;
+  /** Somme de l'XP cumulée (existante ou backfillée) utilisée pour le recalcul. */
+  totalCumulativeExperienceUsed: number;
   oldDistributedTotal: number;
   newAvailableTotal: number;
-  errors: StatPointsRecalculationError[];
+  /** Nombre de personnages connectés notifiés en temps réel (character:reload). */
+  notifiedConnectedCharacterCount: number;
+  errors: CharacterProgressionRecalculationError[];
   executedAt: string;
 }

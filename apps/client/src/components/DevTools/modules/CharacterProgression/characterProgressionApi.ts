@@ -1,7 +1,7 @@
 import type {
   GameConfigDto,
   GameConfigPreview,
-  StatPointsRecalculationReport,
+  CharacterProgressionRecalculationReport,
 } from "./characterProgression.types";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -48,9 +48,9 @@ export async function updateGameConfig(
   return res.json() as Promise<GameConfigDto>;
 }
 
-export async function recalculateCharacterStatPoints(): Promise<StatPointsRecalculationReport> {
+export async function recalculateCharacterProgression(): Promise<CharacterProgressionRecalculationReport> {
   const res = await fetch(
-    `${API}/admin/game-config/recalculate-character-stat-points`,
+    `${API}/admin/game-config/recalculate-character-progression`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -58,5 +58,5 @@ export async function recalculateCharacterStatPoints(): Promise<StatPointsRecalc
     },
   );
   if (!res.ok) throw new Error(await parseError(res));
-  return res.json() as Promise<StatPointsRecalculationReport>;
+  return res.json() as Promise<CharacterProgressionRecalculationReport>;
 }

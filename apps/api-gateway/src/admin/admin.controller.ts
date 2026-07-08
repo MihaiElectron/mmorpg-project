@@ -8,7 +8,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
-import { RecalculateCharacterStatPointsDto } from '../game-config/dto/recalculate-character-stat-points.dto';
+import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -116,13 +116,14 @@ export class AdminController {
   }
 
   /**
-   * Action destructive : remet à 0 les stats primaires distribuées de tous
-   * les personnages et recalcule `unspentStatPoints` depuis GameConfig +
-   * niveau courant. Exige `{ confirm: true }` (ADR-0018 §1, Étape 1B).
+   * Action destructive : recalcule `level`/`experience` de tous les
+   * personnages depuis leur XP cumulée et la courbe XP actuelle, remet à 0
+   * les stats primaires distribuées, et recalcule `unspentStatPoints` depuis
+   * le nouveau niveau. Exige `{ confirm: true }` (ADR-0018 §1).
    */
-  @Post('game-config/recalculate-character-stat-points')
-  recalculateCharacterStatPoints(@Body() dto: RecalculateCharacterStatPointsDto) {
-    return this.adminService.recalculateCharacterStatPoints(dto);
+  @Post('game-config/recalculate-character-progression')
+  recalculateCharacterProgression(@Body() dto: RecalculateCharacterProgressionDto) {
+    return this.adminService.recalculateCharacterProgression(dto);
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

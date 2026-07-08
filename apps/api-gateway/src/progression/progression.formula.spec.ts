@@ -5,6 +5,10 @@ import {
   xpToAdvanceFromLevel,
   cumulativeXpToLevel,
   totalStatPointsForLevel,
+  levelFromCumulativeXp,
+  experienceIntoCurrentLevel,
+  nextLevelXpForLevel,
+  resolveCumulativeExperience,
 } from './progression.formula';
 
 function params(overrides: Partial<ProgressionParams> = {}): ProgressionParams {
@@ -114,6 +118,85 @@ describe('progression.formula', () => {
 
     it("borne au niveau 1 minimum", () => {
       expect(totalStatPointsForLevel(0, params())).toBe(3);
+    });
+  });
+
+  describe('levelFromCumulativeXp', () => {
+    it("retourne le niveau 1 pour une XP cumulee nulle ou insuffisante", () => {
+      expect(levelFromCumulativeXp(0, params())).toBe(1);
+      expect(levelFromCumulativeXp(99, params())).toBe(1);
+    });
+
+    it("retourne exactement le niveau dont le seuil cumule est atteint", () => {
+      // cumulativeXpToLevel(2)=100 ; (5)=100+200+400+800=1500
+      expect(levelFromCumulativeXp(100, params())).toBe(2);
+      expect(levelFromCumulativeXp(1500, params())).toBe(5);
+      expect(levelFromCumulativeXp(1549, params())).toBe(5);
+    });
+
+    it("respecte characterCurrentLevelCap meme avec une XP cumulee tres elevee", () => {
+      const p = params({ characterCurrentLevelCap: 3 });
+      expect(levelFromCumulativeXp(10_000_000, p)).toBe(3);
+    });
+
+    it("respecte characterMaxLevel si le cap courant le depasse (mauvaise config)", () => {
+      const p = params({ characterCurrentLevelCap: 999, characterMaxLevel: 4 });
+      expect(levelFromCumulativeXp(10_000_000, p)).toBe(4);
+    });
+
+    it("est l'inverse coherent de cumulativeXpToLevel (round-trip)", () => {
+      const p = params();
+      for (const level of [1, 2, 5, 10, 11, 30, 60]) {
+        const xp = cumulativeXpToLevel(level, p);
+        expect(levelFromCumulativeXp(xp, p)).toBe(level);
+      }
+    });
+  });
+
+  describe('experienceIntoCurrentLevel', () => {
+    it("retourne le reste d'XP dans le niveau courant", () => {
+      // cumulativeXpToLevel(5)=1500
+      expect(experienceIntoCurrentLevel(1550, 5, params())).toBe(50);
+    });
+
+    it("retourne l'XP telle quelle au niveau 1 (cumulativeXpToLevel(1)=0)", () => {
+      expect(experienceIntoCurrentLevel(50, 1, params())).toBe(50);
+    });
+
+    it("ne retourne jamais une valeur negative", () => {
+      expect(experienceIntoCurrentLevel(0, 5, params())).toBe(0);
+    });
+  });
+
+  describe('nextLevelXpForLevel', () => {
+    it("equivaut a xpToAdvanceFromLevel sous le cap", () => {
+      const p = params();
+      expect(nextLevelXpForLevel(1, p)).toBe(xpToAdvanceFromLevel(1, p));
+      expect(nextLevelXpForLevel(9, p)).toBe(xpToAdvanceFromLevel(9, p));
+    });
+
+    it("retourne 0 au niveau du cap effectif (aucune marche suivante)", () => {
+      const p = params({ characterCurrentLevelCap: 10 });
+      expect(nextLevelXpForLevel(10, p)).toBe(0);
+      expect(nextLevelXpForLevel(11, p)).toBe(0);
+    });
+  });
+
+  describe('resolveCumulativeExperience', () => {
+    it("backfill depuis level/experience si cumulativeExperience est a 0", () => {
+      // cumulativeXpToLevel(5)=1500 + experience(50) = 1550
+      const character = { level: 5, experience: 50, cumulativeExperience: 0 };
+      expect(resolveCumulativeExperience(character, params())).toBe(1550);
+    });
+
+    it("ne recalcule jamais si cumulativeExperience est deja > 0", () => {
+      const character = { level: 1, experience: 0, cumulativeExperience: 999 };
+      expect(resolveCumulativeExperience(character, params())).toBe(999);
+    });
+
+    it("un personnage neuf (niveau 1, XP 0) backfill a 0", () => {
+      const character = { level: 1, experience: 0, cumulativeExperience: 0 };
+      expect(resolveCumulativeExperience(character, params())).toBe(0);
     });
   });
 });
