@@ -1,0 +1,292 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+// DevTools Skill Editor (Skills V1-B). Compact et lisible, aligné sur le style
+// DevTools existant (mêmes variables/mixins que CharacterProgression).
+
+$skills-field-width: 120px;
+$skills-list-max-height: 320px;
+
+.skills-module {
+  @include m.panel-section;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+  font-size: 13px;
+
+  &__header {
+    @include m.panel-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    color: vars.$color-text-primary;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  &__header-title { letter-spacing: 0.3px; }
+  &__header-chevron { color: vars.$color-text-muted; }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap;
+  }
+
+  &__toolbar {
+    display: flex;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__message {
+    margin: 0;
+    color: vars.$color-text-gold;
+  }
+  &__muted {
+    margin: 0;
+    color: vars.$color-text-muted;
+  }
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+  }
+
+  // ── Liste ──────────────────────────────────────────────────────────────────
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+    max-height: $skills-list-max-height;
+    overflow-y: auto;
+  }
+
+  &__item {
+    @include m.panel-slot;
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+    padding: 6px 8px;
+
+    &--active {
+      border-color: vars.$color-text-gold;
+    }
+  }
+
+  &__item-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  &__item-name { font-weight: bold; }
+  &__item-key {
+    color: vars.$color-magic-glow;
+    font-size: 11px;
+  }
+  &__item-tags {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__item-actions {
+    display: flex;
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: vars.$panel-radius-sm;
+    white-space: nowrap;
+
+    &--on {
+      background: rgba(vars.$btn-success-bg, 0.25);
+      color: vars.$btn-success-hover;
+    }
+    &--off {
+      background: rgba(0, 0, 0, 0.3);
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  // ── Zone danger ──────────────────────────────────────────────────────────────
+  &__danger {
+    @include m.panel-slot;
+    border-color: rgba(vars.$btn-danger-bg, 0.5);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+  &__danger-title {
+    font-weight: bold;
+    color: vars.$btn-danger-hover;
+  }
+  &__danger-hint {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  // ── Boutons ────────────────────────────────────────────────────────────────
+  &__btn {
+    @include m.btn-base;
+    padding: 5px 10px;
+    font-size: 12px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+    &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+// ── Formulaire d'édition ───────────────────────────────────────────────────────
+.skills-editor {
+  @include m.panel-slot;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+
+  &__title {
+    margin: 0;
+    color: vars.$color-text-gold;
+    font-size: 14px;
+  }
+
+  &__group {
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    padding: 8px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-sm;
+  }
+  &__legend {
+    padding: 0 4px;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: $skills-field-width;
+
+    &--wide { width: 100%; }
+    &--checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: vars.$dt-gap-xs;
+      width: auto;
+    }
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__input,
+  &__textarea {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+
+    &:disabled { opacity: 0.6; }
+  }
+  &__textarea { resize: vertical; }
+
+  &__subblock {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+
+  // ── Éditeur de paires clé/valeur ─────────────────────────────────────────────
+  &__kv {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+  &__kv-empty {
+    margin: 0;
+    color: vars.$color-text-disabled;
+    font-size: 11px;
+  }
+  &__kv-row {
+    display: flex;
+    gap: vars.$dt-gap-xs;
+    align-items: center;
+  }
+  &__kv-key {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 3px 6px;
+    font-size: 12px;
+    flex: 1;
+  }
+  &__kv-value {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 3px 6px;
+    font-size: 12px;
+    width: 70px;
+  }
+  &__kv-remove {
+    @include m.btn-base;
+    background: vars.$btn-neutral-bg;
+    padding: 3px 7px;
+    font-size: 11px;
+    &:hover { background: vars.$btn-danger-bg; }
+  }
+  &__kv-add {
+    @include m.btn-base;
+    background: vars.$btn-neutral-bg;
+    align-self: flex-start;
+    padding: 3px 8px;
+    font-size: 11px;
+    &:hover { background: vars.$btn-neutral-hover; }
+  }
+
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: 12px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: vars.$dt-gap-sm;
+  }
+  &__btn {
+    @include m.btn-base;
+    padding: 6px 14px;
+    font-size: 13px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
