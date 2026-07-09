@@ -13,6 +13,7 @@ import {
   type DerivedStatDefinitionDto,
   type DerivedStatCategory,
 } from "./derivedStats.types";
+import { useConfirmDialog } from "../../../common/useConfirmDialog";
 
 const RAW_STAT_KEYS = ["maxHealth", "attack", "defense"] as const;
 const CRITICAL_KEY_SET = new Set<string>(CRITICAL_DERIVED_STAT_KEYS);
@@ -112,6 +113,8 @@ export default function DerivedStatsCoefficientsPanel() {
   );
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
   // ── Preview serveur ──────────────────────────────────────────────────────
   const [previewOpen, setPreviewOpen] = useState(false);
   const [primaryDraft, setPrimaryDraft] = useState<Record<string, string>>(emptyPrimaryDraft());
@@ -184,10 +187,13 @@ export default function DerivedStatsCoefficientsPanel() {
     });
   }
 
-  function removeCoefficientEntry(key: string, index: number, label: string) {
-    const confirmed = window.confirm(
-      `Retirer "${label}" de la formule de cette dérivée ? Le changement n'est appliqué qu'après "Enregistrer".`,
-    );
+  async function removeCoefficientEntry(key: string, index: number, label: string) {
+    const confirmed = await confirm({
+      title: "Retirer une stat de la formule",
+      message: `Retirer "${label}" de la formule de cette dérivée ? Le changement n'est appliqué qu'après "Enregistrer".`,
+      confirmLabel: "Retirer",
+      variant: "danger",
+    });
     if (!confirmed) return;
     setDrafts((prev) => {
       const draft = prev[key];
@@ -270,6 +276,7 @@ export default function DerivedStatsCoefficientsPanel() {
 
   return (
     <div className="character-progression__derived-editor">
+      {confirmDialog}
       <p className="character-progression__note">
         Coefficients des 24 stats dérivées — config serveur (DerivedStatDefinition).
         Seules maxHealth/physicalAttack/defense affectent le combat en V1 ; les
@@ -555,7 +562,7 @@ export default function DerivedStatsCoefficientsPanel() {
                                         className="character-progression__derived-coef-remove"
                                         title="Retirer cette stat de la formule"
                                         onClick={() =>
-                                          removeCoefficientEntry(
+                                          void removeCoefficientEntry(
                                             d.key,
                                             idx,
                                             PRIMARY_STAT_LABELS[entry.primary] ?? entry.primary,

@@ -1,0 +1,110 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.confirm-dialog__overlay {
+  align-items: center;
+  background: vars.$panel-overlay-bg;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 10000;
+}
+
+.confirm-dialog {
+  background: vars.$panel-bg;
+  border: 1px solid vars.$panel-border;
+  border-radius: vars.$panel-radius;
+  box-shadow: vars.$panel-shadow-float;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  padding: 16px 18px;
+  width: 90%;
+
+  &--danger {
+    border-color: vars.$btn-danger-bg;
+  }
+
+  &__title {
+    color: vars.$color-text-gold;
+    font-size: 0.95rem;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    margin: 0;
+  }
+
+  &--danger &__title {
+    color: vars.$btn-danger-hover;
+  }
+
+  &__message {
+    color: vars.$color-text-primary;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  &__typed-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__typed-label {
+    color: vars.$color-text-muted;
+    font-size: 0.72rem;
+  }
+
+  &__typed-input {
+    background: vars.$panel-header-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-family: vars.$coords-font-family;
+    font-size: 0.8rem;
+    padding: 6px 8px;
+
+    &:focus {
+      border-color: vars.$color-text-gold;
+      outline: none;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 7px 16px;
+    font-size: 0.8rem;
+
+    &:focus-visible {
+      outline: 2px solid vars.$color-text-gold;
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+  }
+
+  &__btn--cancel {
+    background: vars.$btn-neutral-bg;
+    &:hover:not(:disabled) { background: vars.$btn-neutral-hover; }
+  }
+
+  &__btn--confirm {
+    background: vars.$btn-success-bg;
+    &:hover:not(:disabled) { background: vars.$btn-success-hover; }
+  }
+
+  &__btn--danger {
+    background: vars.$btn-danger-bg;
+    &:hover:not(:disabled) { background: vars.$btn-danger-hover; }
+  }
+}

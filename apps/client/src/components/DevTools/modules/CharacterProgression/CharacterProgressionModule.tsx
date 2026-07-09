@@ -13,6 +13,7 @@ import {
   type CharacterProgressionRecalculationReport,
 } from "./characterProgression.types";
 import DerivedStatsCoefficientsPanel from "./DerivedStatsCoefficientsPanel";
+import { useConfirmDialog } from "../../../common/useConfirmDialog";
 import "./CharacterProgressionModule.scss";
 
 type DraftMap = Record<GameConfigField, string>;
@@ -48,6 +49,8 @@ export default function CharacterProgressionModule() {
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [recalcMessage, setRecalcMessage] = useState<string | null>(null);
   const [recalcReport, setRecalcReport] = useState<CharacterProgressionRecalculationReport | null>(null);
+
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   useEffect(() => {
     if (!open || current) return;
@@ -143,13 +146,18 @@ export default function CharacterProgressionModule() {
   }
 
   async function handleRecalculate() {
-    const confirmed = window.confirm(
-      "Action irréversible : cela va recalculer le niveau de TOUS les " +
+    const confirmed = await confirm({
+      title: "Recalculer la progression de tous les personnages",
+      message:
+        "Action irréversible : cela va recalculer le niveau de TOUS les " +
         "personnages selon leur XP cumulée et la courbe XP actuelle, " +
         "remettre à 0 leurs stats primaires distribuées et recalculer " +
         "leurs points disponibles. Les joueurs devront redistribuer " +
         "leurs points. Continuer ?",
-    );
+      variant: "danger",
+      confirmLabel: "Recalculer",
+      requireTypedConfirmation: "RECALCULER",
+    });
     if (!confirmed) return;
     setRecalcBusy(true);
     setRecalcMessage(null);
@@ -173,6 +181,7 @@ export default function CharacterProgressionModule() {
       className="character-progression"
       aria-label="Character Progression"
     >
+      {confirmDialog}
       <div
         className="character-progression__header"
         onClick={() => setOpen((v) => !v)}

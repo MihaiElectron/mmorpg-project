@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ackPromise, getSocket } from "../../../AdminPanel/adminPanel.shared";
 import type { ItemMaintenanceReport, LootPoolReferenceDetail, RecipeReferenceDetail } from "./itemEditor.types";
+import { useConfirmDialog } from "../../../common/useConfirmDialog";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -62,6 +63,8 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
   // Vrai quand une mutation a echoue : le report affiche peut ne plus refleter la DB.
   const [stale, setStale] = useState(false);
 
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
   const loadReport = useCallback(async () => {
     setStatus("loading");
     setMessage(null);
@@ -80,8 +83,19 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
     void loadReport();
   }, [loadReport]);
 
-  async function run(event: string, payload: unknown, confirmMsg: string): Promise<void> {
-    if (!window.confirm(confirmMsg)) return;
+  async function run(
+    event: string,
+    payload: unknown,
+    confirmMsg: string,
+    opts: { title?: string; variant?: "default" | "danger"; requireTypedConfirmation?: string } = {},
+  ): Promise<void> {
+    const confirmed = await confirm({
+      title: opts.title ?? "Confirmer l'action",
+      message: confirmMsg,
+      variant: opts.variant ?? "danger",
+      requireTypedConfirmation: opts.requireTypedConfirmation,
+    });
+    if (!confirmed) return;
     setBusy(true);
     setMessage(null);
     const res = await ack(event, payload);
@@ -102,6 +116,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       "admin:delete_inventory_stack",
       { inventoryId: stackId },
       `Supprimer la stack de "${itemName}" (${quantity}× chez ${characterName ?? "inconnu"}) ?`,
+      { title: "Supprimer une stack inventaire" },
     );
 
   const handleDestroyInstance = (instanceId: string, state: string) =>
@@ -109,14 +124,18 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       "admin:delete_item_instance",
       { itemInstanceId: instanceId },
       `Détruire (DESTROYED) l'instance de "${itemName}" [${state}] ?`,
+      { title: "Détruire une instance d'objet" },
     );
 
   // Retire une entrée de loot pool (resource ou creature) via PATCH template.
   // Recharge le pool courant, retire l'entrée ciblée (index + itemRef), sauvegarde.
   async function handleRemoveLootRef(ref: LootPoolReferenceDetail): Promise<void> {
-    if (!window.confirm(
-      `Retirer "${itemName}" du loot pool de ${ref.sourceName} (${ref.path}) ?`,
-    )) return;
+    const confirmed = await confirm({
+      title: "Retirer du loot pool",
+      message: `Retirer "${itemName}" du loot pool de ${ref.sourceName} (${ref.path}) ?`,
+      variant: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setMessage(null);
 
@@ -151,6 +170,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       ref.role === "output" ? "admin:remove_result" : "admin:remove_ingredient",
       ref.role === "output" ? { resultId: ref.refId } : { ingredientId: ref.refId },
       `Retirer "${itemName}" (${ref.role === "output" ? "résultat" : "ingrédient"}) de la recette "${ref.recipeName}" ?`,
+      { title: "Retirer une référence de recette" },
     );
 
   const handleRepairOrphan = (instanceId: string) =>
@@ -158,6 +178,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       "admin:repair_orphan_equipped_instance",
       { itemInstanceId: instanceId },
       `Réparer l'instance équipée orpheline de "${itemName}" ? Elle repassera disponible dans l'inventaire du propriétaire.`,
+      { title: "Réparer une instance orpheline", variant: "default" },
     );
 
   const handleDisable = () =>
@@ -165,6 +186,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       "admin:disable_item_template",
       { itemId },
       `Désactiver le template "${itemName}" ? Les instances existantes sont conservées.`,
+      { title: "Désactiver le template", variant: "default" },
     );
 
   const handleDeleteTemplate = () =>
@@ -172,6 +194,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
       "admin:delete_item_template",
       { itemId },
       `SUPPRIMER DÉFINITIVEMENT le template "${itemName}" ? Action irréversible (autorisée uniquement si zéro référence).`,
+      { title: "Supprimer le template définitivement", requireTypedConfirmation: itemName },
     );
 
   if (status === "loading") return <p className="item-editor__status">Chargement du rapport…</p>;
@@ -190,6 +213,7 @@ export default function ItemMaintenancePanel({ itemId, itemName, onChanged }: Pr
 
   return (
     <div className="item-maintenance">
+      {confirmDialog}
       {message && (
         <p
           className={
