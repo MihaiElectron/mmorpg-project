@@ -11,6 +11,11 @@ export type SkillTargetMode = (typeof SKILL_TARGET_MODES)[number];
 export const SKILL_EFFECT_TYPES = ["damage", "heal"] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
+// Nature du skill (V1-H) : seuls les `active` sont lançables ; passive/aura sont
+// configurables/déverrouillables mais non implémentés en runtime.
+export const SKILL_KINDS = ["active", "passive", "aura"] as const;
+export type SkillKind = (typeof SKILL_KINDS)[number];
+
 // Les 10 stats primaires V1 (ADR-0018 §3) — catalogue de suggestions pour
 // scaling.primaryCoefficients. Source de vérité serveur ; listées ici seulement
 // pour l'autocomplétion de l'éditeur.
@@ -40,6 +45,8 @@ export interface SkillDefinitionDto {
   description: string;
   iconAssetPath: string | null;
   enabled: boolean;
+  skillKind: SkillKind;
+  autoUnlock: boolean;
   requiredLevel: number;
   requiredClass: string | null;
   requiredMasteries: Record<string, number>;
@@ -63,6 +70,8 @@ export interface CreateSkillDefinitionPayload {
   description?: string;
   iconAssetPath?: string | null;
   enabled?: boolean;
+  skillKind?: SkillKind;
+  autoUnlock?: boolean;
   requiredLevel?: number;
   requiredClass?: string | null;
   requiredMasteries?: Record<string, number>;

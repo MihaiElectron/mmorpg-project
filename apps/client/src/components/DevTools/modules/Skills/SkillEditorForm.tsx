@@ -3,11 +3,13 @@ import AssetPicker from "../../AssetPicker";
 import KeyValueRowsEditor from "./KeyValueRowsEditor";
 import {
   SKILL_EFFECT_TYPES,
+  SKILL_KINDS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
   PRIMARY_STAT_KEYS,
   type SkillDefinitionDto,
   type SkillEffectType,
+  type SkillKind,
   type SkillResourceType,
   type SkillTargetMode,
   type KeySuggestion,
@@ -34,6 +36,8 @@ interface Draft {
   description: string;
   iconAssetPath: string;
   enabled: boolean;
+  skillKind: SkillKind;
+  autoUnlock: boolean;
   requiredClass: string;
   resourceType: "" | SkillResourceType;
   targetMode: SkillTargetMode;
@@ -57,6 +61,8 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     description: skill?.description ?? "",
     iconAssetPath: skill?.iconAssetPath ?? "",
     enabled: skill?.enabled ?? true,
+    skillKind: skill?.skillKind ?? "active",
+    autoUnlock: skill?.autoUnlock ?? true,
     requiredClass: skill?.requiredClass ?? "",
     resourceType: skill?.resourceType ?? "",
     targetMode: skill?.targetMode ?? "creature",
@@ -162,6 +168,8 @@ export default function SkillEditorForm({
       description: draft.description,
       iconAssetPath: draft.iconAssetPath.trim() === "" ? null : draft.iconAssetPath,
       enabled: draft.enabled,
+      skillKind: draft.skillKind,
+      autoUnlock: draft.autoUnlock,
       requiredLevel: Number(draft.requiredLevel),
       requiredClass: draft.requiredClass.trim() === "" ? null : draft.requiredClass.trim(),
       requiredMasteries,
@@ -376,6 +384,20 @@ export default function SkillEditorForm({
               ))}
             </select>
           </label>
+          <label className="skills-editor__field">
+            <span className="skills-editor__label">skillKind</span>
+            <select
+              className="skills-editor__input"
+              value={draft.skillKind}
+              onChange={(e) => setField("skillKind", e.target.value as SkillKind)}
+            >
+              {SKILL_KINDS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
               type="checkbox"
@@ -383,6 +405,14 @@ export default function SkillEditorForm({
               onChange={(e) => setField("enabled", e.target.checked)}
             />
             <span className="skills-editor__label">enabled</span>
+          </label>
+          <label className="skills-editor__field skills-editor__field--checkbox">
+            <input
+              type="checkbox"
+              checked={draft.autoUnlock}
+              onChange={(e) => setField("autoUnlock", e.target.checked)}
+            />
+            <span className="skills-editor__label">autoUnlock</span>
           </label>
         </div>
       </fieldset>

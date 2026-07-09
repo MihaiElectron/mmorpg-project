@@ -14,6 +14,7 @@ import InventoryGridView, {
   type InventoryGridEntry,
 } from "../character/InventoryGridView";
 import { getSocket, ackPromise } from "./adminPanel.shared";
+import AdminCharacterSkillsTab from "./AdminCharacterSkillsTab";
 
 const API = import.meta.env.VITE_API_URL as string;
 const DIRTY_DEBOUNCE_MS = 200;
@@ -22,6 +23,7 @@ const TABS = [
   { id: "perso", label: "Perso" },
   { id: "stats", label: "Stats" },
   { id: "masteries", label: "Masteries" },
+  { id: "skills", label: "Skills" },
   { id: "talents", label: "Talents" },
   { id: "achievements", label: "Succès" },
 ];
@@ -270,7 +272,9 @@ export default function AdminCharacterPanel({ characterId }: { characterId: stri
         </div>
       )}
 
-      {data && !loading && !error && activeTab !== "perso" && (
+      {activeTab === "skills" && <AdminCharacterSkillsTab characterId={characterId} />}
+
+      {data && !loading && !error && activeTab !== "perso" && activeTab !== "skills" && (
         <p className="admin-character-panel__soon">Onglet « {TABS.find((t) => t.id === activeTab)?.label} » à venir.</p>
       )}
     </div>

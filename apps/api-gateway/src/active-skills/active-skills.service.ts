@@ -13,10 +13,26 @@ import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
 import {
   SKILL_UNLOCK_SOURCES,
   SkillEffectType,
+  SkillKind,
   SkillResourceType,
   SkillTargetMode,
   SkillUnlockSource,
 } from './active-skills.constants';
+
+/** Vue ADMIN de l'état de déverrouillage d'un skill pour un personnage (V1-H-B). */
+export interface AdminSkillUnlockView {
+  key: string;
+  name: string;
+  skillKind: SkillKind;
+  enabled: boolean;
+  autoUnlock: boolean;
+  /** Une ligne player_skill_unlock existe pour ce personnage. */
+  explicitlyUnlocked: boolean;
+  /** État final : autoUnlock OU explicitlyUnlocked. */
+  unlocked: boolean;
+  source: SkillUnlockSource | null;
+  unlockedAt: Date | null;
+}
 
 /** Vue joueur d'un skill actif (route lecture seule `/characters/me/active-skills`). */
 export interface PlayerActiveSkill {
@@ -117,6 +133,33 @@ export class ActiveSkillsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Vue ADMIN du déverrouillage des skills pour un personnage (V1-H-B).
+   * Renvoie TOUT le catalogue (y compris passive/aura, pour visibilité admin)
+   * avec l'état de déverrouillage résolu par personnage.
+   */
+  async getCharacterSkillUnlocks(characterId: string): Promise<AdminSkillUnlockView[]> {
+    const all = await this.listDefinitions();
+    const unlocks = await this.unlockRepo.find({ where: { characterId } });
+    const byDefId = new Map(unlocks.map((u) => [u.skillDefinitionId, u]));
+
+    return all.map((s) => {
+      const row = byDefId.get(s.id);
+      const explicitlyUnlocked = row != null;
+      return {
+        key: s.key,
+        name: s.name,
+        skillKind: s.skillKind,
+        enabled: s.enabled,
+        autoUnlock: s.autoUnlock,
+        explicitlyUnlocked,
+        unlocked: s.autoUnlock || explicitlyUnlocked,
+        source: row?.source ?? null,
+        unlockedAt: row?.unlockedAt ?? null,
+      };
+    });
   }
 
   /** Verrouille (supprime l'unlock) un skill pour un personnage. Idempotent. */

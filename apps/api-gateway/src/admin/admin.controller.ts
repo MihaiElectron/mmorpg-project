@@ -102,6 +102,19 @@ export class AdminController {
     return details;
   }
 
+  /**
+   * GET /admin/characters/:characterId/skill-unlocks
+   * Vue admin du déverrouillage des skills d'un personnage (V1-H-B). Renvoie
+   * tout le catalogue (dont passive/aura) avec l'état résolu par personnage.
+   */
+  @Get('characters/:characterId/skill-unlocks')
+  async getCharacterSkillUnlocks(@Param('characterId') characterId: string) {
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) throw new NotFoundException(`Personnage "${characterId}" introuvable.`);
+    const skills = await this.activeSkillsService.getCharacterSkillUnlocks(characterId);
+    return { characterId, skills };
+  }
+
   @Patch('characters/:id')
   async updateCharacter(@Param('id') id: string, @Body() fields: Record<string, number>) {
     const updated = await this.adminService.updateCharacter(id, fields);

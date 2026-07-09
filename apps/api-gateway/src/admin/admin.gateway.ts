@@ -27,6 +27,8 @@ import { ItemService } from '../items/item.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { InventorySlotAssignmentDto } from '../inventory/dto/update-inventory-slots.dto';
+import { ActiveSkillsService } from '../active-skills/active-skills.service';
+import { SKILL_UNLOCK_SOURCES, SkillUnlockSource } from '../active-skills/active-skills.constants';
 
 type AddBalancePayload = {
   characterId: string;
@@ -83,6 +85,7 @@ export class AdminGateway implements OnGatewayConnection {
     private readonly itemService: ItemService,
     private readonly itemTransferService: ItemTransferService,
     private readonly inventoryService: InventoryService,
+    private readonly activeSkillsService: ActiveSkillsService,
   ) {}
 
   private emitReloadIfConnected(characterId: string): void {
@@ -669,6 +672,70 @@ export class AdminGateway implements OnGatewayConnection {
       };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de l\'injection.' };
+    }
+  }
+
+  // ── Skills : déverrouillage par personnage (V1-H-B) ────────────────────────
+  //
+  // Rôle admin vérifié ici ; toute la logique métier (résolution skillKey →
+  // SkillDefinition, idempotence, validation source) vit dans ActiveSkillsService.
+  // Après succès : character:reload au joueur ciblé (sa SkillActionBar se
+  // rafraîchit via son listener existant), jamais de broadcast.
+
+  @SubscribeMessage('admin:unlock_skill')
+  async onUnlockSkill(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { characterId?: string; skillKey?: string; source?: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const characterId = payload?.characterId;
+    const skillKey = payload?.skillKey;
+    if (!characterId || !skillKey) return { success: false, message: 'characterId et skillKey requis.' };
+
+    const source = payload?.source ?? 'admin';
+    if (!SKILL_UNLOCK_SOURCES.includes(source as SkillUnlockSource)) {
+      return { success: false, message: `Source inconnue : "${source}".` };
+    }
+
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
+
+    try {
+      await this.activeSkillsService.unlockSkillForCharacter(characterId, skillKey, source as SkillUnlockSource);
+      this.emitReloadIfConnected(characterId);
+      return { success: true, message: `Skill "${skillKey}" débloqué pour "${character.name}".` };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors du déverrouillage.' };
+    }
+  }
+
+  @SubscribeMessage('admin:lock_skill')
+  async onLockSkill(
+    @ConnectedSocket() client: WorldSocket,
+    @MessageBody() payload: { characterId?: string; skillKey?: string },
+  ): Promise<CmdResult> {
+    if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
+
+    const characterId = payload?.characterId;
+    const skillKey = payload?.skillKey;
+    if (!characterId || !skillKey) return { success: false, message: 'characterId et skillKey requis.' };
+
+    const character = await this.adminService.findCharacterById(characterId);
+    if (!character) return { success: false, message: `Personnage "${characterId}" introuvable.` };
+
+    try {
+      const result = await this.activeSkillsService.lockSkillForCharacter(characterId, skillKey);
+      this.emitReloadIfConnected(characterId);
+      return {
+        success: true,
+        message: result.locked
+          ? `Unlock de "${skillKey}" retiré pour "${character.name}".`
+          : `Aucun unlock explicite de "${skillKey}" à retirer.`,
+        data: result,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Erreur lors du verrouillage.' };
     }
   }
 

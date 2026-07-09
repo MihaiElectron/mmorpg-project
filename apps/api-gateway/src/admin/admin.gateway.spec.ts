@@ -33,6 +33,7 @@ function makeGateway(wsAuth: Partial<WsAuthService>) {
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
     {} as unknown as import('../inventory/inventory.service').InventoryService,
+    {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
   );
 }
 
@@ -132,6 +133,7 @@ describe('AdminGateway — handlers refusent les non-admins', () => {
       {} as unknown as import('../items/item.service').ItemService,
       {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
       {} as unknown as import('../inventory/inventory.service').InventoryService,
+      {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
     );
     (gateway as any).server = { emit: jest.fn() };
   });
@@ -201,6 +203,7 @@ function makeAddBalanceGateway(overrides: {
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
     {} as unknown as import('../inventory/inventory.service').InventoryService,
+    {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
   );
   (gw as any).server = { emit: jest.fn() };
 
@@ -410,6 +413,7 @@ function makeTeleportGateway(opts: {
     {} as unknown as import("../items/item.service").ItemService,
     {} as unknown as import("../item-transfer/item-transfer.service").ItemTransferService,
     {} as unknown as import("../inventory/inventory.service").InventoryService,
+    {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
   );
   (gw as any).server = { to: jest.fn().mockReturnThis(), emit: jest.fn(), except: jest.fn().mockReturnThis() };
   return { gw, worldService, adminService };
@@ -550,6 +554,7 @@ function makeUpdateCharacterGateway() {
     {} as unknown as import('../items/item.service').ItemService,
     {} as unknown as import('../item-transfer/item-transfer.service').ItemTransferService,
     {} as unknown as import('../inventory/inventory.service').InventoryService,
+    {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
   );
   (gw as any).server = { emit: jest.fn() };
   return { gw, adminServiceMock };
@@ -632,6 +637,7 @@ function makeInventoryGateway(inventoryService: Record<string, jest.Mock>) {
     {} as unknown as import("../items/item.service").ItemService,
     {} as unknown as import("../item-transfer/item-transfer.service").ItemTransferService,
     inventoryService as unknown as import("../inventory/inventory.service").InventoryService,
+    {} as unknown as import("../active-skills/active-skills.service").ActiveSkillsService,
   );
   const emit = jest.fn();
   (gw as any).server = { to: jest.fn().mockReturnValue({ emit }) };

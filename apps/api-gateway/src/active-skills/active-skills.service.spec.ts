@@ -394,4 +394,33 @@ describe("ActiveSkillsService", () => {
       expect(res).toEqual({ skillKey: "fireball", locked: false });
     });
   });
+
+  describe("getCharacterSkillUnlocks (vue admin)", () => {
+    it("expose tout le catalogue avec l'état résolu (dont passive/aura)", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ id: "a", key: "auto_active", autoUnlock: true }),
+        makeSkill({ id: "b", key: "locked_active", autoUnlock: false }),
+        makeSkill({ id: "c", key: "learned_active", autoUnlock: false }),
+        makeSkill({ id: "d", key: "a_passive", skillKind: "passive", autoUnlock: false }),
+      ]);
+      const now = new Date();
+      unlockRepo.find.mockResolvedValue([
+        { skillDefinitionId: "c", source: "admin", unlockedAt: now },
+        { skillDefinitionId: "d", source: "quest", unlockedAt: now },
+      ]);
+
+      const rows = await service.getCharacterSkillUnlocks("char-1");
+      const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+
+      // autoUnlock global → unlocked sans ligne
+      expect(byKey["auto_active"]).toMatchObject({ explicitlyUnlocked: false, unlocked: true, source: null });
+      // verrouillé
+      expect(byKey["locked_active"]).toMatchObject({ explicitlyUnlocked: false, unlocked: false });
+      // débloqué explicitement
+      expect(byKey["learned_active"]).toMatchObject({ explicitlyUnlocked: true, unlocked: true, source: "admin" });
+      // passive visible + débloquable (visibilité admin)
+      expect(byKey["a_passive"]).toMatchObject({ skillKind: "passive", explicitlyUnlocked: true, unlocked: true, source: "quest" });
+      expect(rows).toHaveLength(4);
+    });
+  });
 });
