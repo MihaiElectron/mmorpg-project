@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
-import { SkillDefinition } from './entities/skill-definition.entity';
-import { PlayerSkill } from './entities/player-skill.entity';
+import { MasteryDefinition } from './entities/mastery-definition.entity';
+import { PlayerMastery } from './entities/player-mastery.entity';
 
-export interface SkillUpdatePayload {
-  skillDefinitionKey: string;
+export interface MasteryUpdatePayload {
+  masteryDefinitionKey: string;
   key: string;
   name: string;
   category: string;
@@ -22,8 +22,8 @@ export interface SkillUpdatePayload {
   leveledUp: boolean;
 }
 
-const DEFAULT_SKILLS: Pick<
-  SkillDefinition,
+const DEFAULT_MASTERIES: Pick<
+  MasteryDefinition,
   'key' | 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'
 >[] = [
   // ── Crafting ────────────────────────────────────────────────────────────────
@@ -43,33 +43,33 @@ const DEFAULT_SKILLS: Pick<
 ];
 
 @Injectable()
-export class SkillsService implements OnModuleInit {
-  private readonly logger = new Logger(SkillsService.name);
+export class MasteriesService implements OnModuleInit {
+  private readonly logger = new Logger(MasteriesService.name);
 
   constructor(
-    @InjectRepository(SkillDefinition)
-    private readonly skillDefinitionRepo: Repository<SkillDefinition>,
-    @InjectRepository(PlayerSkill)
-    private readonly playerSkillRepo: Repository<PlayerSkill>,
+    @InjectRepository(MasteryDefinition)
+    private readonly masteryDefinitionRepo: Repository<MasteryDefinition>,
+    @InjectRepository(PlayerMastery)
+    private readonly playerMasteryRepo: Repository<PlayerMastery>,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.seedDefaultSkills();
+    await this.seedDefaultMasteries();
   }
 
   // ---------------------------------------------------------------------------
   // Seed non destructif — n'écrase jamais une définition existante
   // ---------------------------------------------------------------------------
-  async seedDefaultSkills(): Promise<void> {
-    for (const def of DEFAULT_SKILLS) {
-      const existing = await this.skillDefinitionRepo.findOne({
+  async seedDefaultMasteries(): Promise<void> {
+    for (const def of DEFAULT_MASTERIES) {
+      const existing = await this.masteryDefinitionRepo.findOne({
         where: { key: def.key },
       });
       if (existing) continue;
-      await this.skillDefinitionRepo.save(
-        this.skillDefinitionRepo.create(def),
+      await this.masteryDefinitionRepo.save(
+        this.masteryDefinitionRepo.create(def),
       );
-      this.logger.log(`Skill seeded: ${def.key}`);
+      this.logger.log(`Mastery seeded: ${def.key}`);
     }
   }
 
@@ -82,11 +82,11 @@ export class SkillsService implements OnModuleInit {
    * Formule : baseXpPerLevel × level ^ xpCurveExponent
    * Retourne Infinity si level >= maxLevel (aucun level suivant).
    */
-  getNextLevelXp(skillDefinition: SkillDefinition, level: number): number {
-    if (level >= skillDefinition.maxLevel) return Infinity;
+  getNextLevelXp(masteryDefinition: MasteryDefinition, level: number): number {
+    if (level >= masteryDefinition.maxLevel) return Infinity;
     return Math.round(
-      skillDefinition.baseXpPerLevel *
-        Math.pow(Math.max(1, level), skillDefinition.xpCurveExponent),
+      masteryDefinition.baseXpPerLevel *
+        Math.pow(Math.max(1, level), masteryDefinition.xpCurveExponent),
     );
   }
 
@@ -96,15 +96,15 @@ export class SkillsService implements OnModuleInit {
    * Le carry-over est conservé dans xp retourné.
    */
   recomputeLevel(
-    skillDefinition: SkillDefinition,
+    masteryDefinition: MasteryDefinition,
     currentLevel: number,
     xp: number,
   ): { level: number; xp: number } {
     let level = currentLevel;
     let remainingXp = xp;
 
-    while (level < skillDefinition.maxLevel) {
-      const needed = this.getNextLevelXp(skillDefinition, level);
+    while (level < masteryDefinition.maxLevel) {
+      const needed = this.getNextLevelXp(masteryDefinition, level);
       if (remainingXp < needed) break;
       remainingXp -= needed;
       level++;
@@ -114,64 +114,64 @@ export class SkillsService implements OnModuleInit {
   }
 
   // ---------------------------------------------------------------------------
-  // PlayerSkill
+  // PlayerMastery
   // ---------------------------------------------------------------------------
 
   /**
-   * Retourne le PlayerSkill existant ou le crée avec level=1, xp=0.
-   * Lance NotFoundException si la SkillDefinition est introuvable.
+   * Retourne le PlayerMastery existant ou le crée avec level=1, xp=0.
+   * Lance NotFoundException si la MasteryDefinition est introuvable.
    */
-  async getOrCreatePlayerSkill(
+  async getOrCreatePlayerMastery(
     characterId: string,
-    skillKey: string,
-  ): Promise<PlayerSkill> {
-    const skillDef = await this.skillDefinitionRepo.findOne({
-      where: { key: skillKey },
+    masteryKey: string,
+  ): Promise<PlayerMastery> {
+    const masteryDef = await this.masteryDefinitionRepo.findOne({
+      where: { key: masteryKey },
     });
-    if (!skillDef) throw new NotFoundException(`Skill "${skillKey}" introuvable`);
-    return this.getOrCreatePlayerSkillWithDef(characterId, skillDef);
+    if (!masteryDef) throw new NotFoundException(`Mastery "${masteryKey}" introuvable`);
+    return this.getOrCreatePlayerMasteryWithDef(characterId, masteryDef);
   }
 
   /**
-   * Ajoute xpAmount au PlayerSkill (créé si absent), recalcule le level.
+   * Ajoute xpAmount au PlayerMastery (créé si absent), recalcule le level.
    * - xpAmount < 0 → BadRequestException
-   * - skill disabled → BadRequestException
-   * - level plafonné à skillDefinition.maxLevel
+   * - mastery disabled → BadRequestException
+   * - level plafonné à masteryDefinition.maxLevel
    */
   async addXp(
     characterId: string,
-    skillKey: string,
+    masteryKey: string,
     xpAmount: number,
-  ): Promise<PlayerSkill> {
+  ): Promise<PlayerMastery> {
     if (xpAmount < 0) {
       throw new BadRequestException('xpAmount must be >= 0');
     }
 
-    const skillDef = await this.skillDefinitionRepo.findOne({
-      where: { key: skillKey },
+    const masteryDef = await this.masteryDefinitionRepo.findOne({
+      where: { key: masteryKey },
     });
-    if (!skillDef) throw new NotFoundException(`Skill "${skillKey}" introuvable`);
-    if (!skillDef.enabled) {
-      throw new BadRequestException(`Skill "${skillKey}" is disabled`);
+    if (!masteryDef) throw new NotFoundException(`Mastery "${masteryKey}" introuvable`);
+    if (!masteryDef.enabled) {
+      throw new BadRequestException(`Mastery "${masteryKey}" is disabled`);
     }
 
-    const playerSkill = await this.getOrCreatePlayerSkillWithDef(
+    const playerMastery = await this.getOrCreatePlayerMasteryWithDef(
       characterId,
-      skillDef,
+      masteryDef,
     );
 
-    if (xpAmount === 0) return playerSkill;
+    if (xpAmount === 0) return playerMastery;
 
     const { level, xp } = this.recomputeLevel(
-      skillDef,
-      playerSkill.level,
-      playerSkill.xp + xpAmount,
+      masteryDef,
+      playerMastery.level,
+      playerMastery.xp + xpAmount,
     );
 
-    playerSkill.level = level;
-    playerSkill.xp = xp;
+    playerMastery.level = level;
+    playerMastery.xp = xp;
 
-    return this.playerSkillRepo.save(playerSkill);
+    return this.playerMasteryRepo.save(playerMastery);
   }
 
   // ---------------------------------------------------------------------------
@@ -179,38 +179,38 @@ export class SkillsService implements OnModuleInit {
   // ---------------------------------------------------------------------------
 
   /**
-   * Get ou crée un PlayerSkill dans une transaction TypeORM existante.
+   * Get ou crée un PlayerMastery dans une transaction TypeORM existante.
    * Utilise l'EntityManager fourni pour rester dans la même transaction.
    */
-  async getOrCreatePlayerSkillInTx(
+  async getOrCreatePlayerMasteryInTx(
     characterId: string,
-    skillDef: SkillDefinition,
+    masteryDef: MasteryDefinition,
     manager: EntityManager,
-  ): Promise<PlayerSkill> {
-    const existing = await manager.findOne(PlayerSkill, {
-      where: { characterId, skillDefinitionId: skillDef.id },
-      relations: ['skillDefinition'],
+  ): Promise<PlayerMastery> {
+    const existing = await manager.findOne(PlayerMastery, {
+      where: { characterId, masteryDefinitionId: masteryDef.id },
+      relations: ['masteryDefinition'],
     });
     if (existing) return existing;
 
     try {
-      const created = manager.create(PlayerSkill, {
+      const created = manager.create(PlayerMastery, {
         characterId,
-        skillDefinitionId: skillDef.id,
+        masteryDefinitionId: masteryDef.id,
         level: 1,
         xp: 0,
       });
-      const saved = await manager.save(PlayerSkill, created);
-      saved.skillDefinition = skillDef;
+      const saved = await manager.save(PlayerMastery, created);
+      saved.masteryDefinition = masteryDef;
       return saved;
     } catch (error: unknown) {
-      // Conflit UNIQUE(characterId, skillDefinitionId) — création concurrente
+      // Conflit UNIQUE(characterId, masteryDefinitionId) — création concurrente
       // PostgreSQL unique violation code 23505
       const pgError = error as { code?: string };
       if (pgError.code === '23505') {
-        const reload = await manager.findOne(PlayerSkill, {
-          where: { characterId, skillDefinitionId: skillDef.id },
-          relations: ['skillDefinition'],
+        const reload = await manager.findOne(PlayerMastery, {
+          where: { characterId, masteryDefinitionId: masteryDef.id },
+          relations: ['masteryDefinition'],
         });
         if (reload) return reload;
       }
@@ -220,63 +220,63 @@ export class SkillsService implements OnModuleInit {
 
   /**
    * Point d'entrée unifié pour tous les domaines Runtime.
-   * Trouve ou crée le PlayerSkill, applique l'XP, retourne le payload socket.
+   * Trouve ou crée le PlayerMastery, applique l'XP, retourne le payload socket.
    * Doit être appelé dans une transaction ouverte par l'appelant.
    */
-  async applySkillXpInTx(
+  async applyMasteryXpInTx(
     characterId: string,
-    skillKey: string,
+    masteryKey: string,
     xpAmount: number,
     manager: EntityManager,
-  ): Promise<SkillUpdatePayload> {
-    const skillDef = await manager.findOne(SkillDefinition, { where: { key: skillKey } });
-    if (!skillDef) throw new NotFoundException(`Skill "${skillKey}" introuvable`);
-    if (!skillDef.enabled) throw new BadRequestException(`Skill "${skillKey}" désactivé`);
+  ): Promise<MasteryUpdatePayload> {
+    const masteryDef = await manager.findOne(MasteryDefinition, { where: { key: masteryKey } });
+    if (!masteryDef) throw new NotFoundException(`Mastery "${masteryKey}" introuvable`);
+    if (!masteryDef.enabled) throw new BadRequestException(`Mastery "${masteryKey}" désactivé`);
 
-    const playerSkill = await this.getOrCreatePlayerSkillInTx(characterId, skillDef, manager);
-    const levelBefore = playerSkill.level;
-    const updated = await this.applyXpInTx(playerSkill, xpAmount, skillDef, manager);
+    const playerMastery = await this.getOrCreatePlayerMasteryInTx(characterId, masteryDef, manager);
+    const levelBefore = playerMastery.level;
+    const updated = await this.applyXpInTx(playerMastery, xpAmount, masteryDef, manager);
 
     return {
-      skillDefinitionKey: skillKey,
-      key: skillKey,
-      name: skillDef.name,
-      category: skillDef.category,
-      enabled: skillDef.enabled,
+      masteryDefinitionKey: masteryKey,
+      key: masteryKey,
+      name: masteryDef.name,
+      category: masteryDef.category,
+      enabled: masteryDef.enabled,
       level: updated.level,
       xp: updated.xp,
-      nextLevelXp: this.getNextLevelXp(skillDef, updated.level),
+      nextLevelXp: this.getNextLevelXp(masteryDef, updated.level),
       leveledUp: updated.level > levelBefore,
     };
   }
 
   /**
    * Ajoute de l'XP et recalcule le level dans une transaction TypeORM.
-   * Retourne le PlayerSkill inchangé si xpAmount === 0 (sans écriture).
+   * Retourne le PlayerMastery inchangé si xpAmount === 0 (sans écriture).
    */
   async applyXpInTx(
-    playerSkill: PlayerSkill,
+    playerMastery: PlayerMastery,
     xpAmount: number,
-    skillDef: SkillDefinition,
+    masteryDef: MasteryDefinition,
     manager: EntityManager,
-  ): Promise<PlayerSkill> {
-    if (xpAmount === 0) return playerSkill;
+  ): Promise<PlayerMastery> {
+    if (xpAmount === 0) return playerMastery;
     const { level, xp } = this.recomputeLevel(
-      skillDef,
-      playerSkill.level,
-      playerSkill.xp + xpAmount,
+      masteryDef,
+      playerMastery.level,
+      playerMastery.xp + xpAmount,
     );
-    playerSkill.level = level;
-    playerSkill.xp = xp;
-    return manager.save(PlayerSkill, playerSkill);
+    playerMastery.level = level;
+    playerMastery.xp = xp;
+    return manager.save(PlayerMastery, playerMastery);
   }
 
   // ---------------------------------------------------------------------------
   // Lecture — progression joueur
   // ---------------------------------------------------------------------------
 
-  async getCharacterSkills(characterId: string): Promise<{
-    skillDefinitionId: string;
+  async getCharacterMasteries(characterId: string): Promise<{
+    masteryDefinitionId: string;
     key: string;
     name: string;
     category: string;
@@ -286,15 +286,15 @@ export class SkillsService implements OnModuleInit {
     enabled: boolean;
   }[]> {
     // Progression V1 : on part de TOUTES les définitions activées, puis on mappe
-    // la progression du personnage si elle existe. Un skill enabled sans
-    // PlayerSkill est renvoyé avec level=1 / xp=0 — SANS créer de ligne DB.
-    const [definitions, playerSkills] = await Promise.all([
-      this.skillDefinitionRepo.find({ where: { enabled: true } }),
-      this.playerSkillRepo.find({ where: { characterId } }),
+    // la progression du personnage si elle existe. Un mastery enabled sans
+    // PlayerMastery est renvoyé avec level=1 / xp=0 — SANS créer de ligne DB.
+    const [definitions, playerMasteries] = await Promise.all([
+      this.masteryDefinitionRepo.find({ where: { enabled: true } }),
+      this.playerMasteryRepo.find({ where: { characterId } }),
     ]);
 
     const progressById = new Map(
-      playerSkills.map((ps) => [ps.skillDefinitionId, ps]),
+      playerMasteries.map((ps) => [ps.masteryDefinitionId, ps]),
     );
 
     return definitions.map((sd) => {
@@ -302,7 +302,7 @@ export class SkillsService implements OnModuleInit {
       const level = ps?.level ?? 1;
       const xp = ps?.xp ?? 0;
       return {
-        skillDefinitionId: sd.id,
+        masteryDefinitionId: sd.id,
         key: sd.key,
         name: sd.name,
         category: sd.category,
@@ -318,24 +318,24 @@ export class SkillsService implements OnModuleInit {
   // Interne
   // ---------------------------------------------------------------------------
 
-  private async getOrCreatePlayerSkillWithDef(
+  private async getOrCreatePlayerMasteryWithDef(
     characterId: string,
-    skillDef: SkillDefinition,
-  ): Promise<PlayerSkill> {
-    const existing = await this.playerSkillRepo.findOne({
-      where: { characterId, skillDefinitionId: skillDef.id },
-      relations: ['skillDefinition'],
+    masteryDef: MasteryDefinition,
+  ): Promise<PlayerMastery> {
+    const existing = await this.playerMasteryRepo.findOne({
+      where: { characterId, masteryDefinitionId: masteryDef.id },
+      relations: ['masteryDefinition'],
     });
     if (existing) return existing;
 
-    const created = this.playerSkillRepo.create({
+    const created = this.playerMasteryRepo.create({
       characterId,
-      skillDefinitionId: skillDef.id,
+      masteryDefinitionId: masteryDef.id,
       level: 1,
       xp: 0,
     });
-    const saved = await this.playerSkillRepo.save(created);
-    saved.skillDefinition = skillDef;
+    const saved = await this.playerMasteryRepo.save(created);
+    saved.masteryDefinition = masteryDef;
     return saved;
   }
 }

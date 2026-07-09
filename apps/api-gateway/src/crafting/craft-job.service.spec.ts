@@ -16,7 +16,7 @@ import { CraftJobIngredient } from './entities/craft-job-ingredient.entity';
 import { CraftJobOutput } from './entities/craft-job-output.entity';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
-import { SkillsService } from '../skills/skills.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
@@ -24,7 +24,7 @@ import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
+import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
 import {
   ItemInstance,
   ItemInstanceContainerType,
@@ -45,8 +45,8 @@ function makeRecipe(overrides: Partial<CraftingRecipe> = {}): CraftingRecipe {
     name: 'Fondre minerai',
     description: null,
     category: 'smithing',
-    requiredSkillKey: 'smithing',
-    requiredSkillLevel: 1,
+    requiredMasteryKey: 'smithing',
+    requiredMasteryLevel: 1,
     baseSuccessRate: 1.0,
     successBonusPerLevel: 0.0,
     minSuccessRate: 0.05,
@@ -68,8 +68,8 @@ function makeRecipe(overrides: Partial<CraftingRecipe> = {}): CraftingRecipe {
   } as CraftingRecipe;
 }
 
-function makeSkillDef(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
-  return { id: 'sd-1', key: 'smithing', name: 'Smithing', category: 'crafting', enabled: true, ...overrides } as SkillDefinition;
+function makeMasteryDef(overrides: Partial<MasteryDefinition> = {}): MasteryDefinition {
+  return { id: 'sd-1', key: 'smithing', name: 'Smithing', category: 'crafting', enabled: true, ...overrides } as MasteryDefinition;
 }
 
 function makeInventoryRow(itemId: string, quantity: number): Inventory {
@@ -81,7 +81,7 @@ function makeInventoryRow(itemId: string, quantity: number): Inventory {
 describe('CraftJobService — launch()', () => {
   let service: CraftJobService;
   let mockManager: Record<string, jest.Mock>;
-  let mockSkills: { getOrCreatePlayerSkillInTx: jest.Mock; applySkillXpInTx: jest.Mock };
+  let mockMasteries: { getOrCreatePlayerMasteryInTx: jest.Mock; applyMasteryXpInTx: jest.Mock };
   let mockTransfer: { transfer: jest.Mock };
   let mockCrafting: { findNearestCompatibleStationOrThrow: jest.Mock };
   let mockProgression: { applyCharacterXpInTx: jest.Mock };
@@ -124,9 +124,9 @@ describe('CraftJobService — launch()', () => {
       })),
     };
 
-    mockSkills = {
-      getOrCreatePlayerSkillInTx: jest.fn().mockResolvedValue({ level: 10, xp: 0 }),
-      applySkillXpInTx: jest.fn().mockResolvedValue({ key: 'smithing', level: 10, xp: 0 }),
+    mockMasteries = {
+      getOrCreatePlayerMasteryInTx: jest.fn().mockResolvedValue({ level: 10, xp: 0 }),
+      applyMasteryXpInTx: jest.fn().mockResolvedValue({ key: 'smithing', level: 10, xp: 0 }),
     };
     mockTransfer = { transfer: jest.fn().mockResolvedValue({}) };
     mockCrafting = { findNearestCompatibleStationOrThrow: jest.fn().mockResolvedValue({ id: 'station-1' }) };
@@ -141,7 +141,7 @@ describe('CraftJobService — launch()', () => {
           transaction: jest.fn().mockImplementation((cb) => cb(mockManager)),
           getRepository: jest.fn().mockReturnValue(craftJobRepo),
         } },
-        { provide: SkillsService, useValue: mockSkills },
+        { provide: MasteriesService, useValue: mockMasteries },
         { provide: ItemTransferService, useValue: mockTransfer },
         { provide: CraftingService, useValue: mockCrafting },
         { provide: ProgressionService, useValue: mockProgression },
@@ -158,7 +158,7 @@ describe('CraftJobService — launch()', () => {
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve({ id: 'char-1', level: 5 });
       if (entity === CraftingRecipe) return Promise.resolve(recipe);
-      if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+      if (entity === MasteryDefinition) return Promise.resolve(makeMasteryDef());
       return Promise.resolve(null);
     });
     mockManager.find.mockImplementation((entity: any) => {
@@ -182,7 +182,7 @@ describe('CraftJobService — launch()', () => {
     expect(job.quantity).toBe(2);
     expect(job.craftingDifficulty).toBe(20);
     expect(job.craftCharacterXpReward).toBe(7);
-    expect(job.requiredSkillKey).toBe('smithing');
+    expect(job.requiredMasteryKey).toBe('smithing');
     expect(job.stationType).toBe('none');
     expect(job.stationId).toBeNull();
   });
@@ -242,7 +242,7 @@ describe('CraftJobService — launch()', () => {
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve({ id: 'char-1', level: 5 });
       if (entity === CraftingRecipe) return Promise.resolve(makeRecipe());
-      if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+      if (entity === MasteryDefinition) return Promise.resolve(makeMasteryDef());
       return Promise.resolve(null);
     });
     mockManager.find.mockImplementation((entity: any) => {
@@ -266,7 +266,7 @@ describe('CraftJobService — launch()', () => {
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve({ id: 'char-1', level: 5 });
       if (entity === CraftingRecipe) return Promise.resolve(recipe);
-      if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+      if (entity === MasteryDefinition) return Promise.resolve(makeMasteryDef());
       return Promise.resolve(null);
     });
     mockManager.find.mockImplementation((entity: any) => {
@@ -308,7 +308,7 @@ describe('CraftJobService — launch()', () => {
     mockManager.findOne.mockImplementation((entity: any) => {
       if (entity === Character) return Promise.resolve({ id: 'char-1', level: 5 });
       if (entity === CraftingRecipe) return Promise.resolve(recipe);
-      if (entity === SkillDefinition) return Promise.resolve(makeSkillDef());
+      if (entity === MasteryDefinition) return Promise.resolve(makeMasteryDef());
       return Promise.resolve(null);
     });
     mockManager.find.mockImplementation((entity: any) => {
@@ -326,8 +326,8 @@ describe('CraftJobService — launch()', () => {
     await expect(service.launch('char-1', 'recipe-1', 1)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('rejette un niveau de skill insuffisant', async () => {
-    setupStackable(makeRecipe({ requiredSkillLevel: 50 }));
+  it('rejette un niveau de mastery insuffisant', async () => {
+    setupStackable(makeRecipe({ requiredMasteryLevel: 50 }));
     await expect(service.launch('char-1', 'recipe-1', 1)).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -358,8 +358,8 @@ describe('CraftJobService — launch()', () => {
       characterId: 'char-1',
       state: CraftJobState.RUNNING,
       quantity: 1,
-      requiredSkillKey: 'smithing',
-      requiredSkillLevel: 1,
+      requiredMasteryKey: 'smithing',
+      requiredMasteryLevel: 1,
       baseSuccessRate: 1.0,
       successBonusPerLevel: 0.0,
       minSuccessRate: 0.05,
@@ -374,7 +374,7 @@ describe('CraftJobService — launch()', () => {
     };
   }
 
-  function setupComplete(job: any, ingredients: any[] = [], outputs: any[] = [], skillDef = makeSkillDef()) {
+  function setupComplete(job: any, ingredients: any[] = [], outputs: any[] = [], masteryDef = makeMasteryDef()) {
     jobToComplete = job;
     mockManager.find.mockImplementation((entity: any) => {
       if (entity === CraftJobIngredient) return Promise.resolve(ingredients);
@@ -382,7 +382,7 @@ describe('CraftJobService — launch()', () => {
       return Promise.resolve([]);
     });
     mockManager.findOne.mockImplementation((entity: any) => {
-      if (entity === SkillDefinition) return Promise.resolve(skillDef);
+      if (entity === MasteryDefinition) return Promise.resolve(masteryDef);
       return Promise.resolve(null);
     });
   }
@@ -406,7 +406,7 @@ describe('CraftJobService — launch()', () => {
     expect(result).toBeNull();
   });
 
-  it('succès → COMPLETED + XP character + XP skill (× succès)', async () => {
+  it('succès → COMPLETED + XP character + XP mastery (× succès)', async () => {
     const outputs = [{ itemId: 'item-iron_bar', producedQuantity: 1, chance: 1.0, resolvedQuantity: 0 }];
     setupComplete(makeJob({ quantity: 1 }), [], outputs);
     forceRandom(0); // succès garanti + chance ok
@@ -418,33 +418,33 @@ describe('CraftJobService — launch()', () => {
       successes: 1,
       failures: 0,
       grantedCharacterXp: 7,
-      grantedSkillXp: 17,
+      grantedMasteryXp: 17,
     });
-    // difficulté 20 → skill XP base 17, × 1 succès
-    expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 17, mockManager);
+    // difficulté 20 → mastery XP base 17, × 1 succès
+    expect(mockMasteries.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 17, mockManager);
     expect(mockProgression.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 7, 'CRAFT', mockManager);
     expect(outputs[0].resolvedQuantity).toBe(1);
   });
 
-  it('échec total (×1) → FAILED + XP skill partielle 25% + 0 XP perso (règle V1)', async () => {
+  it('échec total (×1) → FAILED + XP mastery partielle 25% + 0 XP perso (règle V1)', async () => {
     setupComplete(makeJob({ baseSuccessRate: 0, minSuccessRate: 0, quantity: 1 }));
     forceRandom(0.99); // échec garanti
 
     const result = await service.complete('job-1');
 
-    // perSuccessSkillXp = 15 + floor(20/10) = 17 ; échec = floor(17 × 0.25) = 4.
+    // perSuccessMasteryXp = 15 + floor(20/10) = 17 ; échec = floor(17 × 0.25) = 4.
     expect(result).toMatchObject({
       state: CraftJobState.FAILED,
       successes: 0,
       failures: 1,
       grantedCharacterXp: 0,
-      grantedSkillXp: 4,
+      grantedMasteryXp: 4,
     });
-    expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 4, mockManager);
+    expect(mockMasteries.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 4, mockManager);
     expect(mockProgression.applyCharacterXpInTx).not.toHaveBeenCalled();
   });
 
-  it('échec total (×3) → XP skill partielle multipliée par le nombre d\'échecs', async () => {
+  it('échec total (×3) → XP mastery partielle multipliée par le nombre d\'échecs', async () => {
     setupComplete(makeJob({ baseSuccessRate: 0, minSuccessRate: 0, quantity: 3 }));
     forceRandom(0.99);
 
@@ -456,9 +456,9 @@ describe('CraftJobService — launch()', () => {
       successes: 0,
       failures: 3,
       grantedCharacterXp: 0,
-      grantedSkillXp: 12,
+      grantedMasteryXp: 12,
     });
-    expect(mockSkills.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 12, mockManager);
+    expect(mockMasteries.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 12, mockManager);
     expect(mockProgression.applyCharacterXpInTx).not.toHaveBeenCalled();
   });
 

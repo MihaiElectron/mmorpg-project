@@ -185,7 +185,7 @@ dans le monde.
 - Respawn : joueur (point le plus proche), creature (spawn d'origine).
 - Loot : génération de récompenses selon le type d'entité.
 - Progression : expérience, niveaux, statistiques.
-- Skills métiers : définitions de skills, XP et niveaux joueur.
+- Masteries métiers : définitions de masteries, XP et niveaux joueur.
 - Crafting : recettes, stations de craft, validation serveur, consommation et
   production d'items.
 - Settlement / Economy : système de ville, ateliers, commandes différées,
@@ -237,8 +237,8 @@ dans le monde.
 | Respawn creature | **Implémenté** |
 | Loot ressource | **Implémenté** (partiel — table hardcodée) |
 | Loot creature | **Futur** |
-| Progression (exp, niveaux) | **Implémenté** pour skills de craft |
-| Métiers / skills | **Implémenté** pour SkillDefinition + PlayerSkill XP/niveaux |
+| Progression (exp, niveaux) | **Implémenté** pour masteries de craft |
+| Métiers / masteries | **Implémenté** pour MasteryDefinition + PlayerMastery XP/niveaux |
 | Crafting | **Implémenté** pour recettes, stations, ActionPanel runtime et validation serveur WU |
 | Stations de craft | **Implémenté** — templates, instances WU, AdminPanel/WOM, rendu debug |
 | Settlement / Economy | **Futur** — documentation Draft + ADR candidats Proposed, aucune implémentation |
@@ -640,7 +640,7 @@ Chaque système futur s'intègre naturellement dans les domaines existants.
 | Système futur | Domaine principal | Extension |
 |---|---|---|
 | Quêtes | Gameplay | Nouveau type de mécanique, entité QuestDefinition en Persistence |
-| Métiers / skills | Gameplay | Progression étendue, conditions sur les interactions |
+| Métiers / masteries | Gameplay | Progression étendue, conditions sur les interactions |
 | Crafting | Gameplay | Mécanique d'interaction, consommation d'inventaire |
 | Économie / Settlement | Gameplay + Persistence | Sous-domaines candidats documentés : marché, prix, échanges, taxes, trésor, bâtiments de ville |
 | Météo | World | État global de la carte, tick monde |

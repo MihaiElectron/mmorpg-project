@@ -2,7 +2,7 @@ import { ResourcesGateway } from './resources.gateway';
 import { ResourcesService } from './resources.service';
 import { LootService } from '../world/loot.service';
 import { WsAuthService } from '../common/ws-auth.service';
-import { SkillsService } from '../skills/skills.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ProgressionService } from '../progression/progression.service';
 import { ResourceTemplate } from './entities/resource-template.entity';
@@ -22,7 +22,7 @@ function makeResource(type: string, remainingLoots = 3) {
 }
 
 /**
- * Template Phase 2c : plus de skillKey/gatheringXpReward lus par le runtime.
+ * Template Phase 2c : plus de masteryKey/gatheringXpReward lus par le runtime.
  * gatherCharacterXpReward pilote la Character XP. On garde les champs legacy
  * dans le stub pour prouver qu'ils sont IGNORÉS.
  */
@@ -35,7 +35,7 @@ function makeTemplate(type: string, gatherCharacterXpReward = 0, gatheringDiffic
     gatherCharacterXpReward,
     gatheringDifficulty,
     // legacy — ne doit jamais être lu par la récolte
-    skillKey: 'legacy_should_be_ignored',
+    masteryKey: 'legacy_should_be_ignored',
     gatheringXpReward: 999,
   } as Partial<ResourceTemplate>;
 }
@@ -66,13 +66,13 @@ function makeClient(characterId = 'char-1'): any {
 
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
-describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill XP runtime)', () => {
+describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Mastery XP runtime)', () => {
   let gateway: ResourcesGateway;
   let resourcesMock: Record<string, jest.Mock>;
   let lootMock: Record<string, jest.Mock>;
   let dataSourceMock: { transaction: jest.Mock };
   let materializeMock: Record<string, jest.Mock>;
-  let skillsMock: Record<string, jest.Mock>;
+  let masteriesMock: Record<string, jest.Mock>;
   let progressionMock: Record<string, jest.Mock>;
   let serverEmit: jest.Mock;
 
@@ -83,7 +83,7 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
       dataSourceMock as any,
       materializeMock as unknown as ItemMaterializationService,
       {} as unknown as WsAuthService,
-      skillsMock as unknown as SkillsService,
+      masteriesMock as unknown as MasteriesService,
       progressionMock as unknown as ProgressionService,
     );
     serverEmit = jest.fn();
@@ -125,9 +125,9 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     dataSourceMock = {
       transaction: jest.fn().mockImplementation(async (fn) => fn({})),
     };
-    skillsMock = {
-      applySkillXpInTx: jest.fn().mockResolvedValue({
-        skillDefinitionKey: 'woodcutting', key: 'woodcutting', name: 'Woodcutting',
+    masteriesMock = {
+      applyMasteryXpInTx: jest.fn().mockResolvedValue({
+        masteryDefinitionKey: 'woodcutting', key: 'woodcutting', name: 'Woodcutting',
         category: 'gathering', enabled: true, level: 1, xp: 10, nextLevelXp: 100, leveledUp: false,
       }),
     };
@@ -139,9 +139,9 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     setupGateway();
   });
 
-  // ── Character XP + Skill XP ──────────────────────────────────────────────────
+  // ── Character XP + Mastery XP ──────────────────────────────────────────────────
 
-  it('dead_tree → Character XP (template) + Skill XP woodcutting (runtime)', async () => {
+  it('dead_tree → Character XP (template) + Mastery XP woodcutting (runtime)', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -152,12 +152,12 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     await (gateway as any).runGatherCycle(client, 'res-1');
 
     expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 7, 'RESOURCE', expect.anything());
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
     expect(client.emit).toHaveBeenCalledWith('character_xp_update', expect.objectContaining({ level: 1 }));
-    expect(client.emit).toHaveBeenCalledWith('skill_update', expect.objectContaining({ key: 'woodcutting' }));
+    expect(client.emit).toHaveBeenCalledWith('mastery_update', expect.objectContaining({ key: 'woodcutting' }));
   });
 
-  it('ore → Character XP (template) + Skill XP mining (runtime)', async () => {
+  it('ore → Character XP (template) + Mastery XP mining (runtime)', async () => {
     const resource = makeResource('ore');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -168,10 +168,10 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     await (gateway as any).runGatherCycle(client, 'res-1');
 
     expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-2', 4, 'RESOURCE', expect.anything());
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-2', 'mining', expect.any(Number), expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-2', 'mining', expect.any(Number), expect.anything());
   });
 
-  it('difficulty 0 → Skill XP = 10 (base)', async () => {
+  it('difficulty 0 → Mastery XP = 10 (base)', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -181,10 +181,10 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 10, expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 10, expect.anything());
   });
 
-  it('difficulty 20 → Skill XP = 12 (10 + floor(20/10))', async () => {
+  it('difficulty 20 → Mastery XP = 12 (10 + floor(20/10))', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -194,10 +194,10 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 12, expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', 12, expect.anything());
   });
 
-  it('difficulty 100 → Skill XP = 20 (10 + floor(100/10))', async () => {
+  it('difficulty 100 → Mastery XP = 20 (10 + floor(100/10))', async () => {
     const resource = makeResource('ore');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -207,7 +207,7 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'mining', 20, expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'mining', 20, expect.anything());
   });
 
   it('gatherCharacterXpReward = 0 → pas de character_xp_update', async () => {
@@ -222,11 +222,11 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
 
     expect(progressionMock.applyCharacterXpInTx).not.toHaveBeenCalled();
     expect(client.emit).not.toHaveBeenCalledWith('character_xp_update', expect.anything());
-    // Skill XP toujours accordé (runtime), indépendant de la Character XP
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalled();
+    // Mastery XP toujours accordé (runtime), indépendant de la Character XP
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalled();
   });
 
-  it('type non mappé → Character XP possible, mais pas de Skill XP', async () => {
+  it('type non mappé → Character XP possible, mais pas de Mastery XP', async () => {
     const resource = makeResource('mystery_plant');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -237,11 +237,11 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     await (gateway as any).runGatherCycle(client, 'res-1');
 
     expect(progressionMock.applyCharacterXpInTx).toHaveBeenCalledWith('char-1', 3, 'RESOURCE', expect.anything());
-    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalled();
-    expect(client.emit).not.toHaveBeenCalledWith('skill_update', expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalledWith('mastery_update', expect.anything());
   });
 
-  it('ignore skillKey / gatheringXpReward legacy du template', async () => {
+  it('ignore masteryKey / gatheringXpReward legacy du template', async () => {
     const resource = makeResource('dead_tree');
     resourcesMock.findOne.mockResolvedValue(resource);
     resourcesMock.consumeLootInManager.mockResolvedValue({ ...resource, remainingLoots: 2 });
@@ -251,9 +251,9 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
     setupSession(client);
     await (gateway as any).runGatherCycle(client, 'res-1');
 
-    // Skill résolu par le runtime (dead_tree → woodcutting), jamais 'legacy_should_be_ignored'
-    expect(skillsMock.applySkillXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
-    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalledWith('char-1', 'legacy_should_be_ignored', expect.anything(), expect.anything());
+    // Mastery résolu par le runtime (dead_tree → woodcutting), jamais 'legacy_should_be_ignored'
+    expect(masteriesMock.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'woodcutting', expect.any(Number), expect.anything());
+    expect(masteriesMock.applyMasteryXpInTx).not.toHaveBeenCalledWith('char-1', 'legacy_should_be_ignored', expect.anything(), expect.anything());
   });
 
   // ── Rollback ──────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
 
     expect(client.emit).not.toHaveBeenCalledWith('resource_loot', expect.anything());
     expect(client.emit).not.toHaveBeenCalledWith('character_xp_update', expect.anything());
-    expect(client.emit).not.toHaveBeenCalledWith('skill_update', expect.anything());
+    expect(client.emit).not.toHaveBeenCalledWith('mastery_update', expect.anything());
     expect(serverEmit).not.toHaveBeenCalledWith('resource_update', expect.anything());
     expect(client.emit).toHaveBeenCalledWith('gather_cancelled', expect.objectContaining({ reason: 'error' }));
   });
@@ -346,7 +346,7 @@ describe('ResourcesGateway — runGatherCycle (Phase 2c : Character XP + Skill X
 
     expect(dataSourceMock.transaction).not.toHaveBeenCalled();
     expect(progressionMock.applyCharacterXpInTx).not.toHaveBeenCalled();
-    expect(skillsMock.applySkillXpInTx).not.toHaveBeenCalled();
+    expect(masteriesMock.applyMasteryXpInTx).not.toHaveBeenCalled();
   });
 
   it('loot INSTANCE (arme) : pas de rollback, character:reload émis, XP appliquée', async () => {

@@ -8,14 +8,14 @@ const storeLogic = (set, get) => ({
   isOpen: false,
   inventory: [],
   equipment: {},
-  skills: [],
+  masteries: [],
   balance: null,
   dragEquipSource: null,
 
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),
-  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, skills: [], balance: null, dragEquipSource: null }),
+  clearCharacter: () => set({ character: null, inventory: [], equipment: {}, masteries: [], balance: null, dragEquipSource: null }),
   setDragEquipSource: (source) => set({ dragEquipSource: source }),
   clearDragEquipSource: () => set({ dragEquipSource: null }),
   toggleOpen: () => {
@@ -92,20 +92,20 @@ const storeLogic = (set, get) => ({
     set((s) => s.character ? { character: { ...s.character, level, experience, nextLevelXp } } : {});
   },
 
-  updateSkill: (skillData) => {
-    const resolvedKey = skillData.key || skillData.skillDefinitionKey;
+  updateMastery: (masteryData) => {
+    const resolvedKey = masteryData.key || masteryData.masteryDefinitionKey;
     if (!resolvedKey) return;
-    const normalized = { ...skillData, key: resolvedKey };
+    const normalized = { ...masteryData, key: resolvedKey };
     set((state) => {
-      const skills = [...(state.skills || [])];
-      const index = skills.findIndex((s) => s.key === resolvedKey);
+      const masteries = [...(state.masteries || [])];
+      const index = masteries.findIndex((s) => s.key === resolvedKey);
       if (index > -1) {
-        skills[index] = { ...skills[index], ...normalized };
+        masteries[index] = { ...masteries[index], ...normalized };
       } else {
-        if (!normalized.name || !normalized.category) return { skills };
-        skills.push(normalized);
+        if (!normalized.name || !normalized.category) return { masteries };
+        masteries.push(normalized);
       }
-      return { skills };
+      return { masteries };
     });
   },
 
@@ -148,18 +148,18 @@ const storeLogic = (set, get) => ({
     }
   },
 
-  loadSkills: async () => {
+  loadMasteries: async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/skills`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/masteries`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
       const data = await res.json();
-      set({ skills: data });
+      set({ masteries: data });
     } catch (err) {
-      console.error("[CharacterStore] loadSkills error:", err);
+      console.error("[CharacterStore] loadMasteries error:", err);
     }
   },
 

@@ -10,8 +10,8 @@ import { DataSource, In, LessThanOrEqual } from 'typeorm';
 import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
-import { SkillsService } from '../skills/skills.service';
+import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
+import { MasteriesService } from '../masteries/masteries.service';
 import {
   ItemInstance,
   ItemInstanceContainerType,
@@ -26,11 +26,11 @@ import {
   ProgressionService,
   ProgressionSource,
 } from '../progression/progression.service';
-import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
-import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
+import { calculateMasteryXp } from '../mastery-xp-calculator/mastery-xp-calculator';
+import { MasteryDomain, MasteryXpContext } from '../mastery-xp-calculator/mastery-xp-context';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { CraftingService } from './crafting.service';
-import { MIN_CRAFT_TIME_MS, FAILURE_SKILL_XP_MULTIPLIER } from './crafting.constants';
+import { MIN_CRAFT_TIME_MS, FAILURE_MASTERY_XP_MULTIPLIER } from './crafting.constants';
 import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { computeCraftSuccessRate } from './craft-success-rate';
 import { CraftJob, CraftJobState } from './entities/craft-job.entity';
@@ -48,7 +48,7 @@ export interface CraftJobCompletionResult {
   successes: number;
   failures: number;
   grantedCharacterXp: number;
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
 }
 
 /**
@@ -66,7 +66,7 @@ export interface CraftJobClaimResult {
   produced: { itemId: string; quantity: number }[];
   ingredientsConsumed: { itemId: string; quantity: number }[];
   grantedCharacterXp: number;
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
   completedAt: Date | null;
   claimedAt: Date | null;
 }
@@ -93,7 +93,7 @@ export class CraftJobService {
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly skillsService: SkillsService,
+    private readonly masteriesService: MasteriesService,
     private readonly itemTransferService: ItemTransferService,
     private readonly craftingService: CraftingService,
     private readonly progressionService: ProgressionService,
@@ -102,7 +102,7 @@ export class CraftJobService {
   ) {}
 
   /**
-   * Lance une production différée : valide recette/station/skill/ingrédients,
+   * Lance une production différée : valide recette/station/mastery/ingrédients,
    * fige le snapshot, réserve les ingrédients et persiste le job RUNNING —
    * le tout dans une transaction unique (rollback total si une étape échoue).
    */
@@ -143,24 +143,24 @@ export class CraftJobService {
         stationId = station.id;
       }
 
-      // ── 4. Skill requis ────────────────────────────────────────────────────
-      const skillDef = await manager.findOne(SkillDefinition, {
-        where: { key: recipe.requiredSkillKey },
+      // ── 4. Mastery requis ────────────────────────────────────────────────────
+      const masteryDef = await manager.findOne(MasteryDefinition, {
+        where: { key: recipe.requiredMasteryKey },
       });
-      if (!skillDef) {
-        throw new NotFoundException(`Skill "${recipe.requiredSkillKey}" introuvable`);
+      if (!masteryDef) {
+        throw new NotFoundException(`Mastery "${recipe.requiredMasteryKey}" introuvable`);
       }
-      if (!skillDef.enabled) {
-        throw new BadRequestException(`Skill "${skillDef.key}" désactivé`);
+      if (!masteryDef.enabled) {
+        throw new BadRequestException(`Mastery "${masteryDef.key}" désactivé`);
       }
-      const playerSkill = await this.skillsService.getOrCreatePlayerSkillInTx(
+      const playerMastery = await this.masteriesService.getOrCreatePlayerMasteryInTx(
         characterId,
-        skillDef,
+        masteryDef,
         manager,
       );
-      if (playerSkill.level < recipe.requiredSkillLevel) {
+      if (playerMastery.level < recipe.requiredMasteryLevel) {
         throw new BadRequestException(
-          `Niveau ${recipe.requiredSkillLevel} requis en ${skillDef.key}, niveau actuel : ${playerSkill.level}`,
+          `Niveau ${recipe.requiredMasteryLevel} requis en ${masteryDef.key}, niveau actuel : ${playerMastery.level}`,
         );
       }
 
@@ -207,8 +207,8 @@ export class CraftJobService {
           quantity,
           craftTimeMs: effectiveCraftTimeMs,
           craftingDifficulty: recipe.craftingDifficulty ?? 0,
-          requiredSkillKey: recipe.requiredSkillKey,
-          requiredSkillLevel: recipe.requiredSkillLevel,
+          requiredMasteryKey: recipe.requiredMasteryKey,
+          requiredMasteryLevel: recipe.requiredMasteryLevel,
           craftCharacterXpReward: recipe.craftCharacterXpReward ?? 0,
           consumeIngredientsOnFailure: recipe.consumeIngredientsOnFailure,
           baseSuccessRate: recipe.baseSuccessRate,
@@ -304,19 +304,19 @@ export class CraftJobService {
       const ingredients = await manager.find(CraftJobIngredient, { where: { jobId } });
       const outputs = await manager.find(CraftJobOutput, { where: { jobId } });
 
-      // Niveau de skill courant (le skill appartient au joueur, jamais relu de la
-      // recette vivante). Si le skill a disparu, on complète sans bonus ni XP.
-      const skillDef = await manager.findOne(SkillDefinition, {
-        where: { key: job.requiredSkillKey },
+      // Niveau de mastery courant (le mastery appartient au joueur, jamais relu de la
+      // recette vivante). Si le mastery a disparu, on complète sans bonus ni XP.
+      const masteryDef = await manager.findOne(MasteryDefinition, {
+        where: { key: job.requiredMasteryKey },
       });
-      let skillLevel = job.requiredSkillLevel;
-      if (skillDef && skillDef.enabled) {
-        const playerSkill = await this.skillsService.getOrCreatePlayerSkillInTx(
+      let masteryLevel = job.requiredMasteryLevel;
+      if (masteryDef && masteryDef.enabled) {
+        const playerMastery = await this.masteriesService.getOrCreatePlayerMasteryInTx(
           job.characterId,
-          skillDef,
+          masteryDef,
           manager,
         );
-        skillLevel = playerSkill.level;
+        masteryLevel = playerMastery.level;
       }
 
       // Taux de succès depuis le SNAPSHOT uniquement (jamais la recette vivante),
@@ -326,8 +326,8 @@ export class CraftJobService {
         successBonusPerLevel: job.successBonusPerLevel,
         minSuccessRate: job.minSuccessRate,
         maxSuccessRate: job.maxSuccessRate,
-        requiredSkillLevel: job.requiredSkillLevel,
-        skillLevel,
+        requiredMasteryLevel: job.requiredMasteryLevel,
+        masteryLevel,
       });
 
       let successes = 0;
@@ -386,31 +386,31 @@ export class CraftJobService {
       if (ingredients.length > 0) await manager.save(CraftJobIngredient, ingredients);
 
       // XP accordée à la complétion (ADR-0016 + règle d'échec V1). L'XP réellement
-      // créditée est FIGÉE sur le job (grantedCharacterXp/grantedSkillXp) pour être
+      // créditée est FIGÉE sur le job (grantedCharacterXp/grantedMasteryXp) pour être
       // affichée telle quelle — jamais recalculée côté client.
-      // - Succès : XP perso pleine (craftCharacterXpReward) + XP skill pleine, ×succès.
-      // - Échec  : 0 XP perso + FAILURE_SKILL_XP_MULTIPLIER × XP skill succès, ×échec.
-      let perSuccessSkillXp = 0;
-      let skillDefinitionKey: string | null = null;
-      if (skillDef && skillDef.enabled) {
-        const skillXp = calculateSkillXp(this.buildCraftSkillXpContext(job, skillLevel));
-        if (skillXp) {
-          perSuccessSkillXp = skillXp.xpAmount;
-          skillDefinitionKey = skillXp.skillDefinitionKey;
+      // - Succès : XP perso pleine (craftCharacterXpReward) + XP mastery pleine, ×succès.
+      // - Échec  : 0 XP perso + FAILURE_MASTERY_XP_MULTIPLIER × XP mastery succès, ×échec.
+      let perSuccessMasteryXp = 0;
+      let masteryDefinitionKey: string | null = null;
+      if (masteryDef && masteryDef.enabled) {
+        const masteryXp = calculateMasteryXp(this.buildCraftMasteryXpContext(job, masteryLevel));
+        if (masteryXp) {
+          perSuccessMasteryXp = masteryXp.xpAmount;
+          masteryDefinitionKey = masteryXp.masteryDefinitionKey;
         }
       }
-      const failureSkillXpPerAttempt = Math.floor(
-        perSuccessSkillXp * FAILURE_SKILL_XP_MULTIPLIER,
+      const failureMasteryXpPerAttempt = Math.floor(
+        perSuccessMasteryXp * FAILURE_MASTERY_XP_MULTIPLIER,
       );
-      const grantedSkillXp =
-        perSuccessSkillXp * successes + failureSkillXpPerAttempt * failures;
+      const grantedMasteryXp =
+        perSuccessMasteryXp * successes + failureMasteryXpPerAttempt * failures;
       const grantedCharacterXp = Math.max(0, job.craftCharacterXpReward) * successes;
 
-      if (grantedSkillXp > 0 && skillDefinitionKey) {
-        await this.skillsService.applySkillXpInTx(
+      if (grantedMasteryXp > 0 && masteryDefinitionKey) {
+        await this.masteriesService.applyMasteryXpInTx(
           job.characterId,
-          skillDefinitionKey,
-          grantedSkillXp,
+          masteryDefinitionKey,
+          grantedMasteryXp,
           manager,
         );
       }
@@ -427,7 +427,7 @@ export class CraftJobService {
       job.successes = successes;
       job.failures = failures;
       job.grantedCharacterXp = grantedCharacterXp;
-      job.grantedSkillXp = grantedSkillXp;
+      job.grantedMasteryXp = grantedMasteryXp;
       job.completedAt = new Date();
       await manager.save(CraftJob, job);
 
@@ -437,7 +437,7 @@ export class CraftJobService {
         successes,
         failures,
         grantedCharacterXp,
-        grantedSkillXp,
+        grantedMasteryXp,
       };
     });
   }
@@ -508,7 +508,7 @@ export class CraftJobService {
           .filter((ing) => ing.consumedQuantity > 0)
           .map((ing) => ({ itemId: ing.itemId, quantity: ing.consumedQuantity })),
         grantedCharacterXp: job.grantedCharacterXp,
-        grantedSkillXp: job.grantedSkillXp,
+        grantedMasteryXp: job.grantedMasteryXp,
         completedAt: job.completedAt,
         claimedAt: job.claimedAt,
       };
@@ -551,16 +551,16 @@ export class CraftJobService {
     return rows.map((r) => r.id);
   }
 
-  private buildCraftSkillXpContext(job: CraftJob, skillLevel: number): SkillXpContext {
+  private buildCraftMasteryXpContext(job: CraftJob, masteryLevel: number): MasteryXpContext {
     return {
-      skillDefinitionKey: job.requiredSkillKey,
-      domain: 'crafting' as SkillDomain,
+      masteryDefinitionKey: job.requiredMasteryKey,
+      domain: 'crafting' as MasteryDomain,
       action: 'craft',
       success: true,
       difficulty: Math.max(0, Math.min(100, job.craftingDifficulty ?? 0)),
       quality: null,
       characterLevel: 1,
-      skillLevel,
+      masteryLevel,
       duration: job.craftTimeMs > 0 ? job.craftTimeMs : null,
       damage: null,
       blockedDamage: null,

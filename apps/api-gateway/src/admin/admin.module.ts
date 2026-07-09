@@ -6,8 +6,8 @@ import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
-import { PlayerSkill } from '../skills/entities/player-skill.entity';
+import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
+import { PlayerMastery } from '../masteries/entities/player-mastery.entity';
 import { CraftingRecipe } from '../crafting/entities/crafting-recipe.entity';
 import { CraftingIngredient } from '../crafting/entities/crafting-ingredient.entity';
 import { CraftingResult } from '../crafting/entities/crafting-result.entity';
@@ -27,7 +27,7 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
 import { ItemModule } from '../items/item.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { InventoryModule } from '../inventory/inventory.module';
-import { SkillsModule } from '../skills/skills.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 import { GameConfigModule } from '../game-config/game-config.module';
 
 @Module({
@@ -35,7 +35,7 @@ import { GameConfigModule } from '../game-config/game-config.module';
     TypeOrmModule.forFeature([
       CreatureTemplate, CreatureSpawn, Creature, Character,
       Resource, ResourceTemplate,
-      SkillDefinition, PlayerSkill,
+      MasteryDefinition, PlayerMastery,
       CraftingRecipe, CraftingIngredient, CraftingResult,
       CraftingStationTemplate, CraftingStation,
       Item,
@@ -50,7 +50,7 @@ import { GameConfigModule } from '../game-config/game-config.module';
     ItemModule,
     ItemTransferModule,
     InventoryModule,
-    SkillsModule,
+    MasteriesModule,
     GameConfigModule,
   ],
   controllers: [AdminController],

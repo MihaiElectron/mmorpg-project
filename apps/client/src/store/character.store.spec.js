@@ -175,91 +175,91 @@ describe("character.store — equipItem", () => {
 });
 
 // ---------------------------------------------------------------------------
-// updateSkill — logique de normalisation et garde défensive
+// updateMastery — logique de normalisation et garde défensive
 // ---------------------------------------------------------------------------
 
-function makeUpdateSkill() {
-  let skills = [];
-  const set = (fn) => { skills = fn({ skills }).skills ?? skills; };
-  const getState = () => ({ skills });
+function makeUpdateMastery() {
+  let masteries = [];
+  const set = (fn) => { masteries = fn({ masteries }).masteries ?? masteries; };
+  const getState = () => ({ masteries });
 
-  const updateSkill = (skillData) => {
-    const resolvedKey = skillData.key || skillData.skillDefinitionKey;
+  const updateMastery = (masteryData) => {
+    const resolvedKey = masteryData.key || masteryData.masteryDefinitionKey;
     if (!resolvedKey) return;
-    const normalized = { ...skillData, key: resolvedKey };
+    const normalized = { ...masteryData, key: resolvedKey };
     set((state) => {
-      const list = [...(state.skills || [])];
+      const list = [...(state.masteries || [])];
       const index = list.findIndex((s) => s.key === resolvedKey);
       if (index > -1) {
         list[index] = { ...list[index], ...normalized };
       } else {
-        if (!normalized.name || !normalized.category) return { skills: list };
+        if (!normalized.name || !normalized.category) return { masteries: list };
         list.push(normalized);
       }
-      return { skills: list };
+      return { masteries: list };
     });
   };
 
-  return { updateSkill, getState, setSkills: (s) => { skills = s; } };
+  return { updateMastery, getState, setMasteries: (s) => { masteries = s; } };
 }
 
-describe("character.store — updateSkill", () => {
-  it("met a jour un skill existant via key", () => {
-    const { updateSkill, getState, setSkills } = makeUpdateSkill();
-    setSkills([{ key: "two_handed", name: "Two-Handed", category: "combat", level: 1, xp: 0, enabled: true }]);
+describe("character.store — updateMastery", () => {
+  it("met a jour un mastery existant via key", () => {
+    const { updateMastery, getState, setMasteries } = makeUpdateMastery();
+    setMasteries([{ key: "two_handed", name: "Two-Handed", category: "combat", level: 1, xp: 0, enabled: true }]);
 
-    updateSkill({ key: "two_handed", level: 2, xp: 10, nextLevelXp: 200, leveledUp: true });
+    updateMastery({ key: "two_handed", level: 2, xp: 10, nextLevelXp: 200, leveledUp: true });
 
-    expect(getState().skills[0].level).toBe(2);
-    expect(getState().skills[0].xp).toBe(10);
-    expect(getState().skills[0].name).toBe("Two-Handed");
+    expect(getState().masteries[0].level).toBe(2);
+    expect(getState().masteries[0].xp).toBe(10);
+    expect(getState().masteries[0].name).toBe("Two-Handed");
   });
 
-  it("normalise skillDefinitionKey vers key pour trouver le skill existant", () => {
-    const { updateSkill, getState, setSkills } = makeUpdateSkill();
-    setSkills([{ key: "bow", name: "Bow", category: "combat", level: 1, xp: 0, enabled: true }]);
+  it("normalise masteryDefinitionKey vers key pour trouver le mastery existant", () => {
+    const { updateMastery, getState, setMasteries } = makeUpdateMastery();
+    setMasteries([{ key: "bow", name: "Bow", category: "combat", level: 1, xp: 0, enabled: true }]);
 
-    updateSkill({ skillDefinitionKey: "bow", level: 3, xp: 25, nextLevelXp: 150, leveledUp: false });
+    updateMastery({ masteryDefinitionKey: "bow", level: 3, xp: 25, nextLevelXp: 150, leveledUp: false });
 
-    expect(getState().skills[0].level).toBe(3);
-    expect(getState().skills[0].key).toBe("bow");
+    expect(getState().masteries[0].level).toBe(3);
+    expect(getState().masteries[0].key).toBe("bow");
   });
 
-  it("ajoute un nouveau skill si key absente des skills charges et payload complet", () => {
-    const { updateSkill, getState } = makeUpdateSkill();
+  it("ajoute un nouveau mastery si key absente des masteries charges et payload complet", () => {
+    const { updateMastery, getState } = makeUpdateMastery();
 
-    updateSkill({ skillDefinitionKey: "crossbow", key: "crossbow", name: "Crossbow", category: "combat", level: 1, xp: 5, nextLevelXp: 100, enabled: true });
+    updateMastery({ masteryDefinitionKey: "crossbow", key: "crossbow", name: "Crossbow", category: "combat", level: 1, xp: 5, nextLevelXp: 100, enabled: true });
 
-    expect(getState().skills).toHaveLength(1);
-    expect(getState().skills[0].key).toBe("crossbow");
-    expect(getState().skills[0].category).toBe("combat");
+    expect(getState().masteries).toHaveLength(1);
+    expect(getState().masteries[0].key).toBe("crossbow");
+    expect(getState().masteries[0].category).toBe("combat");
   });
 
   it("ignore un payload sans resolvedKey", () => {
-    const { updateSkill, getState } = makeUpdateSkill();
+    const { updateMastery, getState } = makeUpdateMastery();
 
-    updateSkill({ level: 1, xp: 5 });
+    updateMastery({ level: 1, xp: 5 });
 
-    expect(getState().skills).toHaveLength(0);
+    expect(getState().masteries).toHaveLength(0);
   });
 
-  it("n'ajoute pas un nouveau skill si name ou category manquent (payload incomplet)", () => {
-    const { updateSkill, getState } = makeUpdateSkill();
+  it("n'ajoute pas un nouveau mastery si name ou category manquent (payload incomplet)", () => {
+    const { updateMastery, getState } = makeUpdateMastery();
 
-    updateSkill({ skillDefinitionKey: "two_handed", level: 1, xp: 5, nextLevelXp: 100 });
+    updateMastery({ masteryDefinitionKey: "two_handed", level: 1, xp: 5, nextLevelXp: 100 });
 
-    expect(getState().skills).toHaveLength(0);
+    expect(getState().masteries).toHaveLength(0);
   });
 
   it("met a jour sans ecraser name/category si deja present dans le store", () => {
-    const { updateSkill, getState, setSkills } = makeUpdateSkill();
-    setSkills([{ key: "mining", name: "Mining", category: "gathering", level: 1, xp: 0, enabled: true }]);
+    const { updateMastery, getState, setMasteries } = makeUpdateMastery();
+    setMasteries([{ key: "mining", name: "Mining", category: "gathering", level: 1, xp: 0, enabled: true }]);
 
-    updateSkill({ skillDefinitionKey: "mining", level: 2, xp: 40 });
+    updateMastery({ masteryDefinitionKey: "mining", level: 2, xp: 40 });
 
-    expect(getState().skills[0].name).toBe("Mining");
-    expect(getState().skills[0].category).toBe("gathering");
-    expect(getState().skills[0].level).toBe(2);
+    expect(getState().masteries[0].name).toBe("Mining");
+    expect(getState().masteries[0].category).toBe("gathering");
+    expect(getState().masteries[0].level).toBe(2);
   });
 });
 

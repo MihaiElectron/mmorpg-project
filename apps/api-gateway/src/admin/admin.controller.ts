@@ -179,13 +179,13 @@ export class AdminController {
     return updated;
   }
 
-  // ── Skills ────────────────────────────────────────────────────────────────
+  // ── Masteries ────────────────────────────────────────────────────────────────
 
-  @Get('skill-definitions')
-  getSkillDefinitions() { return this.adminService.getSkillDefinitions(); }
+  @Get('mastery-definitions')
+  getMasteryDefinitions() { return this.adminService.getMasteryDefinitions(); }
 
-  @Get('skill-definitions/world-objects')
-  getSkillDefinitionWorldObjects() { return this.adminService.getSkillDefinitionWorldObjects(); }
+  @Get('mastery-definitions/world-objects')
+  getMasteryDefinitionWorldObjects() { return this.adminService.getMasteryDefinitionWorldObjects(); }
 
   // ── Items ─────────────────────────────────────────────────────────────────
 

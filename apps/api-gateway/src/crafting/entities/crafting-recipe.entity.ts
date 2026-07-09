@@ -24,16 +24,16 @@ export class CraftingRecipe {
   @Column({ type: 'text', nullable: true, default: null })
   description: string | null;
 
-  // Famille de recettes — correspond à la category du skill requis
+  // Famille de recettes — correspond à la category du mastery requis
   @Column({ type: 'varchar', length: 64, default: 'smithing' })
   category: string;
 
-  // Couplage Skill — le CraftingService vérifie le level avant craft
+  // Couplage Mastery — le CraftingService vérifie le level avant craft
   @Column({ type: 'varchar', length: 64 })
-  requiredSkillKey: string;
+  requiredMasteryKey: string;
 
   @Column({ type: 'int', default: 1 })
-  requiredSkillLevel: number;
+  requiredMasteryLevel: number;
 
   // Formule succès : clamp(base + (playerLevel - required) × bonus, min, max)
   @Column({ type: 'float', default: 1.0 })
@@ -48,8 +48,8 @@ export class CraftingRecipe {
   @Column({ type: 'float', default: 1.0 })
   maxSuccessRate: number;
 
-  // XP legacy (pré-ADR-0016) — plus utilisée par le Runtime craft pour la Skill
-  // XP (désormais calculée via calculateSkillXp). Conservée pour compat données.
+  // XP legacy (pré-ADR-0016) — plus utilisée par le Runtime craft pour la Mastery
+  // XP (désormais calculée via calculateMasteryXp). Conservée pour compat données.
   @Column({ type: 'int', default: 10 })
   xpReward: number;
 
@@ -57,8 +57,8 @@ export class CraftingRecipe {
   @Column({ type: 'int', default: 0 })
   craftCharacterXpReward: number;
 
-  // ADR-0016 : difficulté 0–100 alimentant SkillXpContext.difficulty (Skill Xp
-  // calculée par le Runtime). Jamais une valeur d'XP skill stockée.
+  // ADR-0016 : difficulté 0–100 alimentant MasteryXpContext.difficulty (Mastery Xp
+  // calculée par le Runtime). Jamais une valeur d'XP mastery stockée.
   @Column({ type: 'int', default: 0 })
   craftingDifficulty: number;
 

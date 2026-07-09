@@ -1023,9 +1023,9 @@ export default class WorldScene extends Phaser.Scene {
       getCharacterStore().getState().applyCharacterXpUpdate(data);
     });
 
-    this.socket.on("skill_update", (data) => {
+    this.socket.on("mastery_update", (data) => {
       const store = getCharacterStore();
-      store.getState().updateSkill(data);
+      store.getState().updateMastery(data);
     });
 
     this.socket.on("inventory_update", (data) => {
@@ -2406,7 +2406,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("player_moved");
       this.socket.off("player_left");
       this.socket.off("character_xp_update");
-      this.socket.off("skill_update");
+      this.socket.off("mastery_update");
       this.socket.off("character_damaged");
       this.socket.off("character_teleport");
       this.socket.off("character_respawn");

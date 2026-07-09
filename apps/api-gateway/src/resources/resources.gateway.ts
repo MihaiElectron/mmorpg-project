@@ -14,7 +14,7 @@ import { DataSource } from 'typeorm';
 import type { WorldSocket } from '../types/world-socket';
 import { ResourcesService } from './resources.service';
 import { LootService } from '../world/loot.service';
-import { SkillsService } from '../skills/skills.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import type { MaterializationResult } from '../item-materialization/item-materialization.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
@@ -24,9 +24,9 @@ import { getMapRoomId } from '../common/socket-rooms';
 import { ItemMaterializationService } from '../item-materialization/item-materialization.service';
 import { ItemInstanceSource } from '../item-instances/enums/item-instance-source.enum';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
-import { SkillUpdatePayload } from '../skills/skills.service';
-import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
-import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
+import { MasteryUpdatePayload } from '../masteries/masteries.service';
+import { calculateMasteryXp } from '../mastery-xp-calculator/mastery-xp-calculator';
+import { MasteryDomain, MasteryXpContext } from '../mastery-xp-calculator/mastery-xp-context';
 import { Resource } from './entities/resource.entity';
 
 interface InteractResourcePayload {
@@ -34,11 +34,11 @@ interface InteractResourcePayload {
 }
 
 /**
- * Résolution runtime type de ressource → skillDefinitionKey (Phase 2c).
- * Le skill de récolte est déduit du type de la ressource, jamais d'un champ
+ * Résolution runtime type de ressource → masteryDefinitionKey (Phase 2c).
+ * Le mastery de récolte est déduit du type de la ressource, jamais d'un champ
  * du template. Temporaire : destiné à migrer vers une config Studio.
  */
-const GATHERING_RESOURCE_SKILL_MAP: Record<string, string> = {
+const GATHERING_RESOURCE_MASTERY_MAP: Record<string, string> = {
   dead_tree: 'woodcutting',
   ore: 'mining',
 };
@@ -82,25 +82,25 @@ export class ResourcesGateway
     private readonly dataSource: DataSource,
     private readonly itemMaterialization: ItemMaterializationService,
     private readonly wsAuthService: WsAuthService,
-    private readonly skills: SkillsService,
+    private readonly masteries: MasteriesService,
     private readonly progression: ProgressionService,
   ) {}
 
-  /** Résout le skill de récolte depuis le type de ressource (Runtime only). */
-  private resolveGatherSkillKey(resourceType: string): string | null {
-    return GATHERING_RESOURCE_SKILL_MAP[resourceType] ?? null;
+  /** Résout le mastery de récolte depuis le type de ressource (Runtime only). */
+  private resolveGatherMasteryKey(resourceType: string): string | null {
+    return GATHERING_RESOURCE_MASTERY_MAP[resourceType] ?? null;
   }
 
-  private buildGatherSkillXpContext(skillKey: string, difficulty: number): SkillXpContext {
+  private buildGatherMasteryXpContext(masteryKey: string, difficulty: number): MasteryXpContext {
     return {
-      skillDefinitionKey: skillKey,
-      domain: 'gathering' as SkillDomain,
+      masteryDefinitionKey: masteryKey,
+      domain: 'gathering' as MasteryDomain,
       action: 'gather',
       success: true,
       difficulty: Math.max(0, Math.min(100, difficulty)),
       quality: null,
       characterLevel: 1,
-      skillLevel: 1,
+      masteryLevel: 1,
       duration: GATHER_INTERVAL_MS,
       damage: null,
       blockedDamage: null,
@@ -239,23 +239,23 @@ export class ResourcesGateway
       return;
     }
 
-    // Character XP vient du template ; Skill XP vient du Runtime (type → context).
-    // gatheringDifficulty (template) alimente SkillXpContext.difficulty — jamais
-    // une valeur d'XP skill stockée (ADR-0016).
+    // Character XP vient du template ; Mastery XP vient du Runtime (type → context).
+    // gatheringDifficulty (template) alimente MasteryXpContext.difficulty — jamais
+    // une valeur d'XP mastery stockée (ADR-0016).
     const charXpReward = template?.gatherCharacterXpReward ?? 0;
     const gatheringDifficulty = template?.gatheringDifficulty ?? 0;
-    const skillKey = this.resolveGatherSkillKey(resource.type);
-    const skillXpResult = skillKey
-      ? calculateSkillXp(this.buildGatherSkillXpContext(skillKey, gatheringDifficulty))
+    const masteryKey = this.resolveGatherMasteryKey(resource.type);
+    const masteryXpResult = masteryKey
+      ? calculateMasteryXp(this.buildGatherMasteryXpContext(masteryKey, gatheringDifficulty))
       : null;
 
-    // Pipeline transactionnel unique : loot + consumeLoot + Character XP + Skill XP.
+    // Pipeline transactionnel unique : loot + consumeLoot + Character XP + Mastery XP.
     // Tout ou rien : si une étape échoue, aucun loot, aucun décrément, aucune XP.
     let txOut: {
       matResult: MaterializationResult;
       updatedResource: Resource;
       characterXpUpdate?: CharacterXpResult;
-      skillUpdate?: SkillUpdatePayload;
+      masteryUpdate?: MasteryUpdatePayload;
     };
     try {
       txOut = await this.dataSource.transaction(async (manager) => {
@@ -280,21 +280,21 @@ export class ResourcesGateway
           );
         }
 
-        let skillUpdate: SkillUpdatePayload | undefined;
-        if (skillXpResult) {
-          skillUpdate = await this.skills.applySkillXpInTx(
-            characterId, skillXpResult.skillDefinitionKey, skillXpResult.xpAmount, manager,
+        let masteryUpdate: MasteryUpdatePayload | undefined;
+        if (masteryXpResult) {
+          masteryUpdate = await this.masteries.applyMasteryXpInTx(
+            characterId, masteryXpResult.masteryDefinitionKey, masteryXpResult.xpAmount, manager,
           );
         }
 
-        return { matResult, updatedResource, characterXpUpdate, skillUpdate };
+        return { matResult, updatedResource, characterXpUpdate, masteryUpdate };
       });
     } catch {
       this.cancelGathering(client, targetId, 'error');
       return;
     }
 
-    const { matResult, updatedResource, characterXpUpdate, skillUpdate } = txOut;
+    const { matResult, updatedResource, characterXpUpdate, masteryUpdate } = txOut;
 
     // 📤 Envoie chaque entrée de loot au client
     for (const stack of matResult.stacks) {
@@ -317,7 +317,7 @@ export class ResourcesGateway
     if (matResult.instances.length > 0) client.emit('character:reload');
 
     if (characterXpUpdate) client.emit('character_xp_update', characterXpUpdate);
-    if (skillUpdate) client.emit('skill_update', skillUpdate);
+    if (masteryUpdate) client.emit('mastery_update', masteryUpdate);
 
     // 🔄 Mise à jour visuelle pour les joueurs de la même map
     const mapId = (updatedResource as any).mapId ?? DEFAULT_MAP_ID;

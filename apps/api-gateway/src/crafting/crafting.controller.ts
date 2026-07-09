@@ -6,7 +6,7 @@ import { CharacterService } from '../characters/character.service';
 import { CraftingService } from './crafting.service';
 import { CraftJobService, CraftJobClaimResult } from './craft-job.service';
 import { CraftRequestDto } from './dto/craft-request.dto';
-import { FAILURE_SKILL_XP_MULTIPLIER } from './crafting.constants';
+import { FAILURE_MASTERY_XP_MULTIPLIER } from './crafting.constants';
 import { CraftingRecipe } from './entities/crafting-recipe.entity';
 import { Item } from '../items/entities/item.entity';
 
@@ -53,9 +53,9 @@ export type CraftJobDto = {
   failures: number;
   // XP réellement accordée à la complétion (0 tant que RUNNING). Jamais recalculée client.
   grantedCharacterXp: number;
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
   // Multiplicateur d'XP compétence appliqué aux tentatives échouées (règle V1).
-  failureSkillXpMultiplier: number;
+  failureMasteryXpMultiplier: number;
   ingredients: CraftJobIngredientDto[];
   outputs: CraftJobOutputDto[];
 };
@@ -78,7 +78,7 @@ export type CraftJobClaimSummaryDto = {
   produced: CraftClaimItemDto[];
   ingredientsConsumed: CraftClaimItemDto[];
   grantedCharacterXp: number;
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
   completedAt: Date | null;
   claimedAt: Date | null;
 };
@@ -89,8 +89,8 @@ export type AvailableCraftingRecipe = {
   name: string;
   description: string | null;
   category: string;
-  requiredSkillKey: string;
-  requiredSkillLevel: number;
+  requiredMasteryKey: string;
+  requiredMasteryLevel: number;
   baseSuccessRate: number;
   successBonusPerLevel: number;
   minSuccessRate: number;
@@ -138,7 +138,7 @@ export class CraftingController {
    * Endpoint lecture UI : expose les recettes enabled et leurs ingrédients/résultats.
    * Ce endpoint n'autorise rien définitivement ; le lancement d'un CraftJob
    * (`CraftJobService.launch`) reste la validation serveur pour stationType,
-   * distance, inventaire, skill et résultat.
+   * distance, inventaire, mastery et résultat.
    */
   @Get('available-recipes')
   async getAvailableRecipes(
@@ -162,8 +162,8 @@ export class CraftingController {
       name: recipe.name,
       description: recipe.description ?? null,
       category: recipe.category,
-      requiredSkillKey: recipe.requiredSkillKey,
-      requiredSkillLevel: recipe.requiredSkillLevel,
+      requiredMasteryKey: recipe.requiredMasteryKey,
+      requiredMasteryLevel: recipe.requiredMasteryLevel,
       baseSuccessRate: recipe.baseSuccessRate,
       successBonusPerLevel: recipe.successBonusPerLevel,
       minSuccessRate: recipe.minSuccessRate,
@@ -281,7 +281,7 @@ export class CraftingController {
       produced: result.produced.map(toItemDto),
       ingredientsConsumed: result.ingredientsConsumed.map(toItemDto),
       grantedCharacterXp: result.grantedCharacterXp,
-      grantedSkillXp: result.grantedSkillXp,
+      grantedMasteryXp: result.grantedMasteryXp,
       completedAt: result.completedAt,
       claimedAt: result.claimedAt,
     };
@@ -328,8 +328,8 @@ export class CraftingController {
       successes: job.successes,
       failures: job.failures,
       grantedCharacterXp: job.grantedCharacterXp,
-      grantedSkillXp: job.grantedSkillXp,
-      failureSkillXpMultiplier: FAILURE_SKILL_XP_MULTIPLIER,
+      grantedMasteryXp: job.grantedMasteryXp,
+      failureMasteryXpMultiplier: FAILURE_MASTERY_XP_MULTIPLIER,
       ingredients: (job.ingredients ?? []).map((ing) => {
         const item = itemById.get(ing.itemId);
         return {

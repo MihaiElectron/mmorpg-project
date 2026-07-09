@@ -1,7 +1,7 @@
 @use '../abstracts/variables' as vars;
 @use '../abstracts/mixins' as m;
 
-.skills-tab {
+.masteries-tab {
   width: 100%;
   height: 100%;
   overflow-y: auto;
@@ -35,9 +35,9 @@
     margin: 0;
   }
 
-  // ── Skill ───────────────────────────────────────────────────────────────────
+  // ── Mastery ─────────────────────────────────────────────────────────────────
 
-  &__skill {
+  &__mastery {
     background: vars.$panel-inner-bg;
     border-radius: vars.$panel-radius-sm;
     padding: 8px 10px;
@@ -50,19 +50,19 @@
     }
   }
 
-  &__skill-header {
+  &__mastery-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
   }
 
-  &__skill-name {
+  &__mastery-name {
     font-size: 0.9rem;
     color: vars.$color-text-primary;
     font-weight: 500;
   }
 
-  &__skill-level {
+  &__mastery-level {
     font-size: 0.85rem;
     color: vars.$color-magic-amber;
     font-weight: bold;

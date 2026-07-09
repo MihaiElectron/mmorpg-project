@@ -27,9 +27,9 @@
   - apps/api-gateway/src/characters/character-stats-calculator.ts
   - apps/api-gateway/src/player-runtime/player-runtime.types.ts
   - apps/api-gateway/src/player-runtime/runtime-source.ts
-  - apps/api-gateway/src/skills/skills.service.ts
-  - apps/api-gateway/src/skills/entities/skill-definition.entity.ts
-  - apps/api-gateway/src/skills/entities/player-skill.entity.ts
+  - apps/api-gateway/src/masteries/masteries.service.ts
+  - apps/api-gateway/src/masteries/entities/mastery-definition.entity.ts
+  - apps/api-gateway/src/masteries/entities/player-mastery.entity.ts
 
 > **Note de numérotation.** Cette décision était désignée oralement « ADR-0017 ».
 > Le numéro 0017 est déjà occupé par une décision **Accepted** sans rapport
@@ -68,8 +68,8 @@ les constats structurants sont :
   d'attaque/incantation, réduction de cooldown, menace/aggro, ténacité,
   résistance aux contrôles, régénération, types d'armure, slot bouclier dédié.
 - **Aucune notion de classe, sous-classe ou mastery** n'existe dans le code.
-- **`SkillDefinition` / `PlayerSkill` existent** (catalogue + état par
-  personnage, XP/niveaux par `SkillsService`, cf. ADR-0016). Le seed réel range
+- **`MasteryDefinition` / `PlayerMastery` existent** (catalogue + état par
+  personnage, XP/niveaux par `MasteriesService`, cf. ADR-0016). Le seed réel range
   encore les métiers en `category: 'crafting' | 'gathering'` — la migration vers
   `category: 'profession'` est **Planned** (ADR-0016), non implémentée.
 - **Progression V1** : colonnes `base{Strength…Critical}` + `unspentStatPoints`
@@ -106,7 +106,7 @@ risque de :
   golden-rules §5, implementation-rules §3).
 - Toute contribution de stat doit être **traçable** via le pipeline Runtime
   (ADR-0004 : `RuntimeSource → RuntimeModifier[] → DerivedStats + RuntimeTrace`).
-- Réutiliser l'existant avant de créer : `SkillDefinition`/`PlayerSkill`,
+- Réutiliser l'existant avant de créer : `MasteryDefinition`/`PlayerMastery`,
   `ProgressionService`, `CharacterStatsCalculator`.
 - Le Studio **observe et configure**, ne calcule jamais (ADR-0004,
   domaines.md, CLAUDE.md « Frontière Runtime / Admin »).
@@ -118,11 +118,11 @@ risque de :
 
 ## Considered options
 
-### Option A — Intégration Runtime + réutilisation des skills (retenue)
+### Option A — Intégration Runtime + réutilisation des masteries (retenue)
 
 Classes, sous-classes et masteries sont des **RuntimeSource** produisant des
 `RuntimeModifier` sur des `StatKey`. Les masteries de métier réutilisent et
-étendent le modèle `SkillDefinition`/`PlayerSkill`. La synergie classe ↔ métier
+étendent le modèle `MasteryDefinition`/`PlayerMastery`. La synergie classe ↔ métier
 émerge du recouvrement des stats. Les règles globales et coefficients sont
 exposés en configuration Studio.
 
@@ -265,7 +265,7 @@ Exemples (contenu indicatif, extensible) :
 | Gathering | Mining, Woodcutting, Fishing, Herbalism |
 
 > Les masteries de **Profession / Gathering** réutilisent et étendent le modèle
-> `SkillDefinition` (`category: 'profession'`, aligné ADR-0016). Les masteries
+> `MasteryDefinition` (`category: 'profession'`, aligné ADR-0016). Les masteries
 > **Combat / Weapon / Armor** sont un nouvel axe de progression à définir en
 > implémentation, sous le même contrat générique. `Shield Mastery` apparaît à la
 > fois en Weapon et en Armor (référence unique, double rattachement d'affichage).
@@ -365,7 +365,7 @@ de logique métier dans le Studio »).
 - Brancher classes/masteries/skills sur le pipeline Runtime (ADR-0004) garantit
   la traçabilité et l'inspection Studio sans outillage additionnel, et évite un
   troisième système de stats.
-- Réutiliser `SkillDefinition`/`PlayerSkill` pour les masteries de métier évite
+- Réutiliser `MasteryDefinition`/`PlayerMastery` pour les masteries de métier évite
   de dupliquer la progression déjà fonctionnelle (ADR-0016).
 - La synergie émergente (recouvrement de stats) permet « beaucoup de classes »
   sans table de liaison rigide, et rend le Guerrier polyvalent sans le
@@ -439,7 +439,7 @@ ni modification de schéma. Les points suivants sont signalés comme travaux
   10 primaires et les nouvelles dérivées) ;
 - passage de la liste primaire de 8 à 10 (activation `intelligence`/`wisdom`,
   ajout Esprit/Volonté/Charisme, retrait de `critical` comme primaire) ;
-- migration `SkillDefinition.category` vers `profession` (ADR-0016) ;
+- migration `MasteryDefinition.category` vers `profession` (ADR-0016) ;
 - introduction des entités de mastery et de la persistance classe/sous-classe.
 
 Aucune valeur d'équilibrage n'est engagée par cette ADR.
@@ -484,7 +484,7 @@ Aucune valeur d'équilibrage n'est engagée par cette ADR.
 
 - [ADR-0004 — Runtime-Driven Architecture](ADR-0004-runtime-driven-architecture.md)
 - [ADR-0012 — Gameplay Architecture V1](ADR-0012-gameplay-architecture.md)
-- [ADR-0016 — Skills & Rewards Runtime](ADR-0016-skills-rewards-runtime.md)
+- [ADR-0016 — Masteries & Rewards Runtime](ADR-0016-skills-rewards-runtime.md)
 - [ADR-0017 — Parité panneau personnage joueur ↔ miroir admin](ADR-0017-admin-character-mirror-parity.md)
 - [ADR Process](README.md)
 - [Domaines du projet](../../00_Project/domains.md)

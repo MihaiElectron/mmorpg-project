@@ -4,7 +4,7 @@ import {
   computeMaxCraftable,
   countOwned,
   distanceWU,
-  estimateCraftSkillXp,
+  estimateCraftMasteryXp,
   estimateStationReach,
   filterRecipesForStation,
   formatCraftingServerErrorDetail,
@@ -27,8 +27,8 @@ function recipe(id: string, stationType: string): AvailableCraftingRecipe {
     name: id,
     description: null,
     category: "smithing",
-    requiredSkillKey: "smithing",
-    requiredSkillLevel: 1,
+    requiredMasteryKey: "smithing",
+    requiredMasteryLevel: 1,
     baseSuccessRate: 1,
     successBonusPerLevel: 0,
     minSuccessRate: 1,
@@ -230,12 +230,12 @@ describe("craft UX produit-first", () => {
     expect(formatCraftSeconds(4500)).toBe("4.5 s");
   });
 
-  it("estimateCraftSkillXp reflète le Runtime (base 15 + floor(difficulté/10))", () => {
-    expect(estimateCraftSkillXp(0)).toBe(15);
-    expect(estimateCraftSkillXp(20)).toBe(17);
-    expect(estimateCraftSkillXp(100)).toBe(25);
-    expect(estimateCraftSkillXp(150)).toBe(25); // borné à 100
-    expect(estimateCraftSkillXp(-5)).toBe(15); // borné à 0
+  it("estimateCraftMasteryXp reflète le Runtime (base 15 + floor(difficulté/10))", () => {
+    expect(estimateCraftMasteryXp(0)).toBe(15);
+    expect(estimateCraftMasteryXp(20)).toBe(17);
+    expect(estimateCraftMasteryXp(100)).toBe(25);
+    expect(estimateCraftMasteryXp(150)).toBe(25); // borné à 100
+    expect(estimateCraftMasteryXp(-5)).toBe(15); // borné à 0
   });
 });
 

@@ -25,13 +25,13 @@ import { CharacterStatsCalculator, CharacterStats } from '../characters/characte
 import { resolveEffectiveAttackRangeWU } from '../characters/attack-range.helper';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
-import { SkillsService } from '../skills/skills.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import { EconomyService } from '../economy/economy.service';
 import { Resource } from '../resources/entities/resource.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
-import { SkillDefinition } from '../skills/entities/skill-definition.entity';
-import { PlayerSkill } from '../skills/entities/player-skill.entity';
-import { toSkillDefinitionWorldObject, SkillDefinitionWorldObject } from '../skills/adapters/skill-definition-world-object.adapter';
+import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
+import { PlayerMastery } from '../masteries/entities/player-mastery.entity';
+import { toMasteryDefinitionWorldObject, MasteryDefinitionWorldObject } from '../masteries/adapters/mastery-definition-world-object.adapter';
 import { type MovementMetrics, WorldService } from '../world/world.service';
 import { GameConfigService } from '../game-config/game-config.service';
 import { GameConfig } from '../game-config/game-config.entity';
@@ -172,7 +172,7 @@ export interface AdminCharacterDetails {
   };
   inventory: InventoryEntryDto[];
   equipment: AdminEquipmentEntry[];
-  skills: Awaited<ReturnType<SkillsService['getCharacterSkills']>>;
+  masteries: Awaited<ReturnType<MasteriesService['getCharacterMasteries']>>;
 }
 
 interface LootPoolEntryPatch {
@@ -208,10 +208,10 @@ export class AdminService {
     private readonly resourceRepo: Repository<Resource>,
     @InjectRepository(ResourceTemplate)
     private readonly resourceTemplateRepo: Repository<ResourceTemplate>,
-    @InjectRepository(SkillDefinition)
-    private readonly skillDefinitionRepo: Repository<SkillDefinition>,
-    @InjectRepository(PlayerSkill)
-    private readonly playerSkillRepo: Repository<PlayerSkill>,
+    @InjectRepository(MasteryDefinition)
+    private readonly masteryDefinitionRepo: Repository<MasteryDefinition>,
+    @InjectRepository(PlayerMastery)
+    private readonly playerMasteryRepo: Repository<PlayerMastery>,
     @InjectRepository(CraftingRecipe)
     private readonly recipeRepo: Repository<CraftingRecipe>,
     @InjectRepository(CraftingIngredient)
@@ -226,7 +226,7 @@ export class AdminService {
     private readonly itemRepo: Repository<Item>,
     private readonly worldService: WorldService,
     private readonly inventoryProjection: InventoryProjectionService,
-    private readonly skillsService: SkillsService,
+    private readonly masteriesService: MasteriesService,
     private readonly economyService: EconomyService,
     private readonly gameConfigService: GameConfigService,
     private readonly dataSource: DataSource,
@@ -690,9 +690,9 @@ export class AdminService {
       character.mapId = live.mapId;
     }
 
-    const [inventory, skills, balanceBronze] = await Promise.all([
+    const [inventory, masteries, balanceBronze] = await Promise.all([
       this.inventoryProjection.project(character.id),
-      this.skillsService.getCharacterSkills(character.id),
+      this.masteriesService.getCharacterMasteries(character.id),
       // Lecture PURE : ne crée jamais de wallet par simple consultation.
       this.economyService.readBalanceBronze('character', character.id),
     ]);
@@ -734,7 +734,7 @@ export class AdminService {
       },
       inventory,
       equipment,
-      skills,
+      masteries,
     };
   }
 
@@ -746,7 +746,7 @@ export class AdminService {
 
   async createResourceTemplate(
     fields: Pick<ResourceTemplate, 'type'> &
-      Partial<Pick<ResourceTemplate, 'textureKey' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty'>> & { skillKey?: string | null; lootPool?: unknown },
+      Partial<Pick<ResourceTemplate, 'textureKey' | 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty'>> & { masteryKey?: string | null; lootPool?: unknown },
   ): Promise<ResourceTemplate> {
     if (!fields.type || typeof fields.type !== 'string') throw new BadRequestException('type est requis.');
     AdminService.validateSnakeCase(fields.type, 'type');
@@ -769,9 +769,9 @@ export class AdminService {
         throw new BadRequestException('gatheringDifficulty doit être un entier entre 0 et 100.');
       }
     }
-    if ('skillKey' in fields && fields.skillKey != null) {
-      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.skillKey } });
-      if (!sd) throw new BadRequestException(`Skill "${fields.skillKey}" inexistant dans SkillDefinition.`);
+    if ('masteryKey' in fields && fields.masteryKey != null) {
+      const sd = await this.masteryDefinitionRepo.findOne({ where: { key: fields.masteryKey } });
+      if (!sd) throw new BadRequestException(`Mastery "${fields.masteryKey}" inexistant dans MasteryDefinition.`);
     }
     const lootPool = fields.lootPool !== undefined ? await this.validateLootPool(fields.lootPool) : null;
     return this.resourceTemplateRepo.save(this.resourceTemplateRepo.create({
@@ -782,14 +782,14 @@ export class AdminService {
       gatheringXpReward: fields.gatheringXpReward ?? 0,
       gatherCharacterXpReward: fields.gatherCharacterXpReward ?? 0,
       gatheringDifficulty: fields.gatheringDifficulty ?? 0,
-      skillKey: fields.skillKey === '' ? null : fields.skillKey ?? null,
+      masteryKey: fields.masteryKey === '' ? null : fields.masteryKey ?? null,
       lootPool,
     }));
   }
 
   async updateResourceTemplate(
     type: string,
-    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty' | 'textureKey'>> & { skillKey?: string | null; lootPool?: unknown },
+    fields: Partial<Pick<ResourceTemplate, 'defaultRemainingLoots' | 'respawnDelayMs' | 'gatheringXpReward' | 'gatherCharacterXpReward' | 'gatheringDifficulty' | 'textureKey'>> & { masteryKey?: string | null; lootPool?: unknown },
   ): Promise<ResourceTemplate | null> {
     if (fields.respawnDelayMs !== undefined) {
       const v = fields.respawnDelayMs;
@@ -831,15 +831,15 @@ export class AdminService {
         );
       }
     }
-    if ('skillKey' in fields) {
-      const v = fields.skillKey;
+    if ('masteryKey' in fields) {
+      const v = fields.masteryKey;
       if (v !== null) {
         if (typeof v !== 'string' || v.trim() === '') {
-          throw new BadRequestException('skillKey doit être une chaîne non vide ou null.');
+          throw new BadRequestException('masteryKey doit être une chaîne non vide ou null.');
         }
-        const exists = await this.skillDefinitionRepo.findOne({ where: { key: v } });
+        const exists = await this.masteryDefinitionRepo.findOne({ where: { key: v } });
         if (!exists) {
-          throw new BadRequestException(`Skill "${v}" inexistant dans SkillDefinition.`);
+          throw new BadRequestException(`Mastery "${v}" inexistant dans MasteryDefinition.`);
         }
       }
     }
@@ -1013,7 +1013,7 @@ export class AdminService {
     return resource;
   }
 
-  // ── SkillDefinitions ─────────────────────────────────────────────────────
+  // ── MasteryDefinitions ─────────────────────────────────────────────────────
 
   private static readonly SNAKE_CASE_REGEX = /^[a-z][a-z0-9_]{1,63}$/;
 
@@ -1043,27 +1043,27 @@ export class AdminService {
     }
   }
 
-  getSkillDefinitions(): Promise<SkillDefinition[]> {
-    return this.skillDefinitionRepo.find({ order: { key: 'ASC' } });
+  getMasteryDefinitions(): Promise<MasteryDefinition[]> {
+    return this.masteryDefinitionRepo.find({ order: { key: 'ASC' } });
   }
 
-  async getSkillDefinitionWorldObjects(): Promise<SkillDefinitionWorldObject[]> {
-    const sds = await this.getSkillDefinitions();
-    return sds.map(toSkillDefinitionWorldObject);
+  async getMasteryDefinitionWorldObjects(): Promise<MasteryDefinitionWorldObject[]> {
+    const sds = await this.getMasteryDefinitions();
+    return sds.map(toMasteryDefinitionWorldObject);
   }
 
-  async createSkillDefinition(
-    fields: Pick<SkillDefinition, 'key' | 'name'> &
-      Partial<Pick<SkillDefinition, 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'>>,
-  ): Promise<SkillDefinition> {
+  async createMasteryDefinition(
+    fields: Pick<MasteryDefinition, 'key' | 'name'> &
+      Partial<Pick<MasteryDefinition, 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'>>,
+  ): Promise<MasteryDefinition> {
     if (!fields.key || typeof fields.key !== 'string') {
       throw new BadRequestException('key est requis.');
     }
     AdminService.validateSnakeCase(fields.key, 'key');
 
-    const existing = await this.skillDefinitionRepo.findOne({ where: { key: fields.key } });
+    const existing = await this.masteryDefinitionRepo.findOne({ where: { key: fields.key } });
     if (existing) {
-      throw new BadRequestException(`Skill "${fields.key}" existe déjà.`);
+      throw new BadRequestException(`Mastery "${fields.key}" existe déjà.`);
     }
 
     if (!fields.name || typeof fields.name !== 'string' || fields.name.trim() === '') {
@@ -1073,7 +1073,7 @@ export class AdminService {
       throw new BadRequestException('name doit être <= 256 caractères.');
     }
 
-    const toCreate: Partial<SkillDefinition> = {
+    const toCreate: Partial<MasteryDefinition> = {
       key: fields.key,
       name: fields.name.trim(),
       category: 'general',
@@ -1103,14 +1103,14 @@ export class AdminService {
       toCreate.enabled = Boolean(fields.enabled);
     }
 
-    return this.skillDefinitionRepo.save(this.skillDefinitionRepo.create(toCreate));
+    return this.masteryDefinitionRepo.save(this.masteryDefinitionRepo.create(toCreate));
   }
 
-  async updateSkillDefinition(
+  async updateMasteryDefinition(
     id: string,
-    fields: Partial<Pick<SkillDefinition, 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'>>,
-  ): Promise<SkillDefinition | null> {
-    const sd = await this.skillDefinitionRepo.findOne({ where: { id } });
+    fields: Partial<Pick<MasteryDefinition, 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'>>,
+  ): Promise<MasteryDefinition | null> {
+    const sd = await this.masteryDefinitionRepo.findOne({ where: { id } });
     if (!sd) return null;
 
     if (fields.name !== undefined) {
@@ -1128,8 +1128,8 @@ export class AdminService {
     }
     if (fields.maxLevel !== undefined) {
       AdminService.validateMaxLevel(fields.maxLevel);
-      const blocked = await this.playerSkillRepo.count({
-        where: { skillDefinitionId: id, level: MoreThan(fields.maxLevel) },
+      const blocked = await this.playerMasteryRepo.count({
+        where: { masteryDefinitionId: id, level: MoreThan(fields.maxLevel) },
       });
       if (blocked > 0) {
         throw new BadRequestException(
@@ -1150,7 +1150,7 @@ export class AdminService {
       sd.enabled = Boolean(fields.enabled);
     }
 
-    return this.skillDefinitionRepo.save(sd);
+    return this.masteryDefinitionRepo.save(sd);
   }
 
   // ── Items ────────────────────────────────────────────────────────────────
@@ -1167,9 +1167,9 @@ export class AdminService {
     }
   }
 
-  private static validateRequiredSkillLevel(v: number): void {
+  private static validateRequiredMasteryLevel(v: number): void {
     if (!Number.isFinite(v) || !Number.isInteger(v) || v < 1 || v > 999) {
-      throw new BadRequestException('requiredSkillLevel doit être un entier entre 1 et 999.');
+      throw new BadRequestException('requiredMasteryLevel doit être un entier entre 1 et 999.');
     }
   }
 
@@ -1228,7 +1228,7 @@ export class AdminService {
   async createCraftingRecipe(
     fields: Pick<CraftingRecipe, 'key' | 'name'> &
       Partial<Pick<CraftingRecipe,
-        'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
+        'description' | 'category' | 'requiredMasteryKey' | 'requiredMasteryLevel' |
         'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
         'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled' |
         'craftCharacterXpReward' | 'craftingDifficulty'
@@ -1247,12 +1247,12 @@ export class AdminService {
     }
     if (fields.name.length > 256) throw new BadRequestException('name doit être <= 256 caractères.');
 
-    if (fields.requiredSkillKey !== undefined) {
-      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
-      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
+    if (fields.requiredMasteryKey !== undefined) {
+      const sd = await this.masteryDefinitionRepo.findOne({ where: { key: fields.requiredMasteryKey } });
+      if (!sd) throw new BadRequestException(`Mastery "${fields.requiredMasteryKey}" inexistant dans MasteryDefinition.`);
     }
-    if (fields.requiredSkillLevel !== undefined) {
-      AdminService.validateRequiredSkillLevel(fields.requiredSkillLevel);
+    if (fields.requiredMasteryLevel !== undefined) {
+      AdminService.validateRequiredMasteryLevel(fields.requiredMasteryLevel);
     }
     if (fields.baseSuccessRate !== undefined) AdminService.validateSuccessRate(fields.baseSuccessRate, 'baseSuccessRate');
     if (fields.successBonusPerLevel !== undefined) AdminService.validateSuccessRate(fields.successBonusPerLevel, 'successBonusPerLevel');
@@ -1292,8 +1292,8 @@ export class AdminService {
       name: fields.name.trim(),
       description: fields.description ?? null,
       category: fields.category ?? 'smithing',
-      requiredSkillKey: fields.requiredSkillKey ?? 'smithing',
-      requiredSkillLevel: fields.requiredSkillLevel ?? 1,
+      requiredMasteryKey: fields.requiredMasteryKey ?? 'smithing',
+      requiredMasteryLevel: fields.requiredMasteryLevel ?? 1,
       baseSuccessRate: fields.baseSuccessRate ?? 1.0,
       successBonusPerLevel: fields.successBonusPerLevel ?? 0.02,
       minSuccessRate: fields.minSuccessRate ?? 0.05,
@@ -1314,7 +1314,7 @@ export class AdminService {
   async updateCraftingRecipe(
     id: string,
     fields: Partial<Pick<CraftingRecipe,
-      'name' | 'description' | 'category' | 'requiredSkillKey' | 'requiredSkillLevel' |
+      'name' | 'description' | 'category' | 'requiredMasteryKey' | 'requiredMasteryLevel' |
       'baseSuccessRate' | 'successBonusPerLevel' | 'minSuccessRate' | 'maxSuccessRate' |
       'xpReward' | 'consumeIngredientsOnFailure' | 'craftTimeMs' | 'stationType' | 'enabled' |
       'craftCharacterXpReward' | 'craftingDifficulty'
@@ -1333,14 +1333,14 @@ export class AdminService {
       AdminService.validateSnakeCase(fields.category, 'category');
       recipe.category = fields.category;
     }
-    if (fields.requiredSkillKey !== undefined) {
-      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
-      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
-      recipe.requiredSkillKey = fields.requiredSkillKey;
+    if (fields.requiredMasteryKey !== undefined) {
+      const sd = await this.masteryDefinitionRepo.findOne({ where: { key: fields.requiredMasteryKey } });
+      if (!sd) throw new BadRequestException(`Mastery "${fields.requiredMasteryKey}" inexistant dans MasteryDefinition.`);
+      recipe.requiredMasteryKey = fields.requiredMasteryKey;
     }
-    if (fields.requiredSkillLevel !== undefined) {
-      AdminService.validateRequiredSkillLevel(fields.requiredSkillLevel);
-      recipe.requiredSkillLevel = fields.requiredSkillLevel;
+    if (fields.requiredMasteryLevel !== undefined) {
+      AdminService.validateRequiredMasteryLevel(fields.requiredMasteryLevel);
+      recipe.requiredMasteryLevel = fields.requiredMasteryLevel;
     }
     if (fields.baseSuccessRate !== undefined)    { AdminService.validateSuccessRate(fields.baseSuccessRate, 'baseSuccessRate'); recipe.baseSuccessRate = fields.baseSuccessRate; }
     if (fields.successBonusPerLevel !== undefined) { AdminService.validateSuccessRate(fields.successBonusPerLevel, 'successBonusPerLevel'); recipe.successBonusPerLevel = fields.successBonusPerLevel; }
@@ -1563,8 +1563,8 @@ export class AdminService {
     if ((recipe.ingredients ?? []).length === 0) errors.push('La recette n\'a aucun ingrédient.');
     if ((recipe.results ?? []).length === 0) errors.push('La recette n\'a aucun résultat.');
 
-    const sd = await this.skillDefinitionRepo.findOne({ where: { key: recipe.requiredSkillKey } });
-    if (!sd) errors.push(`Skill requis "${recipe.requiredSkillKey}" inexistant dans SkillDefinition.`);
+    const sd = await this.masteryDefinitionRepo.findOne({ where: { key: recipe.requiredMasteryKey } });
+    if (!sd) errors.push(`Mastery requis "${recipe.requiredMasteryKey}" inexistant dans MasteryDefinition.`);
 
     for (const ing of recipe.ingredients ?? []) {
       const item = await this.itemRepo.findOne({ where: { id: ing.itemId } });
@@ -1618,7 +1618,7 @@ export class AdminService {
 
   async createCraftingStationTemplate(
     fields: Pick<CraftingStationTemplate, 'key' | 'name' | 'stationType'> &
-      Partial<Pick<CraftingStationTemplate, 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
+      Partial<Pick<CraftingStationTemplate, 'category' | 'requiredMasteryKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
   ): Promise<CraftingStationTemplate> {
     if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
     AdminService.validateSnakeCase(fields.key, 'key');
@@ -1636,9 +1636,9 @@ export class AdminService {
     if (existingType) throw new BadRequestException(`stationType "${fields.stationType}" existe déjà.`);
 
     if (fields.category !== undefined) AdminService.validateSnakeCase(fields.category, 'category');
-    if (fields.requiredSkillKey !== undefined && fields.requiredSkillKey !== null && fields.requiredSkillKey !== '') {
-      const sd = await this.skillDefinitionRepo.findOne({ where: { key: fields.requiredSkillKey } });
-      if (!sd) throw new BadRequestException(`Skill "${fields.requiredSkillKey}" inexistant dans SkillDefinition.`);
+    if (fields.requiredMasteryKey !== undefined && fields.requiredMasteryKey !== null && fields.requiredMasteryKey !== '') {
+      const sd = await this.masteryDefinitionRepo.findOne({ where: { key: fields.requiredMasteryKey } });
+      if (!sd) throw new BadRequestException(`Mastery "${fields.requiredMasteryKey}" inexistant dans MasteryDefinition.`);
     }
     if (fields.interactionRadiusWU !== undefined) {
       AdminService.validateInteractionRadiusWU(fields.interactionRadiusWU);
@@ -1649,7 +1649,7 @@ export class AdminService {
       name: fields.name.trim(),
       stationType: fields.stationType,
       category: fields.category ?? 'crafting',
-      requiredSkillKey: fields.requiredSkillKey === '' ? null : fields.requiredSkillKey ?? null,
+      requiredMasteryKey: fields.requiredMasteryKey === '' ? null : fields.requiredMasteryKey ?? null,
       interactionRadiusWU: fields.interactionRadiusWU ?? 1536,
       textureKey: fields.textureKey === '' ? null : fields.textureKey ?? null,
       enabled: fields.enabled ?? true,
@@ -1658,7 +1658,7 @@ export class AdminService {
 
   async updateCraftingStationTemplate(
     id: string,
-    fields: Partial<Pick<CraftingStationTemplate, 'name' | 'stationType' | 'category' | 'requiredSkillKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
+    fields: Partial<Pick<CraftingStationTemplate, 'name' | 'stationType' | 'category' | 'requiredMasteryKey' | 'interactionRadiusWU' | 'textureKey' | 'enabled'>>,
   ): Promise<CraftingStationTemplate | null> {
     const template = await this.stationTemplateRepo.findOne({ where: { id } });
     if (!template) return null;
@@ -1677,14 +1677,14 @@ export class AdminService {
       AdminService.validateSnakeCase(fields.category, 'category');
       template.category = fields.category;
     }
-    if ('requiredSkillKey' in fields) {
-      const skillKey = fields.requiredSkillKey;
-      if (skillKey === null || skillKey === '') {
-        template.requiredSkillKey = null;
+    if ('requiredMasteryKey' in fields) {
+      const masteryKey = fields.requiredMasteryKey;
+      if (masteryKey === null || masteryKey === '') {
+        template.requiredMasteryKey = null;
       } else {
-        const sd = await this.skillDefinitionRepo.findOne({ where: { key: skillKey } });
-        if (!sd) throw new BadRequestException(`Skill "${skillKey}" inexistant dans SkillDefinition.`);
-        template.requiredSkillKey = skillKey!;
+        const sd = await this.masteryDefinitionRepo.findOne({ where: { key: masteryKey } });
+        if (!sd) throw new BadRequestException(`Mastery "${masteryKey}" inexistant dans MasteryDefinition.`);
+        template.requiredMasteryKey = masteryKey!;
       }
     }
     if (fields.interactionRadiusWU !== undefined) {

@@ -46,9 +46,9 @@ export class Item {
   range: number;
 
   /**
-   * Type d'arme utilisé par le Runtime pour résoudre le skill associé.
+   * Type d'arme utilisé par le Runtime pour résoudre le mastery associé.
    * Exemples : 'bow', 'crossbow', 'two_handed_sword', 'two_handed_axe'.
-   * null = item sans skill d'arme associé.
+   * null = item sans mastery d'arme associé.
    */
   @Column({ nullable: true })
   weaponType: string | null;

@@ -19,8 +19,8 @@ export interface CraftingRecipe {
   name: string;
   description: string | null;
   category: string;
-  requiredSkillKey: string;
-  requiredSkillLevel: number;
+  requiredMasteryKey: string;
+  requiredMasteryLevel: number;
   baseSuccessRate: number;
   successBonusPerLevel: number;
   minSuccessRate: number;
@@ -41,8 +41,8 @@ export type RecipePatch = Partial<
     | "name"
     | "description"
     | "category"
-    | "requiredSkillKey"
-    | "requiredSkillLevel"
+    | "requiredMasteryKey"
+    | "requiredMasteryLevel"
     | "baseSuccessRate"
     | "successBonusPerLevel"
     | "minSuccessRate"

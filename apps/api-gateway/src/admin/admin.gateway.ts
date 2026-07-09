@@ -50,8 +50,8 @@ type UpdateTemplatePayload = { key: string; fields: Record<string, number> };
 type RespawnAllPayload = { templateKey: string };
 type MoveCreaturePayload = { creatureId: string; worldX: number; worldY: number };
 type UpdateEntityPayload = { id: string; fields: Record<string, number> };
-type SkillDefinitionCreatePayload = { fields: Record<string, unknown> };
-type SkillDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
+type MasteryDefinitionCreatePayload = { fields: Record<string, unknown> };
+type MasteryDefinitionUpdatePayload = { id: string; fields: Record<string, unknown> };
 type CraftingStationTemplateCreatePayload = { fields: Record<string, unknown> };
 type CraftingStationTemplateUpdatePayload = { id: string; fields: Record<string, unknown> };
 type BuildingTemplateCreatePayload = { fields: Record<string, unknown> };
@@ -356,10 +356,10 @@ export class AdminGateway implements OnGatewayConnection {
     const { type, fields } = payload ?? {};
     if (!type || !fields) return { success: false, message: 'Payload invalide : type et fields requis.' };
 
-    // skillKey / gatheringXpReward legacy volontairement non éditables (ADR-0016 :
-    // le Skill XP vient du Runtime, pas d'un champ de template). Colonnes conservées
+    // masteryKey / gatheringXpReward legacy volontairement non éditables (ADR-0016 :
+    // le Mastery XP vient du Runtime, pas d'un champ de template). Colonnes conservées
     // en DB mais retirées de la surface admin. gatheringDifficulty est un INPUT
-    // (0–100) qui influence le Skill XP via le Runtime, jamais une valeur d'XP.
+    // (0–100) qui influence le Mastery XP via le Runtime, jamais une valeur d'XP.
     const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward', 'gatheringDifficulty'];
     const allowed = [...numericFields, 'textureKey', 'lootPool'];
     const safe: Record<string, unknown> = {};
@@ -923,7 +923,7 @@ export class AdminGateway implements OnGatewayConnection {
     const fields = payload?.fields;
     if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
 
-    // skillKey / gatheringXpReward legacy non exposés (ADR-0016 : Skill XP runtime).
+    // masteryKey / gatheringXpReward legacy non exposés (ADR-0016 : Mastery XP runtime).
     // gatheringDifficulty = input runtime (0–100), pas une valeur d'XP.
     const numericFields = ['defaultRemainingLoots', 'respawnDelayMs', 'gatherCharacterXpReward', 'gatheringDifficulty'];
     const safe: Record<string, unknown> = {};
@@ -947,10 +947,10 @@ export class AdminGateway implements OnGatewayConnection {
     return { success: true, message: `Template ressource "${tpl.type}" créé.`, data: tpl };
   }
 
-  @SubscribeMessage('admin:create_skill_definition')
-  async onCreateSkillDefinition(
+  @SubscribeMessage('admin:create_mastery_definition')
+  async onCreateMasteryDefinition(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: SkillDefinitionCreatePayload,
+    @MessageBody() payload: MasteryDefinitionCreatePayload,
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
 
@@ -961,9 +961,9 @@ export class AdminGateway implements OnGatewayConnection {
 
     const { key, name, category, maxLevel, baseXpPerLevel, xpCurveExponent, enabled } = fields as Record<string, unknown>;
 
-    let sd: import('../skills/entities/skill-definition.entity').SkillDefinition;
+    let sd: import('../masteries/entities/mastery-definition.entity').MasteryDefinition;
     try {
-      sd = await this.adminService.createSkillDefinition({
+      sd = await this.adminService.createMasteryDefinition({
         key:   typeof key  === 'string' ? key  : '',
         name:  typeof name === 'string' ? name : '',
         ...(category         !== undefined && { category: String(category) }),
@@ -976,13 +976,13 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: err?.message ?? 'Erreur lors de la création.' };
     }
 
-    return { success: true, message: `Skill "${sd.key}" créé.`, data: sd };
+    return { success: true, message: `Mastery "${sd.key}" créé.`, data: sd };
   }
 
-  @SubscribeMessage('admin:update_skill_definition')
-  async onUpdateSkillDefinition(
+  @SubscribeMessage('admin:update_mastery_definition')
+  async onUpdateMasteryDefinition(
     @ConnectedSocket() client: WorldSocket,
-    @MessageBody() payload: SkillDefinitionUpdatePayload,
+    @MessageBody() payload: MasteryDefinitionUpdatePayload,
   ): Promise<CmdResult> {
     if (client.data.role !== 'admin') return { success: false, message: 'Non autorisé.' };
 
@@ -1005,16 +1005,16 @@ export class AdminGateway implements OnGatewayConnection {
       }
     }
 
-    let updated: import('../skills/entities/skill-definition.entity').SkillDefinition | null;
+    let updated: import('../masteries/entities/mastery-definition.entity').MasteryDefinition | null;
     try {
-      updated = await this.adminService.updateSkillDefinition(id, safe as any);
+      updated = await this.adminService.updateMasteryDefinition(id, safe as any);
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Erreur lors de la mise à jour.' };
     }
-    if (!updated) return { success: false, message: `Skill "${id}" introuvable.` };
+    if (!updated) return { success: false, message: `Mastery "${id}" introuvable.` };
 
     const changes = Object.keys(safe).join(', ');
-    return { success: true, message: `Skill "${updated.key}" mis à jour : ${changes}.`, data: updated };
+    return { success: true, message: `Mastery "${updated.key}" mis à jour : ${changes}.`, data: updated };
   }
 
   @SubscribeMessage('admin:update_resource')
@@ -1069,7 +1069,7 @@ export class AdminGateway implements OnGatewayConnection {
     const fields = payload?.fields;
     if (!fields || typeof fields !== 'object') return { success: false, message: 'Payload invalide : fields requis.' };
 
-    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
+    const numericFields = ['requiredMasteryLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (numericFields.includes(k)) {
@@ -1100,11 +1100,11 @@ export class AdminGateway implements OnGatewayConnection {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const ALLOWED = ['name', 'description', 'category', 'requiredSkillKey', 'requiredSkillLevel',
+    const ALLOWED = ['name', 'description', 'category', 'requiredMasteryKey', 'requiredMasteryLevel',
       'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate',
       'xpReward', 'consumeIngredientsOnFailure', 'craftTimeMs', 'stationType', 'enabled',
       'craftCharacterXpReward', 'craftingDifficulty'];
-    const numericFields = ['requiredSkillLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
+    const numericFields = ['requiredMasteryLevel', 'baseSuccessRate', 'successBonusPerLevel', 'minSuccessRate', 'maxSuccessRate', 'xpReward', 'craftTimeMs', 'craftCharacterXpReward', 'craftingDifficulty'];
     const safe: Record<string, unknown> = {};
 
     for (const [k, v] of Object.entries(fields)) {
@@ -1251,7 +1251,7 @@ export class AdminGateway implements OnGatewayConnection {
     const { id, fields } = payload ?? {};
     if (!id || !fields) return { success: false, message: 'Payload invalide : id et fields requis.' };
 
-    const allowed = ['name', 'stationType', 'category', 'requiredSkillKey', 'interactionRadiusWU', 'textureKey', 'enabled'];
+    const allowed = ['name', 'stationType', 'category', 'requiredMasteryKey', 'interactionRadiusWU', 'textureKey', 'enabled'];
     const safe: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.includes(k)) return { success: false, message: `Champ "${k}" non modifiable.` };

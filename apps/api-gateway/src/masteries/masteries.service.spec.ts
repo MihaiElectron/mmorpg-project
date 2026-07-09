@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { SkillsService } from './skills.service';
-import { SkillDefinition } from './entities/skill-definition.entity';
-import { PlayerSkill } from './entities/player-skill.entity';
+import { MasteriesService } from './masteries.service';
+import { MasteryDefinition } from './entities/mastery-definition.entity';
+import { PlayerMastery } from './entities/player-mastery.entity';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
-function makeSkillDef(
-  overrides: Partial<SkillDefinition> = {},
-): SkillDefinition {
+function makeMasteryDef(
+  overrides: Partial<MasteryDefinition> = {},
+): MasteryDefinition {
   return {
     id: 'def-1',
     key: 'smithing',
@@ -22,38 +22,38 @@ function makeSkillDef(
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as SkillDefinition;
+  } as MasteryDefinition;
 }
 
-function makePlayerSkill(overrides: Partial<PlayerSkill> = {}): PlayerSkill {
+function makePlayerMastery(overrides: Partial<PlayerMastery> = {}): PlayerMastery {
   return {
     id: 'ps-1',
     characterId: 'char-1',
-    skillDefinitionId: 'def-1',
+    masteryDefinitionId: 'def-1',
     level: 1,
     xp: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as PlayerSkill;
+  } as PlayerMastery;
 }
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
-describe('SkillsService', () => {
-  let service: SkillsService;
-  let skillDefRepo: Record<string, jest.Mock>;
-  let playerSkillRepo: Record<string, jest.Mock>;
+describe('MasteriesService', () => {
+  let service: MasteriesService;
+  let masteryDefRepo: Record<string, jest.Mock>;
+  let playerMasteryRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
-    skillDefRepo = {
+    masteryDefRepo = {
       findOne: jest.fn(),
       find: jest.fn(),
       save: jest.fn(),
       create: jest.fn((x) => x),
     };
 
-    playerSkillRepo = {
+    playerMasteryRepo = {
       findOne: jest.fn(),
       find: jest.fn(),
       save: jest.fn(),
@@ -62,38 +62,38 @@ describe('SkillsService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        SkillsService,
-        { provide: getRepositoryToken(SkillDefinition), useValue: skillDefRepo },
-        { provide: getRepositoryToken(PlayerSkill), useValue: playerSkillRepo },
+        MasteriesService,
+        { provide: getRepositoryToken(MasteryDefinition), useValue: masteryDefRepo },
+        { provide: getRepositoryToken(PlayerMastery), useValue: playerMasteryRepo },
       ],
     }).compile();
 
-    service = module.get<SkillsService>(SkillsService);
+    service = module.get<MasteriesService>(MasteriesService);
   });
 
   // ─── getNextLevelXp (pure) ────────────────────────────────────────────────
 
   describe('getNextLevelXp', () => {
     it('retourne la formule correcte pour level 1', () => {
-      const def = makeSkillDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
       // 100 × 1^1.5 = 100
       expect(service.getNextLevelXp(def, 1)).toBe(100);
     });
 
     it('retourne la formule correcte pour level 2', () => {
-      const def = makeSkillDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
       // 100 × 2^1.5 ≈ 282.8 → arrondi 283
       expect(service.getNextLevelXp(def, 2)).toBe(283);
     });
 
     it('respecte baseXpPerLevel et xpCurveExponent configurés', () => {
-      const def = makeSkillDef({ baseXpPerLevel: 200, xpCurveExponent: 2.0 });
+      const def = makeMasteryDef({ baseXpPerLevel: 200, xpCurveExponent: 2.0 });
       // 200 × 3^2 = 1800
       expect(service.getNextLevelXp(def, 3)).toBe(1800);
     });
 
     it('retourne Infinity quand level >= maxLevel', () => {
-      const def = makeSkillDef({ maxLevel: 10 });
+      const def = makeMasteryDef({ maxLevel: 10 });
       expect(service.getNextLevelXp(def, 10)).toBe(Infinity);
       expect(service.getNextLevelXp(def, 99)).toBe(Infinity);
     });
@@ -103,28 +103,28 @@ describe('SkillsService', () => {
 
   describe('recomputeLevel', () => {
     it('reste au level 1 si xp < seuil', () => {
-      const def = makeSkillDef();
+      const def = makeMasteryDef();
       // seuil 1→2 = 100, xp = 50
       const result = service.recomputeLevel(def, 1, 50);
       expect(result).toEqual({ level: 1, xp: 50 });
     });
 
     it('monte au level 2 quand xp atteint exactement le seuil', () => {
-      const def = makeSkillDef();
+      const def = makeMasteryDef();
       // seuil 1→2 = 100
       const result = service.recomputeLevel(def, 1, 100);
       expect(result).toEqual({ level: 2, xp: 0 });
     });
 
     it('monte au niveau 2 avec carry-over si xp > seuil', () => {
-      const def = makeSkillDef();
+      const def = makeMasteryDef();
       // seuil 1→2 = 100, xp = 150 → level 2, carry 50
       const result = service.recomputeLevel(def, 1, 150);
       expect(result).toEqual({ level: 2, xp: 50 });
     });
 
     it('enchaîne plusieurs level ups en un seul appel', () => {
-      const def = makeSkillDef({ baseXpPerLevel: 100, xpCurveExponent: 1.0, maxLevel: 100 });
+      const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.0, maxLevel: 100 });
       // seuil = 100 × level × 1.0 → 1→2 : 100, 2→3 : 200
       // xp = 350 → level 1 coûte 100, level 2 coûte 200 = total 300, reste 50
       const result = service.recomputeLevel(def, 1, 350);
@@ -133,7 +133,7 @@ describe('SkillsService', () => {
     });
 
     it('plafonne au maxLevel et accumule le surplus XP', () => {
-      const def = makeSkillDef({ maxLevel: 2, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const def = makeMasteryDef({ maxLevel: 2, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
       // maxLevel = 2 : pas de level 3
       const result = service.recomputeLevel(def, 2, 9999);
       expect(result.level).toBe(2);
@@ -141,101 +141,101 @@ describe('SkillsService', () => {
     });
   });
 
-  // ─── seedDefaultSkills ────────────────────────────────────────────────────
+  // ─── seedDefaultMasteries ────────────────────────────────────────────────────
 
-  describe('seedDefaultSkills', () => {
-    it('insère toutes les DEFAULT_SKILLS absentes', async () => {
-      skillDefRepo.findOne.mockResolvedValue(null);
-      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+  describe('seedDefaultMasteries', () => {
+    it('insère toutes les DEFAULT_MASTERIES absentes', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      masteryDefRepo.save.mockResolvedValue({ id: 'def-x' });
 
-      await service.seedDefaultSkills();
+      await service.seedDefaultMasteries();
 
-      // findOne appelé une fois par skill défini
-      expect(skillDefRepo.findOne).toHaveBeenCalledTimes(9);
-      // save appelé pour chaque skill absent
-      expect(skillDefRepo.save).toHaveBeenCalledTimes(9);
+      // findOne appelé une fois par mastery défini
+      expect(masteryDefRepo.findOne).toHaveBeenCalledTimes(9);
+      // save appelé pour chaque mastery absent
+      expect(masteryDefRepo.save).toHaveBeenCalledTimes(9);
     });
 
     it('insère "smithing" avec la bonne category', async () => {
-      skillDefRepo.findOne.mockResolvedValue(null);
-      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      masteryDefRepo.save.mockResolvedValue({ id: 'def-x' });
 
-      await service.seedDefaultSkills();
+      await service.seedDefaultMasteries();
 
-      expect(skillDefRepo.save).toHaveBeenCalledWith(
+      expect(masteryDefRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'smithing', category: 'crafting' }),
       );
     });
 
     it('insère "mining" avec category gathering', async () => {
-      skillDefRepo.findOne.mockResolvedValue(null);
-      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      masteryDefRepo.save.mockResolvedValue({ id: 'def-x' });
 
-      await service.seedDefaultSkills();
+      await service.seedDefaultMasteries();
 
-      expect(skillDefRepo.save).toHaveBeenCalledWith(
+      expect(masteryDefRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'mining', category: 'gathering' }),
       );
     });
 
-    it('ne modifie pas les skills déjà existants (seed non destructif)', async () => {
-      skillDefRepo.findOne.mockResolvedValue(makeSkillDef());
+    it('ne modifie pas les masteries déjà existants (seed non destructif)', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef());
 
-      await service.seedDefaultSkills();
+      await service.seedDefaultMasteries();
 
-      expect(skillDefRepo.save).not.toHaveBeenCalled();
+      expect(masteryDefRepo.save).not.toHaveBeenCalled();
     });
 
-    it('insère seulement les skills absents (certains présents, certains absents)', async () => {
+    it('insère seulement les masteries absents (certains présents, certains absents)', async () => {
       // Les 4 premiers présents, les 5 suivants absents
-      skillDefRepo.findOne
-        .mockResolvedValueOnce(makeSkillDef({ key: 'smithing' }))
-        .mockResolvedValueOnce(makeSkillDef({ key: 'woodworking' }))
-        .mockResolvedValueOnce(makeSkillDef({ key: 'mining' }))
-        .mockResolvedValueOnce(makeSkillDef({ key: 'woodcutting' }))
+      masteryDefRepo.findOne
+        .mockResolvedValueOnce(makeMasteryDef({ key: 'smithing' }))
+        .mockResolvedValueOnce(makeMasteryDef({ key: 'woodworking' }))
+        .mockResolvedValueOnce(makeMasteryDef({ key: 'mining' }))
+        .mockResolvedValueOnce(makeMasteryDef({ key: 'woodcutting' }))
         .mockResolvedValue(null); // two_handed, bow, crossbow, diplomacy, leadership
-      skillDefRepo.save.mockResolvedValue({ id: 'def-x' });
+      masteryDefRepo.save.mockResolvedValue({ id: 'def-x' });
 
-      await service.seedDefaultSkills();
+      await service.seedDefaultMasteries();
 
-      expect(skillDefRepo.save).toHaveBeenCalledTimes(5);
+      expect(masteryDefRepo.save).toHaveBeenCalledTimes(5);
     });
   });
 
-  // ─── getOrCreatePlayerSkill ───────────────────────────────────────────────
+  // ─── getOrCreatePlayerMastery ───────────────────────────────────────────────
 
-  describe('getOrCreatePlayerSkill', () => {
-    it('retourne le PlayerSkill existant sans créer', async () => {
-      const def = makeSkillDef();
-      const existing = makePlayerSkill();
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(existing);
+  describe('getOrCreatePlayerMastery', () => {
+    it('retourne le PlayerMastery existant sans créer', async () => {
+      const def = makeMasteryDef();
+      const existing = makePlayerMastery();
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(existing);
 
-      const result = await service.getOrCreatePlayerSkill('char-1', 'crafting');
+      const result = await service.getOrCreatePlayerMastery('char-1', 'crafting');
 
       expect(result).toBe(existing);
-      expect(playerSkillRepo.save).not.toHaveBeenCalled();
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
     });
 
-    it('crée un PlayerSkill level=1 xp=0 si absent', async () => {
-      const def = makeSkillDef();
-      const created = makePlayerSkill({ level: 1, xp: 0 });
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(null);
-      playerSkillRepo.save.mockResolvedValue(created);
+    it('crée un PlayerMastery level=1 xp=0 si absent', async () => {
+      const def = makeMasteryDef();
+      const created = makePlayerMastery({ level: 1, xp: 0 });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(null);
+      playerMasteryRepo.save.mockResolvedValue(created);
 
-      const result = await service.getOrCreatePlayerSkill('char-1', 'crafting');
+      const result = await service.getOrCreatePlayerMastery('char-1', 'crafting');
 
-      expect(playerSkillRepo.save).toHaveBeenCalledTimes(1);
+      expect(playerMasteryRepo.save).toHaveBeenCalledTimes(1);
       expect(result.level).toBe(1);
       expect(result.xp).toBe(0);
     });
 
-    it('lance NotFoundException si la SkillDefinition est absente', async () => {
-      skillDefRepo.findOne.mockResolvedValue(null);
+    it('lance NotFoundException si la MasteryDefinition est absente', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
 
       await expect(
-        service.getOrCreatePlayerSkill('char-1', 'inexistant'),
+        service.getOrCreatePlayerMastery('char-1', 'inexistant'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
@@ -249,16 +249,16 @@ describe('SkillsService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('lance BadRequestException si le skill est disabled', async () => {
-      skillDefRepo.findOne.mockResolvedValue(makeSkillDef({ enabled: false }));
+    it('lance BadRequestException si le mastery est disabled', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ enabled: false }));
 
       await expect(
         service.addXp('char-1', 'crafting', 10),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('lance NotFoundException si le skill est introuvable', async () => {
-      skillDefRepo.findOne.mockResolvedValue(null);
+    it('lance NotFoundException si le mastery est introuvable', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
 
       await expect(
         service.addXp('char-1', 'introuvable', 10),
@@ -266,11 +266,11 @@ describe('SkillsService', () => {
     });
 
     it('augmente xp sans changer le level si seuil non atteint', async () => {
-      const def = makeSkillDef();
-      const ps = makePlayerSkill({ level: 1, xp: 0 });
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(ps);
-      playerSkillRepo.save.mockImplementation(async (x) => x);
+      const def = makeMasteryDef();
+      const ps = makePlayerMastery({ level: 1, xp: 0 });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(ps);
+      playerMasteryRepo.save.mockImplementation(async (x) => x);
 
       const result = await service.addXp('char-1', 'crafting', 50);
 
@@ -280,11 +280,11 @@ describe('SkillsService', () => {
     });
 
     it('monte le level quand le seuil est atteint', async () => {
-      const def = makeSkillDef();
-      const ps = makePlayerSkill({ level: 1, xp: 0 });
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(ps);
-      playerSkillRepo.save.mockImplementation(async (x) => x);
+      const def = makeMasteryDef();
+      const ps = makePlayerMastery({ level: 1, xp: 0 });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(ps);
+      playerMasteryRepo.save.mockImplementation(async (x) => x);
 
       const result = await service.addXp('char-1', 'crafting', 100);
 
@@ -294,11 +294,11 @@ describe('SkillsService', () => {
     });
 
     it('ne dépasse pas maxLevel même avec un xpAmount massif', async () => {
-      const def = makeSkillDef({ maxLevel: 3, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      const ps = makePlayerSkill({ level: 3, xp: 0 });
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(ps);
-      playerSkillRepo.save.mockImplementation(async (x) => x);
+      const def = makeMasteryDef({ maxLevel: 3, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerMastery({ level: 3, xp: 0 });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(ps);
+      playerMasteryRepo.save.mockImplementation(async (x) => x);
 
       const result = await service.addXp('char-1', 'crafting', 999_999);
 
@@ -306,51 +306,51 @@ describe('SkillsService', () => {
       expect(result.xp).toBe(999_999); // surplus conservé
     });
 
-    it('retourne le playerSkill inchangé si xpAmount === 0', async () => {
-      const def = makeSkillDef();
-      const ps = makePlayerSkill({ level: 5, xp: 42 });
-      skillDefRepo.findOne.mockResolvedValue(def);
-      playerSkillRepo.findOne.mockResolvedValue(ps);
+    it('retourne le playerMastery inchangé si xpAmount === 0', async () => {
+      const def = makeMasteryDef();
+      const ps = makePlayerMastery({ level: 5, xp: 42 });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      playerMasteryRepo.findOne.mockResolvedValue(ps);
 
       const result = await service.addXp('char-1', 'crafting', 0);
 
       expect(result.level).toBe(5);
       expect(result.xp).toBe(42);
-      expect(playerSkillRepo.save).not.toHaveBeenCalled();
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
     });
   });
 
-  // ─── getCharacterSkills ───────────────────────────────────────────────────
+  // ─── getCharacterMasteries ───────────────────────────────────────────────────
 
-  describe('getCharacterSkills', () => {
-    it("retourne tous les skills enabled pour un personnage neuf (level 1 / xp 0)", async () => {
+  describe('getCharacterMasteries', () => {
+    it("retourne tous les masteries enabled pour un personnage neuf (level 1 / xp 0)", async () => {
       const defs = [
-        makeSkillDef({ id: "def-1", key: "smithing", category: "crafting" }),
-        makeSkillDef({ id: "def-2", key: "mining", category: "gathering" }),
+        makeMasteryDef({ id: "def-1", key: "smithing", category: "crafting" }),
+        makeMasteryDef({ id: "def-2", key: "mining", category: "gathering" }),
       ];
-      skillDefRepo.find.mockResolvedValue(defs);
-      playerSkillRepo.find.mockResolvedValue([]); // aucune progression
+      masteryDefRepo.find.mockResolvedValue(defs);
+      playerMasteryRepo.find.mockResolvedValue([]); // aucune progression
 
-      const result = await service.getCharacterSkills("char-1");
+      const result = await service.getCharacterMasteries("char-1");
 
       expect(result).toHaveLength(2);
       expect(result.every((s) => s.level === 1 && s.xp === 0)).toBe(true);
       expect(result.map((s) => s.key).sort()).toEqual(["mining", "smithing"]);
-      // Aucune ligne PlayerSkill créée juste pour l'affichage
-      expect(playerSkillRepo.save).not.toHaveBeenCalled();
+      // Aucune ligne PlayerMastery créée juste pour l'affichage
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
     });
 
-    it("conserve la progression existante d'un skill", async () => {
+    it("conserve la progression existante d'un mastery", async () => {
       const defs = [
-        makeSkillDef({ id: "def-1", key: "smithing" }),
-        makeSkillDef({ id: "def-2", key: "mining" }),
+        makeMasteryDef({ id: "def-1", key: "smithing" }),
+        makeMasteryDef({ id: "def-2", key: "mining" }),
       ];
-      skillDefRepo.find.mockResolvedValue(defs);
-      playerSkillRepo.find.mockResolvedValue([
-        makePlayerSkill({ skillDefinitionId: "def-1", level: 4, xp: 120 }),
+      masteryDefRepo.find.mockResolvedValue(defs);
+      playerMasteryRepo.find.mockResolvedValue([
+        makePlayerMastery({ masteryDefinitionId: "def-1", level: 4, xp: 120 }),
       ]);
 
-      const result = await service.getCharacterSkills("char-1");
+      const result = await service.getCharacterMasteries("char-1");
 
       const smithing = result.find((s) => s.key === "smithing")!;
       const mining = result.find((s) => s.key === "mining")!;
@@ -362,24 +362,24 @@ describe('SkillsService', () => {
       expect(mining.xp).toBe(0);
     });
 
-    it("ne retourne pas les skills disabled", async () => {
+    it("ne retourne pas les masteries disabled", async () => {
       // Le repository ne renvoie que les enabled (where enabled:true).
-      skillDefRepo.find.mockResolvedValue([
-        makeSkillDef({ id: "def-1", key: "smithing", enabled: true }),
+      masteryDefRepo.find.mockResolvedValue([
+        makeMasteryDef({ id: "def-1", key: "smithing", enabled: true }),
       ]);
-      playerSkillRepo.find.mockResolvedValue([]);
+      playerMasteryRepo.find.mockResolvedValue([]);
 
-      const result = await service.getCharacterSkills("char-1");
+      const result = await service.getCharacterMasteries("char-1");
 
-      expect(skillDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
+      expect(masteryDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
       expect(result.every((s) => s.enabled)).toBe(true);
       expect(result.map((s) => s.key)).toEqual(["smithing"]);
     });
   });
 
-  // ─── getOrCreatePlayerSkillInTx ──────────────────────────────────────────
+  // ─── getOrCreatePlayerMasteryInTx ──────────────────────────────────────────
 
-  describe('getOrCreatePlayerSkillInTx', () => {
+  describe('getOrCreatePlayerMasteryInTx', () => {
     let mgr: Record<string, jest.Mock>;
 
     beforeEach(() => {
@@ -390,32 +390,32 @@ describe('SkillsService', () => {
       };
     });
 
-    it('retourne le PlayerSkill existant sans créer', async () => {
-      const def = makeSkillDef();
-      const existing = makePlayerSkill();
+    it('retourne le PlayerMastery existant sans créer', async () => {
+      const def = makeMasteryDef();
+      const existing = makePlayerMastery();
       mgr.findOne.mockResolvedValue(existing);
 
-      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+      const result = await service.getOrCreatePlayerMasteryInTx('char-1', def, mgr as any);
 
       expect(result).toBe(existing);
       expect(mgr.save).not.toHaveBeenCalled();
     });
 
-    it('crée un PlayerSkill level=1 xp=0 si absent et attache la def', async () => {
-      const def = makeSkillDef();
-      const saved = makePlayerSkill({ level: 1, xp: 0 });
+    it('crée un PlayerMastery level=1 xp=0 si absent et attache la def', async () => {
+      const def = makeMasteryDef();
+      const saved = makePlayerMastery({ level: 1, xp: 0 });
       mgr.findOne.mockResolvedValue(null);
       mgr.save.mockResolvedValue(saved);
 
-      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+      const result = await service.getOrCreatePlayerMasteryInTx('char-1', def, mgr as any);
 
       expect(mgr.save).toHaveBeenCalledTimes(1);
-      expect(result.skillDefinition).toBe(def);
+      expect(result.masteryDefinition).toBe(def);
     });
 
-    it('recharge le PlayerSkill existant si conflit concurrent (code 23505)', async () => {
-      const def = makeSkillDef();
-      const existing = makePlayerSkill();
+    it('recharge le PlayerMastery existant si conflit concurrent (code 23505)', async () => {
+      const def = makeMasteryDef();
+      const existing = makePlayerMastery();
       const pgError = Object.assign(new Error('unique violation'), { code: '23505' });
 
       mgr.findOne
@@ -423,21 +423,21 @@ describe('SkillsService', () => {
         .mockResolvedValueOnce(existing); // rechargé après le conflit
       mgr.save.mockRejectedValue(pgError);
 
-      const result = await service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any);
+      const result = await service.getOrCreatePlayerMasteryInTx('char-1', def, mgr as any);
 
       expect(result).toBe(existing);
       expect(mgr.findOne).toHaveBeenCalledTimes(2);
     });
 
     it('remonte les erreurs non-23505', async () => {
-      const def = makeSkillDef();
+      const def = makeMasteryDef();
       const unexpectedError = Object.assign(new Error('DB crash'), { code: '08006' });
 
       mgr.findOne.mockResolvedValue(null);
       mgr.save.mockRejectedValue(unexpectedError);
 
       await expect(
-        service.getOrCreatePlayerSkillInTx('char-1', def, mgr as any),
+        service.getOrCreatePlayerMasteryInTx('char-1', def, mgr as any),
       ).rejects.toThrow('DB crash');
     });
   });
@@ -454,8 +454,8 @@ describe('SkillsService', () => {
     });
 
     it('retourne inchangé si xpAmount === 0 sans écriture', async () => {
-      const def = makeSkillDef();
-      const ps = makePlayerSkill({ level: 1, xp: 50 });
+      const def = makeMasteryDef();
+      const ps = makePlayerMastery({ level: 1, xp: 50 });
 
       const result = await service.applyXpInTx(ps, 0, def, mgr as any);
 
@@ -465,8 +465,8 @@ describe('SkillsService', () => {
     });
 
     it('ajoute XP sans level up', async () => {
-      const def = makeSkillDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      const ps = makePlayerSkill({ level: 1, xp: 0 });
+      const def = makeMasteryDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerMastery({ level: 1, xp: 0 });
 
       const result = await service.applyXpInTx(ps, 50, def, mgr as any);
 
@@ -477,8 +477,8 @@ describe('SkillsService', () => {
 
     it('level up quand le seuil est dépassé', async () => {
       // seuil level 1→2 : 100 × 1^1.5 = 100
-      const def = makeSkillDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      const ps = makePlayerSkill({ level: 1, xp: 80 });
+      const def = makeMasteryDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerMastery({ level: 1, xp: 80 });
 
       // 80 + 50 = 130 ≥ 100 → level 2, xp 30
       const result = await service.applyXpInTx(ps, 50, def, mgr as any);
@@ -488,8 +488,8 @@ describe('SkillsService', () => {
     });
 
     it('plafonne au maxLevel', async () => {
-      const def = makeSkillDef({ maxLevel: 2, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      const ps = makePlayerSkill({ level: 2, xp: 0 });
+      const def = makeMasteryDef({ maxLevel: 2, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      const ps = makePlayerMastery({ level: 2, xp: 0 });
 
       const result = await service.applyXpInTx(ps, 9999, def, mgr as any);
 

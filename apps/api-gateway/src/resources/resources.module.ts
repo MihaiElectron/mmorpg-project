@@ -7,7 +7,7 @@ import { ResourcesService } from './resources.service';
 import { ResourcesGateway } from './resources.gateway';
 import { LootService } from '../world/loot.service';
 import { CommonModule } from '../common/common.module';
-import { SkillsModule } from '../skills/skills.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 import { ProgressionModule } from '../progression/progression.module';
 
@@ -15,7 +15,7 @@ import { ProgressionModule } from '../progression/progression.module';
   imports: [
     TypeOrmModule.forFeature([Resource, ResourceTemplate]),
     CommonModule,
-    SkillsModule,
+    MasteriesModule,
     ItemMaterializationModule,
     ProgressionModule,
   ],

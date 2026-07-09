@@ -109,8 +109,8 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
     if (result.characterXpUpdate) {
       client.emit('character_xp_update', result.characterXpUpdate);
     }
-    if (result.skillUpdate) {
-      client.emit('skill_update', result.skillUpdate);
+    if (result.masteryUpdate) {
+      client.emit('mastery_update', result.masteryUpdate);
     }
 
     if (result.riposte) {

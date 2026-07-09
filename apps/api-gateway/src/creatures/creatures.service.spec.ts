@@ -7,7 +7,7 @@ import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { ProgressionService } from '../progression/progression.service';
-import { SkillsService } from '../skills/skills.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import { WorldService } from '../world/world.service';
 import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
@@ -88,7 +88,7 @@ describe('CreaturesService', () => {
   let templateRepository: Record<string, jest.Mock>;
   let spawnRepository: Record<string, jest.Mock>;
   let progressionService: Record<string, jest.Mock>;
-  let skillsService: Record<string, jest.Mock>;
+  let masteriesService: Record<string, jest.Mock>;
   let mockDataSource: { transaction: jest.Mock };
 
   beforeEach(async () => {
@@ -123,8 +123,8 @@ describe('CreaturesService', () => {
     progressionService = {
       applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 10, nextLevelXp: 100, leveledUp: false }),
     };
-    skillsService = {
-      applySkillXpInTx: jest.fn().mockResolvedValue({ skillDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false }),
+    masteriesService = {
+      applyMasteryXpInTx: jest.fn().mockResolvedValue({ masteryDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false }),
     };
     mockDataSource = {
       transaction: jest.fn().mockImplementation(async (fn: (manager: any) => any) => fn({})),
@@ -139,7 +139,7 @@ describe('CreaturesService', () => {
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: progressionService },
-        { provide: SkillsService, useValue: skillsService },
+        { provide: MasteriesService, useValue: masteriesService },
         { provide: DataSource, useValue: mockDataSource },
         RuntimeDebugRegistry,
         LootService,
@@ -671,9 +671,9 @@ describe('CreaturesService', () => {
       jest.useRealTimers();
     });
 
-    // ── Skill XP ──────────────────────────────────────────────────────────────
+    // ── Mastery XP ──────────────────────────────────────────────────────────────
 
-    it("accorde skill XP au hit si le personnage porte une arme de type 'bow'", async () => {
+    it("accorde mastery XP au hit si le personnage porte une arme de type 'bow'", async () => {
       const bowItem = { id: "item-bow", weaponType: "bow", type: "weapon", range: 300 } as any;
       const equipment = [{ slot: EquipmentSlot.RANGED_WEAPON, item: bowItem }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
@@ -683,10 +683,10 @@ describe('CreaturesService', () => {
       const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
-      expect(skillsService.applySkillXpInTx).toHaveBeenCalledWith("char-1", "bow", expect.any(Number), expect.any(Object));
+      expect(masteriesService.applyMasteryXpInTx).toHaveBeenCalledWith("char-1", "bow", expect.any(Number), expect.any(Object));
     });
 
-    it("accorde skill XP au hit si le personnage porte une arme de type 'crossbow'", async () => {
+    it("accorde mastery XP au hit si le personnage porte une arme de type 'crossbow'", async () => {
       const xbowItem = { id: "item-xbow", weaponType: "crossbow", type: "weapon", range: 300 } as any;
       const equipment = [{ slot: EquipmentSlot.RANGED_WEAPON, item: xbowItem }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
@@ -696,10 +696,10 @@ describe('CreaturesService', () => {
       const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
-      expect(skillsService.applySkillXpInTx).toHaveBeenCalledWith("char-1", "crossbow", expect.any(Number), expect.any(Object));
+      expect(masteriesService.applyMasteryXpInTx).toHaveBeenCalledWith("char-1", "crossbow", expect.any(Number), expect.any(Object));
     });
 
-    it("accorde skill XP two_handed si l'arme en main droite est two_handed_sword", async () => {
+    it("accorde mastery XP two_handed si l'arme en main droite est two_handed_sword", async () => {
       const sword = { id: "item-sword", weaponType: "two_handed_sword", type: "weapon", range: 60 } as any;
       const equipment = [{ slot: EquipmentSlot.RIGHT_HAND, item: sword }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
@@ -709,20 +709,20 @@ describe('CreaturesService', () => {
       const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
-      expect(skillsService.applySkillXpInTx).toHaveBeenCalledWith("char-1", "two_handed", expect.any(Number), expect.any(Object));
+      expect(masteriesService.applyMasteryXpInTx).toHaveBeenCalledWith("char-1", "two_handed", expect.any(Number), expect.any(Object));
     });
 
-    it("ne pas accorder skill XP si le personnage n'a pas d'arme", async () => {
+    it("ne pas accorder mastery XP si le personnage n'a pas d'arme", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, equipment: [] }));
 
       await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.applySkillXpInTx).not.toHaveBeenCalled();
+      expect(masteriesService.applyMasteryXpInTx).not.toHaveBeenCalled();
     });
 
-    it("ne pas accorder skill XP si l'arme equipee a un weaponType null", async () => {
+    it("ne pas accorder mastery XP si l'arme equipee a un weaponType null", async () => {
       const plainWeapon = { id: "item-club", weaponType: null, type: "weapon", range: 60 } as any;
       const equipment = [{ slot: EquipmentSlot.RIGHT_HAND, item: plainWeapon }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
@@ -731,10 +731,10 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.applySkillXpInTx).not.toHaveBeenCalled();
+      expect(masteriesService.applyMasteryXpInTx).not.toHaveBeenCalled();
     });
 
-    it("ne pas accorder skill XP si l'arme n'a pas de weaponType dans COMBAT_WEAPON_SKILL_MAP", async () => {
+    it("ne pas accorder mastery XP si l'arme n'a pas de weaponType dans COMBAT_WEAPON_MASTERY_MAP", async () => {
       const unknownWeapon = { id: "item-staff", weaponType: "staff", type: "weapon", range: 60 } as any;
       const equipment = [{ slot: EquipmentSlot.RIGHT_HAND, item: unknownWeapon }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
@@ -743,26 +743,26 @@ describe('CreaturesService', () => {
 
       await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      expect(skillsService.applySkillXpInTx).not.toHaveBeenCalled();
+      expect(masteriesService.applyMasteryXpInTx).not.toHaveBeenCalled();
     });
 
-    it("retourne skillUpdate dans AttackSuccess si skill XP accordé", async () => {
+    it("retourne masteryUpdate dans AttackSuccess si mastery XP accordé", async () => {
       const bowItem = { id: "item-bow", weaponType: "bow", type: "weapon", range: 300 } as any;
       const equipment = [{ slot: EquipmentSlot.RANGED_WEAPON, item: bowItem }] as any;
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, equipment }));
-      skillsService.applySkillXpInTx.mockResolvedValue({ skillDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false });
+      masteriesService.applyMasteryXpInTx.mockResolvedValue({ masteryDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false });
 
       const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.skillUpdate).toEqual({ skillDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false });
+        expect(result.masteryUpdate).toEqual({ masteryDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false });
       }
     });
 
-    it("skillUpdate est undefined si pas d'arme skill", async () => {
+    it("masteryUpdate est undefined si pas d'arme mastery", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3, equipment: [] }));
@@ -770,7 +770,7 @@ describe('CreaturesService', () => {
       const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
 
       expect(result.success).toBe(true);
-      if (result.success) expect(result.skillUpdate).toBeUndefined();
+      if (result.success) expect(result.masteryUpdate).toBeUndefined();
     });
 
     it("utilise le characterId serveur (parametre), pas une donnee client", async () => {
@@ -1214,7 +1214,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
-        { provide: SkillsService, useValue: { applySkillXpInTx: jest.fn() } },
+        { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
@@ -1363,7 +1363,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
-        { provide: SkillsService, useValue: { applySkillXpInTx: jest.fn() } },
+        { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,

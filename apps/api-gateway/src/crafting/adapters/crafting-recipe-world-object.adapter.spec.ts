@@ -8,8 +8,8 @@ function makeRecipe(overrides: Partial<CraftingRecipe> = {}): CraftingRecipe {
     name: 'Fondre du minerai',
     description: 'Fait fondre 3 minerais.',
     category: 'smithing',
-    requiredSkillKey: 'smithing',
-    requiredSkillLevel: 1,
+    requiredMasteryKey: 'smithing',
+    requiredMasteryLevel: 1,
     baseSuccessRate: 1.0,
     successBonusPerLevel: 0.0,
     minSuccessRate: 1.0,
@@ -76,8 +76,8 @@ describe('toCraftingRecipeWorldObject — metadata', () => {
     expect(m.name).toBe('Fondre du minerai');
     expect(m.description).toBe('Fait fondre 3 minerais.');
     expect(m.category).toBe('smithing');
-    expect(m.requiredSkillKey).toBe('smithing');
-    expect(m.requiredSkillLevel).toBe(1);
+    expect(m.requiredMasteryKey).toBe('smithing');
+    expect(m.requiredMasteryLevel).toBe(1);
     expect(m.baseSuccessRate).toBe(1.0);
     expect(m.xpReward).toBe(10);
     expect(m.consumeIngredientsOnFailure).toBe(true);

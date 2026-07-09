@@ -15,9 +15,9 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
-import { SkillsService, SkillUpdatePayload } from '../skills/skills.service';
-import { calculateSkillXp } from '../skill-xp-calculator/skill-xp-calculator';
-import { SkillDomain, SkillXpContext } from '../skill-xp-calculator/skill-xp-context';
+import { MasteriesService, MasteryUpdatePayload } from '../masteries/masteries.service';
+import { calculateMasteryXp } from '../mastery-xp-calculator/mastery-xp-calculator';
+import { MasteryDomain, MasteryXpContext } from '../mastery-xp-calculator/mastery-xp-context';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
@@ -76,7 +76,7 @@ export type AttackSuccess = {
   riposte?: { damage: number; characterHealth: number };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
-  skillUpdate?: SkillUpdatePayload;
+  masteryUpdate?: MasteryUpdatePayload;
 };
 export type AttackFailure = { success: false; error: string };
 export type AttackResult = AttackSuccess | AttackFailure;
@@ -86,14 +86,14 @@ export function isAttackFailure(result: AttackResult): result is AttackFailure {
 }
 
 /**
- * Résolution weaponType → skillDefinitionKey (Phase 2b : two_handed, bow, crossbow).
- * Seules les armes avec un weaponType référencé ici génèrent de l'XP skill.
+ * Résolution weaponType → masteryDefinitionKey (Phase 2b : two_handed, bow, crossbow).
+ * Seules les armes avec un weaponType référencé ici génèrent de l'XP mastery.
  *
  * Temporaire : cette table est destinée à migrer vers une config Studio
- * (champ weaponType sur ItemTemplate + table de correspondance SkillDefinition).
+ * (champ weaponType sur ItemTemplate + table de correspondance MasteryDefinition).
  * Ne pas ajouter de nouveaux types ici sans ADR ou note de dette.
  */
-const COMBAT_WEAPON_SKILL_MAP: Record<string, string> = {
+const COMBAT_WEAPON_MASTERY_MAP: Record<string, string> = {
   two_handed_sword: 'two_handed',
   two_handed_axe: 'two_handed',
   bow: 'bow',
@@ -119,7 +119,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
     private readonly progression: ProgressionService,
-    private readonly skillsService: SkillsService,
+    private readonly masteriesService: MasteriesService,
     private readonly dataSource: DataSource,
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
@@ -564,21 +564,21 @@ export class CreaturesService implements OnModuleInit {
     }
     await this.creatureRepository.save(creature);
 
-    // Transaction unique : Character XP (au kill) + Skill XP (au hit).
+    // Transaction unique : Character XP (au kill) + Mastery XP (au hit).
     // characterId provient du paramètre, jamais du client.
     let loot: LootEntry[] | undefined;
     let characterXpUpdate: CharacterXpResult | undefined;
-    let skillUpdate: SkillUpdatePayload | undefined;
+    let masteryUpdate: MasteryUpdatePayload | undefined;
 
-    const skillKey = this.resolveCombatSkillKey(character);
-    const skillContext = skillKey
-      ? this.buildCombatSkillXpContext(skillKey, damage, character, template)
+    const masteryKey = this.resolveCombatMasteryKey(character);
+    const masteryContext = masteryKey
+      ? this.buildCombatMasteryXpContext(masteryKey, damage, character, template)
       : null;
-    const skillXpResult = skillContext ? calculateSkillXp(skillContext) : null;
+    const masteryXpResult = masteryContext ? calculateMasteryXp(masteryContext) : null;
 
     const hasCharXp = creature.health === 0 && template.killCharacterXpReward > 0;
 
-    if (hasCharXp || skillXpResult) {
+    if (hasCharXp || masteryXpResult) {
       try {
         const txResult = await this.dataSource.transaction(async (manager) => {
           let charXp: CharacterXpResult | undefined;
@@ -590,19 +590,19 @@ export class CreaturesService implements OnModuleInit {
               manager,
             );
           }
-          let skillXp: SkillUpdatePayload | undefined;
-          if (skillXpResult) {
-            skillXp = await this.skillsService.applySkillXpInTx(
+          let masteryXp: MasteryUpdatePayload | undefined;
+          if (masteryXpResult) {
+            masteryXp = await this.masteriesService.applyMasteryXpInTx(
               characterId,
-              skillXpResult.skillDefinitionKey,
-              skillXpResult.xpAmount,
+              masteryXpResult.masteryDefinitionKey,
+              masteryXpResult.xpAmount,
               manager,
             );
           }
-          return { charXp, skillXp };
+          return { charXp, masteryXp };
         });
         characterXpUpdate = txResult.charXp;
-        skillUpdate = txResult.skillXp;
+        masteryUpdate = txResult.masteryXp;
       } catch (err) {
         console.warn(`[CreaturesService] Récompenses ignorées pour ${characterId}: ${(err as Error).message}`);
       }
@@ -632,40 +632,40 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate, skillUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate, masteryUpdate };
   }
 
-  private resolveCombatSkillKey(character: Character): string | null {
+  private resolveCombatMasteryKey(character: Character): string | null {
     const equipment = character.equipment ?? [];
     const ranged = equipment.find(
       (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
     );
-    if (ranged?.item?.weaponType) return COMBAT_WEAPON_SKILL_MAP[ranged.item.weaponType] ?? null;
+    if (ranged?.item?.weaponType) return COMBAT_WEAPON_MASTERY_MAP[ranged.item.weaponType] ?? null;
     const melee = equipment.find(
       (eq) =>
         ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
           (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
         eq.item?.type === 'weapon',
     );
-    if (melee?.item?.weaponType) return COMBAT_WEAPON_SKILL_MAP[melee.item.weaponType] ?? null;
+    if (melee?.item?.weaponType) return COMBAT_WEAPON_MASTERY_MAP[melee.item.weaponType] ?? null;
     return null;
   }
 
-  private buildCombatSkillXpContext(
-    skillKey: string,
+  private buildCombatMasteryXpContext(
+    masteryKey: string,
     damage: number,
     character: Character,
     template: CreatureTemplate,
-  ): SkillXpContext {
+  ): MasteryXpContext {
     return {
-      skillDefinitionKey: skillKey,
-      domain: 'combat' as SkillDomain,
+      masteryDefinitionKey: masteryKey,
+      domain: 'combat' as MasteryDomain,
       action: 'attack_hit',
       success: true,
       difficulty: Math.max(1, Math.round(template.baseHealth / 10)),
       quality: null,
       characterLevel: character.level ?? 1,
-      skillLevel: 1,
+      masteryLevel: 1,
       duration: null,
       damage,
       blockedDamage: null,

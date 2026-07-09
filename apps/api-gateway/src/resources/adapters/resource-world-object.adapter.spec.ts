@@ -28,7 +28,7 @@ function makeTemplate(overrides: Partial<ResourceTemplate> = {}): ResourceTempla
     defaultRemainingLoots: 5,
     respawnDelayMs: 60_000,
     lootPool: null,
-    skillKey: null,
+    masteryKey: null,
     gatheringXpReward: 0,
     gatherCharacterXpReward: 0,
     gatheringDifficulty: 0,
@@ -317,27 +317,27 @@ describe('toResourceWorldObject — cas nominaux', () => {
   });
 });
 
-// ─── Metadata skillKey ────────────────────────────────────────────────────────
+// ─── Metadata masteryKey ────────────────────────────────────────────────────────
 
-describe('toResourceWorldObject — metadata.skillKey', () => {
+describe('toResourceWorldObject — metadata.masteryKey', () => {
   it('null si template absent', () => {
     const wo = toResourceWorldObject(makeResource());
-    expect(wo.metadata.skillKey).toBeNull();
+    expect(wo.metadata.masteryKey).toBeNull();
   });
 
   it('null si template explicitement null', () => {
     const wo = toResourceWorldObject(makeResource(), null);
-    expect(wo.metadata.skillKey).toBeNull();
+    expect(wo.metadata.masteryKey).toBeNull();
   });
 
-  it('null si template.skillKey est null', () => {
-    const wo = toResourceWorldObject(makeResource(), makeTemplate({ skillKey: null }));
-    expect(wo.metadata.skillKey).toBeNull();
+  it('null si template.masteryKey est null', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ masteryKey: null }));
+    expect(wo.metadata.masteryKey).toBeNull();
   });
 
-  it('reflète le skillKey du template', () => {
-    const wo = toResourceWorldObject(makeResource(), makeTemplate({ skillKey: 'woodcutting' }));
-    expect(wo.metadata.skillKey).toBe('woodcutting');
+  it('reflète le masteryKey du template', () => {
+    const wo = toResourceWorldObject(makeResource(), makeTemplate({ masteryKey: 'woodcutting' }));
+    expect(wo.metadata.masteryKey).toBe('woodcutting');
   });
 });
 

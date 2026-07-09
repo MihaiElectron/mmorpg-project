@@ -35,8 +35,8 @@ export type AvailableCraftingRecipe = {
   name: string;
   description: string | null;
   category: string;
-  requiredSkillKey: string;
-  requiredSkillLevel: number;
+  requiredMasteryKey: string;
+  requiredMasteryLevel: number;
   baseSuccessRate: number;
   successBonusPerLevel: number;
   minSuccessRate: number;
@@ -179,7 +179,7 @@ export function matchesRecipeQuery(recipe: AvailableCraftingRecipe, query: strin
     recipe.name,
     recipe.category,
     product?.itemCategory ?? "",
-    recipe.requiredSkillKey,
+    recipe.requiredMasteryKey,
   ]
     .join(" ")
     .toLowerCase();
@@ -187,12 +187,12 @@ export function matchesRecipeQuery(recipe: AvailableCraftingRecipe, query: strin
 }
 
 /**
- * Estimation lecture seule de la Skill XP par craft — miroir EXACT du Runtime
- * (skill-xp-calculator : domain=crafting, action=craft → base 15 ; bonus =
+ * Estimation lecture seule de la Mastery XP par craft — miroir EXACT du Runtime
+ * (mastery-xp-calculator : domain=crafting, action=craft → base 15 ; bonus =
  * floor(difficulty/10) ; quality null). Affichage uniquement : la valeur
  * autoritaire reste calculée côté serveur.
  */
-export function estimateCraftSkillXp(craftingDifficulty: number): number {
+export function estimateCraftMasteryXp(craftingDifficulty: number): number {
   const d = Math.max(0, Math.min(100, Math.floor(craftingDifficulty) || 0));
   return Math.max(1, 15 + Math.floor(d / 10));
 }

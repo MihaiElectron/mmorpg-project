@@ -24,7 +24,7 @@ import { ResourcesModule } from './resources/resources.module';
 import { WorldModule } from './world/world.module';
 import { CreaturesModule } from './creatures/creatures.module';
 import { AdminModule } from './admin/admin.module';
-import { SkillsModule } from './skills/skills.module';
+import { MasteriesModule } from './masteries/masteries.module';
 import { CraftingModule } from './crafting/crafting.module';
 import { PlayerRuntimeModule } from './player-runtime/player-runtime.module';
 import { CreatureRuntimeModule } from './creature-runtime/creature-runtime.module';
@@ -83,7 +83,7 @@ import { TradeModule } from './trade/trade.module';
     CreaturesModule,
     AdminModule,
     ItemModule,
-    SkillsModule,
+    MasteriesModule,
     CraftingModule,
     PlayerRuntimeModule,
     CreatureRuntimeModule,

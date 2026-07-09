@@ -3,7 +3,7 @@ import { useCharacterStore } from "../../store/character.store";
 import {
   buildCraftRequestPayload,
   computeMaxCraftable,
-  estimateCraftSkillXp,
+  estimateCraftMasteryXp,
   estimateStationReach,
   filterRecipesForStation,
   formatCraftingServerErrorDetail,
@@ -46,7 +46,7 @@ type Props = {
 
 export default function CraftingRuntimePanel({ station, onClose, hideHeader = false }: Props) {
   const loadCharacter = useCharacterStore((s) => s.loadCharacter);
-  const loadSkills = useCharacterStore((s) => s.loadSkills);
+  const loadMasteries = useCharacterStore((s) => s.loadMasteries);
   const character = useCharacterStore((s) => s.character);
   const inventory = useCharacterStore((s) => s.inventory);
   const [recipes, setRecipes] = useState<AvailableCraftingRecipe[]>([]);
@@ -142,9 +142,9 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
     }
   }
 
-  // Rafraîchit inventaire/skills/personnage sans recharger la scène.
+  // Rafraîchit inventaire/masteries/personnage sans recharger la scène.
   async function refreshCharacter() {
-    await Promise.all([loadCharacter(), loadSkills()]);
+    await Promise.all([loadCharacter(), loadMasteries()]);
   }
 
   /**
@@ -362,9 +362,9 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
               <dd>{selectedRecipe.craftingDifficulty} / 100</dd>
             </div>
             <div>
-              <dt>Skill requis</dt>
+              <dt>Maîtrise requise</dt>
               <dd>
-                {selectedRecipe.requiredSkillKey} niv. {selectedRecipe.requiredSkillLevel} · succès {percent(selectedRecipe.baseSuccessRate)}
+                {selectedRecipe.requiredMasteryKey} niv. {selectedRecipe.requiredMasteryLevel} · succès {percent(selectedRecipe.baseSuccessRate)}
               </dd>
             </div>
             <div>
@@ -372,8 +372,8 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
               <dd>+{selectedRecipe.craftCharacterXpReward}</dd>
             </div>
             <div>
-              <dt>XP skill est.</dt>
-              <dd>+{estimateCraftSkillXp(selectedRecipe.craftingDifficulty)} {selectedRecipe.requiredSkillKey}</dd>
+              <dt>XP maîtrise est.</dt>
+              <dd>+{estimateCraftMasteryXp(selectedRecipe.craftingDifficulty)} {selectedRecipe.requiredMasteryKey}</dd>
             </div>
           </dl>
 
@@ -488,7 +488,7 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
                 <span className="action-panel__crafting-muted">Aucun objet obtenu.</span>
               )}
               <span className="action-panel__job-xp">
-                XP obtenue : +{lastClaimResult.grantedCharacterXp} perso · +{lastClaimResult.grantedSkillXp} skill
+                XP obtenue : +{lastClaimResult.grantedCharacterXp} perso · +{lastClaimResult.grantedMasteryXp} maîtrise
               </span>
             </div>
           )}
@@ -556,7 +556,7 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
                     </div>
                   )}
                   <span className="action-panel__job-xp">
-                    XP accordée : +{job.grantedCharacterXp} perso · +{job.grantedSkillXp} skill
+                    XP accordée : +{job.grantedCharacterXp} perso · +{job.grantedMasteryXp} maîtrise
                   </span>
                   <button
                     className="action-panel__button action-panel__job-claim"
@@ -582,7 +582,7 @@ export default function CraftingRuntimePanel({ station, onClose, hideHeader = fa
                   <span className="action-panel__job-meta">Succès {job.successes} · Échecs {job.failures}</span>
                   <span className="action-panel__crafting-muted">Aucun output.</span>
                   <span className="action-panel__job-xp">
-                    XP d'échec : +{job.grantedSkillXp} skill · +0 perso
+                    XP d'échec : +{job.grantedMasteryXp} maîtrise · +0 perso
                   </span>
                 </div>
               ))}

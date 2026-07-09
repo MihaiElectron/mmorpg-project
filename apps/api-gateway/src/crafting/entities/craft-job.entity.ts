@@ -26,7 +26,7 @@ export enum CraftJobState {
  * CraftJob — production différée persistante (ADR-0009).
  *
  * Le job porte un SNAPSHOT IMMUABLE des règles au lancement : recipeId/version,
- * station, durée, difficulté, skill, XP, ingrédients et outputs. Le Runtime ne
+ * station, durée, difficulté, mastery, XP, ingrédients et outputs. Le Runtime ne
  * relit jamais la recette/station vivante après le lancement.
  *
  * Les identifiants (recipeId, itemId dans les tables filles) sont stockés en
@@ -89,10 +89,10 @@ export class CraftJob {
   craftingDifficulty: number;
 
   @Column({ type: 'varchar', length: 64 })
-  requiredSkillKey: string;
+  requiredMasteryKey: string;
 
   @Column({ type: 'int', default: 1 })
-  requiredSkillLevel: number;
+  requiredMasteryLevel: number;
 
   @Column({ type: 'int', default: 0 })
   craftCharacterXpReward: number;
@@ -140,9 +140,9 @@ export class CraftJob {
   grantedCharacterXp: number;
 
   // XP compétence réellement accordée à la complétion (succès pleins + part
-  // d'échec FAILURE_SKILL_XP_MULTIPLIER). Figée ici, affichée telle quelle.
+  // d'échec FAILURE_MASTERY_XP_MULTIPLIER). Figée ici, affichée telle quelle.
   @Column({ type: 'int', default: 0 })
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
 
   @OneToMany(() => CraftJobIngredient, (ing) => ing.job, { cascade: true })
   ingredients: CraftJobIngredient[];

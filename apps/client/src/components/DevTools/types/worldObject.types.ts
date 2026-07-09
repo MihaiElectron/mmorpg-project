@@ -26,8 +26,8 @@ export interface WorldObject {
   metadata: Record<string, unknown> & {
     /** Date ISO de réapparition si l'entité est dead et en attente de respawn (Resource ou Creature). */
     respawnAt?: string | Date | null;
-    /** Clé du skill de récolte (Resource). Null si non configuré. */
-    skillKey?: string | null;
+    /** Clé de la mastery de récolte (Resource). Null si non configuré. */
+    masteryKey?: string | null;
     /** XP accordée par tick de récolte réussi (Resource). Null si template absent. */
     gatheringXpReward?: number | null;
   };

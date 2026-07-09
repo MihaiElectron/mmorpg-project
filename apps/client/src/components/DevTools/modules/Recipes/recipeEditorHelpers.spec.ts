@@ -94,10 +94,10 @@ describe("recipe editor helpers", () => {
   it("construit un patch de recette minimal", () => {
     expect(
       buildRecipePatch(
-        { name: "Lingot", enabled: true, requiredSkillLevel: 1 },
-        { name: " Lingot raffiné ", enabled: true, requiredSkillLevel: 2 },
+        { name: "Lingot", enabled: true, requiredMasteryLevel: 1 },
+        { name: " Lingot raffiné ", enabled: true, requiredMasteryLevel: 2 },
       ),
-    ).toEqual({ name: "Lingot raffiné", requiredSkillLevel: 2 });
+    ).toEqual({ name: "Lingot raffiné", requiredMasteryLevel: 2 });
   });
 
   it("normalise ingredients et résultats avant envoi API", () => {

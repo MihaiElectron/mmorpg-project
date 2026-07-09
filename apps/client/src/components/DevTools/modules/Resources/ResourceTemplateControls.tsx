@@ -7,23 +7,23 @@ const MAX_RESPAWN_MS = 86_400_000;
 const MAX_LOOTS = 999_999;
 const MAX_XP = 999_999;
 
-// XP skill estimée (lecture seule) — miroir EXACT du Runtime (ResourcesGateway +
-// calculateSkillXp). TODO(shared): le module skill-xp-calculator vit dans
+// XP mastery estimée (lecture seule) — miroir EXACT du Runtime (ResourcesGateway +
+// calculateMasteryXp). TODO(shared): le module mastery-xp-calculator vit dans
 // api-gateway (pas d'alias cross-app côté client). Duplication d'affichage
 // uniquement — domain=gathering, action=gather, success=true, quality=null.
 // xpAmount = base 10 + floor(difficulty / 10).
-const GATHERING_RESOURCE_SKILL_MAP: Record<string, string> = {
+const GATHERING_RESOURCE_MASTERY_MAP: Record<string, string> = {
   dead_tree: "woodcutting",
   ore: "mining",
 };
 
-function gatherSkillXpEstimateLabel(resourceType: string, difficulty: number): string {
-  const skillKey = GATHERING_RESOURCE_SKILL_MAP[resourceType];
-  if (!skillKey) return "aucune";
+function gatherMasteryXpEstimateLabel(resourceType: string, difficulty: number): string {
+  const masteryKey = GATHERING_RESOURCE_MASTERY_MAP[resourceType];
+  if (!masteryKey) return "aucune";
   const d = Math.max(0, Math.min(100, Number(difficulty) || 0));
   const xpAmount = Math.max(1, Math.round(10 + Math.floor(d / 10)));
-  const skillName = skillKey.charAt(0).toUpperCase() + skillKey.slice(1);
-  return `+${xpAmount} ${skillName}`;
+  const masteryName = masteryKey.charAt(0).toUpperCase() + masteryKey.slice(1);
+  return `+${xpAmount} ${masteryName}`;
 }
 
 interface Props {
@@ -175,9 +175,9 @@ export function ResourceTemplateControls({ onRefresh }: Props) {
       </div>
 
       <div className="rtc__row">
-        <span className="rtc__label">XP skill estimée</span>
+        <span className="rtc__label">XP mastery estimée</span>
         <span className="rtc__readonly" title="Calculée par le Runtime depuis la difficulté (non éditable)">
-          {gatherSkillXpEstimateLabel(type, difficulty === "" ? (rawDifficulty ?? 0) : Number(difficulty))}
+          {gatherMasteryXpEstimateLabel(type, difficulty === "" ? (rawDifficulty ?? 0) : Number(difficulty))}
         </span>
       </div>
 

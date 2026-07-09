@@ -4,7 +4,7 @@
  * Alimenté par GET /admin/characters/:id/details (snapshot serveur = source de
  * vérité). N'utilise JAMAIS character.store (aucun écrasement du joueur local),
  * aucune mutation, aucun socket, aucun polling : un fetch unique à l'ouverture.
- * Phase 1bis-A : onglet Perso actif ; Stats/Skills/Talents/Succès en attente.
+ * Phase 1bis-A : onglet Perso actif ; Stats/Masteries/Talents/Succès en attente.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CharacterEquipmentView, {
@@ -21,7 +21,7 @@ const DIRTY_DEBOUNCE_MS = 200;
 const TABS = [
   { id: "perso", label: "Perso" },
   { id: "stats", label: "Stats" },
-  { id: "skills", label: "Skills" },
+  { id: "masteries", label: "Masteries" },
   { id: "talents", label: "Talents" },
   { id: "achievements", label: "Succès" },
 ];

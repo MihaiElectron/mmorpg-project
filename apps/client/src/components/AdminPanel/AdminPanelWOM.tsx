@@ -70,72 +70,72 @@ type MovementMetrics = {
   mapMismatch: number;
 };
 
-// ── Constantes skills ─────────────────────────────────────────────────────────
+// ── Constantes masteries ─────────────────────────────────────────────────────────
 
-const SKILL_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
+const MASTERY_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
 const STATION_TYPES = ["forge", "workbench", "sawmill", "alchemy_table", "cooking_station", "tailoring_station", "jewelry_table"];
 const BUILDING_TYPES = ["auction_house", "mailbox", "bank", "guild_hall", "house_door", "teleport", "dungeon_entrance", "shrine"];
 const BUILDING_STATES = ["ACTIVE", "DISABLED", "LOCKED", "UNDER_CONSTRUCTION", "DESTROYED"];
 
-const SKILL_FIELDS = [
+const MASTERY_FIELDS = [
   { key: "name",            label: "Nom",       type: "text" as const },
-  { key: "category",        label: "Catégorie", options: SKILL_CATEGORIES },
+  { key: "category",        label: "Catégorie", options: MASTERY_CATEGORIES },
   { key: "maxLevel",        label: "Niv. max",  min: 2 },
   { key: "baseXpPerLevel",  label: "XP/niv",    min: 1 },
   { key: "xpCurveExponent", label: "Courbe",    min: 1, step: 0.1 },
   { key: "enabled",         label: "Actif",     options: ["true", "false"] },
 ];
 
-const SKILLS_SECTION_CONFIG: SectionConfig = {
-  id: "skills",
-  title: "Skill Editor",
-  fetchPath: "/admin/skill-definitions",
-  saveEvent: "admin:update_skill_definition",
+const MASTERIES_SECTION_CONFIG: SectionConfig = {
+  id: "masteries",
+  title: "Mastery Editor",
+  fetchPath: "/admin/mastery-definitions",
+  saveEvent: "admin:update_mastery_definition",
   getEntityKey:  (sd) => sd.id,
   getDisplayKey: (sd) => sd.key,
   getName: (sd) => `${sd.name} (${sd.key})`,
-  fields: SKILL_FIELDS,
+  fields: MASTERY_FIELDS,
 };
 
-// ── Estimation XP skill récolte (lecture seule) ───────────────────────────────
+// ── Estimation XP mastery récolte (lecture seule) ───────────────────────────────
 // TODO(shared): dupliquer temporairement la résolution + le calcul du Runtime.
-// Le module skill-xp-calculator vit dans api-gateway (pas d'alias cross-app côté
+// Le module mastery-xp-calculator vit dans api-gateway (pas d'alias cross-app côté
 // client). À factoriser dans un package partagé. Toute évolution de la formule
 // runtime (BASE_XP gathering / difficulty) doit être répercutée ici.
-// Miroir EXACT de ResourcesGateway.GATHERING_RESOURCE_SKILL_MAP + calculateSkillXp
+// Miroir EXACT de ResourcesGateway.GATHERING_RESOURCE_MASTERY_MAP + calculateMasteryXp
 // (domain=gathering, action=gather, success=true, difficulty=0, quality=null).
 // Doit rester identique au runtime : une estimation affichée pour un type non
 // mappé côté runtime serait mensongère.
-const GATHERING_RESOURCE_SKILL_MAP: Record<string, string> = {
+const GATHERING_RESOURCE_MASTERY_MAP: Record<string, string> = {
   dead_tree: "woodcutting",
   ore: "mining",
 };
 
-function estimateGatherSkillXp(
+function estimateGatherMasteryXp(
   resourceType: string,
   difficulty: number,
-): { skillKey: string; xpAmount: number } | null {
-  const skillKey = GATHERING_RESOURCE_SKILL_MAP[resourceType];
-  if (!skillKey) return null;
+): { masteryKey: string; xpAmount: number } | null {
+  const masteryKey = GATHERING_RESOURCE_MASTERY_MAP[resourceType];
+  if (!masteryKey) return null;
   const BASE_GATHER_XP = 10; // BASE_XP.gathering.gather (runtime)
   const d = Math.max(0, Math.min(100, Number(difficulty) || 0));
   const difficultyBonus = Math.floor(d / 10); // DIFFICULTY_DIVISOR = 10
   const qualityBonus = 0;                      // quality=null
   const xpAmount = Math.max(1, Math.round(BASE_GATHER_XP + difficultyBonus + qualityBonus));
-  return { skillKey, xpAmount };
+  return { masteryKey, xpAmount };
 }
 
-function gatherSkillXpLabel(resourceType: string, difficulty: number): string {
-  const est = estimateGatherSkillXp(resourceType, difficulty);
-  if (!est) return "XP skill estimée : aucune";
-  const skillName = est.skillKey.charAt(0).toUpperCase() + est.skillKey.slice(1);
-  return `XP skill estimée : +${est.xpAmount} ${skillName}`;
+function gatherMasteryXpLabel(resourceType: string, difficulty: number): string {
+  const est = estimateGatherMasteryXp(resourceType, difficulty);
+  if (!est) return "XP maîtrise estimée : aucune";
+  const masteryName = est.masteryKey.charAt(0).toUpperCase() + est.masteryKey.slice(1);
+  return `XP maîtrise estimée : +${est.xpAmount} ${masteryName}`;
 }
 
 // ── Configs (identiques au legacy) ────────────────────────────────────────────
 
-function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[] {
-  const skillKeyOptions = ["", ...skillKeys];
+function buildGroupedSectionConfigs(masteryKeys: string[]): GroupedSectionConfig[] {
+  const masteryKeyOptions = ["", ...masteryKeys];
   return [
   {
     id: "creatures",
@@ -200,8 +200,8 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
     groupSaveEvent: "admin:update_resource_template",
     getGroupSavePayload: (t, fields) => ({ type: t.type, fields }),
     getGroupInfoLine: (t) => {
-      // XP skill estimée (lecture seule) — miroir du Runtime, dérivée de la difficulté.
-      const xpLine = gatherSkillXpLabel(t.type, t.gatheringDifficulty ?? 0);
+      // XP maîtrise estimée (lecture seule) — miroir du Runtime, dérivée de la difficulté.
+      const xpLine = gatherMasteryXpLabel(t.type, t.gatheringDifficulty ?? 0);
       const items: string[] = t.lootPoolItems ?? [];
       const lootLine = items.length > 0 ? `Loot pool (lecture seule) : ${items.join(", ")}` : null;
       return lootLine ? `${xpLine}  ·  ${lootLine}` : xpLine;
@@ -251,7 +251,7 @@ function buildGroupedSectionConfigs(skillKeys: string[]): GroupedSectionConfig[]
       { key: "name",                label: "Nom",          type: "text" as const },
       { key: "stationType",         label: "Station",      options: STATION_TYPES },
       { key: "category",            label: "Catégorie",    options: ["smithing", "woodworking", "alchemy", "cooking", "crafting", "general"] },
-      { key: "requiredSkillKey",    label: "Skill requis", options: skillKeyOptions },
+      { key: "requiredMasteryKey",    label: "Maîtrise requise", options: masteryKeyOptions },
       { key: "interactionRadiusWU", label: "Rayon WU",     min: 1 },
       { key: "textureKey",          label: "Texture",      type: "asset" as const, assetCategory: "buildings" },
       { key: "enabled",             label: "Actif",        options: ["true", "false"] },
@@ -544,7 +544,7 @@ function wosToCraftingStationTemplates(wos: WorldObject[]): any[] {
     name: (wo.metadata.name as string) ?? wo.type,
     stationType: (wo.metadata.stationType as string) ?? wo.type,
     category: (wo.metadata.category as string) ?? "crafting",
-    requiredSkillKey: (wo.metadata.requiredSkillKey as string | null) ?? "",
+    requiredMasteryKey: (wo.metadata.requiredMasteryKey as string | null) ?? "",
     interactionRadiusWU: (wo.metadata.interactionRadiusWU as number) ?? 1536,
     textureKey: (wo.metadata.textureKey as string | null) ?? "",
     enabled: wo.state === "enabled",
@@ -617,7 +617,7 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
-const NEW_SKILL_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
+const NEW_MASTERY_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
 const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
 const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0, lootPool: [] as Array<{ itemId: string; minQty: number; maxQty: number; probability: number }> };
 const NEW_STATION_TEMPLATE_DEFAULT = {
@@ -625,7 +625,7 @@ const NEW_STATION_TEMPLATE_DEFAULT = {
   name: "",
   stationType: "forge",
   category: "smithing",
-  requiredSkillKey: "",
+  requiredMasteryKey: "",
   interactionRadiusWU: 1536,
   textureKey: "",
   enabled: true,
@@ -1155,9 +1155,9 @@ export default function AdminPanelWOM() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
-  const [skillsOpen, setSkillsOpen] = useState(false);
-  const [createSkillOpen, setCreateSkillOpen] = useState(false);
-  const [newSkill, setNewSkill] = useState({ ...NEW_SKILL_DEFAULT });
+  const [masteriesOpen, setMasteriesOpen] = useState(false);
+  const [createMasteryOpen, setCreateMasteryOpen] = useState(false);
+  const [newMastery, setNewMastery] = useState({ ...NEW_MASTERY_DEFAULT });
   const [createCreatureOpen, setCreateCreatureOpen] = useState(false);
   const [newCreature, setNewCreature] = useState({ ...NEW_CREATURE_DEFAULT });
   const [createResourceTemplateOpen, setCreateResourceTemplateOpen] = useState(false);
@@ -1173,9 +1173,9 @@ export default function AdminPanelWOM() {
   const [movementMetricsLoading, setMovementMetricsLoading] = useState(false);
 
   const groupedConfigs = useMemo(
-    () => buildGroupedSectionConfigs((sectionData["skills"] ?? []).map((sd: any) => sd.key)),
+    () => buildGroupedSectionConfigs((sectionData["masteries"] ?? []).map((sd: any) => sd.key)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sectionData["skills"]],
+    [sectionData["masteries"]],
   );
 
   useEffect(() => {
@@ -1212,9 +1212,9 @@ export default function AdminPanelWOM() {
       fetchAdmin<WorldObject[]>("/admin/buildings/world-objects", token).then((wos) =>
         setInstanceData((prev) => ({ ...prev, buildings: wosToBuildingInstances(wos) }))
       ),
-      // Skills : liste via REST
-      fetchAdmin<any[]>("/admin/skill-definitions", token).then((data) =>
-        setSectionData((prev) => ({ ...prev, skills: data }))
+      // Masteries : liste via REST
+      fetchAdmin<any[]>("/admin/mastery-definitions", token).then((data) =>
+        setSectionData((prev) => ({ ...prev, masteries: data }))
       ),
       // Items : pour les sélecteurs ingrédients/résultats
       fetchAdmin<any[]>("/admin/items", token).then(setItems),
@@ -1718,9 +1718,9 @@ export default function AdminPanelWOM() {
                     {...kbHandlers} />
                 </label>
                 <label className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">XP skill estimée</span>
+                  <span className="admin-panel__template-stat-label">XP maîtrise estimée</span>
                   <span className="admin-panel__field-hint">
-                    {gatherSkillXpLabel(newResourceTemplate.type, newResourceTemplate.gatheringDifficulty)}
+                    {gatherMasteryXpLabel(newResourceTemplate.type, newResourceTemplate.gatheringDifficulty)}
                   </span>
                 </label>
               </div>
@@ -1869,13 +1869,13 @@ export default function AdminPanelWOM() {
                     {...kbHandlers} />
                 </label>
                 <label className="admin-panel__template-stat">
-                  <span className="admin-panel__template-stat-label">Skill requis</span>
+                  <span className="admin-panel__template-stat-label">Maîtrise requise</span>
                   <select className="admin-panel__template-stat-input"
-                    value={newStationTemplate.requiredSkillKey}
-                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
+                    value={newStationTemplate.requiredMasteryKey}
+                    onChange={(e) => setNewStationTemplate((prev) => ({ ...prev, requiredMasteryKey: e.target.value }))}
                     {...kbHandlers}>
                     <option value="">—</option>
-                    {(sectionData["skills"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
+                    {(sectionData["masteries"] ?? []).map((sd: any) => <option key={sd.key} value={sd.key}>{sd.name} ({sd.key})</option>)}
                   </select>
                 </label>
                 <label className="admin-panel__template-stat">
@@ -2013,68 +2013,68 @@ export default function AdminPanelWOM() {
 
       <section className="admin-panel__section">
         <div className="admin-panel__dual-header">
-          <div className="admin-panel__section-toggle" onClick={() => setSkillsOpen((o) => !o)}>
-            <span className="admin-panel__section-chevron">{skillsOpen ? "▼" : "▶"}</span>
-            Skill Editor
+          <div className="admin-panel__section-toggle" onClick={() => setMasteriesOpen((o) => !o)}>
+            <span className="admin-panel__section-chevron">{masteriesOpen ? "▼" : "▶"}</span>
+            Mastery Editor
           </div>
           <span className="admin-panel__count">
-            {(sectionData["skills"] ?? []).length} skill{(sectionData["skills"] ?? []).length > 1 ? "s" : ""}
+            {(sectionData["masteries"] ?? []).length} master{(sectionData["masteries"] ?? []).length > 1 ? "ies" : "y"}
           </span>
         </div>
-        {skillsOpen && (
+        {masteriesOpen && (
           <div className="admin-panel__create-head">
-            <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateSkillOpen((o) => !o)}>
-              <span className="admin-panel__section-chevron">{createSkillOpen ? "▼" : "▶"}</span>
-              Créer skill
+            <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateMasteryOpen((o) => !o)}>
+              <span className="admin-panel__section-chevron">{createMasteryOpen ? "▼" : "▶"}</span>
+              Créer une maîtrise
             </button>
           </div>
         )}
-        {skillsOpen && createSkillOpen && (
+        {masteriesOpen && createMasteryOpen && (
           <div className="admin-panel__template-item admin-panel__template-item--create">
             <div className="admin-panel__template-stats admin-panel__template-stats--create">
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Key</span>
                 <input className="admin-panel__template-stat-input" type="text"
-                  value={newSkill.key}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, key: e.target.value }))}
+                  value={newMastery.key}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, key: e.target.value }))}
                   {...kbHandlers} />
                 <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
               </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Nom</span>
                 <input className="admin-panel__template-stat-input" type="text"
-                  value={newSkill.name}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, name: e.target.value }))}
+                  value={newMastery.name}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, name: e.target.value }))}
                   {...kbHandlers} />
               </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Catégorie</span>
                 <select className="admin-panel__template-stat-input"
-                  value={newSkill.category}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, category: e.target.value }))}
+                  value={newMastery.category}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, category: e.target.value }))}
                   {...kbHandlers}>
-                  {SKILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {MASTERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Niv. max</span>
                 <input className="admin-panel__template-stat-input" type="number" min={1}
-                  value={newSkill.maxLevel}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, maxLevel: Number(e.target.value) }))}
+                  value={newMastery.maxLevel}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, maxLevel: Number(e.target.value) }))}
                   {...kbHandlers} />
               </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">XP/niv</span>
                 <input className="admin-panel__template-stat-input" type="number" min={1}
-                  value={newSkill.baseXpPerLevel}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, baseXpPerLevel: Number(e.target.value) }))}
+                  value={newMastery.baseXpPerLevel}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, baseXpPerLevel: Number(e.target.value) }))}
                   {...kbHandlers} />
               </label>
               <label className="admin-panel__template-stat">
                 <span className="admin-panel__template-stat-label">Exposant XP</span>
                 <input className="admin-panel__template-stat-input" type="number" min={1} max={3} step={0.1}
-                  value={newSkill.xpCurveExponent}
-                  onChange={(e) => setNewSkill((prev) => ({ ...prev, xpCurveExponent: Number(e.target.value) }))}
+                  value={newMastery.xpCurveExponent}
+                  onChange={(e) => setNewMastery((prev) => ({ ...prev, xpCurveExponent: Number(e.target.value) }))}
                   {...kbHandlers} />
               </label>
             </div>
@@ -2083,22 +2083,22 @@ export default function AdminPanelWOM() {
                 const socket = getSocket();
                 if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
                 setCreating(true);
-                const result = await ackPromise(socket, "admin:create_skill_definition", { fields: newSkill });
+                const result = await ackPromise(socket, "admin:create_mastery_definition", { fields: newMastery });
                 setCreating(false);
                 pushResult(result.message, result.success);
                 if (result.success && result.data) {
-                  setSectionData((prev) => ({ ...prev, skills: [...(prev["skills"] ?? []), result.data as any] }));
-                  setNewSkill({ ...NEW_SKILL_DEFAULT });
+                  setSectionData((prev) => ({ ...prev, masteries: [...(prev["masteries"] ?? []), result.data as any] }));
+                  setNewMastery({ ...NEW_MASTERY_DEFAULT });
                 }
               }}>
               {creating ? "…" : "Créer"}
             </button>
           </div>
         )}
-        {skillsOpen && (
+        {masteriesOpen && (
           <EntitySection
-            config={SKILLS_SECTION_CONFIG}
-            items={sectionData["skills"] ?? []}
+            config={MASTERIES_SECTION_CONFIG}
+            items={sectionData["masteries"] ?? []}
             onResult={pushResult}
             embedded
           />
@@ -2107,7 +2107,7 @@ export default function AdminPanelWOM() {
 
       <RecipesSection
         recipes={recipes}
-        skillDefinitions={sectionData["skills"] ?? []}
+        masteryDefinitions={sectionData["masteries"] ?? []}
         items={items}
         onResult={pushResult}
         onRecipeCreated={(r) => setRecipes((prev) => [...prev, r])}

@@ -6,8 +6,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity('skill_definition')
-export class SkillDefinition {
+@Entity('mastery_definition')
+export class MasteryDefinition {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -18,7 +18,7 @@ export class SkillDefinition {
   @Column({ type: 'varchar', length: 256 })
   name: string;
 
-  // Famille de skills : gathering | crafting | combat | social | leadership | general
+  // Famille de masteries : gathering | crafting | combat | social | leadership | general
   @Column({ type: 'varchar', length: 64, default: 'general' })
   category: string;
 

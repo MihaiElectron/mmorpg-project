@@ -19,8 +19,8 @@ export interface CraftingRecipeMetadata {
   readonly name: string;
   readonly description: string | null;
   readonly category: string;
-  readonly requiredSkillKey: string;
-  readonly requiredSkillLevel: number;
+  readonly requiredMasteryKey: string;
+  readonly requiredMasteryLevel: number;
   readonly baseSuccessRate: number;
   readonly successBonusPerLevel: number;
   readonly minSuccessRate: number;
@@ -65,8 +65,8 @@ export function toCraftingRecipeWorldObject(recipe: CraftingRecipe): CraftingRec
       name: recipe.name,
       description: recipe.description ?? null,
       category: recipe.category,
-      requiredSkillKey: recipe.requiredSkillKey,
-      requiredSkillLevel: recipe.requiredSkillLevel,
+      requiredMasteryKey: recipe.requiredMasteryKey,
+      requiredMasteryLevel: recipe.requiredMasteryLevel,
       baseSuccessRate: recipe.baseSuccessRate,
       successBonusPerLevel: recipe.successBonusPerLevel,
       minSuccessRate: recipe.minSuccessRate,

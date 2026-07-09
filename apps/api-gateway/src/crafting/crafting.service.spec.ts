@@ -224,15 +224,15 @@ describe('CraftingService — seedDefaultRecipes', () => {
     });
 
     it('toutes les recettes référencent "smithing" ou "woodworking"', () => {
-      const validSkills = ['smithing', 'woodworking'];
+      const validMasteries = ['smithing', 'woodworking'];
       for (const recipe of DEFAULT_RECIPES) {
-        expect(validSkills).toContain(recipe.requiredSkillKey);
+        expect(validMasteries).toContain(recipe.requiredMasteryKey);
       }
     });
 
-    it('chaque recette a une category cohérente avec son requiredSkillKey', () => {
+    it('chaque recette a une category cohérente avec son requiredMasteryKey', () => {
       for (const recipe of DEFAULT_RECIPES) {
-        expect(recipe.category).toBe(recipe.requiredSkillKey);
+        expect(recipe.category).toBe(recipe.requiredMasteryKey);
       }
     });
 

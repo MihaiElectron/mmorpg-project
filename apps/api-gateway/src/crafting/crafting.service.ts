@@ -41,8 +41,8 @@ interface RecipeDef {
   name: string;
   description?: string;
   category: string;
-  requiredSkillKey: string;
-  requiredSkillLevel: number;
+  requiredMasteryKey: string;
+  requiredMasteryLevel: number;
   baseSuccessRate: number;
   successBonusPerLevel: number;
   minSuccessRate: number;
@@ -60,7 +60,7 @@ interface StationTemplateDef {
   name: string;
   stationType: string;
   category: string;
-  requiredSkillKey?: string | null;
+  requiredMasteryKey?: string | null;
   interactionRadiusWU?: number;
 }
 
@@ -77,11 +77,11 @@ type CraftingStationErrorBody = {
 };
 
 export const DEFAULT_CRAFTING_STATION_TEMPLATES: StationTemplateDef[] = [
-  { key: 'forge', name: 'Forge', stationType: 'forge', category: 'smithing', requiredSkillKey: 'smithing' },
-  { key: 'workbench', name: 'Workbench', stationType: 'workbench', category: 'woodworking', requiredSkillKey: 'woodworking' },
-  { key: 'sawmill', name: 'Sawmill', stationType: 'sawmill', category: 'woodworking', requiredSkillKey: 'woodworking' },
-  { key: 'alchemy_table', name: 'Alchemy Table', stationType: 'alchemy_table', category: 'alchemy', requiredSkillKey: 'alchemy' },
-  { key: 'cooking_station', name: 'Cooking Station', stationType: 'cooking_station', category: 'cooking', requiredSkillKey: 'cooking' },
+  { key: 'forge', name: 'Forge', stationType: 'forge', category: 'smithing', requiredMasteryKey: 'smithing' },
+  { key: 'workbench', name: 'Workbench', stationType: 'workbench', category: 'woodworking', requiredMasteryKey: 'woodworking' },
+  { key: 'sawmill', name: 'Sawmill', stationType: 'sawmill', category: 'woodworking', requiredMasteryKey: 'woodworking' },
+  { key: 'alchemy_table', name: 'Alchemy Table', stationType: 'alchemy_table', category: 'alchemy', requiredMasteryKey: 'alchemy' },
+  { key: 'cooking_station', name: 'Cooking Station', stationType: 'cooking_station', category: 'cooking', requiredMasteryKey: 'cooking' },
 ];
 
 /**
@@ -96,8 +96,8 @@ export const DEFAULT_RECIPES: RecipeDef[] = [
     name: 'Fondre du minerai de fer',
     description: 'Fait fondre 3 minerais de fer pour obtenir un lingot.',
     category: 'smithing',
-    requiredSkillKey: 'smithing',
-    requiredSkillLevel: 1,
+    requiredMasteryKey: 'smithing',
+    requiredMasteryLevel: 1,
     baseSuccessRate: 1.0,
     successBonusPerLevel: 0.0,
     minSuccessRate: 1.0,
@@ -114,8 +114,8 @@ export const DEFAULT_RECIPES: RecipeDef[] = [
     name: 'Façonner un manche brut',
     description: 'Assemble 3 bâtons de bois en un manche brut.',
     category: 'woodworking',
-    requiredSkillKey: 'woodworking',
-    requiredSkillLevel: 1,
+    requiredMasteryKey: 'woodworking',
+    requiredMasteryLevel: 1,
     baseSuccessRate: 1.0,
     successBonusPerLevel: 0.0,
     minSuccessRate: 1.0,
@@ -132,8 +132,8 @@ export const DEFAULT_RECIPES: RecipeDef[] = [
     name: 'Forger une lame brute',
     description: 'Forge 2 lingots de fer en une lame brute.',
     category: 'smithing',
-    requiredSkillKey: 'smithing',
-    requiredSkillLevel: 5,
+    requiredMasteryKey: 'smithing',
+    requiredMasteryLevel: 5,
     baseSuccessRate: 0.85,
     successBonusPerLevel: 0.02,
     minSuccessRate: 0.05,
@@ -150,8 +150,8 @@ export const DEFAULT_RECIPES: RecipeDef[] = [
     name: 'Assembler une épée basique',
     description: 'Assemble une lame brute et un manche pour forger une épée.',
     category: 'smithing',
-    requiredSkillKey: 'smithing',
-    requiredSkillLevel: 10,
+    requiredMasteryKey: 'smithing',
+    requiredMasteryLevel: 10,
     baseSuccessRate: 0.75,
     successBonusPerLevel: 0.02,
     minSuccessRate: 0.05,
@@ -236,8 +236,8 @@ export class CraftingService implements OnModuleInit {
         name: def.name,
         description: def.description ?? null,
         category: def.category,
-        requiredSkillKey: def.requiredSkillKey,
-        requiredSkillLevel: def.requiredSkillLevel,
+        requiredMasteryKey: def.requiredMasteryKey,
+        requiredMasteryLevel: def.requiredMasteryLevel,
         baseSuccessRate: def.baseSuccessRate,
         successBonusPerLevel: def.successBonusPerLevel,
         minSuccessRate: def.minSuccessRate,
@@ -290,7 +290,7 @@ export class CraftingService implements OnModuleInit {
         name: def.name,
         stationType: def.stationType,
         category: def.category,
-        requiredSkillKey: def.requiredSkillKey ?? null,
+        requiredMasteryKey: def.requiredMasteryKey ?? null,
         interactionRadiusWU: def.interactionRadiusWU ?? 1536,
         enabled: true,
       });

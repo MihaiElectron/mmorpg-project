@@ -29,14 +29,14 @@ export async function recalculateEquipmentStats(
   const finalAttack =
     character.baseAttack
     + equipAttack;
-    // future: + skillAttackModifier(characterId)
+    // future: + masteryAttackModifier(characterId)
     // future: + buffAttackModifier(characterId)
     // future: + talentAttackModifier(characterId)
 
   const finalDefense =
     character.baseDefense
     + equipDefense;
-    // future: + skillDefenseModifier(characterId)
+    // future: + masteryDefenseModifier(characterId)
     // future: + buffDefenseModifier(characterId)
     // future: + talentDefenseModifier(characterId)
 

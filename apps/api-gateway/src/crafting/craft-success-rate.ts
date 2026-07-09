@@ -6,7 +6,7 @@
  * rester indépendante du modèle de données. Utilisée par
  * `CraftJobService.complete()` sur le snapshot immuable du job.
  *
- * Formule : `clamp(baseSuccessRate + (skillLevel − requiredSkillLevel) ×
+ * Formule : `clamp(baseSuccessRate + (masteryLevel − requiredMasteryLevel) ×
  * successBonusPerLevel, minSuccessRate, maxSuccessRate)`.
  */
 export interface CraftSuccessRateParams {
@@ -14,13 +14,13 @@ export interface CraftSuccessRateParams {
   successBonusPerLevel: number;
   minSuccessRate: number;
   maxSuccessRate: number;
-  requiredSkillLevel: number;
-  skillLevel: number;
+  requiredMasteryLevel: number;
+  masteryLevel: number;
 }
 
 export function computeCraftSuccessRate(params: CraftSuccessRateParams): number {
   const raw =
     params.baseSuccessRate +
-    (params.skillLevel - params.requiredSkillLevel) * params.successBonusPerLevel;
+    (params.masteryLevel - params.requiredMasteryLevel) * params.successBonusPerLevel;
   return Math.min(params.maxSuccessRate, Math.max(params.minSuccessRate, raw));
 }

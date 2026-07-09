@@ -14,7 +14,7 @@ import { CraftJobService } from './craft-job.service';
 import { CraftIngredientResolver } from './craft-ingredient-resolver';
 import { CraftJobScheduler } from './craft-job.scheduler';
 import { CraftingController } from './crafting.controller';
-import { SkillsModule } from '../skills/skills.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 import { CharactersModule } from '../characters/characters.module';
 import { WorldModule } from '../world/world.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
@@ -34,7 +34,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
       CraftJobOutput,
       Item, // nécessaire pour la résolution des items au seed
     ]),
-    SkillsModule,               // pour SkillsService (helpers transactionnels craft)
+    MasteriesModule,               // pour MasteriesService (helpers transactionnels craft)
     CharactersModule,           // pour CharacterService (résolution characterId côté serveur)
     WorldModule,                // pour position serveur connectée
     ItemMaterializationModule,  // pour matérialisation des résultats de craft

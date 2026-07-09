@@ -13,7 +13,7 @@ import { CreatureRuntimeModule } from '../creature-runtime/creature-runtime.modu
 import { LootService } from '../world/loot.service';
 import { WorldItemsModule } from '../world-items/world-items.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
-import { SkillsModule } from '../skills/skills.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 
 @Module({
   imports: [
@@ -21,7 +21,7 @@ import { SkillsModule } from '../skills/skills.module';
     CommonModule,
     WorldModule,
     ProgressionModule,
-    SkillsModule,
+    MasteriesModule,
     CreatureRuntimeModule,
     WorldItemsModule,
     ItemMaterializationModule,

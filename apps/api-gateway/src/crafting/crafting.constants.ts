@@ -28,4 +28,4 @@ export const MIN_CRAFT_TIME_MESSAGE =
  * inférieur, par tentative). L'XP est accordée à la complétion du CraftJob, pas
  * au claim. Non configurable en DB — constante métier documentée.
  */
-export const FAILURE_SKILL_XP_MULTIPLIER = 0.25;
+export const FAILURE_MASTERY_XP_MULTIPLIER = 0.25;

@@ -138,12 +138,12 @@ export const MIN_CRAFT_TIME_MS = MIN_CRAFT_TIME_SECONDS * 1000;
 export const MIN_CRAFT_TIME_MESSAGE = "La durée minimale d'une recette est de 3 secondes.";
 
 /**
- * Miroir lecture seule de la règle serveur `FAILURE_SKILL_XP_MULTIPLIER`
+ * Miroir lecture seule de la règle serveur `FAILURE_MASTERY_XP_MULTIPLIER`
  * (crafting.constants.ts). Une tentative ratée n'accorde pas d'XP perso mais
  * 25 % de l'XP compétence d'un succès. Aperçu DevTools uniquement — le serveur
  * reste l'autorité de calcul.
  */
-export const FAILURE_SKILL_XP_MULTIPLIER = 0.25;
+export const FAILURE_MASTERY_XP_MULTIPLIER = 0.25;
 
 /**
  * Chance de succès EFFECTIVE au niveau requis (aperçu DevTools, lecture seule).

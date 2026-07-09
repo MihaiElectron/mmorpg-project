@@ -10,7 +10,7 @@ import { ItemModule } from '../items/item.module';
 import { Item } from '../items/entities/item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { InventoryModule } from '../inventory/inventory.module';
-import { SkillsModule } from '../skills/skills.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { ProgressionModule } from '../progression/progression.module';
 import { WorldModule } from '../world/world.module';
@@ -20,7 +20,7 @@ import { WorldModule } from '../world/world.module';
     TypeOrmModule.forFeature([Character, CharacterEquipment, Item, Inventory]),
     ItemModule,
     InventoryModule,
-    SkillsModule,
+    MasteriesModule,
     ItemTransferModule,
     ProgressionModule,
     WorldModule,

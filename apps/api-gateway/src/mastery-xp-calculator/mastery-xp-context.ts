@@ -1,4 +1,4 @@
-export type SkillDomain =
+export type MasteryDomain =
   | 'combat'
   | 'gathering'
   | 'crafting'
@@ -9,23 +9,23 @@ export type SkillDomain =
   | 'exploration';
 
 /**
- * Contexte transmis par chaque domaine au calculateur d'XP skill.
+ * Contexte transmis par chaque domaine au calculateur d'XP mastery.
  *
  * Le domaine est responsable de :
- *   - résoudre skillDefinitionKey (arme équipée, type de ressource, catégorie de recette…)
+ *   - résoudre masteryDefinitionKey (arme équipée, type de ressource, catégorie de recette…)
  *   - construire ce contexte
  *
  * Le calculateur est responsable uniquement de :
  *   - calculer xpAmount
  *
- * Aucune logique de résolution de skill ne figure dans calculateSkillXp.
+ * Aucune logique de résolution de mastery ne figure dans calculateMasteryXp.
  */
-export interface SkillXpContext {
-  /** Clé du skill qui doit progresser — résolue par le domaine appelant, jamais par le calculateur. */
-  skillDefinitionKey: string;
+export interface MasteryXpContext {
+  /** Clé du mastery qui doit progresser — résolue par le domaine appelant, jamais par le calculateur. */
+  masteryDefinitionKey: string;
 
   /** Domaine de l'action — utilisé pour déterminer l'XP de base. */
-  domain: SkillDomain;
+  domain: MasteryDomain;
 
   /**
    * Type précis de l'action effectuée.
@@ -51,8 +51,8 @@ export interface SkillXpContext {
   /** Niveau courant du personnage. */
   characterLevel: number;
 
-  /** Niveau courant du skill concerné. Permet d'ajuster l'XP selon l'écart skill/difficulté. */
-  skillLevel: number;
+  /** Niveau courant du mastery concerné. Permet d'ajuster l'XP selon l'écart mastery/difficulté. */
+  masteryLevel: number;
 
   /** Durée de l'action en millisecondes. null si non applicable. */
   duration: number | null;

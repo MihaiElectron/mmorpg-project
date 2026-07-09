@@ -118,8 +118,8 @@ describe('CraftingController', () => {
         name: 'Forge Recipe',
         description: null,
         category: 'smithing',
-        requiredSkillKey: 'smithing',
-        requiredSkillLevel: 1,
+        requiredMasteryKey: 'smithing',
+        requiredMasteryLevel: 1,
         baseSuccessRate: 1,
         successBonusPerLevel: 0,
         minSuccessRate: 1,
@@ -262,7 +262,7 @@ describe('CraftingController', () => {
       makeJob({
         craftTimeMs: 4000,
         grantedCharacterXp: 14,
-        grantedSkillXp: 34,
+        grantedMasteryXp: 34,
         ingredients: [
           { itemId: "item-ore", objectMode: "STACKABLE", requiredQuantity: 2, reservedQuantity: 4, consumedQuantity: 4 },
         ],
@@ -279,8 +279,8 @@ describe('CraftingController', () => {
     expect(dto).toMatchObject({
       craftTimeMs: 4000,
       grantedCharacterXp: 14,
-      grantedSkillXp: 34,
-      failureSkillXpMultiplier: 0.25,
+      grantedMasteryXp: 34,
+      failureMasteryXpMultiplier: 0.25,
       ingredients: [
         {
           itemId: "item-ore",
@@ -321,7 +321,7 @@ describe('CraftingController', () => {
       produced: [{ itemId: "item-bar", quantity: 1 }],
       ingredientsConsumed: [{ itemId: "item-ore", quantity: 4 }],
       grantedCharacterXp: 7,
-      grantedSkillXp: 21,
+      grantedMasteryXp: 21,
       completedAt: null,
       claimedAt: null,
     });
@@ -341,7 +341,7 @@ describe('CraftingController', () => {
       successes: 1,
       failures: 1,
       grantedCharacterXp: 7,
-      grantedSkillXp: 21,
+      grantedMasteryXp: 21,
       produced: [{ itemId: "item-bar", itemName: "Lingot de fer", itemImage: "/assets/bar.png", quantity: 1 }],
       ingredientsConsumed: [{ itemId: "item-ore", itemName: "Minerai de fer", itemImage: null, quantity: 4 }],
     });

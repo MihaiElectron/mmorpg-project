@@ -26,7 +26,7 @@ export class CraftingStationTemplate {
   category: string;
 
   @Column({ type: 'varchar', length: 64, nullable: true, default: null })
-  requiredSkillKey: string | null;
+  requiredMasteryKey: string | null;
 
   @Column({ type: 'int', default: 1536 })
   interactionRadiusWU: number;

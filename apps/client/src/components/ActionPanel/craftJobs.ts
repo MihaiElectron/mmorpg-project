@@ -40,8 +40,8 @@ export type CraftJobDto = {
   failures: number;
   // XP réellement accordée à la complétion (0 tant que RUNNING). Fournie par le serveur.
   grantedCharacterXp: number;
-  grantedSkillXp: number;
-  failureSkillXpMultiplier: number;
+  grantedMasteryXp: number;
+  failureMasteryXpMultiplier: number;
   ingredients: CraftJobIngredientDto[];
   outputs: CraftJobOutputDto[];
 };
@@ -65,7 +65,7 @@ export type CraftClaimSummary = {
   produced: CraftClaimItem[];
   ingredientsConsumed: CraftClaimItem[];
   grantedCharacterXp: number;
-  grantedSkillXp: number;
+  grantedMasteryXp: number;
   completedAt: string | null;
   claimedAt: string | null;
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StatField, kbHandlers, ackPromise, getSocket, type FieldDef } from "./adminPanel.shared";
-import { estimateCraftSkillXp } from "../ActionPanel/craftingRuntime";
+import { estimateCraftMasteryXp } from "../ActionPanel/craftingRuntime";
 import { ItemCatalog, ItemIcon } from "../DevTools/shared/ItemCatalog";
 import {
   replaceRecipeIngredients,
@@ -15,7 +15,7 @@ import {
   MIN_CRAFT_TIME_SECONDS,
   MIN_CRAFT_TIME_MS,
   MIN_CRAFT_TIME_MESSAGE,
-  FAILURE_SKILL_XP_MULTIPLIER,
+  FAILURE_MASTERY_XP_MULTIPLIER,
   effectiveSuccessAtRequiredLevelPercent,
 } from "../DevTools/modules/Recipes/recipeEditorHelpers";
 import type { ItemCatalogEntry } from "../DevTools/modules/Items/itemEditor.types";
@@ -30,8 +30,8 @@ type Recipe = {
   name: string;
   description: string | null;
   category: string;
-  requiredSkillKey: string;
-  requiredSkillLevel: number;
+  requiredMasteryKey: string;
+  requiredMasteryLevel: number;
   baseSuccessRate: number;
   successBonusPerLevel: number;
   minSuccessRate: number;
@@ -48,11 +48,11 @@ type Recipe = {
 };
 
 type ItemOption = ItemCatalogEntry;
-type SkillDef   = { key: string; name: string };
+type MasteryDef   = { key: string; name: string };
 
 type Props = {
   recipes: Recipe[];
-  skillDefinitions: SkillDef[];
+  masteryDefinitions: MasteryDef[];
   items: ItemOption[];
   onResult: (msg: string, ok: boolean) => void;
   onRecipeCreated: (r: Recipe) => void;
@@ -73,8 +73,8 @@ const STATION_TYPES = ["none", "forge", "workbench", "sawmill", "cooking_station
 const RECIPE_FIELDS: FieldDef[] = [
   { key: "name",                       label: "Nom",                  type: "text" },
   { key: "category",                   label: "Catégorie",            options: [...RECIPE_CATEGORIES] },
-  { key: "requiredSkillKey",           label: "Skill requis",         options: [] },
-  { key: "requiredSkillLevel",         label: "Niveau skill requis",  min: 1 },
+  { key: "requiredMasteryKey",           label: "Maîtrise requise",         options: [] },
+  { key: "requiredMasteryLevel",         label: "Niveau mastery requis",  min: 1 },
   { key: "baseSuccessRate",            label: "Taux base",            min: 0, step: 0.05 },
   { key: "successBonusPerLevel",       label: "Bonus/niv",            min: 0, step: 0.01 },
   { key: "minSuccessRate",             label: "Taux min",             min: 0, step: 0.05 },
@@ -88,7 +88,7 @@ const RECIPE_FIELDS: FieldDef[] = [
   { key: "consumeIngredientsOnFailure", label: "Consomme si échec",   options: ["true", "false"] },
 ];
 
-const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredSkillKey: "", requiredSkillLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, craftCharacterXpReward: 0, craftingDifficulty: 0, consumeIngredientsOnFailure: true, craftTimeMs: MIN_CRAFT_TIME_MS, stationType: "" };
+const NEW_RECIPE_DEFAULT = { key: "", name: "", category: "general", requiredMasteryKey: "", requiredMasteryLevel: 1, baseSuccessRate: 1.0, successBonusPerLevel: 0.02, minSuccessRate: 0.05, maxSuccessRate: 1.0, xpReward: 10, craftCharacterXpReward: 0, craftingDifficulty: 0, consumeIngredientsOnFailure: true, craftTimeMs: MIN_CRAFT_TIME_MS, stationType: "" };
 const NEW_ING_DEFAULT = { itemId: "", requiredQuantity: 1 };
 const NEW_RES_DEFAULT = { itemId: "", producedQuantity: 1, chance: 1.0 };
 
@@ -102,7 +102,7 @@ function fieldValue(recipe: Recipe, key: string): string {
 
 // ── RecipesSection ────────────────────────────────────────────────────────────
 
-export default function RecipesSection({ recipes, skillDefinitions, items, onResult, onRecipeCreated, onRecipeUpdated, onIngredientAdded, onIngredientRemoved, onResultAdded, onResultRemoved }: Props) {
+export default function RecipesSection({ recipes, masteryDefinitions, items, onResult, onRecipeCreated, onRecipeUpdated, onIngredientAdded, onIngredientRemoved, onResultAdded, onResultRemoved }: Props) {
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [createRecipeOpen, setCreateRecipeOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -115,9 +115,9 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
   const [resultQueries, setResultQueries] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
 
-  const skillKeyOptions = ["", ...skillDefinitions.map((sd) => sd.key)];
-  const skillKeyLabels  = ["—", ...skillDefinitions.map((sd) => `${sd.name} (${sd.key})`)];
-  const skillNameByKey  = Object.fromEntries(skillDefinitions.map((sd) => [sd.key, sd.name]));
+  const masteryKeyOptions = ["", ...masteryDefinitions.map((sd) => sd.key)];
+  const masteryKeyLabels  = ["—", ...masteryDefinitions.map((sd) => `${sd.name} (${sd.key})`)];
+  const masteryNameByKey  = Object.fromEntries(masteryDefinitions.map((sd) => [sd.key, sd.name]));
 
   function setDraftField(recipeId: string, field: string, value: string) {
     setDrafts((prev) => ({ ...prev, [recipeId]: { ...(prev[recipeId] ?? {}), [field]: value } }));
@@ -329,10 +329,10 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                     <><span className="admin-panel__recipe-sep"> · </span>
                     <span className="admin-panel__recipe-cat">{recipe.category}</span></>
                   )}
-                  {recipe.requiredSkillKey && (
+                  {recipe.requiredMasteryKey && (
                     <><span className="admin-panel__recipe-sep"> · </span>
-                    <span className="admin-panel__recipe-skill">
-                      skill: {skillNameByKey[recipe.requiredSkillKey] ?? recipe.requiredSkillKey}
+                    <span className="admin-panel__recipe-mastery">
+                      maîtrise : {masteryNameByKey[recipe.requiredMasteryKey] ?? recipe.requiredMasteryKey}
                     </span></>
                   )}
                 </div>
@@ -342,8 +342,8 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                 <div className="admin-panel__template-item">
                   <div className="admin-panel__template-stats">
                     {RECIPE_FIELDS.map((def) => {
-                      const fieldDef: FieldDef = def.key === "requiredSkillKey"
-                        ? { ...def, options: skillKeyOptions, optionLabels: skillKeyLabels }
+                      const fieldDef: FieldDef = def.key === "requiredMasteryKey"
+                        ? { ...def, options: masteryKeyOptions, optionLabels: masteryKeyLabels }
                         : def;
                       return (
                         <label key={def.key} className="admin-panel__template-stat">
@@ -380,9 +380,9 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                     const min = Number(draft?.minSuccessRate ?? recipe.minSuccessRate);
                     const max = Number(draft?.maxSuccessRate ?? recipe.maxSuccessRate);
                     const charXp = Number(draft?.craftCharacterXpReward ?? recipe.craftCharacterXpReward);
-                    const successSkillXp = estimateCraftSkillXp(difficulty);
-                    const failureSkillXp = Math.floor(successSkillXp * FAILURE_SKILL_XP_MULTIPLIER);
-                    const skillKey = recipe.requiredSkillKey || "—";
+                    const successMasteryXp = estimateCraftMasteryXp(difficulty);
+                    const failureMasteryXp = Math.floor(successMasteryXp * FAILURE_MASTERY_XP_MULTIPLIER);
+                    const masteryKey = recipe.requiredMasteryKey || "—";
                     return (
                       <div className="admin-panel__field-hint">
                         <p>
@@ -392,9 +392,9 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
                           par min / max.
                         </p>
                         <p>
-                          <strong>Progression</strong> — Succès : +{charXp} XP perso · +{successSkillXp} XP {skillKey}.
-                          {" "}Échec : +0 XP perso · +{failureSkillXp} XP {skillKey}{" "}
-                          ({Math.round(FAILURE_SKILL_XP_MULTIPLIER * 100)} % de l'XP skill succès).
+                          <strong>Progression</strong> — Succès : +{charXp} XP perso · +{successMasteryXp} XP {masteryKey}.
+                          {" "}Échec : +0 XP perso · +{failureMasteryXp} XP {masteryKey}{" "}
+                          ({Math.round(FAILURE_MASTERY_XP_MULTIPLIER * 100)} % de l'XP maîtrise succès).
                           {" "}L'XP est accordée à la complétion du CraftJob, pas au claim (estimation Runtime, lecture seule).
                         </p>
                       </div>
@@ -572,18 +572,18 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
           </select>
         </label>
         <label className="admin-panel__template-stat">
-          <span className="admin-panel__template-stat-label">Skill requis</span>
+          <span className="admin-panel__template-stat-label">Maîtrise requise</span>
           <select className="admin-panel__template-stat-input"
-            value={newRecipe.requiredSkillKey}
-            onChange={(e) => setNewRecipe((prev) => ({ ...prev, requiredSkillKey: e.target.value }))}
+            value={newRecipe.requiredMasteryKey}
+            onChange={(e) => setNewRecipe((prev) => ({ ...prev, requiredMasteryKey: e.target.value }))}
             {...kbHandlers}>
-            {skillKeyOptions.map((k, i) => (
-              <option key={k} value={k}>{skillKeyLabels[i]}</option>
+            {masteryKeyOptions.map((k, i) => (
+              <option key={k} value={k}>{masteryKeyLabels[i]}</option>
             ))}
           </select>
         </label>
         {([
-          { f: "requiredSkillLevel",   label: "Niv. requis",  step: 1 },
+          { f: "requiredMasteryLevel",   label: "Niv. requis",  step: 1 },
           { f: "baseSuccessRate",      label: "Taux base",    step: 0.05 },
           { f: "minSuccessRate",       label: "Taux min",     step: 0.05 },
           { f: "maxSuccessRate",       label: "Taux max",     step: 0.05 },
@@ -612,7 +612,7 @@ export default function RecipesSection({ recipes, skillDefinitions, items, onRes
       )}
       <p className="admin-panel__field-hint">
         Station requise = où cette recette peut être fabriquée (forge, workbench…).
-        Skill requis = compétence et niveau du personnage nécessaires.
+        Maîtrise requise = compétence et niveau du personnage nécessaires.
         Toute recette crée un CraftJob (durée minimale {MIN_CRAFT_TIME_SECONDS} s) : le joueur réclame son résultat une fois terminé.
       </p>
       <button

@@ -1,5 +1,5 @@
-import { SkillDomain, SkillXpContext } from './skill-xp-context';
-import { SkillXpResult } from './skill-xp-result';
+import { MasteryDomain, MasteryXpContext } from './mastery-xp-context';
+import { MasteryXpResult } from './mastery-xp-result';
 
 // ---------------------------------------------------------------------------
 // Constantes de calcul d'XP
@@ -9,7 +9,7 @@ import { SkillXpResult } from './skill-xp-result';
  * XP de base accordée par domaine et action.
  * Valeur par défaut si domaine/action non référencé : DEFAULT_BASE_XP.
  */
-const BASE_XP: Partial<Record<SkillDomain, Record<string, number>>> = {
+const BASE_XP: Partial<Record<MasteryDomain, Record<string, number>>> = {
   combat: {
     attack_hit: 5,
     ranged_hit: 5,
@@ -45,7 +45,7 @@ const MAX_QUALITY_BONUS = 5;
 // Calcul du montant d'XP
 // ---------------------------------------------------------------------------
 
-function computeXpAmount(context: SkillXpContext): number {
+function computeXpAmount(context: MasteryXpContext): number {
   if (!context.success) return 0;
 
   const base = BASE_XP[context.domain]?.[context.action] ?? DEFAULT_BASE_XP;
@@ -70,15 +70,15 @@ function computeXpAmount(context: SkillXpContext): number {
  * Calcule le montant d'XP à accorder pour une action gameplay.
  *
  * Fonction pure : aucun I/O, aucun effet de bord, aucun accès réseau ou BD.
- * Aucune logique de résolution de skill — le domaine appelant fournit skillDefinitionKey.
+ * Aucune logique de résolution de mastery — le domaine appelant fournit masteryDefinitionKey.
  *
  * Retourne null si :
  * - l'action a échoué (success: false)
  * - le calcul produit 0 XP
  */
-export function calculateSkillXp(context: SkillXpContext): SkillXpResult | null {
+export function calculateMasteryXp(context: MasteryXpContext): MasteryXpResult | null {
   const xpAmount = computeXpAmount(context);
   if (xpAmount <= 0) return null;
 
-  return { skillDefinitionKey: context.skillDefinitionKey, xpAmount };
+  return { masteryDefinitionKey: context.masteryDefinitionKey, xpAmount };
 }

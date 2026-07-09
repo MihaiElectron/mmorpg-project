@@ -9,11 +9,11 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Character } from '../../characters/entities/character.entity';
-import { SkillDefinition } from './skill-definition.entity';
+import { MasteryDefinition } from './mastery-definition.entity';
 
-@Entity('player_skill')
-@Unique(['characterId', 'skillDefinitionId'])
-export class PlayerSkill {
+@Entity('player_mastery')
+@Unique(['characterId', 'masteryDefinitionId'])
+export class PlayerMastery {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -24,12 +24,12 @@ export class PlayerSkill {
   @Column()
   characterId: string;
 
-  @ManyToOne(() => SkillDefinition, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'skillDefinitionId' })
-  skillDefinition: SkillDefinition;
+  @ManyToOne(() => MasteryDefinition, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'masteryDefinitionId' })
+  masteryDefinition: MasteryDefinition;
 
   @Column()
-  skillDefinitionId: string;
+  masteryDefinitionId: string;
 
   // Level dénormalisé — recalculé à chaque addXp, jamais lu sans recalcul
   @Column({ type: 'int', default: 1 })
