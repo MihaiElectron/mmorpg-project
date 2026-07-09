@@ -12,6 +12,9 @@ import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalcula
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { UpdateDerivedStatDefinitionDto } from '../derived-stats/dto/update-derived-stat-definition.dto';
 import { PreviewDerivedStatsDto } from '../derived-stats/dto/preview-derived-stats.dto';
+import { ActiveSkillsService } from '../active-skills/active-skills.service';
+import { CreateSkillDefinitionDto } from '../active-skills/dto/create-skill-definition.dto';
+import { UpdateSkillDefinitionDto } from '../active-skills/dto/update-skill-definition.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,6 +26,7 @@ export class AdminController {
     private readonly resourcesService: ResourcesService,
     private readonly buildingsService: BuildingsService,
     private readonly derivedStatsService: DerivedStatsService,
+    private readonly activeSkillsService: ActiveSkillsService,
   ) {}
 
   @Get('overview')
@@ -156,6 +160,40 @@ export class AdminController {
   @Post('derived-stat-definitions/preview')
   previewDerivedStats(@Body() dto: PreviewDerivedStatsDto) {
     return this.derivedStatsService.previewDerivedStats(dto);
+  }
+
+  // ── Skills actifs — catalogue (SkillDefinition, ADR-0019 V1-A) ──────────────
+
+  @Get('skill-definitions')
+  getSkillDefinitions() {
+    return this.activeSkillsService.listDefinitions();
+  }
+
+  @Get('skill-definitions/:key')
+  getSkillDefinition(@Param('key') key: string) {
+    return this.activeSkillsService.getDefinition(key);
+  }
+
+  @Post('skill-definitions')
+  createSkillDefinition(@Body() dto: CreateSkillDefinitionDto) {
+    return this.activeSkillsService.createDefinition(dto);
+  }
+
+  @Patch('skill-definitions/:key')
+  updateSkillDefinition(
+    @Param('key') key: string,
+    @Body() dto: UpdateSkillDefinitionDto,
+  ) {
+    return this.activeSkillsService.updateDefinition(key, dto);
+  }
+
+  /**
+   * Suppression physique (sûre en V1-A : aucune référence). Pour retirer un
+   * skill du jeu en préservant sa `key`, préférer PATCH `{ enabled: false }`.
+   */
+  @Delete('skill-definitions/:key')
+  deleteSkillDefinition(@Param('key') key: string) {
+    return this.activeSkillsService.deleteDefinition(key);
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

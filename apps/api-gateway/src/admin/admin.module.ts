@@ -30,6 +30,7 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { MasteriesModule } from '../masteries/masteries.module';
 import { GameConfigModule } from '../game-config/game-config.module';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
+import { ActiveSkillsModule } from '../active-skills/active-skills.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
     MasteriesModule,
     GameConfigModule,
     DerivedStatsModule,
+    ActiveSkillsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

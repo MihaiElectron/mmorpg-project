@@ -26,7 +26,7 @@ describe('AdminController — movement metrics', () => {
 
     return {
       adminService,
-      controller: new AdminController(adminService as any, {} as any, {} as any, {} as any, {} as any),
+      controller: new AdminController(adminService as any, {} as any, {} as any, {} as any, {} as any, {} as any),
     };
   }
 

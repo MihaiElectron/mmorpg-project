@@ -3,9 +3,14 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 /**
  * Versionne le renommage Skill → Mastery (refactor vocabulaire ADR-0018 §4-5).
  *
- * Non destructive : uniquement des `RENAME TABLE` / `RENAME COLUMN`, aucune
- * donnée supprimée, aucun DROP. Postgres met à jour automatiquement les
- * contraintes, index et clés étrangères qui référencent les objets renommés.
+ * Non destructive : uniquement des `RENAME TABLE` / `RENAME COLUMN` /
+ * `RENAME CONSTRAINT`, aucune donnée supprimée, aucun DROP. Postgres met à jour
+ * automatiquement les clés étrangères qui référencent les objets renommés, MAIS
+ * ne renomme PAS les noms de contrainte/index (PK, UNIQUE) lors d'un
+ * `RENAME TABLE` : ce fichier renomme donc explicitement la PK et la contrainte
+ * UNIQUE héritées de l'ancien `skill_definition` vers des noms propres à
+ * `mastery_definition`, pour éviter une collision de noms schema-globaux quand
+ * une table `skill_definition` est réintroduite (Skills actifs V1).
  *
  * IMPORTANT — état de la base locale de développement :
  * ce renommage a déjà été appliqué manuellement en SQL direct le 2026-07-09
@@ -31,6 +36,23 @@ export class RenameSkillToMastery1783641600000 implements MigrationInterface {
     // Tables
     await queryRunner.query('ALTER TABLE skill_definition RENAME TO mastery_definition');
     await queryRunner.query('ALTER TABLE player_skill RENAME TO player_mastery');
+
+    // Contraintes index-backed héritées de l'ancien `skill_definition`.
+    // Postgres NE renomme PAS les noms de contrainte/index lors d'un
+    // `RENAME TABLE` : `mastery_definition` conserverait donc les noms générés
+    // par TypeORM pour `skill_definition` (`PK_…`/`UQ_…`, hash de table+colonne).
+    // Ces noms sont schema-globaux (adossés à un index) : à la réintroduction
+    // d'une table `skill_definition` (Skills actifs V1), TypeORM recalcule les
+    // MÊMES noms → collision `relation "…" already exists`. On les renomme donc
+    // vers des noms propres à `mastery_definition`. Aucune donnée touchée
+    // (RENAME uniquement). Les NOT NULL (`skill_definition_*_not_null`) sont
+    // table-scoped → aucune collision, laissés tels quels.
+    await queryRunner.query(
+      'ALTER TABLE mastery_definition RENAME CONSTRAINT "PK_ab618148005f56f13c23bfb4323" TO "PK_mastery_definition_id"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE mastery_definition RENAME CONSTRAINT "UQ_0afbddf73e142606f4147f3de00" TO "UQ_mastery_definition_key"',
+    );
 
     // Colonne de jointure
     await queryRunner.query(
@@ -99,6 +121,18 @@ export class RenameSkillToMastery1783641600000 implements MigrationInterface {
     );
 
     await queryRunner.query('ALTER TABLE player_mastery RENAME TO player_skill');
+
+    // Restaurer les noms de contrainte d'origine AVANT de renommer la table :
+    // on référence encore la table par son nom courant `mastery_definition`.
+    // Après le rename ci-dessous, `skill_definition` retrouve ses noms
+    // `PK_…`/`UQ_…` historiques.
+    await queryRunner.query(
+      'ALTER TABLE mastery_definition RENAME CONSTRAINT "PK_mastery_definition_id" TO "PK_ab618148005f56f13c23bfb4323"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE mastery_definition RENAME CONSTRAINT "UQ_mastery_definition_key" TO "UQ_0afbddf73e142606f4147f3de00"',
+    );
+
     await queryRunner.query('ALTER TABLE mastery_definition RENAME TO skill_definition');
   }
 }

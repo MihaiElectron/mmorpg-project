@@ -639,6 +639,105 @@ export class CreaturesService implements OnModuleInit {
     return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate, masteryUpdate };
   }
 
+  /**
+   * Applique des dégâts de skill (Skills V1-D) à une créature.
+   *
+   * Point d'entrée réutilisé par le cast de skill : la logique métier du skill
+   * (skill valide, cooldown, coût, stats, `calculateSkillEffect`) vit dans
+   * `SkillCastService`. Cette méthode ne s'occupe QUE du côté créature —
+   * validations créature (vivante, même map, portée) puis application des
+   * dégâts, mort/respawn, XP personnage de kill et loot — en réutilisant
+   * exactement le pipeline de `attack()`.
+   *
+   * Différences volontaires avec `attack()` :
+   *   - `rawAmount` est fourni par l'appelant (déjà calculé serveur), pas dérivé
+   *     de l'arme ;
+   *   - la défense de la créature est appliquée via `calculateCombatDamage`
+   *     (`minimumAttack: 0` — le skill a déjà produit son montant ;
+   *     `minimumDamage: 1` — même plancher que le combat) ;
+   *   - pas de cooldown d'auto-attaque, pas de riposte, pas d'XP mastery en V1-D.
+   *
+   * `attackerPosition` provient de l'état runtime live serveur (jamais du client).
+   */
+  async applySkillDamage(
+    creatureId: string,
+    characterId: string,
+    attackerPosition: { worldX: number; worldY: number; mapId: number },
+    rawAmount: number,
+    rangeWU: number,
+  ): Promise<AttackResult> {
+    const creature = this.liveCreatures.get(creatureId);
+    if (!creature) return { success: false, error: 'Creature not found' };
+    if (creature.state === 'dead') return { success: false, error: 'Creature already dead' };
+    if (creature.worldX == null || creature.worldY == null) {
+      return { success: false, error: 'Target out of range' };
+    }
+    if (creature.mapId != null && attackerPosition.mapId !== creature.mapId) {
+      return { success: false, error: 'Target out of range' };
+    }
+    const distance = chebyshevDistanceWU(attackerPosition, {
+      worldX: creature.worldX,
+      worldY: creature.worldY,
+    });
+    if (distance > rangeWU) return { success: false, error: 'Target out of range' };
+
+    const { template } = creature.spawn;
+
+    // Défense créature dérivée (même source que le combat), appliquée au montant
+    // de skill déjà calculé serveur.
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+
+    const damageResult = calculateCombatDamage({
+      attackerValue: Math.max(0, rawAmount),
+      targetDefense: derived.defenseTotal,
+      minimumAttack: 0,
+      minimumDamage: 1,
+      hpBefore: creature.health,
+    });
+    const damage = damageResult.finalDamage;
+
+    creature.health = damageResult.hpAfter;
+    if (creature.health === 0) {
+      creature.state = 'dead';
+      this.patrolStates.delete(creature.id);
+      const delay = creature.respawnDelayMs ?? creature.spawn.respawnDelayMs ?? creature.spawn.template.respawnDelayMs;
+      creature.respawnAt = new Date(Date.now() + delay);
+      setTimeout(() => this.respawnCreature(creature.id), delay);
+    }
+    await this.creatureRepository.save(creature);
+
+    // XP personnage de kill uniquement (pas d'XP mastery en V1-D).
+    let characterXpUpdate: CharacterXpResult | undefined;
+    if (creature.health === 0 && template.killCharacterXpReward > 0) {
+      try {
+        characterXpUpdate = await this.dataSource.transaction((manager) =>
+          this.progression.applyCharacterXpInTx(
+            characterId,
+            template.killCharacterXpReward,
+            ProgressionSource.COMBAT,
+            manager,
+          ),
+        );
+      } catch (err) {
+        console.warn(`[CreaturesService] XP skill ignorée pour ${characterId}: ${(err as Error).message}`);
+      }
+    }
+
+    let loot: LootEntry[] | undefined;
+    if (creature.health === 0) {
+      const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
+      if (generated.length > 0) loot = generated;
+    }
+
+    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, loot, characterXpUpdate };
+  }
+
   private resolveCombatMasteryKey(character: Character): string | null {
     const equipment = character.equipment ?? [];
     const ranged = equipment.find(
