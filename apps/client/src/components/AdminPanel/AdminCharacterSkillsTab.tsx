@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSocket, ackPromise } from "./adminPanel.shared";
+import { onSkillDefinitionsChanged } from "../DevTools/modules/Skills/skillEvents";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -57,6 +58,8 @@ export default function AdminCharacterSkillsTab({ characterId }: { characterId: 
 
   useEffect(() => {
     void load();
+    // Refetch si le catalogue change depuis le Skill Editor (autoUnlock/kind/…).
+    return onSkillDefinitionsChanged(() => void load());
   }, [load]);
 
   const mutate = useCallback(

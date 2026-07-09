@@ -196,6 +196,21 @@ $skills-list-max-height: 320px;
       align-items: center;
       gap: vars.$dt-gap-xs;
       width: auto;
+      cursor: pointer;
+
+      // Le reset global (_reset.scss) applique `appearance: none` à tout input :
+      // on restaure le rendu natif de la case pour la rendre visible/cochable.
+      input[type="checkbox"] {
+        -webkit-appearance: checkbox;
+        -moz-appearance: checkbox;
+        appearance: auto;
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: vars.$color-text-gold;
+      }
     }
   }
 

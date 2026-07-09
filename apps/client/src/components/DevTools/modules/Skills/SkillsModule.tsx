@@ -13,6 +13,7 @@ import type {
   KeySuggestion,
 } from "./skills.types";
 import SkillEditorForm from "./SkillEditorForm";
+import { notifySkillDefinitionsChanged } from "./skillEvents";
 import { useConfirmDialog } from "../../../common/useConfirmDialog";
 import "./SkillsModule.scss";
 
@@ -87,6 +88,8 @@ export default function SkillsModule() {
       }
       await reload();
       setSelection(null);
+      // Signale aux surfaces dérivées (SkillActionBar, panneau admin) de refetch.
+      notifySkillDefinitionsChanged();
     } catch (err) {
       setMessage((err as Error).message);
     } finally {
@@ -100,6 +103,7 @@ export default function SkillsModule() {
     try {
       await updateSkillDefinition(skill.key, { enabled: !skill.enabled });
       await reload();
+      notifySkillDefinitionsChanged();
     } catch (err) {
       setMessage((err as Error).message);
     } finally {
@@ -131,6 +135,7 @@ export default function SkillsModule() {
         setSelection(null);
       }
       await reload();
+      notifySkillDefinitionsChanged();
     } catch (err) {
       setMessage((err as Error).message);
     } finally {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMyActiveSkills, type PlayerActiveSkill } from "../ActionPanel/activeSkillsApi";
 import { getActionPanelStore } from "../../store/actionPanel.store";
+import { onSkillDefinitionsChanged } from "../DevTools/modules/Skills/skillEvents";
 
 /**
  * Raccourcis clavier par slot (AZERTY-friendly : lettres, pas de chiffres qui
@@ -82,9 +83,13 @@ export default function SkillActionBar() {
     const onReload = () => loadSkills();
     socket?.on("character:reload", onReload);
 
+    // Le catalogue de skills a changé (DevTools Skill Editor) → refetch ciblé.
+    const offCatalog = onSkillDefinitionsChanged(loadSkills);
+
     return () => {
       window.removeEventListener("focus", onFocus);
       socket?.off("character:reload", onReload);
+      offCatalog();
     };
   }, [loadSkills]);
 

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AssetPicker from "../../AssetPicker";
 import KeyValueRowsEditor from "./KeyValueRowsEditor";
+import { hasFormChanges } from "../../shared/formDirty";
 import {
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
@@ -76,6 +77,18 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
   };
 }
 
+/** Snapshot canonique de l'état d'édition (pour la détection dirty). */
+function snapshotFromSkill(skill: SkillDefinitionDto | null) {
+  return {
+    keyInput: skill?.key ?? "",
+    draft: draftFrom(skill),
+    requiredMasteries: skill?.requiredMasteries ?? {},
+    primaryCoef: skill?.scaling?.primaryCoefficients ?? {},
+    derivedCoef: skill?.scaling?.derivedCoefficients ?? {},
+    masteryCoef: skill?.scaling?.masteryCoefficients ?? {},
+  };
+}
+
 interface SkillEditorFormProps {
   mode: "create" | "edit";
   /** Skill édité (edit) — sert de valeurs initiales. Null en création. */
@@ -115,6 +128,11 @@ export default function SkillEditorForm({
   );
   const [localError, setLocalError] = useState<string | null>(null);
 
+  // Snapshot de référence figé au (ré)chargement du formulaire → base de la
+  // détection dirty. Recalculé uniquement sur changement de cible (resetToken),
+  // jamais à la frappe.
+  const initialSnapshotRef = useRef(snapshotFromSkill(skill));
+
   // Réinitialise tout le formulaire quand la cible change.
   useEffect(() => {
     setKeyInput(skill?.key ?? "");
@@ -124,9 +142,20 @@ export default function SkillEditorForm({
     setDerivedCoef(skill?.scaling?.derivedCoefficients ?? {});
     setMasteryCoef(skill?.scaling?.masteryCoefficients ?? {});
     setLocalError(null);
+    initialSnapshotRef.current = snapshotFromSkill(skill);
     // resetToken est le déclencheur voulu ; skill est lu à travers lui.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetToken]);
+
+  // Dirty : l'état courant diffère-t-il du snapshot initial ?
+  const isDirty = hasFormChanges(initialSnapshotRef.current, {
+    keyInput,
+    draft,
+    requiredMasteries,
+    primaryCoef,
+    derivedCoef,
+    masteryCoef,
+  });
 
   function setField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -404,7 +433,7 @@ export default function SkillEditorForm({
               checked={draft.enabled}
               onChange={(e) => setField("enabled", e.target.checked)}
             />
-            <span className="skills-editor__label">enabled</span>
+            <span className="skills-editor__label">Skill activé (enabled)</span>
           </label>
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
@@ -412,7 +441,7 @@ export default function SkillEditorForm({
               checked={draft.autoUnlock}
               onChange={(e) => setField("autoUnlock", e.target.checked)}
             />
-            <span className="skills-editor__label">autoUnlock</span>
+            <span className="skills-editor__label">Auto-débloqué (autoUnlock)</span>
           </label>
         </div>
       </fieldset>
@@ -473,13 +502,16 @@ export default function SkillEditorForm({
           onClick={onCancel}
           disabled={busy}
         >
-          Annuler
+          {/* Reste actif : c'est aussi la seule façon de fermer l'éditeur.
+              Sans modification, il devient un simple « Fermer ». */}
+          {isDirty ? "Annuler" : "Fermer"}
         </button>
         <button
           type="button"
           className="skills-editor__btn skills-editor__btn--confirm"
           onClick={handleSubmit}
-          disabled={busy}
+          disabled={busy || !isDirty}
+          title={!isDirty ? "Aucune modification à enregistrer" : undefined}
         >
           {busy ? "…" : mode === "create" ? "Créer" : "Enregistrer"}
         </button>
