@@ -1,6 +1,6 @@
 // apps/api-gateway/src/world/world.service.ts
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { WorldSocket } from '../types/world-socket';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -130,7 +130,7 @@ export type JoinedPlayer = {
 };
 
 @Injectable()
-export class WorldService implements OnModuleInit {
+export class WorldService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(WorldService.name);
   private connectedPlayers = new Map<string, ConnectedPlayer>();
   // Serveur Socket.IO enregistré par WorldGateway.afterInit — permet aux
@@ -463,6 +463,62 @@ export class WorldService implements OnModuleInit {
       worldY: wuY,
       mapId: wuMap,
     });
+  }
+
+  /**
+   * Flush en DB de la position de TOUS les joueurs actuellement connectés.
+   *
+   * Filet de sécurité pour l'arrêt gracieux du serveur (SIGINT/SIGTERM) : sans
+   * lui, un redémarrage backend avec un joueur connecté perdrait la dernière
+   * position live, `handleDisconnect` n'étant pas garanti sur arrêt du process.
+   *
+   * Réutilise `persistPlayerPosition` (point d'écriture unique de la position
+   * joueur) — aucune logique d'update DB dupliquée. `Promise.allSettled` :
+   * l'échec d'un joueur n'empêche jamais la sauvegarde des autres. Les joueurs
+   * sans `characterId` valide sont ignorés (aucune écriture).
+   */
+  async flushConnectedPlayerPositions(): Promise<{ saved: number; failed: number }> {
+    const players = Array.from(this.connectedPlayers.values()).filter(
+      (p) => p && typeof p.characterId === 'string' && p.characterId.length > 0,
+    );
+    if (players.length === 0) return { saved: 0, failed: 0 };
+
+    const results = await Promise.allSettled(
+      players.map((p) => this.persistPlayerPosition(p)),
+    );
+
+    let saved = 0;
+    let failed = 0;
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        saved++;
+      } else {
+        failed++;
+        this.logger.error(
+          `Flush position échoué pour character ${players[i].characterId}: ${
+            (result.reason as Error)?.message ?? result.reason
+          }`,
+        );
+      }
+    });
+
+    this.logger.log(`Flush positions à l'arrêt : ${saved} sauvegardée(s), ${failed} échec(s).`);
+    return { saved, failed };
+  }
+
+  /**
+   * Hook NestJS (activé par `app.enableShutdownHooks()` dans main.ts) : persiste
+   * les positions live avant l'arrêt. Ne relance jamais : un échec de flush ne
+   * doit pas bloquer l'arrêt du serveur.
+   */
+  async onApplicationShutdown(signal?: string): Promise<void> {
+    try {
+      await this.flushConnectedPlayerPositions();
+    } catch (err) {
+      this.logger.error(
+        `Flush des positions au shutdown (${signal ?? 'unknown'}) échoué : ${(err as Error).message}`,
+      );
+    }
   }
 
   getAllConnectedPlayers(): ConnectedPlayer[] {

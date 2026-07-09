@@ -73,6 +73,17 @@ async function bootstrap() {
 
   /**
    * ---------------------------------------------------------------------------
+   * Shutdown hooks (OBLIGATOIRE pour la persistance à l'arrêt gracieux)
+   * ---------------------------------------------------------------------------
+   * Active les hooks de cycle de vie NestJS (OnApplicationShutdown) sur SIGINT/
+   * SIGTERM. WorldService s'en sert pour flusher en DB la position des joueurs
+   * connectés — sinon un redémarrage backend avec un client connecté perd la
+   * dernière position live (handleDisconnect n'étant pas garanti).
+   */
+  app.enableShutdownHooks();
+
+  /**
+   * ---------------------------------------------------------------------------
    * Démarrage du serveur
    * ---------------------------------------------------------------------------
    */

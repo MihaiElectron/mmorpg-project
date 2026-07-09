@@ -792,3 +792,112 @@ describe("WorldService.validateInteraction", () => {
     expect(svc.validateInteraction(char, building, radius)).not.toBeNull();
   });
 });
+
+// ─── flushConnectedPlayerPositions — persistance à l'arrêt gracieux ──────────
+
+describe('WorldService.flushConnectedPlayerPositions', () => {
+  function makeRepos() {
+    const charRepo = {
+      find: jest.fn(), findOne: jest.fn(), update: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+    };
+    const respawnRepo = { find: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
+    return { charRepo, respawnRepo };
+  }
+
+  function silenceLogs(svc: WorldService) {
+    jest.spyOn((svc as any).logger, 'log').mockImplementation(() => undefined);
+    jest.spyOn((svc as any).logger, 'error').mockImplementation(() => undefined);
+  }
+
+  it('persiste la dernière position live après joinPlayer + updatePlayer', async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    charRepo.findOne.mockResolvedValue({
+      id: 'c-1', userId: 'u-1', worldX: 1600, worldY: 8000, mapId: 1, sex: 'male', name: 'Hero',
+    });
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+
+    const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+    await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+    // Fenêtre large pour éviter tout rejet du distance gate sur un déplacement modeste.
+    primeMovement(svc, socket.id, { validatedAgoMs: 1000, proposalAgoMs: 1000 });
+
+    const result = svc.updatePlayer(socket, { worldX: 1700, worldY: 8100, mapId: 1 });
+    expect(result?.status).toBe('accepted');
+
+    const flush = await svc.flushConnectedPlayerPositions();
+
+    expect(charRepo.update).toHaveBeenCalledWith('c-1', { worldX: 1700, worldY: 8100, mapId: 1 });
+    expect(flush).toEqual({ saved: 1, failed: 0 });
+  });
+
+  it('flush plusieurs joueurs connectés', async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+
+    injectPlayer(svc, makeSocket({ id: 's-1' }), makePlayer({ socketId: 's-1', characterId: 'c-1', worldX: 10, worldY: 20 }));
+    injectPlayer(svc, makeSocket({ id: 's-2' }), makePlayer({ socketId: 's-2', characterId: 'c-2', worldX: 30, worldY: 40 }));
+
+    const flush = await svc.flushConnectedPlayerPositions();
+
+    expect(charRepo.update).toHaveBeenCalledTimes(2);
+    expect(charRepo.update).toHaveBeenCalledWith('c-1', { worldX: 10, worldY: 20, mapId: 1 });
+    expect(charRepo.update).toHaveBeenCalledWith('c-2', { worldX: 30, worldY: 40, mapId: 1 });
+    expect(flush).toEqual({ saved: 2, failed: 0 });
+  });
+
+  it("l'échec d'un joueur n'empêche pas la sauvegarde des autres", async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    charRepo.update.mockImplementation((id: string) =>
+      id === 'c-bad' ? Promise.reject(new Error('DB down')) : Promise.resolve(undefined),
+    );
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+
+    injectPlayer(svc, makeSocket({ id: 's-1' }), makePlayer({ socketId: 's-1', characterId: 'c-bad' }));
+    injectPlayer(svc, makeSocket({ id: 's-2' }), makePlayer({ socketId: 's-2', characterId: 'c-ok', worldX: 55, worldY: 66 }));
+
+    const flush = await svc.flushConnectedPlayerPositions();
+
+    expect(charRepo.update).toHaveBeenCalledWith('c-ok', { worldX: 55, worldY: 66, mapId: 1 });
+    expect(flush).toEqual({ saved: 1, failed: 1 });
+  });
+
+  it('ignore un joueur sans characterId valide (aucune écriture)', async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+
+    injectPlayer(svc, makeSocket({ id: 's-1' }), makePlayer({ socketId: 's-1', characterId: '' }));
+    injectPlayer(svc, makeSocket({ id: 's-2' }), makePlayer({ socketId: 's-2', characterId: 'c-ok', worldX: 7, worldY: 8 }));
+
+    const flush = await svc.flushConnectedPlayerPositions();
+
+    expect(charRepo.update).toHaveBeenCalledTimes(1);
+    expect(charRepo.update).toHaveBeenCalledWith('c-ok', { worldX: 7, worldY: 8, mapId: 1 });
+    expect(flush).toEqual({ saved: 1, failed: 0 });
+  });
+
+  it('ne persiste rien si aucun joueur connecté', async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+
+    const flush = await svc.flushConnectedPlayerPositions();
+
+    expect(charRepo.update).not.toHaveBeenCalled();
+    expect(flush).toEqual({ saved: 0, failed: 0 });
+  });
+
+  it('onApplicationShutdown déclenche le flush sans relancer en cas d\'erreur', async () => {
+    const { charRepo, respawnRepo } = makeRepos();
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    silenceLogs(svc);
+    const flushSpy = jest.spyOn(svc, 'flushConnectedPlayerPositions').mockRejectedValue(new Error('boom'));
+
+    await expect(svc.onApplicationShutdown('SIGINT')).resolves.toBeUndefined();
+    expect(flushSpy).toHaveBeenCalled();
+  });
+});

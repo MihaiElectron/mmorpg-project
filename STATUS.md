@@ -64,6 +64,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | M4 Phase C — bounds et walkability serveur absents (le distance gate ne vérifie ni les limites de map ni les collisions) | Medium | M4 Phase C |
 | — | `admin:teleport` téléporte l'admin lui-même (cible = source de coordonnées uniquement), sans mapId ni reset combat ni `character:reload` — refonte multi-cible prévue | Low | Admin teleport V2 |
 | — | Vitesse joueur = constante serveur globale (`PLAYER_BASE_SPEED_WU_PER_SEC`), pas encore une stat dérivée par personnage | Low | Progression/Movement |
+| — | Persistance position joueur pendant le mouvement absente (seulement déconnexion + shutdown gracieux via `WorldService.flushConnectedPlayerPositions`). Un crash/kill dur non gracieux perd les déplacements depuis le dernier flush — persistance périodique/throttlée reste une amélioration future | Low | Movement persistence |
 | — | Double console admin (`ActionPanel.tsx` + `AdminPanelWOM.tsx`) | Low | — |
 | — | `server.emit` broadcast global — pas de rooms/zones | Medium | montée en charge |
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
