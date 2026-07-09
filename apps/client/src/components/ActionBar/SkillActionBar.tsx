@@ -46,24 +46,47 @@ export default function SkillActionBar() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const feedbackTimer = useRef<number | null>(null);
 
-  // Chargement des skills exécutables (damage/créature), plafonné à MAX_SLOTS.
-  useEffect(() => {
-    let mounted = true;
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  // Charge (ou recharge) les skills exécutables, plafonné à MAX_SLOTS.
+  // Rechargé au montage, au retour de focus fenêtre et sur `character:reload`
+  // pour prendre en compte un skill créé/activé après le chargement initial.
+  const loadSkills = useCallback(() => {
     fetchMyActiveSkills()
       .then((list) => {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
+        // Skills exécutables V1 : dégâts/créature (V1-D) OU soin/soi (V1-G).
         const usable = list
-          .filter((s) => s.executable && s.effectType === "damage" && s.targetMode === "creature")
+          .filter(
+            (s) =>
+              s.executable &&
+              ((s.effectType === "damage" && s.targetMode === "creature") ||
+                (s.effectType === "heal" && s.targetMode === "self")),
+          )
           .slice(0, MAX_SLOTS);
         setSkills(usable);
       })
       .catch(() => {
         /* barre simplement vide si indisponible */
       });
-    return () => {
-      mounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadSkills(); // montage
+
+    const onFocus = () => loadSkills();
+    window.addEventListener("focus", onFocus);
+
+    const socket = getSocket();
+    const onReload = () => loadSkills();
+    socket?.on("character:reload", onReload);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      socket?.off("character:reload", onReload);
+    };
+  }, [loadSkills]);
 
   const showFeedback = useCallback((text: string) => {
     setFeedback(text);
@@ -107,14 +130,22 @@ export default function SkillActionBar() {
     (skill: PlayerActiveSkill | undefined) => {
       if (!skill) return;
       if ((cooldowns[skill.key] ?? 0) > Date.now()) return; // cooldown affichage
-      const creature = getSelectedCreature();
-      if (!creature) {
-        showFeedback("Sélectionne une créature.");
-        return;
-      }
       const socket = getSocket();
       if (!socket) {
         showFeedback("Socket indisponible.");
+        return;
+      }
+
+      // Skill de soin sur soi (V1-G) : aucune cible requise.
+      if (skill.targetMode === "self") {
+        socket.emit("skill:cast", { skillKey: skill.key, targetType: "self" });
+        return;
+      }
+
+      // Skill de dégâts sur créature (V1-D) : cible créature obligatoire.
+      const creature = getSelectedCreature();
+      if (!creature) {
+        showFeedback("Sélectionne une créature.");
         return;
       }
       socket.emit("skill:cast", {

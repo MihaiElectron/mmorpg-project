@@ -86,18 +86,20 @@ export class ActiveSkillsService {
       );
       if (!masteriesMet) continue;
 
+      // Combinaisons effet/cible exécutables en V1 :
+      //  - dégâts sur créature (V1-D)
+      //  - soin sur soi (V1-G)
+      const isDamageCreature = s.effectType === 'damage' && s.targetMode === 'creature';
+      const isHealSelf = s.effectType === 'heal' && s.targetMode === 'self';
+      const costBlocked =
+        (s.resourceType === 'mana' || s.resourceType === 'energy') && s.resourceCost > 0;
+
       let executable = true;
       let disabledReason: string | undefined;
-      if (s.effectType !== 'damage') {
+      if (!isDamageCreature && !isHealSelf) {
         executable = false;
-        disabledReason = 'Effet non supporté (V1 : dégâts uniquement).';
-      } else if (s.targetMode !== 'creature') {
-        executable = false;
-        disabledReason = 'Cible non supportée (V1 : créature uniquement).';
-      } else if (
-        (s.resourceType === 'mana' || s.resourceType === 'energy') &&
-        s.resourceCost > 0
-      ) {
+        disabledReason = 'Combinaison effet/cible non supportée (V1).';
+      } else if (costBlocked) {
         executable = false;
         disabledReason = `Coût ${s.resourceType} indisponible (non implémenté).`;
       }

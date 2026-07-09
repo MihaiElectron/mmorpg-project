@@ -1182,6 +1182,15 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    // Resync santé du lanceur après un soin sur soi (Skills V1-G). Le serveur
+    // reste l'autorité : on applique la valeur reçue, sans recalcul.
+    this.socket.on("character_health_update", (data) => {
+      getCharacterStore().getState().setHealth(data.health);
+      if (!this.playerHpBar && this.player) {
+        this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
+      }
+    });
+
     // combat:event = feedback visuel V1 uniquement (dégâts flottants / "Mort").
     // Ne modifie PAS les HP : ceux-ci restent gérés par creature_update /
     // character_damaged. Le client n'affiche que ce que le serveur émet.
@@ -2408,6 +2417,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("character_xp_update");
       this.socket.off("mastery_update");
       this.socket.off("character_damaged");
+      this.socket.off("character_health_update");
       this.socket.off("character_teleport");
       this.socket.off("character_respawn");
       this.socket.off("player_position_correction");

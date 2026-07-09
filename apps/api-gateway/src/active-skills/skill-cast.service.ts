@@ -32,7 +32,21 @@ export interface SkillCastFailure {
 }
 export type SkillCastResult = SkillCastSuccess | SkillCastFailure;
 
-export function isSkillCastFailure(r: SkillCastResult): r is SkillCastFailure {
+/** Résultat d'un skill de soin sur soi (V1-G). */
+export interface SelfSkillCastSuccess {
+  success: true;
+  skillKey: string;
+  /** PV réellement restaurés (après clamp maxHealth et coût éventuel). */
+  heal: number;
+  /** PV finaux du lanceur (autorité serveur). */
+  health: number;
+  cooldownMs: number;
+}
+export type SelfSkillCastResult = SelfSkillCastSuccess | SkillCastFailure;
+
+export function isSkillCastFailure(
+  r: SkillCastResult | SelfSkillCastResult,
+): r is SkillCastFailure {
   return r.success === false;
 }
 
@@ -176,6 +190,98 @@ export class SkillCastService {
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,
       healthCost,
+    };
+  }
+
+  /**
+   * Cast d'un skill de SOIN sur soi-même (V1-G). Aucune cible, aucune portée.
+   * Mêmes garanties de sécurité que le chemin créature : tout est validé et
+   * calculé serveur, le client n'envoie qu'une intention.
+   */
+  async castSelfSkill(
+    characterId: string,
+    skillKey: string,
+  ): Promise<SelfSkillCastResult> {
+    // ── Contrôles skill (config) ───────────────────────────────────────────
+    const skill = await this.findSkill(skillKey);
+    if (!skill) return { success: false, error: 'Skill introuvable.' };
+    if (!skill.enabled) return { success: false, error: 'Skill désactivé.' };
+    if (skill.targetMode !== 'self') {
+      return { success: false, error: 'Ce skill ne se lance pas sur soi.' };
+    }
+    if (skill.effectType !== 'heal') {
+      return { success: false, error: 'Effet non supporté (self V1-G : heal uniquement).' };
+    }
+
+    // ── Contrôles personnage ───────────────────────────────────────────────
+    const character = await this.characterRepository.findOne({ where: { id: characterId } });
+    if (!character) return { success: false, error: 'Personnage introuvable.' };
+    if (character.health <= 0) return { success: false, error: 'Personnage mort.' };
+
+    if ((character.level ?? 1) < skill.requiredLevel) {
+      return { success: false, error: `Niveau ${skill.requiredLevel} requis.` };
+    }
+
+    const masteryRows = await this.masteries.getCharacterMasteries(characterId);
+    const masteryLevels: Record<string, number> = {};
+    for (const m of masteryRows) masteryLevels[m.key] = m.level;
+
+    for (const [key, minLevel] of Object.entries(skill.requiredMasteries ?? {})) {
+      if ((masteryLevels[key] ?? 0) < minLevel) {
+        return { success: false, error: `Mastery "${key}" niveau ${minLevel} requise.` };
+      }
+    }
+
+    // ── Coût ───────────────────────────────────────────────────────────────
+    const hasCost = skill.resourceType != null && skill.resourceCost > 0;
+    if (hasCost) {
+      if (skill.resourceType === 'mana' || skill.resourceType === 'energy') {
+        return {
+          success: false,
+          error: `Coût ${skill.resourceType} non supporté en V1 (ressource non implémentée).`,
+        };
+      }
+      if (skill.resourceType === 'health' && character.health <= skill.resourceCost) {
+        return { success: false, error: 'Vie insuffisante pour lancer ce skill.' };
+      }
+    }
+
+    // ── Cooldown serveur ───────────────────────────────────────────────────
+    const now = Date.now();
+    const cdKey = this.cooldownKey(characterId, skill.key);
+    const last = this.lastCastAt.get(cdKey) ?? 0;
+    if (now - last < skill.cooldownMs) {
+      const remaining = skill.cooldownMs - (now - last);
+      return { success: false, error: `Skill en recharge (${remaining} ms).` };
+    }
+
+    // ── Calcul serveur du soin + clamp maxHealth dérivé ────────────────────
+    const derivedDefinitions = await this.derivedStats.getDefinitions();
+    const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+    const effect = calculateSkillEffect(skill, {
+      primary: stats.final as unknown as Record<string, number>,
+      derived: stats.derived as unknown as Record<string, number>,
+      masteryLevels,
+    });
+    const healAmount = effect.amount;
+
+    const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));
+    // Coût de vie appliqué avant le soin (rare : heal + coût health). Non létal.
+    const healthAfterCost =
+      hasCost && skill.resourceType === 'health'
+        ? character.health - skill.resourceCost
+        : character.health;
+    const newHealth = Math.min(maxHealth, healthAfterCost + healAmount);
+
+    await this.characterRepository.update(characterId, { health: newHealth });
+    this.lastCastAt.set(cdKey, now);
+
+    return {
+      success: true,
+      skillKey: skill.key,
+      heal: newHealth - healthAfterCost,
+      health: newHealth,
+      cooldownMs: skill.cooldownMs,
     };
   }
 }

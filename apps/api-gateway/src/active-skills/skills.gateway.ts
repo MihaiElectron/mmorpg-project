@@ -72,6 +72,26 @@ export class SkillsGateway implements OnGatewayConnection {
       return;
     }
 
+    // ── Skill de soin sur soi (V1-G) — aucun broadcast, resync au lanceur ──
+    if (payload.targetType === 'self') {
+      const selfResult = await this.skillCast.castSelfSkill(player.characterId, payload.skillKey);
+      if (isSkillCastFailure(selfResult)) {
+        client.emit('skill:error', { skillKey: payload.skillKey, error: selfResult.error });
+        return;
+      }
+      client.emit('character_health_update', {
+        characterId: player.characterId,
+        health: selfResult.health,
+        heal: selfResult.heal,
+      });
+      client.emit('skill:cooldown', {
+        skillKey: selfResult.skillKey,
+        cooldownMs: selfResult.cooldownMs,
+        readyAt: Date.now() + selfResult.cooldownMs,
+      });
+      return;
+    }
+
     const result = await this.skillCast.castCreatureSkill(
       player.characterId,
       { worldX: player.worldX, worldY: player.worldY, mapId: player.mapId },

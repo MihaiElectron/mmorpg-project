@@ -42,4 +42,29 @@ describe("parseSkillCastPayload", () => {
       parseSkillCastPayload({ skillKey: "k", targetType: "creature", targetId: "not-a-uuid" }),
     ).toBeNull();
   });
+
+  // ── Self (V1-G) ────────────────────────────────────────────────────────────
+
+  it("accepte un payload self sans targetId", () => {
+    expect(parseSkillCastPayload({ skillKey: "heal", targetType: "self" })).toEqual({
+      skillKey: "heal",
+      targetType: "self",
+    });
+  });
+
+  it("rejette un self avec targetId présent", () => {
+    expect(
+      parseSkillCastPayload({ skillKey: "heal", targetType: "self", targetId: UUID }),
+    ).toBeNull();
+  });
+
+  it("rejette un self avec un champ inconnu", () => {
+    expect(
+      parseSkillCastPayload({ skillKey: "heal", targetType: "self", foo: 1 }),
+    ).toBeNull();
+  });
+
+  it("rejette un creature sans targetId", () => {
+    expect(parseSkillCastPayload({ skillKey: "k", targetType: "creature" })).toBeNull();
+  });
 });

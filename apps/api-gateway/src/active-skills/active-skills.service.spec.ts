@@ -252,5 +252,31 @@ describe("ActiveSkillsService", () => {
       expect(res[0].executable).toBe(false);
       expect(res[0].disabledReason).toMatch(/effet/i);
     });
+
+    it("renvoie executable=true pour un skill heal/self sans coût bloquant (test_heal)", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({
+          key: "test_heal",
+          targetMode: "self",
+          effectType: "heal",
+          resourceType: null,
+          resourceCost: 0,
+          scaling: { derivedCoefficients: { healingPower: 3 } },
+        }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res).toHaveLength(1);
+      expect(res[0]).toMatchObject({ key: "test_heal", executable: true });
+      expect(res[0].disabledReason).toBeUndefined();
+    });
+
+    it("marque non exécutable un heal/self avec coût mana > 0", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ key: "h", targetMode: "self", effectType: "heal", resourceType: "mana", resourceCost: 5 }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res[0].executable).toBe(false);
+      expect(res[0].disabledReason).toMatch(/mana/i);
+    });
   });
 });

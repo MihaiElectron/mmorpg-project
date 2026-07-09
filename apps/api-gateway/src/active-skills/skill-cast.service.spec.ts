@@ -228,4 +228,130 @@ describe("SkillCastService", () => {
     const r2 = await cast();
     expect(isSkillCastFailure(r2) && r2.error).toMatch(/dead/i);
   });
+
+  // ── castSelfSkill (V1-G : soin sur soi) ─────────────────────────────────────
+  describe("castSelfSkill", () => {
+    function makeHealSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
+      return makeSkill({
+        key: "heal_self",
+        targetMode: "self",
+        effectType: "heal",
+        scaling: { primaryCoefficients: { strength: 3 } }, // strength 10 × 3 = 30
+        ...overrides,
+      });
+    }
+    function castSelf() {
+      return service.castSelfSkill("c1", "heal_self");
+    }
+    function useSkill(skill: SkillDefinition) {
+      currentSkill = skill;
+      activeSkills.listDefinitions.mockResolvedValue([skill]);
+    }
+    function useCharacter(char: Character) {
+      currentCharacter = char;
+      charRepo.findOne.mockResolvedValue(char);
+    }
+
+    it("soigne et clampe à maxHealth dérivé (~100)", async () => {
+      useSkill(makeHealSkill());
+      useCharacter(makeCharacter({ health: 50, maxHealth: 100 }));
+      const r = await castSelf();
+      expect(r.success).toBe(true);
+      // 50 + 30 = 80 (< 100)
+      expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 80 });
+      if (r.success) {
+        expect(r.health).toBe(80);
+        expect(r.heal).toBe(30);
+        expect(r.cooldownMs).toBe(1000);
+      }
+    });
+
+    it("ne dépasse jamais maxHealth", async () => {
+      useSkill(makeHealSkill());
+      useCharacter(makeCharacter({ health: 90, maxHealth: 100 }));
+      const r = await castSelf();
+      expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 100 });
+      if (r.success) expect(r.heal).toBe(10);
+    });
+
+    it("rejette un skill disabled", async () => {
+      useSkill(makeHealSkill({ enabled: false }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/désactivé/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("rejette targetMode != self", async () => {
+      useSkill(makeHealSkill({ targetMode: "creature" }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/soi/i);
+    });
+
+    it("rejette effectType != heal", async () => {
+      useSkill(makeHealSkill({ effectType: "damage" }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/heal/i);
+    });
+
+    it("rejette un personnage mort", async () => {
+      useSkill(makeHealSkill());
+      useCharacter(makeCharacter({ health: 0 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/mort/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("rejette si requiredLevel non atteint", async () => {
+      useSkill(makeHealSkill({ requiredLevel: 10 }));
+      useCharacter(makeCharacter({ level: 5, health: 50 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/niveau/i);
+    });
+
+    it("rejette si une mastery requise est insuffisante", async () => {
+      useSkill(makeHealSkill({ requiredMasteries: { restoration: 5 } }));
+      masteries.getCharacterMasteries.mockResolvedValue([{ key: "restoration", level: 2 }]);
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/mastery/i);
+    });
+
+    it("rejette un coût mana > 0", async () => {
+      useSkill(makeHealSkill({ resourceType: "mana", resourceCost: 10 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/mana/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("accepte un coût health non létal (payé avant le soin)", async () => {
+      useSkill(makeHealSkill({ resourceType: "health", resourceCost: 20 }));
+      useCharacter(makeCharacter({ health: 50, maxHealth: 100 }));
+      const r = await castSelf();
+      // 50 - 20 (coût) = 30 ; 30 + 30 (soin) = 60
+      expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 60 });
+      if (r.success) expect(r.health).toBe(60);
+    });
+
+    it("rejette un coût health létal", async () => {
+      useSkill(makeHealSkill({ resourceType: "health", resourceCost: 100 }));
+      useCharacter(makeCharacter({ health: 100 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/vie insuffisante/i);
+    });
+
+    it("arme le cooldown après succès et rejette le 2e cast", async () => {
+      useSkill(makeHealSkill());
+      useCharacter(makeCharacter({ health: 50 }));
+      const first = await castSelf();
+      expect(first.success).toBe(true);
+      const second = await castSelf();
+      expect(isSkillCastFailure(second) && second.error).toMatch(/recharge/i);
+    });
+
+    it("n'arme aucun cooldown si échec (skill introuvable)", async () => {
+      activeSkills.listDefinitions.mockResolvedValue([]);
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/introuvable/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+  });
 });
