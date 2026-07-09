@@ -191,28 +191,57 @@ describe("SkillCastService", () => {
     expect(isSkillCastFailure(r) && r.error).toMatch(/mastery/i);
   });
 
-  it("rejette un coût mana (>0) non supporté", async () => {
+  it("consomme le mana après un cast réussi", async () => {
     currentSkill = makeSkill({ resourceType: "mana", resourceCost: 10 });
     activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    currentCharacter = makeCharacter({ mana: 30 });
+    charRepo.findOne.mockResolvedValue(currentCharacter);
     const r = await cast();
-    expect(isSkillCastFailure(r) && r.error).toMatch(/mana/i);
-    expect(creatures.applySkillDamage).not.toHaveBeenCalled();
+    expect(r.success).toBe(true);
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { mana: 20 });
+    if (r.success) expect(r.resources?.mana).toBe(20);
   });
 
-  it("rejette un coût energy (>0) non supporté", async () => {
+  it("refuse le cast si mana insuffisant (aucun dégât, aucun décrément)", async () => {
+    currentSkill = makeSkill({ resourceType: "mana", resourceCost: 10 });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    currentCharacter = makeCharacter({ mana: 5 });
+    charRepo.findOne.mockResolvedValue(currentCharacter);
+    const r = await cast();
+    expect(isSkillCastFailure(r) && r.error).toMatch(/mana insuffisant/i);
+    expect(creatures.applySkillDamage).not.toHaveBeenCalled();
+    expect(charRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("consomme l'énergie après un cast réussi", async () => {
     currentSkill = makeSkill({ resourceType: "energy", resourceCost: 5 });
     activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    currentCharacter = makeCharacter({ energy: 12 });
+    charRepo.findOne.mockResolvedValue(currentCharacter);
     const r = await cast();
-    expect(isSkillCastFailure(r) && r.error).toMatch(/energy/i);
+    expect(r.success).toBe(true);
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { energy: 7 });
+    if (r.success) expect(r.resources?.energy).toBe(7);
   });
 
-  it("rejette un coût health léthal (vie insuffisante)", async () => {
+  it("refuse le cast si énergie insuffisante", async () => {
+    currentSkill = makeSkill({ resourceType: "energy", resourceCost: 5 });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    currentCharacter = makeCharacter({ energy: 2 });
+    charRepo.findOne.mockResolvedValue(currentCharacter);
+    const r = await cast();
+    expect(isSkillCastFailure(r) && r.error).toMatch(/énergie insuffisante/i);
+    expect(creatures.applySkillDamage).not.toHaveBeenCalled();
+    expect(charRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("rejette un coût health léthal (santé insuffisante)", async () => {
     currentSkill = makeSkill({ resourceType: "health", resourceCost: 100 });
     activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
     currentCharacter = makeCharacter({ health: 100 });
     charRepo.findOne.mockResolvedValue(currentCharacter);
     const r = await cast();
-    expect(isSkillCastFailure(r) && r.error).toMatch(/vie insuffisante/i);
+    expect(isSkillCastFailure(r) && r.error).toMatch(/santé insuffisante/i);
   });
 
   it("propage un échec côté créature (hors portée)", async () => {
@@ -370,10 +399,23 @@ describe("SkillCastService", () => {
       expect(isSkillCastFailure(r) && r.error).toMatch(/mastery/i);
     });
 
-    it("rejette un coût mana > 0", async () => {
+    it("consomme le mana et soigne dans la même mise à jour", async () => {
       useSkill(makeHealSkill({ resourceType: "mana", resourceCost: 10 }));
+      useCharacter(makeCharacter({ health: 50, maxHealth: 100, mana: 30 }));
       const r = await castSelf();
-      expect(isSkillCastFailure(r) && r.error).toMatch(/mana/i);
+      // Soin 30 → health 80 ; mana 30 - 10 = 20, persistés ensemble.
+      expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 80, mana: 20 });
+      if (r.success) {
+        expect(r.health).toBe(80);
+        expect(r.resources?.mana).toBe(20);
+      }
+    });
+
+    it("refuse le soin si mana insuffisant (aucun décrément)", async () => {
+      useSkill(makeHealSkill({ resourceType: "mana", resourceCost: 10 }));
+      useCharacter(makeCharacter({ health: 50, mana: 5 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/mana insuffisant/i);
       expect(charRepo.update).not.toHaveBeenCalled();
     });
 
@@ -390,7 +432,7 @@ describe("SkillCastService", () => {
       useSkill(makeHealSkill({ resourceType: "health", resourceCost: 100 }));
       useCharacter(makeCharacter({ health: 100 }));
       const r = await castSelf();
-      expect(isSkillCastFailure(r) && r.error).toMatch(/vie insuffisante/i);
+      expect(isSkillCastFailure(r) && r.error).toMatch(/santé insuffisante/i);
     });
 
     it("arme le cooldown après succès et rejette le 2e cast", async () => {

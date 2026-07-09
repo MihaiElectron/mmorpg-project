@@ -58,6 +58,19 @@ const MOVE_SUSPECT_LOG_THROTTLE_MS = 10_000;
  */
 export const PLAYER_BASE_SPEED_WU_PER_SEC = 3_600;
 
+/**
+ * Résout la valeur d'une ressource (mana/énergie) à la connexion (Skills V1-J-B).
+ * - valeur non finie → traitée comme 0 ;
+ * - à 0 avec un max positif → REFILL au max (comportement V1 temporaire) ;
+ * - sinon → clamp dans [0, max].
+ */
+function resolveJoinResource(current: number, max: number): number {
+  const cur = Number.isFinite(current) ? current : 0;
+  const cap = Number.isFinite(max) && max > 0 ? Math.round(max) : 0;
+  if (cur <= 0 && cap > 0) return cap; // refill (V1 temporaire, pas de regen)
+  return Math.min(Math.max(0, cur), cap); // clamp
+}
+
 /** Marge de tolérance (jitter réseau, arrondis px→WU) appliquée au budget de distance. */
 export const PLAYER_MOVE_TOLERANCE_MULTIPLIER = 1.5;
 
@@ -298,6 +311,10 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     if (character.worldX == null || character.worldY == null || character.mapId == null) {
       return null; // guard explicite : impossible après P7-A
     }
+
+    // Ressources mana/énergie : clamp aux max dérivés + refill V1 temporaire.
+    await this.refillCharacterResourcesOnJoin(character);
+
     const player: ConnectedPlayer = {
       socketId: client.id,
       characterId: payload.characterId,
@@ -326,6 +343,33 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     };
 
     return { player, previousSocketId };
+  }
+
+  /**
+   * Ressources mana/énergie à la connexion (Skills V1-J-B).
+   *
+   * Calcule les max dérivés serveur, clampe `mana`/`energy` dans [0, max], et
+   * applique un REFILL V1 TEMPORAIRE : si une ressource est à 0 alors que son
+   * max dérivé est positif, elle est remontée au max — évite d'avoir des
+   * ressources mortes tant que la régénération réelle n'existe pas (V1-K).
+   *
+   * Aucune régénération périodique ici : ce refill n'a lieu qu'au join.
+   * Persiste en DB uniquement si une valeur change. Le mana/énergie du
+   * `ConnectedPlayer` n'est pas suivi runtime : la source reste la DB, lue à
+   * chaque cast par `SkillCastService`.
+   */
+  private async refillCharacterResourcesOnJoin(character: Character): Promise<void> {
+    const derivedDefinitions = await this.derivedStats.getDefinitions();
+    const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+
+    const mana = resolveJoinResource(character.mana, stats.derived.maxMana);
+    const energy = resolveJoinResource(character.energy, stats.derived.maxEnergy);
+
+    if (mana !== character.mana || energy !== character.energy) {
+      character.mana = mana;
+      character.energy = energy;
+      await this.characterRepository.update(character.id, { mana, energy });
+    }
   }
 
   /**

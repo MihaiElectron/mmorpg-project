@@ -671,6 +671,54 @@ describe('WorldService — P7-B : guards WU explicites', () => {
     });
   });
 
+  describe('joinPlayer — refill/clamp mana & énergie (V1-J-B)', () => {
+    // maxMana = intelligence×10 + wisdom×5 ; maxEnergy = endurance×8 + agility×2.
+    function makeCharRepo(overrides: Record<string, unknown>) {
+      return {
+        find: jest.fn(),
+        findOne: jest.fn().mockResolvedValue({
+          id: 'c-1', userId: 'u-1', name: 'Hero', sex: 'male',
+          worldX: 1600, worldY: 8000, mapId: 1,
+          health: 100, maxHealth: 100,
+          baseIntelligence: 5, baseWisdom: 0, // maxMana = 50
+          baseEndurance: 5, baseAgility: 0, // maxEnergy = 40
+          mana: 0, energy: 0,
+          ...overrides,
+        }),
+        update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
+      };
+    }
+    function makeSvc(charRepo: any) {
+      const respawnRepo = { count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
+      return new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
+    }
+
+    it('refill V1 : mana/énergie à 0 → remontés aux max dérivés', async () => {
+      const charRepo = makeCharRepo({ mana: 0, energy: 0 });
+      const svc = makeSvc(charRepo);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      expect(result).not.toBeNull();
+      expect(charRepo.update).toHaveBeenCalledWith('c-1', { mana: 50, energy: 40 });
+    });
+
+    it('clamp : mana/énergie au-dessus des max → ramenés aux max', async () => {
+      const charRepo = makeCharRepo({ mana: 999, energy: 999 });
+      const svc = makeSvc(charRepo);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      expect(charRepo.update).toHaveBeenCalledWith('c-1', { mana: 50, energy: 40 });
+    });
+
+    it('aucune écriture si mana/énergie déjà dans [0, max] et non nuls', async () => {
+      const charRepo = makeCharRepo({ mana: 30, energy: 20 });
+      const svc = makeSvc(charRepo);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('respawnCharacter — retourne tôt si worldX/Y/mapId absent', () => {
     it('ne fait rien si character.worldX est null', async () => {
       const charRepo = {

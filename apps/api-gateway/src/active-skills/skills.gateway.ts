@@ -79,11 +79,19 @@ export class SkillsGateway implements OnGatewayConnection {
         client.emit('skill:error', { skillKey: payload.skillKey, error: selfResult.error });
         return;
       }
+      // Conservé pour la compat V1-G (resync HP du panneau/HUD).
       client.emit('character_health_update', {
         characterId: player.characterId,
         health: selfResult.health,
         heal: selfResult.heal,
       });
+      // Ressources complètes (santé + mana/énergie) au seul lanceur.
+      if (selfResult.resources) {
+        client.emit('character_resource_update', {
+          characterId: player.characterId,
+          ...selfResult.resources,
+        });
+      }
       client.emit('skill:cooldown', {
         skillKey: selfResult.skillKey,
         cooldownMs: selfResult.cooldownMs,
@@ -153,6 +161,15 @@ export class SkillsGateway implements OnGatewayConnection {
         characterId: player.characterId,
         damage: result.healthCost.amount,
         health: result.healthCost.health,
+      });
+    }
+
+    // Ressources complètes (santé + mana/énergie) au seul lanceur, si un coût
+    // a été prélevé (mana/énergie/santé). Émis même si la santé n'a pas changé.
+    if (result.resources) {
+      client.emit('character_resource_update', {
+        characterId: player.characterId,
+        ...result.resources,
       });
     }
 

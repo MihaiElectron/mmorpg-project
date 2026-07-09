@@ -14,6 +14,20 @@ import type { CreatureDto } from '../creatures/dto/creature.dto';
 import type { CharacterXpResult } from '../progression/progression.service';
 import type { LootEntry } from '../world/loot.service';
 
+/**
+ * Instantané des ressources du lanceur après un cast (Skills V1-J-B). Présent
+ * uniquement si une ressource/santé a changé → base de `character_resource_update`.
+ * Les `max*` sont des dérivées serveur (pas de colonne DB pour mana/energy).
+ */
+export interface ResourceSnapshot {
+  health: number;
+  mana: number;
+  energy: number;
+  maxHealth: number;
+  maxMana: number;
+  maxEnergy: number;
+}
+
 export interface SkillCastSuccess {
   success: true;
   skillKey: string;
@@ -23,8 +37,10 @@ export interface SkillCastSuccess {
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
-  /** Coût de vie appliqué au lanceur (si resourceType=health). */
+  /** Coût de vie appliqué au lanceur (si resourceType=health) — event `character_damaged`. */
   healthCost?: { amount: number; health: number };
+  /** Ressources finales si un coût a été consommé — event `character_resource_update`. */
+  resources?: ResourceSnapshot;
 }
 export interface SkillCastFailure {
   success: false;
@@ -41,6 +57,8 @@ export interface SelfSkillCastSuccess {
   /** PV finaux du lanceur (autorité serveur). */
   health: number;
   cooldownMs: number;
+  /** Ressources finales (santé toujours changée par le soin) — `character_resource_update`. */
+  resources?: ResourceSnapshot;
 }
 export type SelfSkillCastResult = SelfSkillCastSuccess | SkillCastFailure;
 
@@ -106,6 +124,27 @@ export class SkillCastService {
     return null;
   }
 
+  /**
+   * Vérifie la SUFFISANCE de la ressource (Skills V1-J-B) — vérification seule,
+   * aucun décrément (la ressource n'est consommée qu'après succès réel). Santé :
+   * règle non létale conservée (health > cost → reste ≥ 1). Retourne un message
+   * d'erreur clair, ou `null` si le coût est payable (ou nul).
+   */
+  private checkResourceCost(character: Character, skill: SkillDefinition): string | null {
+    if (skill.resourceType == null || skill.resourceCost <= 0) return null;
+    const cost = skill.resourceCost;
+    switch (skill.resourceType) {
+      case 'mana':
+        return character.mana >= cost ? null : 'Mana insuffisant.';
+      case 'energy':
+        return character.energy >= cost ? null : 'Énergie insuffisante.';
+      case 'health':
+        return character.health > cost ? null : 'Santé insuffisante.';
+      default:
+        return null;
+    }
+  }
+
   async castCreatureSkill(
     characterId: string,
     attackerPosition: { worldX: number; worldY: number; mapId: number },
@@ -146,20 +185,9 @@ export class SkillCastService {
       }
     }
 
-    // ── Coût ───────────────────────────────────────────────────────────────
-    const hasCost = skill.resourceType != null && skill.resourceCost > 0;
-    if (hasCost) {
-      if (skill.resourceType === 'mana' || skill.resourceType === 'energy') {
-        return {
-          success: false,
-          error: `Coût ${skill.resourceType} non supporté en V1 (ressource non implémentée).`,
-        };
-      }
-      if (skill.resourceType === 'health' && character.health <= skill.resourceCost) {
-        // Ne doit jamais tuer le lanceur : il faut qu'il reste au moins 1 PV.
-        return { success: false, error: 'Vie insuffisante pour lancer ce skill.' };
-      }
-    }
+    // ── Coût (vérification SEULE — décrément après succès réel) ────────────
+    const costError = this.checkResourceCost(character, skill);
+    if (costError) return { success: false, error: costError };
 
     // ── Cooldown serveur ───────────────────────────────────────────────────
     const now = Date.now();
@@ -191,12 +219,37 @@ export class SkillCastService {
       return { success: false, error: result.error };
     }
 
-    // ── Effets serveur post-succès : coût de vie + armement du cooldown ─────
+    // ── Effets serveur post-succès : décrément ressource + armement cooldown ─
+    const cost = skill.resourceCost;
+    const hasCost = skill.resourceType != null && cost > 0;
     let healthCost: { amount: number; health: number } | undefined;
-    if (hasCost && skill.resourceType === 'health') {
-      const newHealth = Math.max(1, character.health - skill.resourceCost);
-      await this.characterRepository.update(characterId, { health: newHealth });
-      healthCost = { amount: character.health - newHealth, health: newHealth };
+    let resources: ResourceSnapshot | undefined;
+    let finalHealth = character.health;
+    let finalMana = character.mana;
+    let finalEnergy = character.energy;
+
+    if (hasCost) {
+      const update: Partial<Character> = {};
+      if (skill.resourceType === 'health') {
+        finalHealth = Math.max(1, character.health - cost);
+        update.health = finalHealth;
+        healthCost = { amount: character.health - finalHealth, health: finalHealth };
+      } else if (skill.resourceType === 'mana') {
+        finalMana = Math.max(0, character.mana - cost);
+        update.mana = finalMana;
+      } else if (skill.resourceType === 'energy') {
+        finalEnergy = Math.max(0, character.energy - cost);
+        update.energy = finalEnergy;
+      }
+      await this.characterRepository.update(characterId, update);
+      resources = {
+        health: finalHealth,
+        mana: finalMana,
+        energy: finalEnergy,
+        maxHealth: Math.round(stats.derived.maxHealth),
+        maxMana: Math.round(stats.derived.maxMana),
+        maxEnergy: Math.round(stats.derived.maxEnergy),
+      };
     }
 
     this.lastCastAt.set(cdKey, now);
@@ -211,6 +264,7 @@ export class SkillCastService {
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,
       healthCost,
+      resources,
     };
   }
 
@@ -255,19 +309,9 @@ export class SkillCastService {
       }
     }
 
-    // ── Coût ───────────────────────────────────────────────────────────────
-    const hasCost = skill.resourceType != null && skill.resourceCost > 0;
-    if (hasCost) {
-      if (skill.resourceType === 'mana' || skill.resourceType === 'energy') {
-        return {
-          success: false,
-          error: `Coût ${skill.resourceType} non supporté en V1 (ressource non implémentée).`,
-        };
-      }
-      if (skill.resourceType === 'health' && character.health <= skill.resourceCost) {
-        return { success: false, error: 'Vie insuffisante pour lancer ce skill.' };
-      }
-    }
+    // ── Coût (vérification SEULE — décrément après succès réel) ────────────
+    const costError = this.checkResourceCost(character, skill);
+    if (costError) return { success: false, error: costError };
 
     // ── Cooldown serveur ───────────────────────────────────────────────────
     const now = Date.now();
@@ -288,16 +332,38 @@ export class SkillCastService {
     });
     const healAmount = effect.amount;
 
+    const cost = skill.resourceCost;
+    const hasCost = skill.resourceType != null && cost > 0;
     const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));
     // Coût de vie appliqué avant le soin (rare : heal + coût health). Non létal.
     const healthAfterCost =
-      hasCost && skill.resourceType === 'health'
-        ? character.health - skill.resourceCost
-        : character.health;
+      hasCost && skill.resourceType === 'health' ? character.health - cost : character.health;
     const newHealth = Math.min(maxHealth, healthAfterCost + healAmount);
 
-    await this.characterRepository.update(characterId, { health: newHealth });
+    // Décrément mana/energy éventuel (le coût health est déjà dans healthAfterCost).
+    let finalMana = character.mana;
+    let finalEnergy = character.energy;
+    const update: Partial<Character> = { health: newHealth };
+    if (hasCost && skill.resourceType === 'mana') {
+      finalMana = Math.max(0, character.mana - cost);
+      update.mana = finalMana;
+    } else if (hasCost && skill.resourceType === 'energy') {
+      finalEnergy = Math.max(0, character.energy - cost);
+      update.energy = finalEnergy;
+    }
+
+    await this.characterRepository.update(characterId, update);
     this.lastCastAt.set(cdKey, now);
+
+    // Le soin change toujours la santé → snapshot ressources toujours émis.
+    const resources: ResourceSnapshot = {
+      health: newHealth,
+      mana: finalMana,
+      energy: finalEnergy,
+      maxHealth,
+      maxMana: Math.round(stats.derived.maxMana),
+      maxEnergy: Math.round(stats.derived.maxEnergy),
+    };
 
     return {
       success: true,
@@ -305,6 +371,7 @@ export class SkillCastService {
       heal: newHealth - healthAfterCost,
       health: newHealth,
       cooldownMs: skill.cooldownMs,
+      resources,
     };
   }
 }
