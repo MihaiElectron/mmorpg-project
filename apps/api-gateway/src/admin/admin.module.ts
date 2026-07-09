@@ -29,6 +29,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { MasteriesModule } from '../masteries/masteries.module';
 import { GameConfigModule } from '../game-config/game-config.module';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { GameConfigModule } from '../game-config/game-config.module';
     InventoryModule,
     MasteriesModule,
     GameConfigModule,
+    DerivedStatsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],

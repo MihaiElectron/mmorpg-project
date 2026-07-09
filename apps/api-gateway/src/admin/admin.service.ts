@@ -23,6 +23,8 @@ import { Creature } from '../creatures/entities/creature.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator, CharacterStats } from '../characters/character-stats-calculator';
 import { resolveEffectiveAttackRangeWU } from '../characters/attack-range.helper';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
 import { InventoryProjectionService } from '../inventory/projection/inventory-projection.service';
 import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { MasteriesService } from '../masteries/masteries.service';
@@ -235,6 +237,7 @@ export class AdminService {
     private readonly masteriesService: MasteriesService,
     private readonly economyService: EconomyService,
     private readonly gameConfigService: GameConfigService,
+    private readonly derivedStatsService: DerivedStatsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -598,19 +601,23 @@ export class AdminService {
    * (liste complète) et `getCharacterRow` (une seule ligne, refresh ciblé
    * DevTools) — logique unique, jamais dupliquée.
    */
-  private enrichCharacterRow(char: Character): Character & { stats: CharacterStats } {
+  private enrichCharacterRow(
+    char: Character,
+    derivedStatDefinitions: DerivedStatDefinition[],
+  ): Character & { stats: CharacterStats } {
     const live = this.worldService.getConnectedPlayerByCharacterId(char.id);
     if (live) {
       char.worldX = live.worldX;
       char.worldY = live.worldY;
       char.mapId = live.mapId;
     }
-    return Object.assign(char, { stats: CharacterStatsCalculator.compute(char) });
+    return Object.assign(char, { stats: CharacterStatsCalculator.compute(char, derivedStatDefinitions) });
   }
 
   async getCharacters(): Promise<(Character & { stats: CharacterStats })[]> {
     const characters = await this.characterRepo.find({ order: { name: 'ASC' } });
-    return characters.map((char) => this.enrichCharacterRow(char));
+    const derivedStatDefinitions = await this.derivedStatsService.getDefinitions();
+    return characters.map((char) => this.enrichCharacterRow(char, derivedStatDefinitions));
   }
 
   /**
@@ -623,7 +630,8 @@ export class AdminService {
   async getCharacterRow(id: string): Promise<(Character & { stats: CharacterStats }) | null> {
     const character = await this.characterRepo.findOne({ where: { id } });
     if (!character) return null;
-    return this.enrichCharacterRow(character);
+    const derivedStatDefinitions = await this.derivedStatsService.getDefinitions();
+    return this.enrichCharacterRow(character, derivedStatDefinitions);
   }
 
   findCharacterById(id: string): Promise<Character | null> {
@@ -686,7 +694,8 @@ export class AdminService {
 
     Object.assign(character, patch);
     const saved = await this.characterRepo.save(character);
-    return Object.assign(saved, { stats: CharacterStatsCalculator.compute(saved) });
+    const derivedStatDefinitions = await this.derivedStatsService.getDefinitions();
+    return Object.assign(saved, { stats: CharacterStatsCalculator.compute(saved, derivedStatDefinitions) });
   }
 
   /**
@@ -709,11 +718,12 @@ export class AdminService {
       character.mapId = live.mapId;
     }
 
-    const [inventory, masteries, balanceBronze] = await Promise.all([
+    const [inventory, masteries, balanceBronze, derivedStatDefinitions] = await Promise.all([
       this.inventoryProjection.project(character.id),
       this.masteriesService.getCharacterMasteries(character.id),
       // Lecture PURE : ne crée jamais de wallet par simple consultation.
       this.economyService.readBalanceBronze('character', character.id),
+      this.derivedStatsService.getDefinitions(),
     ]);
     const wallet = {
       gold: Number(balanceBronze / 10_000n),
@@ -747,7 +757,7 @@ export class AdminService {
         worldY: character.worldY,
         mapId: character.mapId,
         // stats.base = stats de base ; stats.derived = calculées serveur (lecture seule).
-        stats: CharacterStatsCalculator.compute(character),
+        stats: CharacterStatsCalculator.compute(character, derivedStatDefinitions),
         combat: { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) },
         wallet,
       },

@@ -9,6 +9,9 @@ import { Roles } from '../common/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
 import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { UpdateDerivedStatDefinitionDto } from '../derived-stats/dto/update-derived-stat-definition.dto';
+import { PreviewDerivedStatsDto } from '../derived-stats/dto/preview-derived-stats.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -19,6 +22,7 @@ export class AdminController {
     private readonly creaturesService: CreaturesService,
     private readonly resourcesService: ResourcesService,
     private readonly buildingsService: BuildingsService,
+    private readonly derivedStatsService: DerivedStatsService,
   ) {}
 
   @Get('overview')
@@ -132,6 +136,26 @@ export class AdminController {
   @Post('game-config/recalculate-character-progression')
   recalculateCharacterProgression(@Body() dto: RecalculateCharacterProgressionDto) {
     return this.adminService.recalculateCharacterProgression(dto);
+  }
+
+  // ── Coefficients des stats dérivées (DerivedStatDefinition) ─────────────────
+
+  @Get('derived-stat-definitions')
+  getDerivedStatDefinitions() {
+    return this.derivedStatsService.getDefinitions();
+  }
+
+  @Patch('derived-stat-definitions/:key')
+  updateDerivedStatDefinition(
+    @Param('key') key: string,
+    @Body() dto: UpdateDerivedStatDefinitionDto,
+  ) {
+    return this.derivedStatsService.updateDefinition(key, dto);
+  }
+
+  @Post('derived-stat-definitions/preview')
+  previewDerivedStats(@Body() dto: PreviewDerivedStatsDto) {
+    return this.derivedStatsService.previewDerivedStats(dto);
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

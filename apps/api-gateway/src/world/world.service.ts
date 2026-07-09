@@ -15,6 +15,7 @@ export type AdminCharacterDirtyReason =
   | 'unknown';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import {
   wuToIsoScreenX,
@@ -150,6 +151,7 @@ export class WorldService implements OnModuleInit {
     private readonly characterRepository: Repository<Character>,
     @InjectRepository(RespawnPoint)
     private readonly respawnPointRepository: Repository<RespawnPoint>,
+    private readonly derivedStats: DerivedStatsService,
   ) {}
 
   async onModuleInit() {
@@ -228,7 +230,8 @@ export class WorldService implements OnModuleInit {
     } catch { /* position hors isométrie : conserver la WU du point */ }
 
     // Respawn full HP = PV max DÉRIVÉS (Vitalité incluse), pas la colonne brute.
-    const derivedMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+    const derivedStatDefinitions = await this.derivedStats.getDefinitions();
+    const derivedMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
     const newHealth = derivedMaxHealth;
 
     await this.characterRepository.update(characterId, {

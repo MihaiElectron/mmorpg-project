@@ -12,46 +12,13 @@ import {
   type GameConfigPreview,
   type CharacterProgressionRecalculationReport,
 } from "./characterProgression.types";
+import DerivedStatsCoefficientsPanel from "./DerivedStatsCoefficientsPanel";
 import "./CharacterProgressionModule.scss";
 
 type DraftMap = Record<GameConfigField, string>;
 
 const FIELD_KEYS = FIELD_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
 const DEFAULT_TARGET_LEVEL = "40";
-
-// Coefficients des 24 dérivées V1 (CharacterStatsCalculator, backend) —
-// LECTURE SEULE. Non configurables dans ce chantier (portée limitée au
-// remplacement des stats primaires) : les rendre éditables nécessiterait de
-// migrer ~24 formules vers GameConfig (nouvelles colonnes, DTO, preview
-// serveur dédiée) — un chantier séparé, volontairement non entamé ici pour
-// rester sur un diff maîtrisé. Cette liste reflète le code serveur tel quel ;
-// la maintenir à jour si les formules évoluent.
-const DERIVED_STAT_FORMULAS: { label: string; formula: string }[] = [
-  { label: "PV max", formula: "maxHealth brut + Vitalité × 10" },
-  { label: "Mana max", formula: "Intelligence × 10 + Sagesse × 5" },
-  { label: "Énergie max", formula: "Endurance × 8 + Agilité × 2" },
-  { label: "Régén. PV", formula: "Vitalité × 0.5 + Endurance × 0.2" },
-  { label: "Régén. mana", formula: "Sagesse × 0.5 + Intelligence × 0.2" },
-  { label: "Régén. énergie", formula: "Endurance × 0.3 + Agilité × 0.2" },
-  { label: "Attaque physique", formula: "attack brut + Force × 2" },
-  { label: "Puissance magique", formula: "Intelligence × 2 + Esprit × 1" },
-  { label: "Puissance de soin", formula: "Sagesse × 2 + Esprit × 1" },
-  { label: "Défense", formula: "defense brut + Endurance × 1" },
-  { label: "Résistance feu", formula: "Esprit × 0.5 + Sagesse × 0.2" },
-  { label: "Résistance eau", formula: "Esprit × 0.5 + Intelligence × 0.2" },
-  { label: "Résistance air", formula: "Esprit × 0.5 + Agilité × 0.2" },
-  { label: "Résistance terre", formula: "Esprit × 0.5 + Endurance × 0.2" },
-  { label: "Précision", formula: "Dextérité × 0.5" },
-  { label: "Chance critique", formula: "min(50, Dextérité × 0.3 + Agilité × 0.2)" },
-  { label: "Dégâts critiques", formula: "150 + Dextérité × 1" },
-  { label: "Esquive", formula: "min(40, Agilité × 0.3)" },
-  { label: "Parade", formula: "min(40, Force × 0.15 + Dextérité × 0.15)" },
-  { label: "Blocage", formula: "min(40, Endurance × 0.2 + Force × 0.1)" },
-  { label: "Vitesse d'attaque", formula: "100 + Agilité × 0.3" },
-  { label: "Vitesse de déplacement", formula: "100 + Agilité × 0.2 (preview — pas encore branché au déplacement réel)" },
-  { label: "Résistance aux contrôles", formula: "min(50, Volonté × 0.4)" },
-  { label: "Génération d'aggro", formula: "Charisme × 0.5 + Force × 0.3" },
-];
 
 function toDraft(config: GameConfigDto): DraftMap {
   const draft = {} as DraftMap;
@@ -284,24 +251,7 @@ export default function CharacterProgressionModule() {
                 </fieldset>
               ))}
 
-              <fieldset className="character-progression__group character-progression__group--formulas">
-                <legend className="character-progression__group-title">
-                  Coefficients des stats dérivées (lecture seule)
-                </legend>
-                <p className="character-progression__note">
-                  Formules V1 codées côté serveur (CharacterStatsCalculator),
-                  non configurables dans ce chantier. Rendre ces coefficients
-                  éditables est un chantier séparé (migration vers GameConfig).
-                </p>
-                <ul className="character-progression__formulas">
-                  {DERIVED_STAT_FORMULAS.map((f) => (
-                    <li key={f.label} className="character-progression__formula-row">
-                      <span className="character-progression__formula-label">{f.label}</span>
-                      <span className="character-progression__formula-value">{f.formula}</span>
-                    </li>
-                  ))}
-                </ul>
-              </fieldset>
+              <DerivedStatsCoefficientsPanel />
 
               <fieldset className="character-progression__group character-progression__group--simulation">
                 <legend className="character-progression__group-title">

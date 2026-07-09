@@ -14,6 +14,7 @@ import { MasteriesModule } from '../masteries/masteries.module';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { ProgressionModule } from '../progression/progression.module';
 import { WorldModule } from '../world/world.module';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WorldModule } from '../world/world.module';
     ItemTransferModule,
     ProgressionModule,
     WorldModule,
+    DerivedStatsModule,
   ],
   controllers: [CharacterController],
   providers: [CharacterService],

@@ -1,6 +1,12 @@
 @use "../../../../styles/abstracts/variables" as vars;
 @use "../../../../styles/abstracts/mixins" as m;
 
+// Largeur des champs numériques compacts de l'éditeur de dérivées (min/max,
+// base, coefficients) — une seule source pour éviter de dupliquer la valeur
+// dans plusieurs règles. min/max réduits d'1/3 (60px → 40px) ; base/coef
+// alignés sur la même taille pour un rendu uniforme et compact.
+$derived-field-width: 40px;
+
 .character-progression {
   @include m.panel-section;
   color: vars.$color-text-primary;
@@ -98,23 +104,39 @@
     border-color: vars.$color-text-gold;
   }
 
-  &__formulas {
+  // ── Éditeur de coefficients de dérivées (DerivedStatDefinition) ────────────
+
+  &__derived-editor {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    list-style: none;
-    margin: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    padding: 0;
+    gap: 8px;
   }
 
-  &__formula-row {
+  &__derived-category-title {
+    cursor: pointer;
     display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 0.72rem;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+
+  &__derived-row-edit {
+    display: grid;
+    grid-template-columns:
+      20px minmax(0, 1fr)
+      $derived-field-width $derived-field-width $derived-field-width $derived-field-width
+      auto;
+    align-items: center;
+    gap: 6px;
     padding: 3px 4px;
+    font-size: 0.72rem;
+
+    // Empêche tout enfant (texte, input) de déborder de sa colonne et de se
+    // superposer aux colonnes voisines — comportement par défaut de CSS grid
+    // (min-width: auto) sinon.
+    > * {
+      min-width: 0;
+    }
 
     &:nth-child(odd) {
       background: vars.$panel-header-bg;
@@ -122,15 +144,84 @@
     }
   }
 
-  &__formula-label {
-    color: vars.$color-text-primary;
-    white-space: nowrap;
+  &__derived-enabled {
+    display: flex;
+    justify-content: center;
   }
 
-  &__formula-value {
-    color: vars.$color-text-muted;
+  &__derived-row-label {
+    color: vars.$color-text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__derived-raw-source {
+    font-style: italic;
+  }
+
+  // Dérivée système non désactivable (maxHealth/physicalAttack/defense) —
+  // sobre, réutilise la couleur atténuée existante (__field-current).
+  &__derived-locked-note {
+    font-style: italic;
+    font-size: 0.65rem;
+  }
+
+  &__derived-enabled input:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &__derived-base-input,
+  &__derived-coef-input,
+  &__derived-minmax-input {
+    width: $derived-field-width;
+    font-size: 0.7rem;
+    padding: 3px 5px;
+  }
+
+  &__derived-save-btn {
+    padding: 3px 8px;
+  }
+
+  // ── Preview serveur ──────────────────────────────────────────────────────
+
+  &__derived-preview-inputs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 6px;
+  }
+
+  &__derived-preview-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__derived-preview-results {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-top: 4px;
+    border-top: 1px solid vars.$panel-border;
+  }
+
+  &__derived-preview-result {
+    display: flex;
+    gap: 4px;
+    font-size: 0.7rem;
     font-family: vars.$coords-font-family;
-    text-align: right;
+  }
+
+  &__derived-preview-result-label {
+    color: vars.$color-text-muted;
+  }
+
+  &__derived-preview-result-value {
+    color: vars.$color-text-primary;
+    font-weight: bold;
   }
 
   &__simulation-result {

@@ -14,6 +14,7 @@ import { LootService } from '../world/loot.service';
 import { WorldItemsModule } from '../world-items/world-items.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 import { MasteriesModule } from '../masteries/masteries.module';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MasteriesModule } from '../masteries/masteries.module';
     CreatureRuntimeModule,
     WorldItemsModule,
     ItemMaterializationModule,
+    DerivedStatsModule,
   ],
   providers: [CreaturesGateway, CreaturesService, LootService],
   exports: [CreaturesService],

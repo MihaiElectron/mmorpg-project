@@ -1,0 +1,209 @@
+import { Test, TestingModule } from "@nestjs/testing";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { getRepositoryToken } from "@nestjs/typeorm";
+import { DerivedStatsService } from "./derived-stats.service";
+import { DerivedStatDefinition } from "./entities/derived-stat-definition.entity";
+import { DEFAULT_DERIVED_STAT_DEFINITIONS } from "./derived-stats.constants";
+
+function makeRepo() {
+  return {
+    count: jest.fn().mockResolvedValue(24),
+    find: jest.fn().mockResolvedValue(DEFAULT_DERIVED_STAT_DEFINITIONS),
+    findOne: jest.fn(),
+    create: jest.fn().mockImplementation((d) => d),
+    save: jest.fn().mockImplementation((d) => Promise.resolve(d)),
+    merge: jest.fn().mockImplementation((existing, patch) => ({ ...existing, ...patch })),
+  };
+}
+
+describe("DerivedStatsService", () => {
+  let service: DerivedStatsService;
+  let repo: ReturnType<typeof makeRepo>;
+
+  beforeEach(async () => {
+    repo = makeRepo();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DerivedStatsService,
+        { provide: getRepositoryToken(DerivedStatDefinition), useValue: repo },
+      ],
+    }).compile();
+    service = module.get<DerivedStatsService>(DerivedStatsService);
+  });
+
+  describe("onModuleInit — seed", () => {
+    it("seed les 24 defaults si la table est vide", async () => {
+      repo.count.mockResolvedValue(0);
+      await service.onModuleInit();
+      expect(repo.save).toHaveBeenCalledTimes(1);
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved).toHaveLength(DEFAULT_DERIVED_STAT_DEFINITIONS.length);
+    });
+
+    it("ne re-seed pas si la table contient déjà des lignes", async () => {
+      repo.count.mockResolvedValue(24);
+      await service.onModuleInit();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getDefinitions — cache", () => {
+    it("charge depuis le repo puis sert depuis le cache", async () => {
+      const first = await service.getDefinitions();
+      const second = await service.getDefinitions();
+      expect(repo.find).toHaveBeenCalledTimes(1);
+      expect(first).toBe(second);
+    });
+
+    it("retombe sur les defaults V1 si le repo renvoie une liste vide", async () => {
+      repo.find.mockResolvedValue([]);
+      const defs = await service.getDefinitions();
+      expect(defs).toEqual(DEFAULT_DERIVED_STAT_DEFINITIONS);
+    });
+  });
+
+  describe("updateDefinition", () => {
+    it("refuse une clé inconnue (pas de création)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.updateDefinition("unknownStat", { baseValue: 5 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("refuse un coefficient sur une stat primaire inconnue", async () => {
+      repo.findOne.mockResolvedValue({ ...DEFAULT_DERIVED_STAT_DEFINITIONS[0] });
+      await expect(
+        service.updateDefinition("maxHealth", {
+          primaryCoefficients: { notAPrimary: 1 },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse un coefficient non numérique", async () => {
+      repo.findOne.mockResolvedValue({ ...DEFAULT_DERIVED_STAT_DEFINITIONS[0] });
+      await expect(
+        service.updateDefinition("maxHealth", {
+          primaryCoefficients: { vitality: "dix" as unknown as number },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse minValue > maxValue", async () => {
+      repo.findOne.mockResolvedValue({ ...DEFAULT_DERIVED_STAT_DEFINITIONS[0] });
+      await expect(
+        service.updateDefinition("maxHealth", { minValue: 10, maxValue: 5 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse une catégorie invalide", async () => {
+      repo.findOne.mockResolvedValue({ ...DEFAULT_DERIVED_STAT_DEFINITIONS[0] });
+      await expect(
+        service.updateDefinition("maxHealth", { category: "invalid" as any }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    describe("garde-fou dérivées système critiques (maxHealth/physicalAttack/defense)", () => {
+      it.each(["maxHealth", "physicalAttack", "defense"])(
+        "refuse enabled=false sur %s",
+        async (key) => {
+          repo.findOne.mockResolvedValue({
+            ...DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === key)!,
+          });
+          await expect(
+            service.updateDefinition(key, { enabled: false }),
+          ).rejects.toBeInstanceOf(BadRequestException);
+          expect(repo.save).not.toHaveBeenCalled();
+        },
+      );
+
+      it.each(["maxHealth", "physicalAttack", "defense"])(
+        "accepte enabled=true sur %s (no-op explicite autorisé)",
+        async (key) => {
+          const existing = { ...DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === key)! };
+          repo.findOne.mockResolvedValue(existing);
+          await expect(
+            service.updateDefinition(key, { enabled: true }),
+          ).resolves.toBeDefined();
+        },
+      );
+
+      it.each(["maxHealth", "physicalAttack", "defense"])(
+        "autorise la modification des coefficients/baseValue/min/max sur %s",
+        async (key) => {
+          const existing = { ...DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === key)! };
+          repo.findOne.mockResolvedValue(existing);
+          const updated = await service.updateDefinition(key, {
+            baseValue: 5,
+            primaryCoefficients: { vitality: 20 },
+            minValue: 0,
+            maxValue: 999,
+          });
+          expect(updated).toBeDefined();
+          expect(repo.save).toHaveBeenCalled();
+        },
+      );
+
+      it("n'affecte pas une dérivée non critique (criticalChance reste désactivable)", async () => {
+        const existing = { ...DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "criticalChance")! };
+        repo.findOne.mockResolvedValue(existing);
+        await expect(
+          service.updateDefinition("criticalChance", { enabled: false }),
+        ).resolves.toBeDefined();
+      });
+    });
+
+    it("applique un patch valide et invalide le cache", async () => {
+      const existing = { ...DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "criticalChance")! };
+      repo.findOne.mockResolvedValue(existing);
+
+      // Charge une première fois pour peupler le cache.
+      await service.getDefinitions();
+      expect(repo.find).toHaveBeenCalledTimes(1);
+
+      await service.updateDefinition("criticalChance", {
+        primaryCoefficients: { dexterity: 0.5 },
+      });
+
+      await service.getDefinitions();
+      expect(repo.find).toHaveBeenCalledTimes(2); // cache invalidé → re-fetch
+    });
+  });
+
+  describe("previewDerivedStats", () => {
+    it("calcule avec la config persistée si aucun brouillon fourni", async () => {
+      const result = await service.previewDerivedStats({
+        primaryStats: { vitality: 5 },
+      });
+      // maxHealth = rawStatSource(maxHealth, absent ici → 0) + vitality*10
+      expect(result.maxHealth).toBe(50);
+    });
+
+    it("utilise rawStats pour les dérivées à rawStatSource", async () => {
+      const result = await service.previewDerivedStats({
+        primaryStats: { vitality: 5 },
+        rawStats: { maxHealth: 100, attack: 0, defense: 0 },
+      });
+      expect(result.maxHealth).toBe(150);
+    });
+
+    it("applique un draftDefinitions pour prévisualiser un changement non sauvegardé", async () => {
+      const withoutDraft = await service.previewDerivedStats({
+        primaryStats: { dexterity: 10, agility: 0 },
+      });
+      const withDraft = await service.previewDerivedStats({
+        primaryStats: { dexterity: 10, agility: 0 },
+        draftDefinitions: [{ key: "criticalChance", primaryCoefficients: { dexterity: 1 } }],
+      });
+      expect(withDraft.criticalChance).not.toBe(withoutDraft.criticalChance);
+      expect(withDraft.criticalChance).toBe(10);
+    });
+
+    it("refuse une clé inconnue dans draftDefinitions", async () => {
+      await expect(
+        service.previewDerivedStats({
+          draftDefinitions: [{ key: "notReal", baseValue: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+});

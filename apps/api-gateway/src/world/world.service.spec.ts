@@ -2,6 +2,10 @@ import { ConnectedPlayer, MAX_REASONABLE_POSITION, WorldService } from './world.
 import { WorldSocket } from '../types/world-socket';
 import { wuToChunkIndex, DEFAULT_MAP_ID } from '../common/world-coordinates';
 
+// Fallback vide → CharacterStatsCalculator retombe sur DEFAULT_DERIVED_STAT_DEFINITIONS
+// (mêmes valeurs que les anciennes formules hardcodées).
+const derivedStatsMock = { getDefinitions: jest.fn().mockResolvedValue([]) };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeSocket(overrides: Partial<WorldSocket> = {}): WorldSocket {
@@ -29,7 +33,7 @@ function makePlayer(overrides: Partial<ConnectedPlayer> = {}): ConnectedPlayer {
 function makeService(): WorldService {
   const charRepo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
   const respawnRepo = { find: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
-  const svc = new WorldService(charRepo as any, respawnRepo as any);
+  const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
   return svc;
 }
 
@@ -582,7 +586,7 @@ describe('WorldService.respawnCharacter', () => {
       save: jest.fn(),
       create: jest.fn(),
     };
-    return new WorldService(charRepo as any, respawnRepo as any);
+    return new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
   }
 
   it("émet character_respawn avec worldX/worldY/characterId/chunkX/chunkY", async () => {
@@ -619,7 +623,7 @@ describe('WorldService.respawnCharacter', () => {
     const respawnRepo = {
       find: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), save: jest.fn(), create: jest.fn(),
     };
-    const svc = new WorldService(charRepo as any, respawnRepo as any);
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
     const { server, emitted } = makeRespawnServer();
     await svc.respawnCharacter('inexistant', server);
     expect(emitted).toHaveLength(0);
@@ -648,7 +652,7 @@ describe('WorldService — P7-B : guards WU explicites', () => {
         update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
       };
       const respawnRepo = { count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
-      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
       const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
       const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
       expect(result).toBeNull();
@@ -660,7 +664,7 @@ describe('WorldService — P7-B : guards WU explicites', () => {
         update: jest.fn(), count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
       };
       const respawnRepo = { count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn() };
-      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
       const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
       const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
       expect(result).toBeNull();
@@ -677,7 +681,7 @@ describe('WorldService — P7-B : guards WU explicites', () => {
         find: jest.fn().mockResolvedValue([{ worldX: 0, worldY: 0, mapId: 1, radius: 0 }]),
         count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
       };
-      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
       const server = makeServer();
       await svc.respawnCharacter('c-1', server);
       expect(charRepo.update).not.toHaveBeenCalled();
@@ -692,7 +696,7 @@ describe('WorldService — P7-B : guards WU explicites', () => {
         find: jest.fn().mockResolvedValue([{ worldX: null, worldY: 0, mapId: 1, radius: 0 }]),
         count: jest.fn().mockResolvedValue(1), save: jest.fn(), create: jest.fn(),
       };
-      const svc = new WorldService(charRepo as any, respawnRepo as any);
+      const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
       const server = makeServer();
       await svc.respawnCharacter('c-1', server);
       // Aucun point valide → nearestWU reste null → retour sans update
@@ -712,7 +716,7 @@ describe('WorldService.onModuleInit — seed RespawnPoint (P7-A)', () => {
       create: jest.fn().mockImplementation((a) => { created.push(a); return a; }),
       save: jest.fn().mockResolvedValue({}),
     };
-    const svc = new WorldService(charRepo as any, respawnRepo as any);
+    const svc = new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
     return { svc, respawnRepo, created };
   }
 

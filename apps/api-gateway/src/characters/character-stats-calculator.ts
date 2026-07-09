@@ -1,4 +1,6 @@
 import { Character } from './entities/character.entity';
+import type { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
+import { DEFAULT_DERIVED_STAT_DEFINITIONS } from '../derived-stats/derived-stats.constants';
 
 /**
  * CharacterStatsCalculator — Progression V1
@@ -22,11 +24,15 @@ import { Character } from './entities/character.entity';
  * legacy sur `Character`) : `criticalChance`/`criticalDamage` sont désormais
  * calculées depuis Dextérité/Agilité comme toutes les autres dérivées.
  *
- * Seules `maxHealth`, `physicalAttack` et `defense` sont consommées par le
- * combat (creatures.service.ts) en V1. Toutes les autres dérivées sont
- * calculées et exposées mais restent de l'affichage/preview V1 — non
- * branchées à une mécanique (mana/energy/régénération/résistances
- * élémentaires/vitesse/CC n'existent pas encore comme systèmes runtime).
+ * Les FORMULES des 24 dérivées ne sont plus hardcodées ici : elles viennent
+ * de `DerivedStatDefinition` (config serveur, éditable en DevTools — voir
+ * `derived-stats/`). `compute()` reste PUR : il reçoit les définitions en
+ * paramètre (chargées par `DerivedStatsService`) et retombe sur
+ * `DEFAULT_DERIVED_STAT_DEFINITIONS` (mêmes valeurs que les anciennes
+ * constantes hardcodées) si absentes, pour ne jamais planter. Seules
+ * `maxHealth`, `physicalAttack` et `defense` sont consommées par le combat
+ * (creatures.service.ts) en V1. Toutes les autres dérivées sont calculées et
+ * exposées mais restent de l'affichage/preview V1.
  */
 
 /** Les dix stats principales distribuables du personnage. */
@@ -114,6 +120,48 @@ function sumPrimary(...parts: PrimaryStats[]): PrimaryStats {
   }), zeroPrimary());
 }
 
+/**
+ * Calcule les 24 dérivées à partir des stats primaires finales, d'un lot de
+ * valeurs brutes Character (pour `rawStatSource`) et d'un jeu de définitions.
+ * Fonction PURE réutilisée par `compute()` (personnage réel) et par
+ * `DerivedStatsService.previewDerivedStats()` (aperçu admin sans personnage).
+ */
+export function computeDerivedFromDefinitions(
+  final: PrimaryStats,
+  rawStats: { maxHealth: number; attack: number; defense: number },
+  definitions: DerivedStatDefinition[] | undefined | null,
+): DerivedStats {
+  const defs = definitions && definitions.length > 0 ? definitions : DEFAULT_DERIVED_STAT_DEFINITIONS;
+
+  const result: Record<string, number> = {};
+  for (const d of defs) {
+    if (!d.enabled) {
+      result[d.key] = 0;
+      continue;
+    }
+    const start = d.rawStatSource
+      ? (rawStats as unknown as Record<string, number>)[d.rawStatSource] ?? 0
+      : d.baseValue ?? 0;
+    let value = start;
+    for (const [primaryKey, coef] of Object.entries(d.primaryCoefficients ?? {})) {
+      const primaryValue = (final as unknown as Record<string, number>)[primaryKey] ?? 0;
+      value += coef * primaryValue;
+    }
+    if (d.minValue != null) value = Math.max(d.minValue, value);
+    if (d.maxValue != null) value = Math.min(d.maxValue, value);
+    result[d.key] = value;
+  }
+
+  // Garantit le contrat DerivedStats (24 clés) même si la config DB est
+  // incomplète (ex: nouvelle dérivée ajoutée au code sans ligne DB seedée) —
+  // complète depuis les defaults V1 sans écraser une valeur déjà calculée.
+  for (const fallback of DEFAULT_DERIVED_STAT_DEFINITIONS) {
+    if (!(fallback.key in result)) result[fallback.key] = 0;
+  }
+
+  return result as unknown as DerivedStats;
+}
+
 export class CharacterStatsCalculator {
   /** Stats principales de base = points permanents alloués (colonnes base*). */
   static baseStats(character: Character): PrimaryStats {
@@ -139,8 +187,13 @@ export class CharacterStatsCalculator {
    * En V1 tous les modifiers de stats principales sont à 0 (l'équipement
    * n'octroie pas encore de stats principales ; il agit sur `attack`/`defense`
    * bruts déjà persistés, repris tels quels dans les dérivées).
+   *
+   * `definitions` : config serveur des formules de dérivées (chargée par
+   * `DerivedStatsService.getDefinitions()`). Si omise/vide, retombe sur
+   * `DEFAULT_DERIVED_STAT_DEFINITIONS` (mêmes valeurs que l'ancien code
+   * hardcodé) — ne plante jamais.
    */
-  static compute(character: Character): CharacterStats {
+  static compute(character: Character, definitions?: DerivedStatDefinition[]): CharacterStats {
     const base = this.baseStats(character);
 
     const modifiers = {
@@ -158,53 +211,11 @@ export class CharacterStatsCalculator {
       modifiers.debuffs,
     );
 
-    const derived: DerivedStats = {
-      // ── Combat V1 (branché) : Force / Vitalité / Endurance modifient déjà
-      // maxHealth / attaque / défense. `character.maxHealth`, `attack`,
-      // `defense` restent la base brute (incluant l'équipement legacy) ; les
-      // stats principales s'y ajoutent.
-      maxHealth: character.maxHealth + final.vitality * 10,
-      physicalAttack: character.attack + final.strength * 2,
-      defense: character.defense + final.endurance * 1,
-
-      // ── Ressources (affichage/preview V1 — aucun système mana/energy runtime) ──
-      maxMana: final.intelligence * 10 + final.wisdom * 5,
-      maxEnergy: final.endurance * 8 + final.agility * 2,
-      healthRegen: final.vitality * 0.5 + final.endurance * 0.2,
-      manaRegen: final.wisdom * 0.5 + final.intelligence * 0.2,
-      energyRegen: final.endurance * 0.3 + final.agility * 0.2,
-
-      // ── Puissance magique / soin (affichage/preview V1 — non branché combat) ──
-      magicPower: final.intelligence * 2 + final.spirit * 1,
-      healingPower: final.wisdom * 2 + final.spirit * 1,
-
-      // ── Résistances élémentaires séparées (affichage/preview V1 — poison/bleed
-      // etc. pourront être ajoutées plus tard sans changer ce contrat) ──
-      magicalResistanceFire: final.spirit * 0.5 + final.wisdom * 0.2,
-      magicalResistanceWater: final.spirit * 0.5 + final.intelligence * 0.2,
-      magicalResistanceAir: final.spirit * 0.5 + final.agility * 0.2,
-      magicalResistanceEarth: final.spirit * 0.5 + final.endurance * 0.2,
-
-      // ── Précision / critique / esquive (affichage/preview V1 — non branché
-      // combat ; criticalChance/criticalDamage ne dépendent plus de Critique,
-      // devenu legacy, mais de Dextérité/Agilité) ──
-      accuracy: final.dexterity * 0.5,
-      criticalChance: Math.min(50, final.dexterity * 0.3 + final.agility * 0.2),
-      criticalDamage: 150 + final.dexterity * 1,
-      dodgeChance: Math.min(40, final.agility * 0.3),
-      parryChance: Math.min(40, final.strength * 0.15 + final.dexterity * 0.15),
-      blockChance: Math.min(40, final.endurance * 0.2 + final.strength * 0.1),
-
-      // ── Vitesse (affichage/preview V1 — base 100 = valeur neutre ; la
-      // vitesse de déplacement réelle reste une constante serveur globale,
-      // voir dette technique STATUS.md "Vitesse joueur") ──
-      attackSpeed: 100 + final.agility * 0.3,
-      movementSpeed: 100 + final.agility * 0.2,
-
-      // ── Contrôle / aggro (affichage/preview V1 — pas de CC/aggro runtime) ──
-      controlResistance: Math.min(50, final.willpower * 0.4),
-      threatGeneration: final.charisma * 0.5 + final.strength * 0.3,
-    };
+    const derived = computeDerivedFromDefinitions(
+      final,
+      { maxHealth: character.maxHealth, attack: character.attack, defense: character.defense },
+      definitions,
+    );
 
     return { base, modifiers, final, derived };
   }

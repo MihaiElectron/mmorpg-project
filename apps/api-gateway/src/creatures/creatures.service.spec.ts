@@ -13,6 +13,7 @@ import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,6 +134,7 @@ describe('CreaturesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CreaturesService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepository },
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
@@ -1208,6 +1210,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CreaturesService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepository },
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
@@ -1357,6 +1360,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     const module = await Test.createTestingModule({
       providers: [
         CreaturesService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: { findOne: jest.fn().mockResolvedValue(null), upsert: jest.fn() } },
         { provide: getRepositoryToken(CreatureSpawn), useValue: { findOne: jest.fn().mockResolvedValue(null), find: jest.fn().mockResolvedValue([]), save: jest.fn(), update: jest.fn(), create: jest.fn().mockImplementation((a) => a) } },

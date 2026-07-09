@@ -22,6 +22,7 @@ import { InventoryProjectionService } from '../inventory/projection/inventory-pr
 import { MasteriesService } from '../masteries/masteries.service';
 import { EconomyService } from '../economy/economy.service';
 import { GameConfigService } from '../game-config/game-config.service';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
 
@@ -105,6 +106,7 @@ describe('AdminService resources', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -612,6 +614,7 @@ describe('AdminService — createMasteryDefinition', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -719,6 +722,7 @@ describe('AdminService — updateMasteryDefinition', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -796,6 +800,7 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
   return Test.createTestingModule({
     providers: [
       AdminService,
+      { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
       { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
       { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
       { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -1146,6 +1151,7 @@ describe('createCreatureTemplate', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -1229,6 +1235,7 @@ describe('createResourceTemplate', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
@@ -1495,6 +1502,7 @@ describe('AdminService — recalculateCharacterProgression', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: {} },
         { provide: MasteriesService, useValue: {} },
         { provide: EconomyService, useValue: {} },

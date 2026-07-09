@@ -12,6 +12,7 @@ import { InventoryProjectionService } from '../inventory/projection/inventory-pr
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { WorldService } from '../world/world.service';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 function makeRepo() {
   return {
@@ -40,6 +41,7 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CharacterService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
@@ -115,6 +117,7 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CharacterService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
@@ -212,6 +215,7 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CharacterService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },

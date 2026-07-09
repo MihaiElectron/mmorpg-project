@@ -23,6 +23,7 @@ import { CharacterStatsCalculator } from './character-stats-calculator';
 import { resolveEffectiveAttackRangeWU } from './attack-range.helper';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { WorldService } from '../world/world.service';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // Correspondance stat DTO → colonne base* de Character.
 const STAT_COLUMN: Record<keyof AllocateStatsDto, keyof Character> = {
@@ -59,6 +60,7 @@ export class CharacterService {
     private readonly itemTransfer: ItemTransferService,
     private readonly progression: ProgressionService,
     private readonly worldService: WorldService,
+    private readonly derivedStats: DerivedStatsService,
   ) {}
 
   /**
@@ -112,7 +114,8 @@ export class CharacterService {
     if (!character) throw new NotFoundException(`No character found for user ${userId}`);
     const inventory = await this.inventoryProjection.project(character.id);
     const nextLevelXp = await this.progression.getNextLevelXp(character.level);
-    const stats = CharacterStatsCalculator.compute(character);
+    const derivedStatDefinitions = await this.derivedStats.getDefinitions();
+    const stats = CharacterStatsCalculator.compute(character, derivedStatDefinitions);
     // Bloc combat séparé de stats.derived : portée effective issue de
     // l'équipement + règles combat (source serveur unique pour l'auto-attaque).
     const combat = { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) };
@@ -149,6 +152,8 @@ export class CharacterService {
       throw new BadRequestException('Aucun point à allouer.');
     }
 
+    const derivedStatDefinitions = await this.derivedStats.getDefinitions();
+
     const characterId = await this.dataSource.transaction(async (manager) => {
       const character = await manager.findOne(Character, {
         where: { userId },
@@ -164,7 +169,7 @@ export class CharacterService {
       }
 
       // PV max dérivé avant application (pour le delta Vitalité).
-      const oldMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+      const oldMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
 
       for (const [column, amount] of Object.entries(increments)) {
         (character as unknown as Record<string, number>)[column] += amount as number;
@@ -172,7 +177,7 @@ export class CharacterService {
       character.unspentStatPoints -= total;
 
       // Vitalité : PV courants +delta, capés au nouveau PV max dérivé.
-      const newMaxHealth = CharacterStatsCalculator.compute(character).derived.maxHealth;
+      const newMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
       const delta = newMaxHealth - oldMaxHealth;
       if (delta > 0) {
         character.health = Math.min(character.health + delta, newMaxHealth);

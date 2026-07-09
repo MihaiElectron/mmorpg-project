@@ -26,6 +26,7 @@ import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, C
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // Portée mêlée par défaut en WU (distance Chebyshev) — source unique dans le
 // helper partagé avec la projection /characters/me. Encore utilisée ici pour
@@ -123,6 +124,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly dataSource: DataSource,
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
+    private readonly derivedStats: DerivedStatsService,
   ) {}
 
   async onModuleInit() {
@@ -370,7 +372,8 @@ export class CreaturesService implements OnModuleInit {
       const char = await this.characterRepository.findOne({ where: { id: target.characterId } });
       if (char && char.health > 0) {
         // Défense dérivée serveur (Endurance incluse), jamais la colonne brute.
-        const charDefense = CharacterStatsCalculator.compute(char).derived.defense;
+        const derivedStatDefinitions = await this.derivedStats.getDefinitions();
+        const charDefense = CharacterStatsCalculator.compute(char, derivedStatDefinitions).derived.defense;
         const dmg = Math.max(template.baseAttack - charDefense, 1);
         const newHealth = Math.max(char.health - dmg, 0);
         await this.characterRepository.update(char.id, { health: newHealth });
@@ -544,7 +547,8 @@ export class CreaturesService implements OnModuleInit {
     // Progression V1 : le combat lit les stats DÉRIVÉES serveur, jamais les
     // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
     // agilité / dextérité NON branchés en combat V1 (affichage seul).
-    const charStats = CharacterStatsCalculator.compute(character);
+    const derivedStatDefinitionsForAttack = await this.derivedStats.getDefinitions();
+    const charStats = CharacterStatsCalculator.compute(character, derivedStatDefinitionsForAttack);
     const damageResult = calculateCombatDamage({
       attackerValue: charStats.derived.physicalAttack,
       targetDefense: derived.defenseTotal,
