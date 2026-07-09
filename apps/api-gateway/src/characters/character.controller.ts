@@ -14,6 +14,7 @@ import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
+import { PreviewStatsDto } from './dto/preview-stats.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('characters')
@@ -70,6 +71,17 @@ export class CharacterController {
   @Post('me/stats/allocate')
   allocateStats(@Request() req, @Body() dto: AllocateStatsDto) {
     return this.characterService.allocateStats(req.user.userId, dto);
+  }
+
+  /**
+   * POST /characters/me/stats-preview
+   * Aperçu LECTURE SEULE de l'impact d'une répartition de points (avant
+   * validation). Ne persiste rien — renvoie { primary, derived } calculés
+   * serveur.
+   */
+  @Post('me/stats-preview')
+  previewStats(@Request() req, @Body() dto: PreviewStatsDto) {
+    return this.characterService.previewStats(req.user.userId, dto);
   }
 
   /**

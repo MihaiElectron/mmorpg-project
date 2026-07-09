@@ -12,6 +12,43 @@ const storeLogic = (set, get) => ({
   balance: null,
   dragEquipSource: null,
 
+  // Aperçu des stats dérivées pendant la répartition de points (Progression V1).
+  // Jamais persisté : rempli par le serveur via /characters/me/stats-preview,
+  // vidé à la validation/annulation. `_statPreviewSeq` ignore les réponses
+  // obsolètes quand plusieurs requêtes sont en vol (debounce côté StatsTab).
+  statPreviewDerived: null,
+  statPreviewLoading: false,
+  _statPreviewSeq: 0,
+
+  clearStatPreview: () => set({ statPreviewDerived: null, statPreviewLoading: false }),
+
+  requestStatPreview: async (draftPrimaryStats) => {
+    const seq = get()._statPreviewSeq + 1;
+    set({ _statPreviewSeq: seq, statPreviewLoading: true });
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me/stats-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ draftPrimaryStats }),
+      });
+      // Réponse obsolète : une requête plus récente a été lancée entre-temps.
+      if (get()._statPreviewSeq !== seq) return;
+      if (!res.ok) {
+        // Erreur discrète : on garde les stats actuelles (pas de preview).
+        set({ statPreviewDerived: null, statPreviewLoading: false });
+        return;
+      }
+      const data = await res.json();
+      if (get()._statPreviewSeq !== seq) return;
+      set({ statPreviewDerived: data?.derived ?? null, statPreviewLoading: false });
+    } catch {
+      if (get()._statPreviewSeq !== seq) return;
+      set({ statPreviewDerived: null, statPreviewLoading: false });
+    }
+  },
+
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),

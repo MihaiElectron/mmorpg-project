@@ -275,4 +275,18 @@
     color: vars.$color-text-primary;
     font-weight: 500;
   }
+
+  // Aperçu live pendant la répartition de points : "current → preview".
+  &__derived-preview {
+    color: vars.$btn-success-hover;
+    font-weight: 700;
+  }
+
+  &__derived-previewing {
+    color: vars.$color-text-muted;
+    font-size: 0.7rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
 }

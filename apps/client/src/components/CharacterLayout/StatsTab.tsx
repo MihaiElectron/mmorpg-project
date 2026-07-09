@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCharacterStore } from "../../store/character.store";
 import {
+  STAT_FIELDS,
   STAT_FIELDS_COLUMN_1,
   STAT_FIELDS_COLUMN_2,
   emptyBuffer,
@@ -10,6 +11,9 @@ import {
   decrement,
   buildAllocationPayload,
 } from "./statsAllocation";
+
+// Debounce court avant d'appeler l'aperçu serveur (évite le spam au clic répété).
+const PREVIEW_DEBOUNCE_MS = 200;
 
 type PrimaryStats = Record<string, number>;
 type DerivedStats = Record<string, number>;
@@ -27,6 +31,8 @@ export default function StatsTab() {
       })
     | null;
   const allocateStats = useCharacterStore((s) => s.allocateStats);
+  const requestStatPreview = useCharacterStore((s) => s.requestStatPreview);
+  const clearStatPreview = useCharacterStore((s) => s.clearStatPreview);
 
   const [buffer, setBuffer] = useState<Record<string, number>>(emptyBuffer());
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +46,31 @@ export default function StatsTab() {
   const final = character?.stats?.final ?? {};
 
   const hasPending = allocated > 0;
+
+  // Aperçu live : à chaque changement du brouillon, on demande au serveur les
+  // dérivées prévisualisées (debounce). Le serveur reste l'autorité de calcul ;
+  // rien n'est persisté. Sans brouillon → on vide l'aperçu (retour aux valeurs
+  // serveur actuelles).
+  useEffect(() => {
+    if (allocated <= 0) {
+      clearStatPreview();
+      return;
+    }
+    const draftPrimaryStats: Record<string, number> = {};
+    for (const f of STAT_FIELDS) {
+      const baseVal =
+        (base as Record<string, number>)[f.final] ??
+        (character as Record<string, number> | null)?.[f.base] ??
+        0;
+      draftPrimaryStats[f.key] = baseVal + (buffer[f.key] || 0);
+    }
+    const timer = window.setTimeout(() => requestStatPreview(draftPrimaryStats), PREVIEW_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buffer]);
+
+  // Vide l'aperçu au démontage de l'onglet.
+  useEffect(() => () => clearStatPreview(), [clearStatPreview]);
 
   if (!character) {
     return <div className="character-stats character-stats--empty">Chargement du personnage…</div>;
@@ -58,6 +89,7 @@ export default function StatsTab() {
   function handleCancel() {
     setError(null);
     setBuffer(emptyBuffer());
+    clearStatPreview();
   }
 
   async function handleValidate() {
@@ -69,6 +101,7 @@ export default function StatsTab() {
     setSubmitting(false);
     if (result?.ok) {
       setBuffer(emptyBuffer());
+      clearStatPreview();
     } else {
       setError(result?.error ?? "Allocation refusée");
     }

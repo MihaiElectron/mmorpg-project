@@ -48,24 +48,47 @@ export default function DerivedStatsTab() {
   const character = useCharacterStore((s) => s.character) as
     | (Record<string, number> & { stats?: { derived: DerivedStats } })
     | null;
+  const previewDerived = useCharacterStore((s) => s.statPreviewDerived) as DerivedStats | null;
+  const previewLoading = useCharacterStore((s) => s.statPreviewLoading) as boolean;
 
   const derived = character?.stats?.derived ?? {};
 
   const derivedEntries = useMemo(
-    () => DERIVED_ROWS.map((r) => ({ ...r, value: derived[r.key] })),
-    [derived],
+    () =>
+      DERIVED_ROWS.map((r) => {
+        const current = derived[r.key];
+        const preview = previewDerived ? previewDerived[r.key] : undefined;
+        // "Changé" seulement si l'aperçu diffère de l'affichage arrondi actuel.
+        const changed =
+          preview != null &&
+          current != null &&
+          formatDerived(preview, r.suffix) !== formatDerived(current, r.suffix);
+        return { ...r, current, preview, changed };
+      }),
+    [derived, previewDerived],
   );
 
   if (!character) return null;
 
   return (
     <div className="character-stats__derived character-stats__derived--compact">
-      <h3 className="character-stats__derived-title">Stats dérivées</h3>
+      <h3 className="character-stats__derived-title">
+        Stats dérivées
+        {previewLoading && <span className="character-stats__derived-previewing"> aperçu…</span>}
+      </h3>
       <div className="character-stats__derived-list">
         {derivedEntries.map((r) => (
           <div key={r.key} className="character-stats__derived-row">
             <span className="character-stats__derived-label">{r.label}</span>
-            <span className="character-stats__derived-value">{formatDerived(r.value, r.suffix)}</span>
+            <span className="character-stats__derived-value">
+              {formatDerived(r.current, r.suffix)}
+              {r.changed && (
+                <span className="character-stats__derived-preview">
+                  {" → "}
+                  {formatDerived(r.preview as number, r.suffix)}
+                </span>
+              )}
+            </span>
           </div>
         ))}
       </div>

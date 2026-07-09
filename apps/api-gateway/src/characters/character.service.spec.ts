@@ -305,3 +305,109 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
     });
   });
 });
+
+describe('CharacterService.previewStats — aperçu sans persistance (Progression V1)', () => {
+  let service: CharacterService;
+  let characterRepo: ReturnType<typeof makeRepo>;
+
+  function makeCharacter(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'char-1',
+      userId: 'user-1',
+      level: 5,
+      health: 80,
+      maxHealth: 100,
+      attack: 12,
+      defense: 6,
+      baseStrength: 0,
+      baseVitality: 0,
+      baseEndurance: 0,
+      baseAgility: 0,
+      baseDexterity: 0,
+      baseIntelligence: 0,
+      baseWisdom: 0,
+      baseSpirit: 0,
+      baseWillpower: 0,
+      baseCharisma: 0,
+      unspentStatPoints: 10,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    characterRepo = makeRepo();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CharacterService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
+        { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
+        { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
+        { provide: getRepositoryToken(Item), useValue: makeRepo() },
+        { provide: DataSource, useValue: { transaction: jest.fn() } },
+        { provide: InventoryProjectionService, useValue: { project: jest.fn() } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn() } },
+        { provide: WorldService, useValue: { emitCharacterReload: jest.fn(), emitAdminCharacterDirty: jest.fn() } },
+      ],
+    }).compile();
+    service = module.get<CharacterService>(CharacterService);
+  });
+
+  function arm(overrides: Record<string, unknown> = {}) {
+    characterRepo.findOne.mockResolvedValue(makeCharacter(overrides));
+  }
+
+  it('renvoie primary reflétant le brouillon et maxHealth dérivé prévisualisé', async () => {
+    arm({ maxHealth: 100, baseVitality: 0, unspentStatPoints: 10 });
+    // +5 Vitalité → maxHealth dérivé = 100 + 5×10 = 150
+    const res = await service.previewStats('user-1', {
+      draftPrimaryStats: { strength: 0, vitality: 5, endurance: 0, agility: 0, dexterity: 0, intelligence: 0, wisdom: 0, spirit: 0, willpower: 0, charisma: 0 },
+    });
+    expect(res.primary.vitality).toBe(5);
+    expect(res.derived.maxHealth).toBe(150);
+  });
+
+  it("ne persiste rien (aucun save sur le repository)", async () => {
+    arm();
+    await service.previewStats('user-1', { draftPrimaryStats: { vitality: 3 } });
+    expect(characterRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('les dérivées répondent au brouillon (physicalAttack augmente avec la Force)', async () => {
+    arm({ baseStrength: 0, unspentStatPoints: 10 });
+    const low = await service.previewStats('user-1', { draftPrimaryStats: { strength: 0 } });
+    const high = await service.previewStats('user-1', { draftPrimaryStats: { strength: 5 } });
+    expect(high.derived.physicalAttack).toBeGreaterThan(low.derived.physicalAttack);
+  });
+
+  it('rejette une stat inconnue', async () => {
+    arm();
+    await expect(
+      service.previewStats('user-1', { draftPrimaryStats: { luck: 3 } as Record<string, number> }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une valeur non entière ou négative', async () => {
+    arm();
+    await expect(service.previewStats('user-1', { draftPrimaryStats: { strength: 1.5 } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.previewStats('user-1', { draftPrimaryStats: { strength: -1 } })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette une valeur sous la base permanente (dé-allocation interdite)', async () => {
+    arm({ baseStrength: 4 });
+    await expect(service.previewStats('user-1', { draftPrimaryStats: { strength: 2 } })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejette un total ajouté supérieur aux points disponibles', async () => {
+    arm({ unspentStatPoints: 3, baseStrength: 0, baseVitality: 0 });
+    await expect(
+      service.previewStats('user-1', { draftPrimaryStats: { strength: 2, vitality: 2 } }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('NotFound si aucun personnage', async () => {
+    characterRepo.findOne.mockResolvedValue(null);
+    await expect(service.previewStats('user-1', { draftPrimaryStats: {} })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

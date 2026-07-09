@@ -19,9 +19,10 @@ import { InventoryEntryDto } from '../inventory/projection/inventory-entry.dto';
 import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
-import { CharacterStatsCalculator } from './character-stats-calculator';
+import { CharacterStatsCalculator, PrimaryStats, DerivedStats } from './character-stats-calculator';
 import { resolveEffectiveAttackRangeWU } from './attack-range.helper';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
+import { PreviewStatsDto } from './dto/preview-stats.dto';
 import { WorldService } from '../world/world.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
@@ -191,6 +192,63 @@ export class CharacterService {
     this.worldService.emitCharacterReload(characterId);
     this.worldService.emitAdminCharacterDirty(characterId, 'stats');
     return this.findFirstByUserProjected(userId);
+  }
+
+  /**
+   * Prévisualisation (LECTURE SEULE) de l'impact d'une répartition de points de
+   * stats primaires, AVANT validation. Ne persiste RIEN.
+   *
+   * `draftPrimaryStats` = valeurs finales souhaitées des 10 primaires (base
+   * permanente + points en cours). Le serveur reste autorité : il refuse les
+   * clés inconnues, les valeurs non entières/négatives, une valeur inférieure
+   * à la base déjà acquise (dé-allocation interdite) et un total ajouté
+   * supérieur aux `unspentStatPoints`. Le calcul réutilise
+   * `CharacterStatsCalculator` (aucune formule dupliquée) sur un clone en
+   * mémoire — la ligne DB n'est jamais modifiée.
+   */
+  async previewStats(
+    userId: string,
+    dto: PreviewStatsDto,
+  ): Promise<{ primary: PrimaryStats; derived: DerivedStats }> {
+    const character = await this.characterRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'ASC' },
+    });
+    if (!character) throw new NotFoundException(`No character found for user ${userId}`);
+
+    const draft = dto?.draftPrimaryStats ?? {};
+    const tempChar = { ...character } as Character;
+    const tempRecord = tempChar as unknown as Record<string, number>;
+    const charRecord = character as unknown as Record<string, number>;
+
+    let totalAdded = 0;
+    for (const [key, value] of Object.entries(draft)) {
+      if (!(key in STAT_COLUMN)) {
+        throw new BadRequestException(`Stat primaire inconnue : "${key}".`);
+      }
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        throw new BadRequestException(`Valeur invalide pour "${key}" : entier >= 0 requis.`);
+      }
+      const column = STAT_COLUMN[key as keyof AllocateStatsDto];
+      const baseVal = charRecord[column] ?? 0;
+      if (value < baseVal) {
+        throw new BadRequestException(
+          `"${key}" ne peut pas passer sous sa base permanente (${baseVal}).`,
+        );
+      }
+      totalAdded += value - baseVal;
+      tempRecord[column] = value;
+    }
+
+    if (totalAdded > character.unspentStatPoints) {
+      throw new BadRequestException(
+        `Points insuffisants : ${totalAdded} demandés, ${character.unspentStatPoints} disponibles.`,
+      );
+    }
+
+    const definitions = await this.derivedStats.getDefinitions();
+    const stats = CharacterStatsCalculator.compute(tempChar, definitions);
+    return { primary: stats.final, derived: stats.derived };
   }
 
   /**
