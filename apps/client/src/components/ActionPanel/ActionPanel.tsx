@@ -2,27 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useActionPanelStore, getActionPanelStore } from "../../store/actionPanel.store";
 import { getWindowManagerStore } from "../../store/windowManager.store";
 import { useCharacterStore } from "../../store/character.store";
-import { getDevToolsStore } from "../../store/devtools.store";
-import { parseCommand } from "../../phaser/admin/commandParser";
-import { commandRegistry, autocompleteCommand } from "../../phaser/admin/commandRegistry";
 import HealthBar from "../HealthBar/HealthBar";
 import { getDevToolsSocket, getWorldScene } from "../DevTools/devtoolsBridge";
 import CraftingRuntimePanel from "./CraftingRuntimePanel";
 import ActionPanelSkills from "./ActionPanelSkills";
 import { isCraftStationPanelOpenFor, type CraftingStationTarget } from "./craftingRuntime";
 
-type ConsoleLine = { text: string; ok: boolean };
-
 function decodeJwtRole(token: string): string | null {
   try { return JSON.parse(atob(token.split(".")[1]))?.role ?? null; }
   catch { return null; }
-}
-
-function getTemplateKeys(): string[] {
-  try {
-    const store = (window as any).__GLOBAL_ADMIN_STORE__;
-    return store?.getState?.()?.templates?.map((t: any) => t.key) ?? [];
-  } catch { return []; }
 }
 
 export default function ActionPanel() {
@@ -34,11 +22,8 @@ export default function ActionPanel() {
   const selectOverlapTarget = useActionPanelStore((s) => s.selectOverlapTarget);
   const character         = useCharacterStore((s) => s.character);
 
-  const panelRef       = useRef<HTMLDivElement>(null);
-  const consoleInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  const [command, setCommand]   = useState("");
-  const [results, setResults]   = useState<ConsoleLine[]>([]);
   const [craftingStation, setCraftingStation] = useState<CraftingStationTarget | null>(null);
 
   const token   = localStorage.getItem("token") ?? "";
@@ -51,9 +36,6 @@ export default function ActionPanel() {
   const craftPanelOpenForTarget = isCraftStationPanelOpenFor(target, craftingStation);
   const visibleActions = craftPanelOpenForTarget ? [] : actions;
   // Vue craft station pure : uniquement titre + fermer + CraftingRuntimePanel.
-  // On masque alors la console admin et les éléments génériques (le champ commande
-  // « /spawn … » n'a rien à faire dans une fenêtre de craft). La console reste
-  // disponible partout ailleurs.
   const isCraftStationPanelMode = craftPanelOpenForTarget;
 
   // ── Fermeture au clic extérieur (sauf canvas Phaser) ─────────────────────
@@ -67,138 +49,25 @@ export default function ActionPanel() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [closePanel]);
 
-  // ── Focus + pré-remplissage console ──────────────────────────────────────
+  // Reset du panneau craft à chaque changement de cible. Déclaré AVANT l'effet
+  // d'ouverture ci-dessous → sur une nouvelle station, on repart d'un état
+  // « fermé » avant de rouvrir net.
   useEffect(() => {
-    if (isOpen && isAdmin) setTimeout(() => consoleInputRef.current?.focus(), 0);
-  }, [isOpen, isAdmin]);
-
-  useEffect(() => {
-    if (isAdmin && hasOverlap) {
-      setCommand("/select ");
-      setTimeout(() => consoleInputRef.current?.focus(), 0);
-    } else {
-      setCommand("");
-    }
     setCraftingStation(null);
-  }, [isAdmin, hasOverlap, target?.id]);
+  }, [target?.id]);
 
   // Ouverture automatique du panneau craft quand WorldScene ouvre une station.
   // WorldScene n'ouvre une station QUE lorsque le joueur est à portée (garde WU
   // dans updatePendingCraftStationOpen) : l'ouverture ne donne donc aucun avantage
   // hors portée, le serveur restant l'autorité (POST /crafting/craft). Chaque
   // openPanel passe un nouvel objet `target` → l'effet refire même pour la même
-  // station (ré-approche). Déclaré APRÈS le reset ci-dessus → net « ouvert ».
+  // station (ré-approche).
   useEffect(() => {
     if (target?.kind === "crafting_station") {
       setCraftingStation(target as CraftingStationTarget);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
-
-  // ── Gestion du focus → store admin + désactivation capture clavier Phaser ─
-  function getPhaserKeyboard() {
-    return getWorldScene()?.input?.keyboard;
-  }
-
-  function onFocus() {
-    getDevToolsStore().getState().setConsoleActive(true);
-    getPhaserKeyboard()?.disableGlobalCapture();
-  }
-
-  function onBlur() {
-    getDevToolsStore().getState().setConsoleActive(false);
-    getPhaserKeyboard()?.enableGlobalCapture();
-  }
-
-  // ── Exécution de commande ─────────────────────────────────────────────────
-  async function runCommand(raw: string) {
-    const parsed = parseCommand(raw.trim());
-    if (!parsed) {
-      pushResult("Syntaxe invalide — commencez par '/'.", false);
-      return;
-    }
-
-    const def = commandRegistry[parsed.name];
-    if (!def) {
-      const matches = autocompleteCommand(parsed.name);
-      const hint = matches.length ? ` Vouliez-vous dire : ${matches.join(", ")} ?` : "";
-      pushResult(`Commande "${parsed.name}" inconnue.${hint}`, false);
-      return;
-    }
-
-    if (def.destructive && parsed.flags["confirm"] !== "true") {
-      pushResult(`Commande destructive — ajoutez --confirm pour l'exécuter.`, false);
-      return;
-    }
-
-    const socket = getDevToolsSocket();
-    if (!socket?.connected) {
-      pushResult("Erreur : socket non connecté.", false);
-      return;
-    }
-
-    const ctx = {
-      socket,
-      token,
-      getTarget: () => target,
-      getCharacterPos: () =>
-        character ? { x: character.positionX ?? 400, y: character.positionY ?? 300 } : null,
-      getLastClickedPos: () => getDevToolsStore().getState().lastClickedPos,
-      getTemplateKeys,
-    };
-
-    const result = await def.handler(parsed.args, parsed.flags, ctx);
-    pushResult(result.message, result.success);
-    getDevToolsStore().getState().addToHistory(raw.trim());
-  }
-
-  function pushResult(text: string, ok: boolean) {
-    setResults((prev) => [{ text, ok }, ...prev].slice(0, 5));
-  }
-
-  // ── Gestion clavier console ───────────────────────────────────────────────
-  async function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const cmd = command.trim();
-      if (!cmd) return;
-      setCommand("");
-      await runCommand(cmd);
-      return;
-    }
-
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const prev = getDevToolsStore().getState().navigateHistory("up", command);
-      setCommand(prev);
-      return;
-    }
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = getDevToolsStore().getState().navigateHistory("down", command);
-      setCommand(next);
-      return;
-    }
-
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const parts = command.split(/\s+/);
-      if (parts.length === 1 && parts[0].startsWith("/")) {
-        const suggestions = autocompleteCommand(parts[0].slice(1));
-        if (suggestions.length === 1) {
-          setCommand(suggestions[0] + " ");
-        } else if (suggestions.length > 1) {
-          pushResult(`Suggestions : ${suggestions.join("  ")}`, true);
-        }
-      }
-      return;
-    }
-
-    if (e.key === "Escape") {
-      closePanel();
-    }
-  }
 
   // ── Suppression admin ─────────────────────────────────────────────────────
   function handleAdminDelete() {
@@ -285,54 +154,20 @@ export default function ActionPanel() {
         <ActionPanelSkills key={target.id} creatureId={target.id} />
       )}
 
-      {isAdmin && !isCraftStationPanelMode && (
-        <div className="action-panel__console">
-          {hasOverlap && (
-            <div className="action-panel__overlap">
-              <span className="action-panel__overlap-label">Superposés :</span>
-              <select
-                className="action-panel__overlap-select"
-                value={target.id}
-                onChange={(e) => { selectOverlapTarget(e.target.value); setCommand(""); }}
-              >
-                {overlappingTargets.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.type.replace(/_/g, " ")} ({t.kind})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {results.length > 0 && (
-            <div className="action-panel__console-results">
-              {results.map((r, i) => (
-                <div
-                  key={i}
-                  className={`action-panel__console-result action-panel__console-result--${r.ok ? "ok" : "err"}`}
-                >
-                  {r.text}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="action-panel__console-input">
-            <span className="action-panel__console-prefix">&gt;</span>
-            <input
-              ref={consoleInputRef}
-              className="action-panel__console-field"
-              type="text"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              onKeyDown={onKeyDown}
-              onFocus={onFocus}
-              onBlur={onBlur}
-              placeholder={hasOverlap ? "/select <index>" : "/spawn goblin  /tp x y  /help"}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </div>
+      {isAdmin && !isCraftStationPanelMode && hasOverlap && (
+        <div className="action-panel__overlap">
+          <span className="action-panel__overlap-label">Superposés :</span>
+          <select
+            className="action-panel__overlap-select"
+            value={target.id}
+            onChange={(e) => selectOverlapTarget(e.target.value)}
+          >
+            {overlappingTargets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.type.replace(/_/g, " ")} ({t.kind})
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

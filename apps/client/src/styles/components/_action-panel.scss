@@ -45,19 +45,13 @@
     cursor: pointer;
   }
 
-  // ── Console admin ─────────────────────────────────────────────────────────
-  &__console {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    border-top: 1px solid vars.$panel-border;
-    padding-top: 8px;
-  }
-
+  // ── Cible superposée (désambiguïsation admin) ─────────────────────────────
   &__overlap {
     display: flex;
     align-items: center;
     gap: 6px;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 8px;
   }
 
   &__overlap-label {
@@ -85,64 +79,6 @@
     option {
       background: vars.$color-shadow-deep;
       color: vars.$color-text-primary;
-    }
-  }
-
-  &__console-results {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    max-height: 120px;
-    overflow-y: auto;
-  }
-
-  &__console-result {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.75rem;
-    padding: 3px 6px;
-    border-radius: vars.$panel-radius-sm;
-    line-height: 1.4;
-    word-break: break-word;
-
-    &--ok {
-      color: #7ecf7e;
-      background: rgba(126, 207, 126, 0.08);
-    }
-
-    &--err {
-      color: #cf7e7e;
-      background: rgba(207, 126, 126, 0.08);
-    }
-  }
-
-  &__console-input {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: vars.$panel-header-bg;
-    border: 1px solid vars.$panel-border;
-    border-radius: vars.$panel-radius-sm;
-    padding: 4px 8px;
-  }
-
-  &__console-prefix {
-    color: vars.$color-text-gold;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.85rem;
-    flex-shrink: 0;
-  }
-
-  &__console-field {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: vars.$color-text-primary;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.8rem;
-
-    &::placeholder {
-      color: vars.$color-text-disabled;
     }
   }
 
