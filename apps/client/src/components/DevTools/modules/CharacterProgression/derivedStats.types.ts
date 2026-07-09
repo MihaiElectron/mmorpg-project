@@ -63,6 +63,24 @@ export const PRIMARY_STAT_KEYS = [
   "charisma",
 ] as const;
 
+/** Libellés FR — catalogue affiché dans le select "stat impliquée" et les résumés. */
+export const PRIMARY_STAT_OPTIONS: { key: (typeof PRIMARY_STAT_KEYS)[number]; label: string }[] = [
+  { key: "strength", label: "Force" },
+  { key: "vitality", label: "Vitalité" },
+  { key: "endurance", label: "Endurance" },
+  { key: "agility", label: "Agilité" },
+  { key: "dexterity", label: "Dextérité" },
+  { key: "intelligence", label: "Intelligence" },
+  { key: "wisdom", label: "Sagesse" },
+  { key: "spirit", label: "Esprit" },
+  { key: "willpower", label: "Volonté" },
+  { key: "charisma", label: "Charisme" },
+];
+
+export const PRIMARY_STAT_LABELS: Record<string, string> = Object.fromEntries(
+  PRIMARY_STAT_OPTIONS.map((opt) => [opt.key, opt.label]),
+);
+
 /**
  * Dérivées système requises par le combat V1 — jamais désactivables
  * (miroir de CRITICAL_DERIVED_STAT_KEYS backend, derived-stats.constants.ts).

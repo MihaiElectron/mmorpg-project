@@ -1,11 +1,18 @@
 @use "../../../../styles/abstracts/variables" as vars;
 @use "../../../../styles/abstracts/mixins" as m;
 
-// Largeur des champs numériques compacts de l'éditeur de dérivées (min/max,
-// base, coefficients) — une seule source pour éviter de dupliquer la valeur
-// dans plusieurs règles. min/max réduits d'1/3 (60px → 40px) ; base/coef
-// alignés sur la même taille pour un rendu uniforme et compact.
-$derived-field-width: 40px;
+// Largeur des champs numériques de l'édition détaillée d'une dérivée
+// (minValue/maxValue/valeur de coefficient) — une seule source pour éviter
+// de dupliquer la valeur dans plusieurs règles. Reste confortable (contexte
+// dépliable en pleine largeur, pas la ligne de résumé compacte).
+$derived-field-width: 72px;
+
+// Largeur du select "stat primaire impliquée" — en "ch" (largeur de
+// caractère) pour suivre le plus long libellé FR ("Intelligence").
+$derived-select-width: 13ch;
+
+// Hauteur max de la liste des dérivées d'une catégorie avant scroll interne.
+$derived-list-max-height: 360px;
 
 .character-progression {
   @include m.panel-section;
@@ -58,7 +65,7 @@ $derived-field-width: 40px;
 
   &__status--error,
   &__message--error {
-    color: #e74c3c;
+    color: vars.$btn-danger-hover;
   }
 
   &__body {
@@ -120,44 +127,80 @@ $derived-field-width: 40px;
     user-select: none;
   }
 
-  &__derived-row-edit {
-    display: grid;
-    grid-template-columns:
-      20px minmax(0, 1fr)
-      $derived-field-width $derived-field-width $derived-field-width $derived-field-width
-      auto;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
-    font-size: 0.72rem;
-
-    // Empêche tout enfant (texte, input) de déborder de sa colonne et de se
-    // superposer aux colonnes voisines — comportement par défaut de CSS grid
-    // (min-width: auto) sinon.
-    > * {
-      min-width: 0;
-    }
-
-    &:nth-child(odd) {
-      background: vars.$panel-header-bg;
-      border-radius: vars.$panel-radius-sm;
-    }
-  }
-
-  &__derived-enabled {
+  // Liste des dérivées d'une catégorie — scroll interne indépendant du reste
+  // du panneau si elle dépasse $derived-list-max-height.
+  &__derived-list {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    max-height: $derived-list-max-height;
+    overflow-y: auto;
   }
 
-  &__derived-row-label {
+  &__derived-row {
+    @include m.panel-slot;
+  }
+
+  // Ligne de résumé — bouton pleine largeur qui déplie l'édition. flex-wrap
+  // au lieu d'une grille à colonnes fixes : aucun élément ne peut déborder
+  // sur un autre, tout passe simplement à la ligne suivante si l'espace
+  // manque (résout la superposition texte/champs des versions précédentes).
+  &__derived-summary {
+    align-items: center;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    font-family: inherit;
+    gap: 4px 10px;
+    padding: 6px 8px;
+    text-align: left;
+    width: 100%;
+
+    &:hover {
+      background: vars.$panel-header-bg;
+    }
+  }
+
+  &__derived-summary-label {
     color: vars.$color-text-primary;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.75rem;
+    font-weight: bold;
   }
 
-  &__derived-raw-source {
-    font-style: italic;
+  &__derived-summary-category {
+    background: vars.$panel-header-bg;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    text-transform: uppercase;
+  }
+
+  &__derived-summary-enabled {
+    color: vars.$color-text-muted;
+    font-size: 0.75rem;
+  }
+
+  &__derived-summary-base,
+  &__derived-summary-minmax {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  // Toujours sur sa propre ligne (flex-basis 100%) : la liste complète des
+  // stats impliquées ne doit jamais être coupée ni se disputer l'espace
+  // avec le reste du résumé.
+  &__derived-summary-coefs {
+    color: vars.$color-text-muted;
+    flex-basis: 100%;
+    font-family: vars.$coords-font-family;
+    font-size: 0.68rem;
   }
 
   // Dérivée système non désactivable (maxHealth/physicalAttack/defense) —
@@ -167,21 +210,96 @@ $derived-field-width: 40px;
     font-size: 0.65rem;
   }
 
-  &__derived-enabled input:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
+  // ── Édition détaillée (dépliée) ─────────────────────────────────────────────
+
+  &__derived-detail {
+    background: vars.$panel-header-bg;
+    border-top: 1px solid vars.$panel-border;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 8px 10px;
   }
 
-  &__derived-base-input,
-  &__derived-coef-input,
-  &__derived-minmax-input {
+  &__derived-detail-fields {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+
+    input:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+  }
+
+  &__derived-detail-coefs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__derived-detail-coefs-title {
+    color: vars.$color-text-gold;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  &__derived-coef-row {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+
+  // Spécificité `&__x.character-progression__input` (au lieu de `&__x` seul)
+  // pour gagner face à `&__input { width: 100% }` quel que soit l'ordre des
+  // règles dans le fichier compilé.
+  &__derived-coef-select.character-progression__input {
+    width: $derived-select-width;
+  }
+
+  &__derived-coef-value.character-progression__input {
     width: $derived-field-width;
-    font-size: 0.7rem;
-    padding: 3px 5px;
   }
 
-  &__derived-save-btn {
-    padding: 3px 8px;
+  &__derived-coef-remove {
+    background: none;
+    border: none;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 2px 4px;
+
+    &:hover {
+      color: vars.$btn-danger-hover;
+    }
+  }
+
+  &__derived-coef-add {
+    align-self: flex-start;
+    background: none;
+    border: 1px dashed vars.$panel-border;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+
+    &:hover:not(:disabled) {
+      border-color: vars.$color-text-gold;
+      color: vars.$color-text-gold;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+  }
+
+  &__derived-detail-actions {
+    display: flex;
+    gap: 8px;
   }
 
   // ── Preview serveur ──────────────────────────────────────────────────────
@@ -288,7 +406,7 @@ $derived-field-width: 40px;
   }
 
   &__field--invalid &__input {
-    border-color: #e74c3c;
+    border-color: vars.$btn-danger-hover;
   }
 
   &__actions {
@@ -381,7 +499,7 @@ $derived-field-width: 40px;
   // rouge, fond dédié, jamais mélangée avec "Appliquer" / "Aperçu".
   &__danger-zone {
     background: rgba(231, 76, 60, 0.08);
-    border: 1px solid #e74c3c;
+    border: 1px solid vars.$btn-danger-hover;
     border-radius: vars.$panel-radius-sm;
     display: flex;
     flex-direction: column;
@@ -391,7 +509,7 @@ $derived-field-width: 40px;
   }
 
   &__danger-title {
-    color: #e74c3c;
+    color: vars.$btn-danger-hover;
     font-size: 0.78rem;
     font-weight: bold;
     letter-spacing: 1px;
@@ -414,8 +532,8 @@ $derived-field-width: 40px;
   }
 
   &__btn--danger {
-    border-color: #e74c3c;
-    color: #e74c3c;
+    border-color: vars.$btn-danger-hover;
+    color: vars.$btn-danger-hover;
 
     &:hover:not(:disabled) {
       background: rgba(231, 76, 60, 0.15);
@@ -432,7 +550,7 @@ $derived-field-width: 40px;
   }
 
   &__danger-errors {
-    color: #e74c3c;
+    color: vars.$btn-danger-hover;
     font-size: 0.7rem;
 
     ul {
