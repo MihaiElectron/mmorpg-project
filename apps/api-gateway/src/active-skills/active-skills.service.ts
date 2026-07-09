@@ -7,12 +7,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
+import { PlayerSkillUnlock } from './entities/player-skill-unlock.entity';
 import { CreateSkillDefinitionDto } from './dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
 import {
+  SKILL_UNLOCK_SOURCES,
   SkillEffectType,
   SkillResourceType,
   SkillTargetMode,
+  SkillUnlockSource,
 } from './active-skills.constants';
 
 /** Vue joueur d'un skill actif (route lecture seule `/characters/me/active-skills`). */
@@ -51,10 +54,82 @@ export class ActiveSkillsService {
   constructor(
     @InjectRepository(SkillDefinition)
     private readonly repo: Repository<SkillDefinition>,
+    @InjectRepository(PlayerSkillUnlock)
+    private readonly unlockRepo: Repository<PlayerSkillUnlock>,
   ) {}
 
   invalidateCache(): void {
     this.cache = null;
+  }
+
+  // ── Déverrouillage par personnage (V1-H) ────────────────────────────────────
+
+  /** Ids des SkillDefinition explicitement déverrouillées pour un personnage. */
+  async getUnlockedSkillDefinitionIds(characterId: string): Promise<Set<string>> {
+    const rows = await this.unlockRepo.find({
+      where: { characterId },
+      select: { skillDefinitionId: true },
+    });
+    return new Set(rows.map((r) => r.skillDefinitionId));
+  }
+
+  /** Vrai si une ligne d'unlock existe pour ce personnage + cette définition. */
+  async isSkillUnlocked(characterId: string, skillDefinitionId: string): Promise<boolean> {
+    const count = await this.unlockRepo.count({ where: { characterId, skillDefinitionId } });
+    return count > 0;
+  }
+
+  /**
+   * Déverrouille un skill (par `key`) pour un personnage. Idempotent : si déjà
+   * déverrouillé, ne crée pas de doublon (contrainte unique + code 23505 géré).
+   * `autoUnlock` NE crée jamais de ligne (un skill autoUnlock est débloqué sans
+   * persistance). `skillKey` n'est jamais stocké — seul `skillDefinitionId`.
+   */
+  async unlockSkillForCharacter(
+    characterId: string,
+    skillKey: string,
+    source?: SkillUnlockSource | null,
+  ): Promise<PlayerSkillUnlock> {
+    const skill = await this.getDefinition(skillKey); // NotFound si clé inconnue
+    if (source != null && !SKILL_UNLOCK_SOURCES.includes(source)) {
+      throw new BadRequestException(`Source de déverrouillage inconnue : "${source}".`);
+    }
+
+    const existing = await this.unlockRepo.findOne({
+      where: { characterId, skillDefinitionId: skill.id },
+    });
+    if (existing) return existing;
+
+    try {
+      const created = this.unlockRepo.create({
+        characterId,
+        skillDefinitionId: skill.id,
+        source: source ?? null,
+      });
+      return await this.unlockRepo.save(created);
+    } catch (error: unknown) {
+      // Création concurrente : conflit UNIQUE(characterId, skillDefinitionId).
+      if ((error as { code?: string }).code === '23505') {
+        const reload = await this.unlockRepo.findOne({
+          where: { characterId, skillDefinitionId: skill.id },
+        });
+        if (reload) return reload;
+      }
+      throw error;
+    }
+  }
+
+  /** Verrouille (supprime l'unlock) un skill pour un personnage. Idempotent. */
+  async lockSkillForCharacter(
+    characterId: string,
+    skillKey: string,
+  ): Promise<{ skillKey: string; locked: boolean }> {
+    const skill = await this.getDefinition(skillKey); // NotFound si clé inconnue
+    const result = await this.unlockRepo.delete({
+      characterId,
+      skillDefinitionId: skill.id,
+    });
+    return { skillKey, locked: (result.affected ?? 0) > 0 };
   }
 
   /**
@@ -69,16 +144,26 @@ export class ActiveSkillsService {
    *
    * Ne renvoie aucune donnée sensible (pas de `scaling`, pas d'id interne,
    * pas de `requiredMasteries` détaillées) — seulement ce dont l'UI a besoin.
+   *
+   * V1-H : uniquement les skills `skillKind === 'active'` ET débloqués
+   * (`autoUnlock === true` OU ligne `player_skill_unlock`). Les passifs/auras et
+   * les skills verrouillés sont EXCLUS.
    */
   async getUsableSkillsForCharacter(
+    characterId: string,
     characterLevel: number,
     masteryLevels: Record<string, number>,
   ): Promise<PlayerActiveSkill[]> {
     const all = await this.listDefinitions();
+    const unlockedIds = await this.getUnlockedSkillDefinitionIds(characterId);
     const result: PlayerActiveSkill[] = [];
 
     for (const s of all) {
       if (!s.enabled) continue;
+      // Seuls les skills actifs sont lançables — passive/aura exclus.
+      if (s.skillKind !== 'active') continue;
+      // Débloqué : autoUnlock global OU unlock explicite du personnage.
+      if (!s.autoUnlock && !unlockedIds.has(s.id)) continue;
       if ((characterLevel ?? 1) < s.requiredLevel) continue;
 
       const masteriesMet = Object.entries(s.requiredMasteries ?? {}).every(

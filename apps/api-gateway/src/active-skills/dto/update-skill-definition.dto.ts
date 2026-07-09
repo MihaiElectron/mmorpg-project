@@ -10,9 +10,11 @@ import {
 } from 'class-validator';
 import {
   SKILL_EFFECT_TYPES,
+  SKILL_KINDS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
   SkillEffectType,
+  SkillKind,
   SkillResourceType,
   SkillTargetMode,
 } from '../active-skills.constants';
@@ -43,6 +45,14 @@ export class UpdateSkillDefinitionDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @IsOptional()
+  @IsIn(SKILL_KINDS)
+  skillKind?: SkillKind;
+
+  @IsOptional()
+  @IsBoolean()
+  autoUnlock?: boolean;
 
   @IsOptional()
   @IsInt()

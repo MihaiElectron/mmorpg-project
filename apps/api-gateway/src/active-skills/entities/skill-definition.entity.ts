@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import {
   SkillEffectType,
+  SkillKind,
   SkillResourceType,
   SkillTargetMode,
 } from '../active-skills.constants';
@@ -48,6 +49,21 @@ export class SkillDefinition {
 
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
+
+  // ── Nature & déverrouillage (V1-H) ──────────────────────────────────────────
+
+  /** active | passive | aura. Seuls les `active` sont lançables (défaut). */
+  @Column({ type: 'varchar', length: 16, default: 'active' })
+  skillKind: SkillKind;
+
+  /**
+   * Si true, le skill est disponible pour tous les personnages sans ligne
+   * `player_skill_unlock` (rétro-compat). Si false, il faut un déverrouillage
+   * explicite par personnage. Règle : débloqué = `autoUnlock === true` OU
+   * ligne `player_skill_unlock` présente.
+   */
+  @Column({ type: 'boolean', default: true })
+  autoUnlock: boolean;
 
   // ── Prérequis ──────────────────────────────────────────────────────────────
 

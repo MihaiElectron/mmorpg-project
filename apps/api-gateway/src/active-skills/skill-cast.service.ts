@@ -87,6 +87,25 @@ export class SkillCastService {
     return all.find((s) => s.key === skillKey) ?? null;
   }
 
+  /**
+   * Garde-fou V1-H commun aux deux chemins de cast (jamais de confiance au
+   * client). Refuse tout skill non `active` (passive/aura non castables) et tout
+   * skill verrouillé (`!autoUnlock` sans ligne `player_skill_unlock`). Retourne
+   * un message d'erreur, ou `null` si le cast est autorisé.
+   */
+  private async checkKindAndUnlock(
+    characterId: string,
+    skill: SkillDefinition,
+  ): Promise<string | null> {
+    if (skill.skillKind !== 'active') {
+      return 'Ce skill ne peut pas être lancé (non actif).';
+    }
+    if (!skill.autoUnlock && !(await this.activeSkills.isSkillUnlocked(characterId, skill.id))) {
+      return 'Skill non débloqué.';
+    }
+    return null;
+  }
+
   async castCreatureSkill(
     characterId: string,
     attackerPosition: { worldX: number; worldY: number; mapId: number },
@@ -97,6 +116,8 @@ export class SkillCastService {
     const skill = await this.findSkill(skillKey);
     if (!skill) return { success: false, error: 'Skill introuvable.' };
     if (!skill.enabled) return { success: false, error: 'Skill désactivé.' };
+    const gate = await this.checkKindAndUnlock(characterId, skill);
+    if (gate) return { success: false, error: gate };
     if (skill.targetMode !== 'creature') {
       return { success: false, error: 'Ce skill ne cible pas une créature.' };
     }
@@ -206,6 +227,8 @@ export class SkillCastService {
     const skill = await this.findSkill(skillKey);
     if (!skill) return { success: false, error: 'Skill introuvable.' };
     if (!skill.enabled) return { success: false, error: 'Skill désactivé.' };
+    const gate = await this.checkKindAndUnlock(characterId, skill);
+    if (gate) return { success: false, error: gate };
     if (skill.targetMode !== 'self') {
       return { success: false, error: 'Ce skill ne se lance pas sur soi.' };
     }

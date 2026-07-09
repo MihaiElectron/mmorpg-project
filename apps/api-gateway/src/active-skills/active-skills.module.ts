@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
+import { PlayerSkillUnlock } from './entities/player-skill-unlock.entity';
 import { ActiveSkillsService } from './active-skills.service';
 import { SkillCastService } from './skill-cast.service';
 import { SkillsGateway } from './skills.gateway';
@@ -27,7 +28,7 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SkillDefinition, Character]),
+    TypeOrmModule.forFeature([SkillDefinition, PlayerSkillUnlock, Character]),
     CommonModule,
     CharactersModule,
     CreaturesModule,

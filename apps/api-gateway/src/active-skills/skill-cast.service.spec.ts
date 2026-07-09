@@ -19,6 +19,8 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     description: "",
     iconAssetPath: null,
     enabled: true,
+    skillKind: "active",
+    autoUnlock: true,
     requiredLevel: 1,
     requiredClass: null,
     requiredMasteries: {},
@@ -52,7 +54,7 @@ function makeCharacter(overrides: Partial<Character> = {}): Character {
 
 describe("SkillCastService", () => {
   let service: SkillCastService;
-  let activeSkills: { listDefinitions: jest.Mock };
+  let activeSkills: { listDefinitions: jest.Mock; isSkillUnlocked: jest.Mock };
   let derivedStats: { getDefinitions: jest.Mock };
   let masteries: { getCharacterMasteries: jest.Mock };
   let creatures: { applySkillDamage: jest.Mock };
@@ -65,7 +67,10 @@ describe("SkillCastService", () => {
     currentSkill = makeSkill();
     currentCharacter = makeCharacter();
 
-    activeSkills = { listDefinitions: jest.fn(async () => [currentSkill]) };
+    activeSkills = {
+      listDefinitions: jest.fn(async () => [currentSkill]),
+      isSkillUnlocked: jest.fn(async () => true),
+    };
     derivedStats = { getDefinitions: jest.fn(async () => []) };
     masteries = { getCharacterMasteries: jest.fn(async () => []) };
     creatures = {
@@ -113,6 +118,39 @@ describe("SkillCastService", () => {
     activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
     const r = await cast();
     expect(isSkillCastFailure(r) && r.error).toMatch(/désactivé/i);
+  });
+
+  // ── Garde-fous kind/unlock (V1-H) ───────────────────────────────────────────
+  it("rejette un skill passive (non actif)", async () => {
+    currentSkill = makeSkill({ skillKind: "passive" });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    const r = await cast();
+    expect(isSkillCastFailure(r) && r.error).toMatch(/non actif/i);
+    expect(creatures.applySkillDamage).not.toHaveBeenCalled();
+  });
+
+  it("rejette un skill aura (non actif)", async () => {
+    currentSkill = makeSkill({ skillKind: "aura" });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    const r = await cast();
+    expect(isSkillCastFailure(r) && r.error).toMatch(/non actif/i);
+  });
+
+  it("rejette un skill actif non débloqué (autoUnlock=false, pas d'unlock)", async () => {
+    currentSkill = makeSkill({ autoUnlock: false });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    activeSkills.isSkillUnlocked.mockResolvedValue(false);
+    const r = await cast();
+    expect(isSkillCastFailure(r) && r.error).toMatch(/non débloqué/i);
+    expect(creatures.applySkillDamage).not.toHaveBeenCalled();
+  });
+
+  it("autorise un skill actif débloqué (autoUnlock=false + unlock)", async () => {
+    currentSkill = makeSkill({ autoUnlock: false });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    activeSkills.isSkillUnlocked.mockResolvedValue(true);
+    const r = await cast();
+    expect(r.success).toBe(true);
   });
 
   it("rejette targetMode != creature", async () => {
@@ -272,6 +310,23 @@ describe("SkillCastService", () => {
       const r = await castSelf();
       expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 100 });
       if (r.success) expect(r.heal).toBe(10);
+    });
+
+    it("rejette un heal passive (non actif) et n'écrit rien", async () => {
+      useSkill(makeHealSkill({ skillKind: "passive" }));
+      useCharacter(makeCharacter({ health: 50 }));
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/non actif/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("rejette un heal actif non débloqué", async () => {
+      useSkill(makeHealSkill({ autoUnlock: false }));
+      useCharacter(makeCharacter({ health: 50 }));
+      activeSkills.isSkillUnlocked.mockResolvedValue(false);
+      const r = await castSelf();
+      expect(isSkillCastFailure(r) && r.error).toMatch(/non débloqué/i);
+      expect(charRepo.update).not.toHaveBeenCalled();
     });
 
     it("rejette un skill disabled", async () => {

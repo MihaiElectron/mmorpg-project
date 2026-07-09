@@ -7,6 +7,7 @@ import {
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { ActiveSkillsService } from "./active-skills.service";
 import { SkillDefinition } from "./entities/skill-definition.entity";
+import { PlayerSkillUnlock } from "./entities/player-skill-unlock.entity";
 
 function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
   return {
@@ -16,6 +17,8 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     description: "",
     iconAssetPath: null,
     enabled: true,
+    skillKind: "active",
+    autoUnlock: true,
     requiredLevel: 1,
     requiredClass: null,
     requiredMasteries: {},
@@ -45,16 +48,30 @@ function makeRepo() {
   };
 }
 
+function makeUnlockRepo() {
+  return {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    count: jest.fn().mockResolvedValue(0),
+    create: jest.fn().mockImplementation((d) => d),
+    save: jest.fn().mockImplementation((d) => Promise.resolve({ id: "unlock-1", ...d })),
+    delete: jest.fn().mockResolvedValue({ affected: 1 }),
+  };
+}
+
 describe("ActiveSkillsService", () => {
   let service: ActiveSkillsService;
   let repo: ReturnType<typeof makeRepo>;
+  let unlockRepo: ReturnType<typeof makeUnlockRepo>;
 
   beforeEach(async () => {
     repo = makeRepo();
+    unlockRepo = makeUnlockRepo();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ActiveSkillsService,
         { provide: getRepositoryToken(SkillDefinition), useValue: repo },
+        { provide: getRepositoryToken(PlayerSkillUnlock), useValue: unlockRepo },
       ],
     }).compile();
     service = module.get<ActiveSkillsService>(ActiveSkillsService);
@@ -207,13 +224,13 @@ describe("ActiveSkillsService", () => {
   describe("getUsableSkillsForCharacter", () => {
     it("exclut les skills disabled", async () => {
       repo.find.mockResolvedValue([makeSkill({ key: "off", enabled: false })]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res).toHaveLength(0);
     });
 
     it("exclut si requiredLevel non atteint", async () => {
       repo.find.mockResolvedValue([makeSkill({ key: "hi", requiredLevel: 20 })]);
-      const res = await service.getUsableSkillsForCharacter(5, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 5, {});
       expect(res).toHaveLength(0);
     });
 
@@ -221,13 +238,13 @@ describe("ActiveSkillsService", () => {
       repo.find.mockResolvedValue([
         makeSkill({ key: "m", requiredMasteries: { two_handed: 5 } }),
       ]);
-      const res = await service.getUsableSkillsForCharacter(10, { two_handed: 2 });
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, { two_handed: 2 });
       expect(res).toHaveLength(0);
     });
 
     it("renvoie executable=true pour un skill damage/creature sans coût bloquant", async () => {
       repo.find.mockResolvedValue([makeSkill({ key: "ok" })]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res).toHaveLength(1);
       expect(res[0]).toMatchObject({ key: "ok", executable: true });
       expect(res[0].disabledReason).toBeUndefined();
@@ -240,7 +257,7 @@ describe("ActiveSkillsService", () => {
       repo.find.mockResolvedValue([
         makeSkill({ key: "mana", resourceType: "mana", resourceCost: 10 }),
       ]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res).toHaveLength(1);
       expect(res[0].executable).toBe(false);
       expect(res[0].disabledReason).toMatch(/mana/i);
@@ -248,7 +265,7 @@ describe("ActiveSkillsService", () => {
 
     it("marque non exécutable un effet non damage", async () => {
       repo.find.mockResolvedValue([makeSkill({ key: "heal", effectType: "heal" })]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res[0].executable).toBe(false);
       expect(res[0].disabledReason).toMatch(/effet/i);
     });
@@ -264,7 +281,7 @@ describe("ActiveSkillsService", () => {
           scaling: { derivedCoefficients: { healingPower: 3 } },
         }),
       ]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res).toHaveLength(1);
       expect(res[0]).toMatchObject({ key: "test_heal", executable: true });
       expect(res[0].disabledReason).toBeUndefined();
@@ -274,9 +291,107 @@ describe("ActiveSkillsService", () => {
       repo.find.mockResolvedValue([
         makeSkill({ key: "h", targetMode: "self", effectType: "heal", resourceType: "mana", resourceCost: 5 }),
       ]);
-      const res = await service.getUsableSkillsForCharacter(10, {});
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res[0].executable).toBe(false);
       expect(res[0].disabledReason).toMatch(/mana/i);
+    });
+
+    // ── Déverrouillage (V1-H) ────────────────────────────────────────────────
+    it("autoUnlock=true → présent sans player_skill_unlock", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "auto", autoUnlock: true })]);
+      unlockRepo.find.mockResolvedValue([]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res.map((r) => r.key)).toContain("auto");
+    });
+
+    it("autoUnlock=false sans unlock → absent", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "locked", autoUnlock: false })]);
+      unlockRepo.find.mockResolvedValue([]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res).toHaveLength(0);
+    });
+
+    it("autoUnlock=false avec unlock → présent", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "learned", autoUnlock: false })]);
+      unlockRepo.find.mockResolvedValue([{ skillDefinitionId: "s1" }]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res.map((r) => r.key)).toContain("learned");
+    });
+
+    it("skillKind=passive → absent même si débloqué", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "pas", skillKind: "passive" })]);
+      unlockRepo.find.mockResolvedValue([{ skillDefinitionId: "s1" }]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res).toHaveLength(0);
+    });
+
+    it("skillKind=aura → absent même si débloqué", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "aura", skillKind: "aura" })]);
+      unlockRepo.find.mockResolvedValue([{ skillDefinitionId: "s1" }]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res).toHaveLength(0);
+    });
+  });
+
+  describe("unlock/lock par personnage", () => {
+    it("isSkillUnlocked reflète le count", async () => {
+      unlockRepo.count.mockResolvedValueOnce(1);
+      expect(await service.isSkillUnlocked("char-1", "s1")).toBe(true);
+      unlockRepo.count.mockResolvedValueOnce(0);
+      expect(await service.isSkillUnlocked("char-1", "s2")).toBe(false);
+    });
+
+    it("getUnlockedSkillDefinitionIds renvoie un Set d'ids", async () => {
+      unlockRepo.find.mockResolvedValue([{ skillDefinitionId: "a" }, { skillDefinitionId: "b" }]);
+      const set = await service.getUnlockedSkillDefinitionIds("char-1");
+      expect(set.has("a")).toBe(true);
+      expect(set.has("b")).toBe(true);
+      expect(set.size).toBe(2);
+    });
+
+    it("unlock crée une ligne (skillKey résolu → id, jamais stocké)", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "fireball" })]);
+      unlockRepo.findOne.mockResolvedValue(null);
+      await service.unlockSkillForCharacter("char-1", "fireball", "admin");
+      expect(unlockRepo.save).toHaveBeenCalledTimes(1);
+      const created = unlockRepo.create.mock.calls[0][0];
+      expect(created).toEqual({ characterId: "char-1", skillDefinitionId: "s1", source: "admin" });
+      expect(created).not.toHaveProperty("skillKey");
+    });
+
+    it("unlock idempotent : ne crée pas de doublon si déjà débloqué", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "fireball" })]);
+      unlockRepo.findOne.mockResolvedValue({ id: "u1", characterId: "char-1", skillDefinitionId: "s1" });
+      await service.unlockSkillForCharacter("char-1", "fireball");
+      expect(unlockRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("unlock rejette une source inconnue", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "fireball" })]);
+      unlockRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.unlockSkillForCharacter("char-1", "fireball", "hacker" as never),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("unlock lève NotFound si la clé est inconnue", async () => {
+      repo.find.mockResolvedValue([]);
+      await expect(service.unlockSkillForCharacter("char-1", "nope")).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("lock supprime l'unlock", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "fireball" })]);
+      unlockRepo.delete.mockResolvedValue({ affected: 1 });
+      const res = await service.lockSkillForCharacter("char-1", "fireball");
+      expect(unlockRepo.delete).toHaveBeenCalledWith({ characterId: "char-1", skillDefinitionId: "s1" });
+      expect(res).toEqual({ skillKey: "fireball", locked: true });
+    });
+
+    it("lock idempotent si aucune ligne", async () => {
+      repo.find.mockResolvedValue([makeSkill({ id: "s1", key: "fireball" })]);
+      unlockRepo.delete.mockResolvedValue({ affected: 0 });
+      const res = await service.lockSkillForCharacter("char-1", "fireball");
+      expect(res).toEqual({ skillKey: "fireball", locked: false });
     });
   });
 });

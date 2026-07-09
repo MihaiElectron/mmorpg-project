@@ -21,5 +21,21 @@ export type SkillTargetMode = (typeof SKILL_TARGET_MODES)[number];
 export const SKILL_EFFECT_TYPES = ['damage', 'heal'] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
+/**
+ * Nature du skill (V1-H). Le modèle de déverrouillage est kind-agnostique, mais
+ * seuls les `active` sont lançables (`skill:cast`, /active-skills) :
+ *   - active  : déclenché volontairement par le joueur ;
+ *   - passive : effet permanent/conditionnel une fois débloqué (non implémenté V1) ;
+ *   - aura    : effet passif projeté (non implémenté V1).
+ * `passive`/`aura` sont persistables et déverrouillables dès maintenant, mais
+ * jamais castables ni renvoyés par /characters/me/active-skills en V1-H.
+ */
+export const SKILL_KINDS = ['active', 'passive', 'aura'] as const;
+export type SkillKind = (typeof SKILL_KINDS)[number];
+
+/** Origines possibles d'un déverrouillage (`player_skill_unlock.source`). */
+export const SKILL_UNLOCK_SOURCES = ['admin', 'level', 'quest', 'item', 'trainer', 'debug'] as const;
+export type SkillUnlockSource = (typeof SKILL_UNLOCK_SOURCES)[number];
+
 /** Clé stable : minuscules, chiffres et underscore uniquement. */
 export const SKILL_KEY_PATTERN = /^[a-z0-9_]+$/;

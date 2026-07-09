@@ -28,6 +28,7 @@ export class CharactersActiveSkillsController {
     const masteryLevels: Record<string, number> = {};
     for (const m of masteryRows) masteryLevels[m.key] = m.level;
     return this.activeSkillsService.getUsableSkillsForCharacter(
+      character.id,
       character.level ?? 1,
       masteryLevels,
     );
