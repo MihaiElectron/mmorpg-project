@@ -84,8 +84,13 @@
     }
   }
 
+  // Hauteur intrinsèque au contenu : ne doit PAS être écrasé à hauteur nulle
+  // par un frère flex (équipement). Le défilement est porté par la colonne
+  // parente `.character-layout__content--perso` (overflow-y: auto) qui scrolle
+  // équipement + stats d'un seul bloc — garantit que toutes les stats restent
+  // accessibles même en 1920×1024 (60vh serré).
   &__stats {
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
   }
 

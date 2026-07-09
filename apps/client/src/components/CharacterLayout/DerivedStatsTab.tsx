@@ -7,20 +7,23 @@ type DerivedStats = Record<string, number>;
 // maxHealth/physicalAttack/defense sont branchées au combat ; les autres
 // restent affichage/preview V1 (voir commentaires backend).
 const DERIVED_ROWS: { key: string; label: string; suffix?: string }[] = [
-  { key: "maxHealth", label: "PV max" },
-  { key: "maxMana", label: "Mana max" },
-  { key: "maxEnergy", label: "Énergie max" },
-  { key: "healthRegen", label: "Régén. PV" },
-  { key: "manaRegen", label: "Régén. mana" },
-  { key: "energyRegen", label: "Régén. énergie" },
+  // Stats prioritaires (haut de liste) : combat/ressources principales.
   { key: "physicalAttack", label: "Attaque physique" },
   { key: "magicPower", label: "Puissance magique" },
-  { key: "healingPower", label: "Puissance de soin" },
+  { key: "maxHealth", label: "PV max" },
+  { key: "maxMana", label: "Mana max" },
   { key: "defense", label: "Défense" },
+  // Résistances magiques.
   { key: "magicalResistanceFire", label: "Résistance feu" },
   { key: "magicalResistanceWater", label: "Résistance eau" },
   { key: "magicalResistanceAir", label: "Résistance air" },
   { key: "magicalResistanceEarth", label: "Résistance terre" },
+  // Reste : ressources secondaires, régénérations, taux, vitesses, divers.
+  { key: "maxEnergy", label: "Énergie max" },
+  { key: "healingPower", label: "Puissance de soin" },
+  { key: "healthRegen", label: "Régén. PV" },
+  { key: "manaRegen", label: "Régén. mana" },
+  { key: "energyRegen", label: "Régén. énergie" },
   { key: "accuracy", label: "Précision" },
   { key: "criticalChance", label: "Chance critique", suffix: "%" },
   { key: "criticalDamage", label: "Dégâts critiques", suffix: "%" },

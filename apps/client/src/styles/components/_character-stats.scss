@@ -22,6 +22,20 @@
   &--compact {
     gap: 6px;
     padding: 4px 2px;
+    // Hauteur au contenu (pas 100% du parent) + pas de scroll interne : la
+    // colonne perso (parent) porte l'unique barre de défilement. Sans ça, la
+    // boîte de stats était écrasée sous l'équipement et ses colonnes scrollaient
+    // dans ~150px, rendant la plupart des lignes inatteignables en 60vh serré.
+    height: auto;
+    overflow: visible;
+
+    .character-stats__columns {
+      flex: 0 0 auto;
+    }
+
+    .character-stats__list {
+      overflow-y: visible;
+    }
 
     .character-stats__points {
       padding: 4px 8px;

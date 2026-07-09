@@ -152,22 +152,6 @@ export default function CharacterLayer() {
           );
         })}
       </div>
-
-      <div className="character-layer__stats-panel">
-        <div className="character-layer__stat">
-          <span className="character-layer__stat-label">Attaque</span>
-          <span className="character-layer__stat-value character-layer__stat-value--attack">
-            {/* Valeur finale serveur (stats.derived) ; jamais la colonne brute. */}
-            {character.stats?.derived?.physicalAttack ?? character.attack ?? 0}
-          </span>
-        </div>
-        <div className="character-layer__stat">
-          <span className="character-layer__stat-label">Défense</span>
-          <span className="character-layer__stat-value character-layer__stat-value--defense">
-            {character.stats?.derived?.defense ?? character.defense ?? 0}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }
