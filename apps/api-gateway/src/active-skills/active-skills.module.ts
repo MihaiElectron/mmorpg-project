@@ -2,10 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
 import { PlayerSkillUnlock } from './entities/player-skill-unlock.entity';
+import { CharacterActionBarSlot } from './entities/character-action-bar-slot.entity';
 import { ActiveSkillsService } from './active-skills.service';
+import { ActionBarService } from './action-bar.service';
 import { SkillCastService } from './skill-cast.service';
 import { SkillsGateway } from './skills.gateway';
 import { CharactersActiveSkillsController } from './characters-active-skills.controller';
+import { CharactersActionBarController } from './characters-action-bar.controller';
 import { Character } from '../characters/entities/character.entity';
 import { CommonModule } from '../common/common.module';
 import { CharactersModule } from '../characters/characters.module';
@@ -28,7 +31,12 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SkillDefinition, PlayerSkillUnlock, Character]),
+    TypeOrmModule.forFeature([
+      SkillDefinition,
+      PlayerSkillUnlock,
+      CharacterActionBarSlot,
+      Character,
+    ]),
     CommonModule,
     CharactersModule,
     CreaturesModule,
@@ -37,8 +45,8 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
     WorldItemsModule,
     ItemMaterializationModule,
   ],
-  controllers: [CharactersActiveSkillsController],
-  providers: [ActiveSkillsService, SkillCastService, SkillsGateway],
+  controllers: [CharactersActiveSkillsController, CharactersActionBarController],
+  providers: [ActiveSkillsService, ActionBarService, SkillCastService, SkillsGateway],
   exports: [ActiveSkillsService],
 })
 export class ActiveSkillsModule {}

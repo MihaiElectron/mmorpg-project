@@ -39,3 +39,32 @@ export type SkillUnlockSource = (typeof SKILL_UNLOCK_SOURCES)[number];
 
 /** Clé stable : minuscules, chiffres et underscore uniquement. */
 export const SKILL_KEY_PATTERN = /^[a-z0-9_]+$/;
+
+/**
+ * Barre d'action persistante (Skills V1-I). Nombre de slots par personnage.
+ * `slotIndex` valide : 0 .. ACTION_BAR_SLOT_COUNT - 1. Source unique — aligné
+ * sur `MAX_SLOTS`/`HOTKEYS` du frontend (A,Z,E,R,Q,S,D,F).
+ */
+export const ACTION_BAR_SLOT_COUNT = 8;
+
+/** `true` si `slotIndex` est un entier dans les bornes de la barre. */
+export function isValidActionBarSlotIndex(slotIndex: number): boolean {
+  return Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < ACTION_BAR_SLOT_COUNT;
+}
+
+/**
+ * Raison d'indisponibilité d'un slot de barre d'action (Skills V1-I).
+ * `null` = disponible ; `empty` = slot vide.
+ */
+export const ACTION_BAR_UNAVAILABLE_REASONS = [
+  'empty',
+  'disabled',
+  'non_active',
+  'locked',
+  'level_required',
+  'mastery_required',
+  'unsupported_resource',
+  'unsupported_target',
+  'unknown',
+] as const;
+export type ActionBarUnavailableReason = (typeof ACTION_BAR_UNAVAILABLE_REASONS)[number];

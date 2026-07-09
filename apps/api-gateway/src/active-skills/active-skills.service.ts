@@ -11,6 +11,7 @@ import { PlayerSkillUnlock } from './entities/player-skill-unlock.entity';
 import { CreateSkillDefinitionDto } from './dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
 import {
+  ActionBarUnavailableReason,
   SKILL_UNLOCK_SOURCES,
   SkillEffectType,
   SkillKind,
@@ -249,6 +250,43 @@ export class ActiveSkillsService {
     }
 
     return result;
+  }
+
+  /**
+   * Évalue la DISPONIBILITÉ d'un skill pour un personnage (Skills V1-I), avec
+   * une raison structurée. Encode exactement les mêmes règles V1 que
+   * `getUsableSkillsForCharacter` (source unique réutilisée par ActionBarService).
+   * Pur : ne fait aucune I/O (unlock/level/masteries fournis par l'appelant).
+   *
+   * Retourne `null` si disponible, sinon la raison (`disabled`, `non_active`,
+   * `locked`, `level_required`, `mastery_required`, `unsupported_target`,
+   * `unsupported_resource`).
+   */
+  evaluateSkillAvailability(
+    skill: SkillDefinition,
+    characterLevel: number,
+    masteryLevels: Record<string, number>,
+    isUnlocked: boolean,
+  ): ActionBarUnavailableReason | null {
+    if (!skill.enabled) return 'disabled';
+    if (skill.skillKind !== 'active') return 'non_active';
+    if (!skill.autoUnlock && !isUnlocked) return 'locked';
+    if ((characterLevel ?? 1) < skill.requiredLevel) return 'level_required';
+
+    const masteriesMet = Object.entries(skill.requiredMasteries ?? {}).every(
+      ([key, min]) => (masteryLevels[key] ?? 0) >= min,
+    );
+    if (!masteriesMet) return 'mastery_required';
+
+    const isDamageCreature = skill.effectType === 'damage' && skill.targetMode === 'creature';
+    const isHealSelf = skill.effectType === 'heal' && skill.targetMode === 'self';
+    if (!isDamageCreature && !isHealSelf) return 'unsupported_target';
+
+    const costBlocked =
+      (skill.resourceType === 'mana' || skill.resourceType === 'energy') && skill.resourceCost > 0;
+    if (costBlocked) return 'unsupported_resource';
+
+    return null;
   }
 
   /** Toutes les définitions (cache). Copie défensive pour ne pas exposer le cache. */
