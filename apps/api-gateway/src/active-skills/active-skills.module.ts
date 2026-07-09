@@ -4,8 +4,10 @@ import { SkillDefinition } from './entities/skill-definition.entity';
 import { ActiveSkillsService } from './active-skills.service';
 import { SkillCastService } from './skill-cast.service';
 import { SkillsGateway } from './skills.gateway';
+import { CharactersActiveSkillsController } from './characters-active-skills.controller';
 import { Character } from '../characters/entities/character.entity';
 import { CommonModule } from '../common/common.module';
+import { CharactersModule } from '../characters/characters.module';
 import { CreaturesModule } from '../creatures/creatures.module';
 import { MasteriesModule } from '../masteries/masteries.module';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
@@ -27,12 +29,14 @@ import { ItemMaterializationModule } from '../item-materialization/item-material
   imports: [
     TypeOrmModule.forFeature([SkillDefinition, Character]),
     CommonModule,
+    CharactersModule,
     CreaturesModule,
     MasteriesModule,
     DerivedStatsModule,
     WorldItemsModule,
     ItemMaterializationModule,
   ],
+  controllers: [CharactersActiveSkillsController],
   providers: [ActiveSkillsService, SkillCastService, SkillsGateway],
   exports: [ActiveSkillsService],
 })

@@ -162,6 +162,86 @@
     }
   }
 
+  // ── Skills actifs (V1-E) ───────────────────────────────────────────────────
+  &__skills {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+    border-top: 1px solid vars.$panel-border;
+    padding-top: 8px;
+  }
+
+  &__skills-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: vars.$color-text-gold;
+  }
+
+  &__skills-empty {
+    font-size: 12px;
+    color: vars.$color-text-muted;
+  }
+
+  &__skill {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    padding: 5px 8px;
+  }
+
+  &__skill-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  &__skill-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__skill-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: vars.$color-text-primary;
+  }
+
+  &__skill-meta {
+    font-size: 11px;
+    color: vars.$color-text-muted;
+  }
+
+  &__skill-reason {
+    font-size: 11px;
+    color: vars.$hp-color-low;
+  }
+
+  &__skill-cast {
+    @include m.btn-success;
+    padding: 4px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+
+  &__skills-feedback {
+    font-size: 12px;
+    padding: 2px 0;
+
+    &--ok { color: vars.$hp-color-high; }
+    &--err { color: vars.$hp-color-critical; }
+  }
+
   // ── Craft runtime ────────────────────────────────────────────────────────
   &__crafting {
     display: flex;

@@ -9,6 +9,27 @@ import { Repository } from 'typeorm';
 import { SkillDefinition } from './entities/skill-definition.entity';
 import { CreateSkillDefinitionDto } from './dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
+import {
+  SkillEffectType,
+  SkillResourceType,
+  SkillTargetMode,
+} from './active-skills.constants';
+
+/** Vue joueur d'un skill actif (route lecture seule `/characters/me/active-skills`). */
+export interface PlayerActiveSkill {
+  key: string;
+  name: string;
+  description: string;
+  iconAssetPath: string | null;
+  cooldownMs: number;
+  rangeWU: number;
+  targetMode: SkillTargetMode;
+  effectType: SkillEffectType;
+  resourceType: SkillResourceType | null;
+  resourceCost: number;
+  executable: boolean;
+  disabledReason?: string;
+}
 
 /**
  * ActiveSkillsService — source de vérité serveur du catalogue de skills actifs
@@ -34,6 +55,70 @@ export class ActiveSkillsService {
 
   invalidateCache(): void {
     this.cache = null;
+  }
+
+  /**
+   * Skills actifs UTILISABLES par un personnage (route joueur lecture seule,
+   * V1-E). Filtrage serveur — le client ne décide rien :
+   *   - uniquement les skills `enabled` ;
+   *   - `requiredLevel` et `requiredMasteries` non satisfaits → EXCLUS (skill
+   *     verrouillé, non renvoyé) ;
+   *   - skill renvoyé mais `executable=false` + `disabledReason` si l'exécution
+   *     V1 ne le supporte pas (effet non damage, cible non créature, ou coût
+   *     mana/energy > 0 car ces ressources courantes ne sont pas implémentées).
+   *
+   * Ne renvoie aucune donnée sensible (pas de `scaling`, pas d'id interne,
+   * pas de `requiredMasteries` détaillées) — seulement ce dont l'UI a besoin.
+   */
+  async getUsableSkillsForCharacter(
+    characterLevel: number,
+    masteryLevels: Record<string, number>,
+  ): Promise<PlayerActiveSkill[]> {
+    const all = await this.listDefinitions();
+    const result: PlayerActiveSkill[] = [];
+
+    for (const s of all) {
+      if (!s.enabled) continue;
+      if ((characterLevel ?? 1) < s.requiredLevel) continue;
+
+      const masteriesMet = Object.entries(s.requiredMasteries ?? {}).every(
+        ([key, min]) => (masteryLevels[key] ?? 0) >= min,
+      );
+      if (!masteriesMet) continue;
+
+      let executable = true;
+      let disabledReason: string | undefined;
+      if (s.effectType !== 'damage') {
+        executable = false;
+        disabledReason = 'Effet non supporté (V1 : dégâts uniquement).';
+      } else if (s.targetMode !== 'creature') {
+        executable = false;
+        disabledReason = 'Cible non supportée (V1 : créature uniquement).';
+      } else if (
+        (s.resourceType === 'mana' || s.resourceType === 'energy') &&
+        s.resourceCost > 0
+      ) {
+        executable = false;
+        disabledReason = `Coût ${s.resourceType} indisponible (non implémenté).`;
+      }
+
+      result.push({
+        key: s.key,
+        name: s.name,
+        description: s.description,
+        iconAssetPath: s.iconAssetPath,
+        cooldownMs: s.cooldownMs,
+        rangeWU: s.rangeWU,
+        targetMode: s.targetMode,
+        effectType: s.effectType,
+        resourceType: s.resourceType,
+        resourceCost: s.resourceCost,
+        executable,
+        ...(disabledReason ? { disabledReason } : {}),
+      });
+    }
+
+    return result;
   }
 
   /** Toutes les définitions (cache). Copie défensive pour ne pas exposer le cache. */

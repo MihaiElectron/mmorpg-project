@@ -203,4 +203,54 @@ describe("ActiveSkillsService", () => {
       await expect(service.deleteDefinition("nope")).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  describe("getUsableSkillsForCharacter", () => {
+    it("exclut les skills disabled", async () => {
+      repo.find.mockResolvedValue([makeSkill({ key: "off", enabled: false })]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res).toHaveLength(0);
+    });
+
+    it("exclut si requiredLevel non atteint", async () => {
+      repo.find.mockResolvedValue([makeSkill({ key: "hi", requiredLevel: 20 })]);
+      const res = await service.getUsableSkillsForCharacter(5, {});
+      expect(res).toHaveLength(0);
+    });
+
+    it("exclut si une requiredMastery est insuffisante", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ key: "m", requiredMasteries: { two_handed: 5 } }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter(10, { two_handed: 2 });
+      expect(res).toHaveLength(0);
+    });
+
+    it("renvoie executable=true pour un skill damage/creature sans coût bloquant", async () => {
+      repo.find.mockResolvedValue([makeSkill({ key: "ok" })]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res).toHaveLength(1);
+      expect(res[0]).toMatchObject({ key: "ok", executable: true });
+      expect(res[0].disabledReason).toBeUndefined();
+      // pas de données sensibles exposées
+      expect(res[0]).not.toHaveProperty("scaling");
+      expect(res[0]).not.toHaveProperty("id");
+    });
+
+    it("marque non exécutable un coût mana > 0 (ressource non implémentée)", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ key: "mana", resourceType: "mana", resourceCost: 10 }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res).toHaveLength(1);
+      expect(res[0].executable).toBe(false);
+      expect(res[0].disabledReason).toMatch(/mana/i);
+    });
+
+    it("marque non exécutable un effet non damage", async () => {
+      repo.find.mockResolvedValue([makeSkill({ key: "heal", effectType: "heal" })]);
+      const res = await service.getUsableSkillsForCharacter(10, {});
+      expect(res[0].executable).toBe(false);
+      expect(res[0].disabledReason).toMatch(/effet/i);
+    });
+  });
 });

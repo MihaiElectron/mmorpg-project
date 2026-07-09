@@ -8,6 +8,7 @@ import { commandRegistry, autocompleteCommand } from "../../phaser/admin/command
 import HealthBar from "../HealthBar/HealthBar";
 import { getDevToolsSocket, getWorldScene } from "../DevTools/devtoolsBridge";
 import CraftingRuntimePanel from "./CraftingRuntimePanel";
+import ActionPanelSkills from "./ActionPanelSkills";
 import { isCraftStationPanelOpenFor, type CraftingStationTarget } from "./craftingRuntime";
 
 type ConsoleLine = { text: string; ok: boolean };
@@ -279,6 +280,10 @@ export default function ActionPanel() {
         target.maxHealth != null && (
           <HealthBar health={target.health} maxHealth={target.maxHealth} />
         )}
+
+      {target.kind === "creature" && !isCraftStationPanelMode && (
+        <ActionPanelSkills key={target.id} creatureId={target.id} />
+      )}
 
       {isAdmin && !isCraftStationPanelMode && (
         <div className="action-panel__console">
