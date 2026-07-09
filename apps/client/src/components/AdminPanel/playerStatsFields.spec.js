@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   PLAYER_PROGRESSION_FIELDS,
   PLAYER_PRIMARY_STAT_FIELDS,
+  PLAYER_LEGACY_FIELDS,
   PLAYER_COMBAT_FIELDS,
   PLAYER_EDITABLE_FIELDS,
   PLAYER_DERIVED_ROWS,
@@ -12,19 +13,26 @@ const DERIVED_KEYS = PLAYER_DERIVED_ROWS.map((r) => r.key);
 const EDITABLE_KEYS = PLAYER_EDITABLE_FIELDS.map((f) => f.key);
 
 describe("playerStatsFields", () => {
-  it("regroupe progression + principales + combat dans les champs éditables", () => {
+  it("regroupe progression + principales + legacy + combat dans les champs éditables", () => {
     expect(PLAYER_EDITABLE_FIELDS).toHaveLength(
       PLAYER_PROGRESSION_FIELDS.length +
         PLAYER_PRIMARY_STAT_FIELDS.length +
+        PLAYER_LEGACY_FIELDS.length +
         PLAYER_COMBAT_FIELDS.length,
     );
   });
 
-  it("expose les 8 stats principales base*", () => {
+  it("expose les 10 stats principales base* (Critique exclue, devenue dérivée)", () => {
     expect(PLAYER_PRIMARY_STAT_FIELDS.map((f) => f.key)).toEqual([
       "baseStrength", "baseVitality", "baseEndurance", "baseAgility",
-      "baseDexterity", "baseIntelligence", "baseWisdom", "baseCritical",
+      "baseDexterity", "baseIntelligence", "baseWisdom",
+      "baseSpirit", "baseWillpower", "baseCharisma",
     ]);
+    expect(PLAYER_PRIMARY_STAT_FIELDS.map((f) => f.key)).not.toContain("baseCritical");
+  });
+
+  it("expose baseCritical comme champ legacy séparé", () => {
+    expect(PLAYER_LEGACY_FIELDS.map((f) => f.key)).toEqual(["baseCritical"]);
   });
 
   it("inclut experience et unspentStatPoints dans les champs éditables", () => {

@@ -44,5 +44,15 @@ export class AllocateStatsDto {
   @IsOptional()
   @IsInt()
   @Min(0)
-  critical?: number;
+  spirit?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  willpower?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  charisma?: number;
 }

@@ -33,7 +33,9 @@ const STAT_COLUMN: Record<keyof AllocateStatsDto, keyof Character> = {
   dexterity: 'baseDexterity',
   intelligence: 'baseIntelligence',
   wisdom: 'baseWisdom',
-  critical: 'baseCritical',
+  spirit: 'baseSpirit',
+  willpower: 'baseWillpower',
+  charisma: 'baseCharisma',
 };
 
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).

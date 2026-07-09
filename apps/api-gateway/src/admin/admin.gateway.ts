@@ -491,7 +491,10 @@ export class AdminGateway implements OnGatewayConnection {
       'level', 'experience', 'health', 'maxHealth', 'attack', 'defense',
       // Stats principales (Progression V1) + points non dépensés
       'baseStrength', 'baseVitality', 'baseEndurance', 'baseAgility',
-      'baseDexterity', 'baseIntelligence', 'baseWisdom', 'baseCritical',
+      'baseDexterity', 'baseIntelligence', 'baseWisdom',
+      'baseSpirit', 'baseWillpower', 'baseCharisma',
+      // baseCritical : legacy, non distribuable, conservée éditable pour debug/reset manuel.
+      'baseCritical',
       'unspentStatPoints',
     ];
     const safe: Record<string, number> = {};

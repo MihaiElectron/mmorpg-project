@@ -10,7 +10,7 @@ import {
 } from "./statsAllocation";
 
 describe("statsAllocation", () => {
-  it("emptyBuffer initialise les 8 stats à 0", () => {
+  it("emptyBuffer initialise les 10 stats à 0", () => {
     const b = emptyBuffer();
     expect(Object.keys(b)).toHaveLength(STAT_FIELDS.length);
     expect(totalAllocated(b)).toBe(0);
@@ -50,9 +50,9 @@ describe("statsAllocation", () => {
     let b = emptyBuffer();
     b = increment(b, "strength", 5);
     b = increment(b, "strength", 5);
-    b = increment(b, "critical", 5);
+    b = increment(b, "charisma", 5);
     const payload = buildAllocationPayload(b);
-    expect(payload).toEqual({ strength: 2, critical: 1 });
+    expect(payload).toEqual({ strength: 2, charisma: 1 });
   });
 
   it("buildAllocationPayload est vide si rien à envoyer", () => {

@@ -16,7 +16,9 @@ export const PLAYER_PROGRESSION_FIELDS: FieldDef[] = [
   { key: "unspentStatPoints", label: "Points dispo", min: 0 },
 ];
 
-// B. Stats principales ───────────────────────────────────────────────────────
+// B. Stats principales (10 primaires distribuables) ───────────────────────────
+// Critique n'en fait plus partie (devenue dérivée) ; voir PLAYER_LEGACY_FIELDS
+// pour la colonne baseCritical legacy conservée en DB.
 export const PLAYER_PRIMARY_STAT_FIELDS: FieldDef[] = [
   { key: "baseStrength", label: "Force", min: 0 },
   { key: "baseVitality", label: "Vitalité", min: 0 },
@@ -25,7 +27,16 @@ export const PLAYER_PRIMARY_STAT_FIELDS: FieldDef[] = [
   { key: "baseDexterity", label: "Dextérité", min: 0 },
   { key: "baseIntelligence", label: "Intelligence", min: 0 },
   { key: "baseWisdom", label: "Sagesse", min: 0 },
-  { key: "baseCritical", label: "Critique", min: 0 },
+  { key: "baseSpirit", label: "Esprit", min: 0 },
+  { key: "baseWillpower", label: "Volonté", min: 0 },
+  { key: "baseCharisma", label: "Charisme", min: 0 },
+];
+
+// B-bis. Legacy — colonne conservée en DB, non distribuable, éditable
+// uniquement pour un reset/debug manuel admin (remboursement automatique via
+// le recalcul global de progression, voir AdminService.recalculateCharacterProgression).
+export const PLAYER_LEGACY_FIELDS: FieldDef[] = [
+  { key: "baseCritical", label: "Critique (legacy)", min: 0 },
 ];
 
 // C. Combat brut / debug (valeurs brutes, distinctes des dérivées) ────────────
@@ -40,21 +51,40 @@ export const PLAYER_COMBAT_FIELDS: FieldDef[] = [
 export const PLAYER_EDITABLE_FIELDS: FieldDef[] = [
   ...PLAYER_PROGRESSION_FIELDS,
   ...PLAYER_PRIMARY_STAT_FIELDS,
+  ...PLAYER_LEGACY_FIELDS,
   ...PLAYER_COMBAT_FIELDS,
 ];
 
 /** Stats dérivées — LECTURE SEULE, lues depuis `player.stats.derived`. */
 export type DerivedRow = { key: string; label: string; suffix?: string };
 
+// 24 dérivées V1 (CharacterStatsCalculator) — seules maxHealth/physicalAttack/
+// defense sont branchées combat ; le reste est affichage/preview V1.
 export const PLAYER_DERIVED_ROWS: DerivedRow[] = [
   { key: "maxHealth", label: "PV max (dérivé)" },
+  { key: "maxMana", label: "Mana max" },
+  { key: "maxEnergy", label: "Énergie max" },
+  { key: "healthRegen", label: "Régén. PV" },
+  { key: "manaRegen", label: "Régén. mana" },
+  { key: "energyRegen", label: "Régén. énergie" },
   { key: "physicalAttack", label: "Attaque physique (dérivée)" },
+  { key: "magicPower", label: "Puissance magique" },
+  { key: "healingPower", label: "Puissance de soin" },
   { key: "defense", label: "Défense (dérivée)" },
+  { key: "magicalResistanceFire", label: "Résistance feu" },
+  { key: "magicalResistanceWater", label: "Résistance eau" },
+  { key: "magicalResistanceAir", label: "Résistance air" },
+  { key: "magicalResistanceEarth", label: "Résistance terre" },
+  { key: "accuracy", label: "Précision" },
   { key: "criticalChance", label: "Chance critique", suffix: "%" },
   { key: "criticalDamage", label: "Dégâts critiques", suffix: "%" },
   { key: "dodgeChance", label: "Esquive", suffix: "%" },
-  { key: "accuracy", label: "Précision" },
-  { key: "initiative", label: "Initiative" },
+  { key: "parryChance", label: "Parade", suffix: "%" },
+  { key: "blockChance", label: "Blocage", suffix: "%" },
+  { key: "attackSpeed", label: "Vitesse d'attaque", suffix: "%" },
+  { key: "movementSpeed", label: "Vitesse de déplacement", suffix: "%" },
+  { key: "controlResistance", label: "Résistance aux contrôles", suffix: "%" },
+  { key: "threatGeneration", label: "Génération d'aggro" },
 ];
 
 /** Formatage lecture seule d'une valeur dérivée (arrondi + suffixe). */

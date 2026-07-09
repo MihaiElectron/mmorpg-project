@@ -10,16 +10,21 @@
   justify-content: center;
   border-radius: vars.$panel-radius-sm;
   position: relative;
-  height: 100%;
   width: 100%;
+  // Intrinsèque (5 x 60px + gaps) : ne doit JAMAIS s'étirer à height:100% de
+  // son parent flex — sinon un panneau flex-column voisin (ex: StatsTab sous
+  // l'équipement) se retrouve écrasé à hauteur nulle.
+  flex: 0 0 auto;
 }
 
 .character-layer-container {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  height: 100%;
   width: 100%;
+  // Idem : taille intrinsèque au contenu (header + grille + stats-panel),
+  // ne s'étire jamais dans un parent flex-column.
+  flex: 0 0 auto;
 }
 
 .character-layer-header {

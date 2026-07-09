@@ -141,7 +141,8 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
     // derived : maxHealth 100 + vitality(4)*10, physicalAttack 12 + strength(5)*2
     expect(result.stats.derived.maxHealth).toBe(140);
     expect(result.stats.derived.physicalAttack).toBe(22);
-    expect(result.stats.derived.criticalChance).toBe(3);
+    // criticalChance = dexterity(1)*0.3 + agility(3)*0.2 (Critique n'est plus une primaire)
+    expect(result.stats.derived.criticalChance).toBeCloseTo(0.9);
   });
 
   it('expose combat.attackRangeWU = 1280 sans arme équipée', async () => {

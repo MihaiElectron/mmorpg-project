@@ -88,6 +88,21 @@ export class Character {
   baseWisdom: number;
 
   @Column({ default: 0 })
+  baseSpirit: number;
+
+  @Column({ default: 0 })
+  baseWillpower: number;
+
+  @Column({ default: 0 })
+  baseCharisma: number;
+
+  // LEGACY — Critique n'est plus une stat primaire distribuable (devenue
+  // dérivée, voir CharacterStatsCalculator). Colonne conservée pour ne pas
+  // perdre les points déjà investis par les personnages existants ; jamais
+  // exposée dans PrimaryStats/AllocateStatsDto/STAT_COLUMN. Les points qui
+  // y sont encore alloués sont remboursés en unspentStatPoints et remis à 0
+  // lors du recalcul global de progression (AdminService.recalculateCharacterProgression).
+  @Column({ default: 0 })
   baseCritical: number;
 
   // Points de stats gagnés au level-up et pas encore dépensés.

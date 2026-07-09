@@ -16,6 +16,58 @@
     font-size: 0.9rem;
   }
 
+  // ── Mode compact (sous l'équipement, onglet Perso) ──────────────────────────
+  // 2 colonnes de 5 stats primaires ; réduit l'espacement, les paddings et les
+  // tailles de police partout pour tenir sous l'équipement.
+  &--compact {
+    gap: 6px;
+    padding: 4px 2px;
+
+    .character-stats__points {
+      padding: 4px 8px;
+    }
+
+    .character-stats__points-value {
+      font-size: 0.95rem;
+    }
+
+    .character-stats__list {
+      gap: 2px;
+    }
+
+    .character-stats__row {
+      padding: 3px 6px;
+      gap: 4px;
+    }
+
+    .character-stats__row-label,
+    .character-stats__row-value {
+      font-size: 0.75rem;
+    }
+
+    .character-stats__btn {
+      width: 18px;
+      height: 18px;
+      font-size: 0.85rem;
+    }
+
+    .character-stats__action {
+      padding: 5px;
+      font-size: 0.78rem;
+    }
+  }
+
+  &__columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    // Occupe le reste de l'espace vertical disponible sous "Points
+    // disponibles" plutôt qu'une hauteur au contenu — chaque colonne scrolle
+    // en interne si elle dépasse l'espace alloué.
+    flex: 1;
+    min-height: 0;
+  }
+
   // ── Points disponibles ──────────────────────────────────────────────────────
 
   &__points {
@@ -46,6 +98,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   &__row {
@@ -150,12 +204,50 @@
   }
 
   // ── Stats dérivées ──────────────────────────────────────────────────────────
+  // Composant autonome (DerivedStatsTab), affiché sous la monnaie dans la
+  // colonne inventaire — pas un enfant de .character-stats.
 
   &__derived {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-top: 4px;
+    margin-top: 6px;
+    // Occupe le reste de l'espace vertical disponible dans son parent flex
+    // (colonne inventaire) plutôt qu'une hauteur fixe — la liste interne
+    // scrolle, pas le bloc lui-même.
+    flex: 1;
+    min-height: 0;
+
+    // Mode compact (sous la monnaie) : espacement et police réduits, liste
+    // scrollable propre pour les 24 dérivées V1.
+    &--compact {
+      gap: 2px;
+      margin-top: 4px;
+
+      .character-stats__derived-title {
+        font-size: 0.68rem;
+        padding-bottom: 2px;
+        margin-bottom: 2px;
+      }
+
+      .character-stats__derived-row {
+        font-size: 0.72rem;
+        padding: 1px 4px;
+      }
+
+      .character-stats__derived-list {
+        gap: 1px;
+      }
+    }
+  }
+
+  &__derived-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   &__derived-title {

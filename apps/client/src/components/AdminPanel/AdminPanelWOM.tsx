@@ -28,6 +28,7 @@ import AdminCharacterPanel from "./AdminCharacterPanel";
 import {
   PLAYER_PROGRESSION_FIELDS,
   PLAYER_PRIMARY_STAT_FIELDS,
+  PLAYER_LEGACY_FIELDS,
   PLAYER_COMBAT_FIELDS,
   PLAYER_EDITABLE_FIELDS,
   PLAYER_DERIVED_ROWS,
@@ -1056,6 +1057,19 @@ function PlayerSection({
                       <span className="admin-panel__subsection-label">Stats principales</span>
                       <div className="admin-panel__template-stats">
                         {PLAYER_PRIMARY_STAT_FIELDS.map((f) => (
+                          <label key={f.key} className="admin-panel__template-stat">
+                            <span className="admin-panel__template-stat-label">{f.label}</span>
+                            <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}
+                              value={draft.getDisplayField(dk, f.key, player)}
+                              onChange={(v) => draft.onChange(dk, f.key, v)} />
+                          </label>
+                        ))}
+                      </div>
+
+                      {/* ── B-bis. Legacy (éditable, reset/debug manuel) ── */}
+                      <span className="admin-panel__subsection-label">Legacy</span>
+                      <div className="admin-panel__template-stats">
+                        {PLAYER_LEGACY_FIELDS.map((f) => (
                           <label key={f.key} className="admin-panel__template-stat">
                             <span className="admin-panel__template-stat-label">{f.label}</span>
                             <StatField def={f} dirty={draft.isDirty(dk, f.key, player)}

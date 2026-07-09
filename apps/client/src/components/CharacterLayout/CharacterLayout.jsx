@@ -3,11 +3,11 @@ import CharacterLayer from "../CharacterLayer/CharacterLayer";
 import Inventory from "../Inventory/Inventory";
 import MasteriesTab from "./MasteriesTab";
 import StatsTab from "./StatsTab";
+import DerivedStatsTab from "./DerivedStatsTab";
 import { useCharacterStore } from "../../store/character.store";
 
 const TABS = [
   { id: "perso",        label: "Perso" },
-  { id: "stats",        label: "Stats" },
   { id: "masteries",    label: "Maîtrises" },
   { id: "talents",      label: "Talents" },
   { id: "achievements", label: "Succès" },
@@ -52,8 +52,14 @@ export default function CharacterLayout() {
 
       {activeTab === "perso" && isOpen && (
         <>
-          <div className="character-layout__content">
+          <div className="character-layout__content character-layout__content--perso">
             <CharacterLayer />
+            <div className="character-layout__stats">
+              <StatsTab />
+            </div>
+          </div>
+          <div className="character-layout__inventory">
+            <Inventory />
             {balance && (
               <div className="character-layout__balance">
                 {balance.gold > 0 && <span className="character-layout__balance-gold">{balance.gold}g</span>}
@@ -61,17 +67,9 @@ export default function CharacterLayout() {
                 <span className="character-layout__balance-bronze">{balance.bronze}b</span>
               </div>
             )}
-          </div>
-          <div className="character-layout__inventory">
-            <Inventory />
+            <DerivedStatsTab />
           </div>
         </>
-      )}
-
-      {activeTab === "stats" && isOpen && (
-        <div className="character-layout__content character-layout__content--full">
-          <StatsTab />
-        </div>
       )}
 
       {activeTab === "masteries" && isOpen && (

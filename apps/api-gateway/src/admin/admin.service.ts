@@ -104,9 +104,13 @@ export interface GameConfigPreview {
 }
 
 /**
- * Colonnes Character portant les 8 stats primaires distribuées par le joueur
+ * Colonnes Character portant les 10 stats primaires distribuées par le joueur
  * (Progression V1). Seule liste utilisée pour le reset destructif — ne pas
  * dupliquer ailleurs ; réutiliser cette constante pour toute évolution future.
+ *
+ * `baseCritical` N'EN FAIT PLUS PARTIE (Critique est devenue une dérivée) —
+ * elle est traitée séparément dans `recalculateCharacterProgression` comme
+ * un remboursement legacy vers `unspentStatPoints`.
  */
 const ADMIN_STAT_POINT_FIELDS = [
   'baseStrength',
@@ -116,7 +120,9 @@ const ADMIN_STAT_POINT_FIELDS = [
   'baseDexterity',
   'baseIntelligence',
   'baseWisdom',
-  'baseCritical',
+  'baseSpirit',
+  'baseWillpower',
+  'baseCharisma',
 ] as const satisfies readonly (keyof Character)[];
 
 /** Une erreur ligne par ligne rencontrée pendant le recalcul (best-effort). */
@@ -367,16 +373,25 @@ export class AdminService {
     await this.dataSource.transaction(async (manager) => {
       for (const character of characters) {
         try {
+          // baseCritical (legacy) inclus dans le total distribué pour un
+          // rapport exact, bien qu'il ne fasse plus partie de
+          // ADMIN_STAT_POINT_FIELDS depuis que Critique est devenue dérivée.
+          const legacyCriticalPoints = character.baseCritical ?? 0;
           const oldDistributed =
             ADMIN_STAT_POINT_FIELDS.reduce(
               (sum, field) => sum + (character[field] ?? 0),
               0,
-            ) + (character.unspentStatPoints ?? 0);
+            ) +
+            legacyCriticalPoints +
+            (character.unspentStatPoints ?? 0);
 
           const cumulativeExperience = resolveCumulativeExperience(character, cfg);
           const newLevel = levelFromCumulativeXp(cumulativeExperience, cfg);
           const newExperience = experienceIntoCurrentLevel(cumulativeExperience, newLevel, cfg);
-          const newUnspent = totalStatPointsForLevel(newLevel, cfg);
+          // Remboursement legacy : les points encore investis dans
+          // baseCritical (stat primaire supprimée) sont reversés en points
+          // disponibles au lieu d'être perdus, puis la colonne est remise à 0.
+          const newUnspent = totalStatPointsForLevel(newLevel, cfg) + legacyCriticalPoints;
 
           const resetFields = Object.fromEntries(
             ADMIN_STAT_POINT_FIELDS.map((field) => [field, 0]),
@@ -392,6 +407,7 @@ export class AdminService {
 
           await manager.update(Character, character.id, {
             ...resetFields,
+            baseCritical: 0,
             level: newLevel,
             experience: newExperience,
             cumulativeExperience,
@@ -646,6 +662,9 @@ export class AdminService {
         | 'baseDexterity'
         | 'baseIntelligence'
         | 'baseWisdom'
+        | 'baseSpirit'
+        | 'baseWillpower'
+        | 'baseCharisma'
         | 'baseCritical'
         | 'unspentStatPoints'
       >
