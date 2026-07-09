@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { CharacterService } from './character.service';
+import { CharacterService, resourceAfterMaxChange } from './character.service';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
@@ -81,6 +81,14 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
     const created = characterRepo.create.mock.calls[0][0];
     expect(created.worldX).toBe(0);
     expect(created.worldY).toBe(9600);
+  });
+
+  it('initialise mana/energy au max dérivé (0 pour un perso frais sans primaires)', async () => {
+    await service.create('user-1', { name: 'Hero', sex: 'male' });
+    const created = characterRepo.save.mock.calls[0][0];
+    // maxMana = int×10 + wis×5 = 0 ; maxEnergy = end×8 + agi×2 = 0.
+    expect(created.mana).toBe(0);
+    expect(created.energy).toBe(0);
   });
 });
 
@@ -304,6 +312,31 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
       expect(locked.health).toBeLessThanOrEqual(derivedMax);
     });
   });
+
+  describe('Mana / Énergie (Skills V1-J-A)', () => {
+    it('allouer de l\'Intelligence augmente maxMana et fait monter la mana du delta', async () => {
+      armCharacter({ baseIntelligence: 0, unspentStatPoints: 10 });
+      // +3 int → maxMana = 3×10 = 30 ; mana 0 → 30
+      const result = (await service.allocateStats('user-1', { intelligence: 3 })) as any;
+      expect(result.stats.derived.maxMana).toBe(30);
+      expect(locked.mana).toBe(30);
+    });
+
+    it('allouer de l\'Endurance augmente maxEnergy et fait monter l\'énergie du delta', async () => {
+      armCharacter({ baseEndurance: 0, unspentStatPoints: 10 });
+      // +2 end → maxEnergy = 2×8 = 16 ; energy 0 → 16
+      const result = (await service.allocateStats('user-1', { endurance: 2 })) as any;
+      expect(result.stats.derived.maxEnergy).toBe(16);
+      expect(locked.energy).toBe(16);
+    });
+
+    it('la mana ne dépasse jamais le nouveau maxMana dérivé', async () => {
+      // Départ mana 100 (incohérent), max avant = 20 (int 2). +1 int → max 30.
+      armCharacter({ baseIntelligence: 2, mana: 100, unspentStatPoints: 10 });
+      await service.allocateStats('user-1', { intelligence: 1 });
+      expect(locked.mana).toBeLessThanOrEqual(30);
+    });
+  });
 });
 
 describe('CharacterService.previewStats — aperçu sans persistance (Progression V1)', () => {
@@ -409,5 +442,30 @@ describe('CharacterService.previewStats — aperçu sans persistance (Progressio
   it('NotFound si aucun personnage', async () => {
     characterRepo.findOne.mockResolvedValue(null);
     await expect(service.previewStats('user-1', { draftPrimaryStats: {} })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('resourceAfterMaxChange (helper V1-J-A)', () => {
+  it('max augmente → courant += delta, capé au nouveau max', () => {
+    // 10/20 → newMax 35 : delta 15 → 25/35
+    expect(resourceAfterMaxChange(10, 20, 35)).toBe(25);
+  });
+
+  it('max diminue → clamp au nouveau max', () => {
+    // 30/40 → newMax 20 → 20
+    expect(resourceAfterMaxChange(30, 40, 20)).toBe(20);
+  });
+
+  it('ne dépasse jamais le nouveau max même si courant déjà au-dessus', () => {
+    expect(resourceAfterMaxChange(100, 20, 30)).toBe(30);
+  });
+
+  it('ne descend jamais sous 0', () => {
+    expect(resourceAfterMaxChange(-5, 0, 10)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('valeurs non finies traitées défensivement (0)', () => {
+    expect(resourceAfterMaxChange(NaN, 0, 0)).toBe(0);
+    expect(resourceAfterMaxChange(5, 0, NaN)).toBe(0);
   });
 });

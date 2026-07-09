@@ -36,6 +36,16 @@ export class Character {
   @Column({ default: 100 })
   maxHealth: number;
 
+  // Ressources courantes (Skills V1-J). Même pattern que `health` (valeur
+  // COURANTE). Le MAX n'a PAS de colonne : `maxMana`/`maxEnergy` sont des stats
+  // dérivées (DerivedStatsService / CharacterStatsCalculator). Initialisées au
+  // max dérivé à la création, clampées/augmentées du delta à l'allocation.
+  @Column({ default: 0 })
+  mana: number;
+
+  @Column({ default: 0 })
+  energy: number;
+
   // XP restante dans le niveau courant (partielle). Recalculée à chaque gain
   // depuis `cumulativeExperience` (jamais décrémentée manuellement) —
   // conservée pour compatibilité avec l'UI existante (panneau personnage).

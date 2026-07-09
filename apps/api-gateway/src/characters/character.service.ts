@@ -40,6 +40,27 @@ const STAT_COLUMN: Record<keyof AllocateStatsDto, keyof Character> = {
   charisma: 'baseCharisma',
 };
 
+/** Entier fini >= 0, sinon 0 (garde-fou pour les dérivées éditables en DevTools). */
+function safeResourceMax(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+}
+
+/**
+ * Nouvelle valeur courante d'une ressource (mana/energy) quand son MAX dérivé
+ * change (Skills V1-J-A) :
+ *   - max augmente → courant += delta positif, capé au nouveau max ;
+ *   - max diminue  → clamp au nouveau max.
+ * Jamais < 0, jamais > newMax.
+ */
+export function resourceAfterMaxChange(current: number, oldMax: number, newMax: number): number {
+  const cur = Number.isFinite(current) ? current : 0;
+  const nMax = safeResourceMax(newMax);
+  if (nMax >= safeResourceMax(oldMax)) {
+    return Math.max(0, Math.min(cur + (nMax - safeResourceMax(oldMax)), nMax));
+  }
+  return Math.max(0, Math.min(cur, nMax));
+}
+
 // Position isométrique de spawn par défaut (positionX=400, positionY=300 → entity defaults).
 // WU calculés une fois : worldX=0, worldY=9600.
 const DEFAULT_SPAWN_PX = { x: 400, y: 300 } as const;
@@ -76,6 +97,14 @@ export class CharacterService {
       worldY: DEFAULT_SPAWN_WU.worldY,
       mapId: DEFAULT_MAP_ID,
     });
+    // Ressources courantes initialisées au max dérivé (Skills V1-J-A). Pour un
+    // perso frais (stats primaires à 0), maxMana/maxEnergy valent 0 → 0.
+    const derived = CharacterStatsCalculator.compute(
+      character,
+      await this.derivedStats.getDefinitions(),
+    ).derived;
+    character.mana = safeResourceMax(derived.maxMana);
+    character.energy = safeResourceMax(derived.maxEnergy);
     return this.characterRepository.save(character);
   }
 
@@ -169,20 +198,28 @@ export class CharacterService {
         );
       }
 
-      // PV max dérivé avant application (pour le delta Vitalité).
-      const oldMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
+      // Dérivées AVANT application (pour les deltas de max).
+      const oldDerived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
 
       for (const [column, amount] of Object.entries(increments)) {
         (character as unknown as Record<string, number>)[column] += amount as number;
       }
       character.unspentStatPoints -= total;
 
-      // Vitalité : PV courants +delta, capés au nouveau PV max dérivé.
-      const newMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
-      const delta = newMaxHealth - oldMaxHealth;
-      if (delta > 0) {
-        character.health = Math.min(character.health + delta, newMaxHealth);
+      // Dérivées APRÈS application.
+      const newDerived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
+
+      // Vitalité : PV courants +delta, capés au nouveau PV max dérivé
+      // (logique existante inchangée).
+      const deltaHealth = newDerived.maxHealth - oldDerived.maxHealth;
+      if (deltaHealth > 0) {
+        character.health = Math.min(character.health + deltaHealth, newDerived.maxHealth);
       }
+
+      // Mana / Énergie : montée du delta positif si le max augmente, clamp sinon
+      // (Skills V1-J-A). Jamais > max, jamais < 0.
+      character.mana = resourceAfterMaxChange(character.mana, oldDerived.maxMana, newDerived.maxMana);
+      character.energy = resourceAfterMaxChange(character.energy, oldDerived.maxEnergy, newDerived.maxEnergy);
 
       await manager.save(Character, character);
       return character.id;
