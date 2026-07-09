@@ -38,6 +38,10 @@ $slot-size: 44px;
     box-shadow: vars.$panel-shadow-float;
   }
 
+  &__slot-wrap {
+    position: relative;
+  }
+
   &__slot {
     position: relative;
     width: $slot-size;
@@ -60,6 +64,128 @@ $slot-size: 44px;
       cursor: not-allowed;
       opacity: 0.55;
     }
+
+    // Slot vide : discret, invite à équiper.
+    &--empty {
+      border-style: dashed;
+      color: vars.$color-text-disabled;
+    }
+
+    // Slot rempli mais indisponible : grisé, non lançable.
+    &--unavailable {
+      opacity: 0.4;
+      filter: grayscale(1);
+    }
+  }
+
+  &__plus {
+    font-size: 20px;
+    line-height: 1;
+    color: vars.$color-text-disabled;
+  }
+
+  // Petit bouton « gérer » (remplacer/vider) sur un slot rempli.
+  &__slot-edit {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    font-size: 10px;
+    line-height: 1;
+    border: 1px solid vars.$panel-border;
+    border-radius: 50%;
+    background: vars.$panel-header-bg;
+    color: vars.$color-text-primary;
+    cursor: pointer;
+    pointer-events: auto;
+
+    &:hover { border-color: vars.$color-text-gold; }
+  }
+
+  // ── Sélecteur d'équipement ─────────────────────────────────────────────────
+  &__picker {
+    pointer-events: auto;
+    align-self: flex-start;
+    max-width: 240px;
+    background: vars.$panel-overlay-bg;
+    border: 1px solid vars.$panel-border;
+    border-radius: vars.$panel-radius-card;
+    box-shadow: vars.$panel-shadow-float;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__picker-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    color: vars.$color-text-gold;
+  }
+
+  &__picker-close {
+    background: vars.$btn-neutral-bg;
+    border: none;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 11px;
+    padding: 2px 8px;
+    cursor: pointer;
+    &:hover { background: vars.$btn-neutral-hover; }
+  }
+
+  &__picker-empty {
+    font-size: 12px;
+    color: vars.$color-text-muted;
+  }
+
+  &__picker-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  &__picker-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    background: vars.$panel-inner-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 12px;
+    padding: 4px 6px;
+    cursor: pointer;
+    &:hover { border-color: vars.$color-text-gold; }
+  }
+
+  &__picker-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+  }
+
+  &__picker-clear {
+    background: vars.$btn-neutral-bg;
+    border: none;
+    border-radius: vars.$panel-radius-sm;
+    color: vars.$color-text-primary;
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    &:hover { background: vars.$btn-danger-bg; }
   }
 
   &__hotkey {
