@@ -70,7 +70,7 @@
   }
 
   &--hp     .character-resource__value { color: vars.$color-stat-attack; }
-  &--mana   .character-resource__value { color: #4aa3ff; }
+  &--mana   .character-resource__value { color: vars.$resource-mana; }
   &--energy .character-resource__value { color: vars.$color-magic-amber; }
 }
 

@@ -1,3 +1,4 @@
+@use "sass:math";
 @use "../abstracts/variables" as vars;
 @use "../abstracts/mixins" as m;
 
@@ -29,6 +30,7 @@ $slot-size: 44px;
 
   &__slots {
     display: flex;
+    align-items: center;
     gap: vars.$dt-gap-sm;
     pointer-events: auto;
     background: vars.$panel-overlay-bg;
@@ -36,6 +38,51 @@ $slot-size: 44px;
     border-radius: vars.$panel-radius-card;
     padding: 6px;
     box-shadow: vars.$panel-shadow-float;
+  }
+
+  // ── Mini-jauges ressources (V1-L-A) ─────────────────────────────────────────
+  // À gauche des 8 slots. Remplissage vertical bas → haut (le niveau descend
+  // quand la ressource baisse). Mana et énergie collées (groupe à gap 1px).
+  &__resources {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    margin-right: 2px;
+  }
+
+  &__gauge-group {
+    display: flex;
+    gap: 1px; // mana + énergie collées
+  }
+
+  &__gauge {
+    position: relative;
+    width: 8px;
+    height: 30px;
+    background: vars.$hp-bar-bg;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: 2px;
+    overflow: hidden;
+
+    &--hp     .skill-action-bar__gauge-fill { background: vars.$resource-health; }
+    &--mana   .skill-action-bar__gauge-fill { background: vars.$resource-mana; }
+    &--energy .skill-action-bar__gauge-fill { background: vars.$resource-energy; }
+  }
+
+  &__gauge-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0; // ancrage bas → la hauteur matérialise le niveau
+    height: 0;
+    transition: height 0.2s ease-out;
+  }
+
+  // Paliers de remplissage 0..100 par pas de 5 (aucun style inline côté TSX).
+  @for $i from 0 through 20 {
+    &__gauge-fill--fill-#{$i * 5} {
+      height: math.percentage(math.div($i * 5, 100));
+    }
   }
 
   &__slot-wrap {

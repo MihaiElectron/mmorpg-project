@@ -7,6 +7,7 @@ import {
   type ActionBarUnavailableReason,
 } from "./actionBarApi";
 import { getActionPanelStore } from "../../store/actionPanel.store";
+import { useCharacterStore } from "../../store/character.store";
 import { onSkillDefinitionsChanged } from "../DevTools/modules/Skills/skillEvents";
 
 /**
@@ -47,6 +48,95 @@ function getSelectedCreature(): { id: string } | null {
 
 function shortLabel(name: string): string {
   return name.trim().slice(0, 2).toUpperCase();
+}
+
+/** Pourcentage de remplissage [0..100], garde toute division par zéro. */
+function resourcePercent(current: number | undefined, max: number | undefined): number {
+  if (!max || max <= 0 || !current || current <= 0) return 0;
+  return Math.min(100, Math.round((current / max) * 100));
+}
+
+/** Palier 0..100 par pas de 5 → classe SCSS `--fill-XX` (aucun style inline). */
+function fillBucket(percent: number): number {
+  return Math.round(percent / 5) * 5;
+}
+
+const RESOURCE_LABELS = { hp: "PV", mana: "Mana", energy: "Énergie" } as const;
+type ResourceKind = keyof typeof RESOURCE_LABELS;
+
+/** Libellé de coût pour le tooltip : « Mana 5 » / « Énergie 5 » / « Santé 5 » / « aucun ». */
+function costLabel(meta: PlayerActiveSkill): string {
+  if (!meta.resourceType || meta.resourceCost <= 0) return "aucun";
+  const label =
+    meta.resourceType === "mana" ? "Mana" : meta.resourceType === "energy" ? "Énergie" : "Santé";
+  return `${label} ${meta.resourceCost}`;
+}
+
+/**
+ * Tooltip natif compact d'un slot (V1-L-A) : nom, coût, recharge, portée, cible,
+ * état. `title` multi-ligne — pas de fenêtre custom. Retombe sur un libellé
+ * simple si les métadonnées du skill ne sont pas encore chargées.
+ */
+function buildSlotTitle(slot: ActionBarSlot, meta: PlayerActiveSkill | undefined): string {
+  if (!slot.skillKey) return "Slot vide — équiper un skill";
+  const reason = REASON_LABELS[slot.unavailableReason ?? "unknown"];
+  if (!meta) {
+    return slot.available ? (slot.name ?? "") : `${slot.name} — ${reason}`;
+  }
+  const cible = meta.targetMode === "self" ? "soi-même" : "créature";
+  const etat = slot.available ? "Disponible" : `Indisponible — ${reason}`;
+  return [
+    meta.name,
+    `Coût : ${costLabel(meta)}`,
+    `Recharge : ${Math.round(meta.cooldownMs / 1000)} s`,
+    `Portée : ${meta.rangeWU}   Cible : ${cible}`,
+    etat,
+  ].join("\n");
+}
+
+type CharacterResources = {
+  health?: number;
+  mana?: number;
+  energy?: number;
+  stats?: { derived?: { maxHealth?: number; maxMana?: number; maxEnergy?: number } };
+} | null;
+
+/**
+ * Mini-jauges verticales PV / Mana / Énergie (V1-L-A), à gauche des slots.
+ * Lecture SEULE du store (serveur autoritaire) ; aucun recalcul de stat client.
+ * Remplissage bas → haut via classes de paliers SCSS (pas de style inline).
+ */
+function ResourceGauges() {
+  const character = useCharacterStore((s: { character: CharacterResources }) => s.character);
+  const derived = character?.stats?.derived;
+
+  const gauges: { kind: ResourceKind; current: number; max: number }[] = [
+    { kind: "hp", current: character?.health ?? 0, max: derived?.maxHealth ?? 0 },
+    { kind: "mana", current: character?.mana ?? 0, max: derived?.maxMana ?? 0 },
+    { kind: "energy", current: character?.energy ?? 0, max: derived?.maxEnergy ?? 0 },
+  ];
+
+  const gauge = (kind: ResourceKind, current: number, max: number) => {
+    const percent = resourcePercent(current, max);
+    const title = `${RESOURCE_LABELS[kind]} ${current ?? 0} / ${max ?? 0}`;
+    return (
+      <div className={`skill-action-bar__gauge skill-action-bar__gauge--${kind}`} title={title}>
+        <div
+          className={`skill-action-bar__gauge-fill skill-action-bar__gauge-fill--fill-${fillBucket(percent)}`}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="skill-action-bar__resources">
+      {gauge("hp", gauges[0].current, gauges[0].max)}
+      <div className="skill-action-bar__gauge-group">
+        {gauge("mana", gauges[1].current, gauges[1].max)}
+        {gauge("energy", gauges[2].current, gauges[2].max)}
+      </div>
+    </div>
+  );
 }
 
 function emptySlots(): ActionBarSlot[] {
@@ -289,17 +379,14 @@ export default function SkillActionBar() {
       )}
 
       <div className="skill-action-bar__slots">
+        <ResourceGauges />
         {slots.map((slot, i) => {
           const filled = !!slot.skillKey;
           const readyAt = filled ? cooldowns[slot.skillKey as string] ?? 0 : 0;
           const remainingMs = Math.max(0, readyAt - now);
           const onCooldown = remainingMs > 0;
           const unavailable = filled && !slot.available;
-          const title = filled
-            ? unavailable
-              ? `${slot.name} — ${REASON_LABELS[slot.unavailableReason ?? "unknown"]}`
-              : (slot.name ?? "")
-            : "Slot vide — équiper un skill";
+          const title = buildSlotTitle(slot, slot.skillKey ? skillMeta[slot.skillKey] : undefined);
           const cls =
             "skill-action-bar__slot" +
             (filled ? "" : " skill-action-bar__slot--empty") +

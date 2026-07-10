@@ -110,3 +110,11 @@ $hp-color-critical: #c0392b;
 $hp-bar-height:     8px;
 $hp-bar-radius:     4px;
 $hp-bar-bg:         rgba(0, 0, 0, 0.55);
+
+// ===============================
+// Ressources courantes (PV / Mana / Énergie)
+// Variables partagées entre la SkillActionBar (jauges) et le panneau perso.
+// ===============================
+$resource-health: $hp-color-high;   // vert = vie
+$resource-mana:   #4aa3ff;          // bleu = mana
+$resource-energy: $color-magic-amber; // ambre = énergie
