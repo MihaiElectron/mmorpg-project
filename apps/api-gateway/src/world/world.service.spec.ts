@@ -604,15 +604,23 @@ describe('WorldService.respawnCharacter', () => {
     const { server, emitted } = makeRespawnServer();
     await svc.respawnCharacter('char-1', server);
 
-    expect(emitted).toHaveLength(1);
-    const payload = emitted[0].payload;
-    expect(emitted[0].event).toBe('character_respawn');
+    // character_respawn + character_resource_update (V1-K-A) au joueur.
+    const respawnEvt = emitted.find((e) => e.event === 'character_respawn');
+    expect(respawnEvt).toBeDefined();
+    const payload = respawnEvt!.payload;
     expect(payload.characterId).toBe('char-1');
     expect(typeof payload.worldX).toBe('number');
     expect(typeof payload.worldY).toBe('number');
     expect(payload.chunkX).toBe(wuToChunkIndex(payload.worldX));
     expect(payload.chunkY).toBe(wuToChunkIndex(payload.worldY));
     expect(payload.health).toBe(100);
+
+    // Ressources refaites au max dérivé et synchronisées.
+    const resEvt = emitted.find((e) => e.event === 'character_resource_update');
+    expect(resEvt).toBeDefined();
+    expect(resEvt!.payload.characterId).toBe('char-1');
+    expect(resEvt!.payload.mana).toBe(resEvt!.payload.maxMana);
+    expect(resEvt!.payload.energy).toBe(resEvt!.payload.maxEnergy);
   });
 
   it("ne fait rien si le personnage est introuvable", async () => {

@@ -39,11 +39,16 @@ function makePlayer(overrides: Partial<ConnectedPlayer> = {}): ConnectedPlayer {
 
 function makeGateway(worldServiceMock: Partial<WorldService>) {
   const wsAuth = { authenticate: jest.fn().mockResolvedValue({ userId: 'u-1', role: 'user' }) };
-  const gateway = new WorldGateway(worldServiceMock as WorldService, wsAuth as unknown as WsAuthService);
+  const resourceRegen = { start: jest.fn(), stop: jest.fn() };
+  const gateway = new WorldGateway(
+    worldServiceMock as WorldService,
+    wsAuth as unknown as WsAuthService,
+    resourceRegen as any,
+  );
   const roomEmit = jest.fn();
   const globalEmit = jest.fn();
   (gateway as any).server = { to: jest.fn().mockReturnValue({ emit: roomEmit }), emit: globalEmit };
-  return { gateway, wsAuth };
+  return { gateway, wsAuth, resourceRegen };
 }
 
 // ─── Suite ───────────────────────────────────────────────────────────────────

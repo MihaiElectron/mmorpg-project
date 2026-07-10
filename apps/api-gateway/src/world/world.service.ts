@@ -260,12 +260,19 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     } catch { /* position hors isométrie : conserver la WU du point */ }
 
     // Respawn full HP = PV max DÉRIVÉS (Vitalité incluse), pas la colonne brute.
+    // Mana/énergie également remis au max dérivé (V1-K-A) : cohérent avec le
+    // full-life, évite une ressource morte juste après la mort.
     const derivedStatDefinitions = await this.derivedStats.getDefinitions();
-    const derivedMaxHealth = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived.maxHealth;
+    const derived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
+    const derivedMaxHealth = derived.maxHealth;
     const newHealth = derivedMaxHealth;
+    const newMana = Math.max(0, Math.round(derived.maxMana));
+    const newEnergy = Math.max(0, Math.round(derived.maxEnergy));
 
     await this.characterRepository.update(characterId, {
       health: newHealth,
+      mana: newMana,
+      energy: newEnergy,
       worldX: newWX,
       worldY: newWY,
       mapId: nearestWU.mapId,
@@ -288,6 +295,16 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
           mapId: nearestWU.mapId,
           health: newHealth,
           maxHealth: derivedMaxHealth,
+        });
+        // Sync ressources (mana/énergie refaites au max) au seul joueur (V1-K-A).
+        server.to(player.socketId).emit('character_resource_update', {
+          characterId,
+          health: Math.round(newHealth),
+          mana: newMana,
+          energy: newEnergy,
+          maxHealth: Math.max(1, Math.round(derivedMaxHealth)),
+          maxMana: newMana,
+          maxEnergy: newEnergy,
         });
         break;
       }

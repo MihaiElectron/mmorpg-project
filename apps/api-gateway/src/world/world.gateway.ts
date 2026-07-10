@@ -13,6 +13,7 @@ import {
 import { Server } from 'socket.io';
 import type { WorldSocket } from '../types/world-socket';
 import { WorldService, ConnectedPlayer } from './world.service';
+import { ResourceRegenerationService } from './resource-regeneration.service';
 import { WsAuthService } from '../common/ws-auth.service';
 import { CLIENT_ORIGIN } from '../common/cors.constants';
 import { getMapRoomId } from '../common/socket-rooms';
@@ -60,11 +61,14 @@ export class WorldGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
   constructor(
     private readonly worldService: WorldService,
     private readonly wsAuthService: WsAuthService,
+    private readonly resourceRegen: ResourceRegenerationService,
   ) {}
 
   /** Expose le serveur Socket.IO au WorldService (émission character:reload HTTP). */
   afterInit(server: Server) {
     this.worldService.registerServer(server);
+    // Démarre le tick global de régénération mana/énergie (V1-K-A). Idempotent.
+    this.resourceRegen.start(server);
   }
 
   /**
