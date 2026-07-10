@@ -6,6 +6,7 @@ import { SkillDefinition } from './entities/skill-definition.entity';
 import { calculateSkillEffect } from './calculators/skill-effect.calculator';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 import { CreaturesService } from '../creatures/creatures.service';
@@ -167,7 +168,10 @@ export class SkillCastService {
     }
 
     // ── Contrôles personnage ───────────────────────────────────────────────
-    const character = await this.characterRepository.findOne({ where: { id: characterId } });
+    const character = await this.characterRepository.findOne({
+      where: { id: characterId },
+      relations: ['equipment', 'equipment.item'],
+    });
     if (!character) return { success: false, error: 'Personnage introuvable.' };
     if (character.health <= 0) return { success: false, error: 'Personnage mort.' };
 
@@ -202,7 +206,11 @@ export class SkillCastService {
 
     // ── Calcul serveur du montant (stats déjà calculées) ───────────────────
     const derivedDefinitions = await this.derivedStats.getDefinitions();
-    const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+    const stats = CharacterStatsCalculator.compute(
+      character,
+      derivedDefinitions,
+      aggregateEquipmentBonuses(character.equipment),
+    );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,
       derived: stats.derived as unknown as Record<string, number>,
@@ -294,7 +302,10 @@ export class SkillCastService {
     }
 
     // ── Contrôles personnage ───────────────────────────────────────────────
-    const character = await this.characterRepository.findOne({ where: { id: characterId } });
+    const character = await this.characterRepository.findOne({
+      where: { id: characterId },
+      relations: ['equipment', 'equipment.item'],
+    });
     if (!character) return { success: false, error: 'Personnage introuvable.' };
     if (character.health <= 0) return { success: false, error: 'Personnage mort.' };
 
@@ -327,7 +338,11 @@ export class SkillCastService {
 
     // ── Calcul serveur du soin + clamp maxHealth dérivé ────────────────────
     const derivedDefinitions = await this.derivedStats.getDefinitions();
-    const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+    const stats = CharacterStatsCalculator.compute(
+      character,
+      derivedDefinitions,
+      aggregateEquipmentBonuses(character.equipment),
+    );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,
       derived: stats.derived as unknown as Record<string, number>,

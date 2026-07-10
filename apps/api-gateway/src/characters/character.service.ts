@@ -20,6 +20,7 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { CharacterStatsCalculator, PrimaryStats, DerivedStats } from './character-stats-calculator';
+import { aggregateEquipmentBonuses } from './equipment-stats.helper';
 import { resolveEffectiveAttackRangeWU } from './attack-range.helper';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { PreviewStatsDto } from './dto/preview-stats.dto';
@@ -145,7 +146,11 @@ export class CharacterService {
     const inventory = await this.inventoryProjection.project(character.id);
     const nextLevelXp = await this.progression.getNextLevelXp(character.level);
     const derivedStatDefinitions = await this.derivedStats.getDefinitions();
-    const stats = CharacterStatsCalculator.compute(character, derivedStatDefinitions);
+    const stats = CharacterStatsCalculator.compute(
+      character,
+      derivedStatDefinitions,
+      aggregateEquipmentBonuses(character.equipment),
+    );
     // Bloc combat séparé de stats.derived : portée effective issue de
     // l'équipement + règles combat (source serveur unique pour l'auto-attaque).
     const combat = { attackRangeWU: resolveEffectiveAttackRangeWU(character.equipment) };
@@ -198,8 +203,21 @@ export class CharacterService {
         );
       }
 
+      // Équipement chargé séparément (un join sous verrou pessimiste FOR UPDATE
+      // est fragile en Postgres) → agrégé pour que les max dérivés/clamps tiennent
+      // compte des bonus d'équipement (Équipement V1-A). Constant sur l'allocation.
+      const equipment = await manager.find(CharacterEquipment, {
+        where: { characterId: character.id },
+        relations: ['item'],
+      });
+      const equipmentModifier = aggregateEquipmentBonuses(equipment);
+
       // Dérivées AVANT application (pour les deltas de max).
-      const oldDerived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
+      const oldDerived = CharacterStatsCalculator.compute(
+        character,
+        derivedStatDefinitions,
+        equipmentModifier,
+      ).derived;
 
       for (const [column, amount] of Object.entries(increments)) {
         (character as unknown as Record<string, number>)[column] += amount as number;
@@ -207,7 +225,11 @@ export class CharacterService {
       character.unspentStatPoints -= total;
 
       // Dérivées APRÈS application.
-      const newDerived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
+      const newDerived = CharacterStatsCalculator.compute(
+        character,
+        derivedStatDefinitions,
+        equipmentModifier,
+      ).derived;
 
       // Vitalité : PV courants +delta, capés au nouveau PV max dérivé
       // (logique existante inchangée).
@@ -250,6 +272,7 @@ export class CharacterService {
     const character = await this.characterRepository.findOne({
       where: { userId },
       order: { createdAt: 'ASC' },
+      relations: ['equipment', 'equipment.item'],
     });
     if (!character) throw new NotFoundException(`No character found for user ${userId}`);
 
@@ -284,7 +307,11 @@ export class CharacterService {
     }
 
     const definitions = await this.derivedStats.getDefinitions();
-    const stats = CharacterStatsCalculator.compute(tempChar, definitions);
+    const stats = CharacterStatsCalculator.compute(
+      tempChar,
+      definitions,
+      aggregateEquipmentBonuses(tempChar.equipment),
+    );
     return { primary: stats.final, derived: stats.derived };
   }
 

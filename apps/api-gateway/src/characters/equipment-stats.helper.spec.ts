@@ -2,10 +2,18 @@ import { EntityManager } from 'typeorm';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
 import { Item } from '../items/entities/item.entity';
-import { recalculateEquipmentStats } from './equipment-stats.helper';
+import {
+  recalculateEquipmentStats,
+  aggregateEquipmentBonuses,
+  sanitizeStatBonuses,
+} from './equipment-stats.helper';
 
 function makeItem(attack: number | null, defense: number | null): Item {
   return { id: "item-x", attack, defense } as Item;
+}
+
+function makeBonusEquip(statBonuses: Record<string, unknown>): CharacterEquipment {
+  return { characterId: "char-1", slot: "s", item: { statBonuses } as unknown as Item } as CharacterEquipment;
 }
 
 function makeEquip(slot: string, item: Item): CharacterEquipment {
@@ -123,5 +131,57 @@ describe("recalculateEquipmentStats", () => {
       where: { characterId },
       relations: ["item"],
     });
+  });
+});
+
+describe("sanitizeStatBonuses (Équipement V1-A)", () => {
+  it("ne conserve que les clés primaires connues et valeurs finies", () => {
+    const out = sanitizeStatBonuses({
+      strength: 5,
+      intelligence: 3,
+      unknownKey: 9, // ignoré
+      criticalChance: 2, // dérivée → ignorée en V1
+      vitality: Number.NaN, // non finie → ignorée
+      agility: "x", // non numérique → ignorée
+    });
+    expect(out).toEqual({ strength: 5, intelligence: 3 });
+  });
+
+  it("entrée non-objet → objet vide", () => {
+    expect(sanitizeStatBonuses(null)).toEqual({});
+    expect(sanitizeStatBonuses(42)).toEqual({});
+  });
+});
+
+describe("aggregateEquipmentBonuses (Équipement V1-A)", () => {
+  it("aucun équipement → PrimaryStats à zéro", () => {
+    const total = aggregateEquipmentBonuses([]);
+    expect(total.strength).toBe(0);
+    expect(Object.values(total).every((v) => v === 0)).toBe(true);
+  });
+
+  it("somme les bonus de plusieurs items équipés", () => {
+    const total = aggregateEquipmentBonuses([
+      makeBonusEquip({ strength: 5, intelligence: 2 }),
+      makeBonusEquip({ strength: 3, wisdom: 4 }),
+    ]);
+    expect(total.strength).toBe(8);
+    expect(total.intelligence).toBe(2);
+    expect(total.wisdom).toBe(4);
+  });
+
+  it("ignore les clés inconnues et valeurs non finies", () => {
+    const total = aggregateEquipmentBonuses([
+      makeBonusEquip({ strength: 5, foo: 100, vitality: Number.POSITIVE_INFINITY }),
+    ]);
+    expect(total.strength).toBe(5);
+    expect(total.vitality).toBe(0);
+  });
+
+  it("un item sans statBonuses ne contribue pas", () => {
+    const total = aggregateEquipmentBonuses([
+      { characterId: "c", slot: "s", item: {} } as never,
+    ]);
+    expect(Object.values(total).every((v) => v === 0)).toBe(true);
   });
 });

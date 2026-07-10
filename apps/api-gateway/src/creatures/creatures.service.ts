@@ -7,6 +7,7 @@ import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
 import { calculateCombatDamage } from './combat-damage.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
@@ -369,11 +370,19 @@ export class CreaturesService implements OnModuleInit {
     const lastAtk = this.lastCreatureAutoAttackAt.get(creature.id) ?? 0;
     if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       this.lastCreatureAutoAttackAt.set(creature.id, now);
-      const char = await this.characterRepository.findOne({ where: { id: target.characterId } });
+      const char = await this.characterRepository.findOne({
+        where: { id: target.characterId },
+        relations: ['equipment', 'equipment.item'],
+      });
       if (char && char.health > 0) {
-        // Défense dérivée serveur (Endurance incluse), jamais la colonne brute.
+        // Défense dérivée serveur (Endurance incluse + bonus d'équipement), jamais
+        // la colonne brute.
         const derivedStatDefinitions = await this.derivedStats.getDefinitions();
-        const charDefense = CharacterStatsCalculator.compute(char, derivedStatDefinitions).derived.defense;
+        const charDefense = CharacterStatsCalculator.compute(
+          char,
+          derivedStatDefinitions,
+          aggregateEquipmentBonuses(char.equipment),
+        ).derived.defense;
         const dmg = Math.max(template.baseAttack - charDefense, 1);
         const newHealth = Math.max(char.health - dmg, 0);
         await this.characterRepository.update(char.id, { health: newHealth });
@@ -548,7 +557,11 @@ export class CreaturesService implements OnModuleInit {
     // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
     // agilité / dextérité NON branchés en combat V1 (affichage seul).
     const derivedStatDefinitionsForAttack = await this.derivedStats.getDefinitions();
-    const charStats = CharacterStatsCalculator.compute(character, derivedStatDefinitionsForAttack);
+    const charStats = CharacterStatsCalculator.compute(
+      character,
+      derivedStatDefinitionsForAttack,
+      aggregateEquipmentBonuses(character.equipment),
+    );
     const damageResult = calculateCombatDamage({
       attackerValue: charStats.derived.physicalAttack,
       targetDefense: derived.defenseTotal,

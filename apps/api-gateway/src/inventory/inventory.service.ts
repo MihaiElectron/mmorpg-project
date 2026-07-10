@@ -16,7 +16,10 @@ import { Character } from '../characters/entities/character.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
 import { ItemInstance, ItemInstanceContainerType, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
-import { recalculateEquipmentStats } from '../characters/equipment-stats.helper';
+import { recalculateEquipmentStats, aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
+import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { MasteriesService } from '../masteries/masteries.service';
 import { WorldService } from '../world/world.service';
 import { InventoryProjectionService } from './projection/inventory-projection.service';
 import { InventoryEntryDto } from './projection/inventory-entry.dto';
@@ -50,6 +53,8 @@ export class InventoryService {
     private readonly itemTransfer: ItemTransferService,
     private readonly worldService: WorldService,
     private readonly inventoryProjection: InventoryProjectionService,
+    private readonly derivedStats: DerivedStatsService,
+    private readonly masteriesService: MasteriesService,
   ) {}
 
   /**
@@ -277,6 +282,9 @@ export class InventoryService {
       if (!item) throw new NotFoundException('Item not found');
       if (!item.slot) throw new BadRequestException('Item has no slot defined');
 
+      // Prérequis d'équipement (Équipement V1-A). Serveur autoritaire.
+      await this.validateEquipRequirements(manager, characterId, item);
+
       let targetSlot: string;
       if (requestedSlot) {
         if (!this.isSlotCompatible(item.slot, requestedSlot)) {
@@ -324,8 +332,81 @@ export class InventoryService {
         transition: { type: 'EQUIP', characterId },
       });
       await recalculateEquipmentStats(manager, characterId);
+      // Clamp des ressources courantes si l'équipement fait baisser un max dérivé.
+      await this.clampResourcesToDerivedMax(manager, characterId);
       return equipped;
     });
+  }
+
+  /**
+   * Valide les prérequis d'équipement d'un item (Équipement V1-A).
+   * - `requiredLevel` : niveau minimum du personnage.
+   * - `requiredMasteries` : mêmes règles que les skills (niveau de maîtrise).
+   * - `requiredClass` : champ persisté mais NON enforced en V1 (aucun système de
+   *   classe sur `Character`) — à activer quand la classe existera.
+   * Serveur autoritaire ; le Studio configure mais ne valide rien.
+   */
+  private async validateEquipRequirements(
+    manager: EntityManager,
+    characterId: string,
+    item: Item,
+  ): Promise<void> {
+    const character = await manager.findOne(Character, { where: { id: characterId } });
+    if (!character) throw new NotFoundException('Character not found');
+
+    if ((item.requiredLevel ?? 1) > (character.level ?? 1)) {
+      throw new BadRequestException('Niveau requis insuffisant.');
+    }
+
+    const requiredMasteries = item.requiredMasteries ?? {};
+    const requiredEntries = Object.entries(requiredMasteries).filter(
+      ([, min]) => typeof min === 'number' && min > 0,
+    );
+    if (requiredEntries.length > 0) {
+      const masteries = await this.masteriesService.getCharacterMasteries(characterId);
+      const levelByKey = new Map(masteries.map((m) => [m.key, m.level]));
+      for (const [key, min] of requiredEntries) {
+        if ((levelByKey.get(key) ?? 0) < (min as number)) {
+          throw new BadRequestException('Maîtrise requise insuffisante.');
+        }
+      }
+    }
+  }
+
+  /**
+   * Clampe `health`/`mana`/`energy` aux max DÉRIVÉS serveur (équipement inclus)
+   * après une mutation d'équipement (Équipement V1-A). Ne fait que RÉDUIRE : si
+   * un max baisse (item retiré/moins puissant), la ressource courante est capée ;
+   * si un max monte, on ne remplit pas (cohérent avec allocateStats). Persiste
+   * uniquement en cas de changement. Aucune régénération inventée.
+   */
+  private async clampResourcesToDerivedMax(
+    manager: EntityManager,
+    characterId: string,
+  ): Promise<void> {
+    const [character, equipment, definitions] = await Promise.all([
+      manager.findOne(Character, { where: { id: characterId } }),
+      manager.find(CharacterEquipment, { where: { characterId }, relations: ['item'] }),
+      this.derivedStats.getDefinitions(),
+    ]);
+    if (!character) return;
+
+    const derived = CharacterStatsCalculator.compute(
+      character,
+      definitions,
+      aggregateEquipmentBonuses(equipment),
+    ).derived;
+    const maxHealth = Math.max(1, Math.round(derived.maxHealth));
+    const maxMana = Math.max(0, Math.round(derived.maxMana));
+    const maxEnergy = Math.max(0, Math.round(derived.maxEnergy));
+
+    const health = Math.min(character.health ?? 0, maxHealth);
+    const mana = Math.min(character.mana ?? 0, maxMana);
+    const energy = Math.min(character.energy ?? 0, maxEnergy);
+
+    if (health !== character.health || mana !== character.mana || energy !== character.energy) {
+      await manager.update(Character, { id: characterId }, { health, mana, energy });
+    }
   }
 
   /**
@@ -447,6 +528,7 @@ export class InventoryService {
           transition: { type: 'UNEQUIP', characterId },
         });
         await recalculateEquipmentStats(manager, characterId);
+        await this.clampResourcesToDerivedMax(manager, characterId);
         return instance;
       }
 
@@ -458,6 +540,7 @@ export class InventoryService {
       inv.equipped = false;
       const saved = await manager.save(Inventory, inv);
       await recalculateEquipmentStats(manager, characterId);
+      await this.clampResourcesToDerivedMax(manager, characterId);
       return saved;
     });
     // Invalidation live du Player Inspector admin (unequip).

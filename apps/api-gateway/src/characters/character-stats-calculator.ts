@@ -49,6 +49,23 @@ export interface PrimaryStats {
   charisma: number;
 }
 
+/**
+ * Whitelist canonique des clés de stats primaires. Source unique réutilisée pour
+ * valider les `statBonuses` d'équipement (Équipement V1-A) et l'agrégation.
+ */
+export const PRIMARY_STAT_KEYS: readonly (keyof PrimaryStats)[] = [
+  'strength',
+  'vitality',
+  'endurance',
+  'agility',
+  'dexterity',
+  'intelligence',
+  'wisdom',
+  'spirit',
+  'willpower',
+  'charisma',
+];
+
 /** Stats dérivées calculées à partir des stats finales + stats brutes Character. */
 export interface DerivedStats {
   maxHealth: number;
@@ -193,11 +210,18 @@ export class CharacterStatsCalculator {
    * `DEFAULT_DERIVED_STAT_DEFINITIONS` (mêmes valeurs que l'ancien code
    * hardcodé) — ne plante jamais.
    */
-  static compute(character: Character, definitions?: DerivedStatDefinition[]): CharacterStats {
+  static compute(
+    character: Character,
+    definitions?: DerivedStatDefinition[],
+    equipmentModifier?: PrimaryStats,
+  ): CharacterStats {
     const base = this.baseStats(character);
 
+    // `equipmentModifier` agrégé par l'appelant (helper `aggregateEquipmentBonuses`,
+    // point unique). Absent → zéro : comportement identique à avant V1-A. Le
+    // calculateur reste PUR (aucune I/O, aucun chargement d'équipement ici).
     const modifiers = {
-      equipment: zeroPrimary(),
+      equipment: equipmentModifier ?? zeroPrimary(),
       buffs: zeroPrimary(),
       passives: zeroPrimary(),
       debuffs: zeroPrimary(),

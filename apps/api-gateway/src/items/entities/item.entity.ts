@@ -79,6 +79,31 @@ export class Item {
   enabled: boolean;
 
   /**
+   * Bonus de stats PRIMAIRES accordés quand l'item est équipé (Équipement V1-A).
+   * Ex: `{ "strength": 5, "intelligence": 3 }`. Uniquement des clés primaires
+   * connues (whitelist serveur `PRIMARY_STAT_KEYS`) ; jamais de dérivées directes
+   * en V1. N'affecte PAS `attack`/`defense` plats (chemin `recalculateEquipmentStats`
+   * conservé). Agrégé côté serveur dans `modifiers.equipment` du calculateur.
+   */
+  @Column({ type: 'jsonb', default: {} })
+  statBonuses: Record<string, number>;
+
+  /** Niveau minimum requis pour équiper (défaut 1). Validé serveur. */
+  @Column({ type: 'int', default: 1 })
+  requiredLevel: number;
+
+  /** Classe requise pour équiper (null = aucune restriction). Validé serveur. */
+  @Column({ type: 'varchar', nullable: true, default: null })
+  requiredClass: string | null;
+
+  /**
+   * Maîtrises requises pour équiper (ex: `{ "two_handed": 5 }`). `{}` = aucune.
+   * Même pattern que `skill.requiredMasteries`. Validé serveur.
+   */
+  @Column({ type: 'jsonb', default: {} })
+  requiredMasteries: Record<string, number>;
+
+  /**
    * Relation avec l'équipement des personnages
    * Un item peut être équipé par plusieurs personnages
    */

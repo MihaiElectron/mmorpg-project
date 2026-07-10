@@ -60,6 +60,39 @@ describe('CharacterStatsCalculator', () => {
     });
   });
 
+  describe('equipmentModifier (Équipement V1-A)', () => {
+    const zeroPrimary = () => ({
+      strength: 0, vitality: 0, endurance: 0, agility: 0, dexterity: 0,
+      intelligence: 0, wisdom: 0, spirit: 0, willpower: 0, charisma: 0,
+    });
+
+    it("sans equipmentModifier → comportement identique (equipment reste a 0)", () => {
+      const character = makeCharacter({ baseStrength: 4 });
+      const stats = CharacterStatsCalculator.compute(character);
+      expect(stats.modifiers.equipment.strength).toBe(0);
+      expect(stats.final.strength).toBe(4);
+    });
+
+    it("un bonus de force augmente final.strength et physicalAttack derive", () => {
+      const character = makeCharacter({ attack: 10, baseStrength: 4 });
+      const mod = { ...zeroPrimary(), strength: 5 };
+      const stats = CharacterStatsCalculator.compute(character, undefined, mod);
+      expect(stats.modifiers.equipment.strength).toBe(5);
+      expect(stats.final.strength).toBe(9); // 4 base + 5 equip
+      // physicalAttack = attack brut 10 + strength(9)*2 = 28 (vs 18 sans équipement)
+      expect(stats.derived.physicalAttack).toBe(28);
+    });
+
+    it("un bonus d'intelligence augmente maxMana derive", () => {
+      const character = makeCharacter({ baseIntelligence: 2 });
+      const mod = { ...zeroPrimary(), intelligence: 3 };
+      const stats = CharacterStatsCalculator.compute(character, undefined, mod);
+      // maxMana = intelligence*10 + wisdom*5 → final int 5 → 50
+      expect(stats.final.intelligence).toBe(5);
+      expect(stats.derived.maxMana).toBe(50);
+    });
+  });
+
   describe('stats derivees (formules V1)', () => {
     it("maxHealth = maxHealth brut + vitality * 10", () => {
       const stats = CharacterStatsCalculator.compute(makeCharacter({ maxHealth: 100, baseVitality: 5 }));

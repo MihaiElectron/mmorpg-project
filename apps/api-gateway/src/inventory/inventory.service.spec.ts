@@ -15,6 +15,8 @@ import {
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { WorldService } from '../world/world.service';
 import { InventoryProjectionService } from './projection/inventory-projection.service';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { MasteriesService } from '../masteries/masteries.service';
 
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -69,6 +71,8 @@ describe('InventoryService — findItemForLoot', () => {
         { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
         { provide: WorldService, useValue: { emitAdminCharacterDirty: jest.fn() } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
@@ -173,6 +177,8 @@ function makeEquipService(overrides: {
   worldService?: { emitAdminCharacterDirty: jest.Mock };
   instanceRepo?: Record<string, jest.Mock>;
   inventoryProjection?: { project: jest.Mock };
+  derivedStats?: { getDefinitions: jest.Mock };
+  masteriesService?: { getCharacterMasteries: jest.Mock };
 } = {}): InventoryService {
   const inventoryRepo = overrides.inventoryRepo ?? { findOne: jest.fn(), save: jest.fn(), create: jest.fn((x) => x), find: jest.fn().mockResolvedValue([]) };
   const characterRepo = overrides.characterRepo ?? { findOneBy: jest.fn().mockResolvedValue(DEFAULT_CHARACTER) };
@@ -183,6 +189,8 @@ function makeEquipService(overrides: {
   const itemTransfer = overrides.itemTransfer ?? { transfer: jest.fn().mockResolvedValue(makeInstance()) };
   const worldService = overrides.worldService ?? { emitAdminCharacterDirty: jest.fn() };
   const inventoryProjection = overrides.inventoryProjection ?? { project: jest.fn().mockResolvedValue([]) };
+  const derivedStats = overrides.derivedStats ?? { getDefinitions: jest.fn().mockResolvedValue([]) };
+  const masteriesService = overrides.masteriesService ?? { getCharacterMasteries: jest.fn().mockResolvedValue([]) };
 
   return new InventoryService(
     inventoryRepo as any,
@@ -194,6 +202,8 @@ function makeEquipService(overrides: {
     itemTransfer as unknown as ItemTransferService,
     worldService as any,
     inventoryProjection as any,
+    derivedStats as any,
+    masteriesService as any,
   );
 }
 
@@ -220,9 +230,24 @@ function makeManager(calls: {
   delete?: jest.Mock;
   create?: jest.Mock;
   getRepository?: jest.Mock;
+  character?: Partial<Character>;
 }): jest.Mocked<EntityManager> {
+  // Les lookups Character (validateEquipRequirements / clampResources /
+  // recalculateEquipmentStats — Équipement V1-A) sont dispatchés vers un perso
+  // par défaut, pour ne pas perturber les séquences findOne ordonnées des tests
+  // (qui n'énumèrent que ItemInstance / Item / CharacterEquipment / Inventory).
+  const defaultCharacter = {
+    id: 'char-1', level: 1, health: 100, mana: 0, energy: 0, maxHealth: 100,
+    baseAttack: 0, baseDefense: 0, attack: 0, defense: 0,
+    ...calls.character,
+  };
+  const providedFindOne = calls.findOne ?? jest.fn();
+  const findOne = jest.fn((entity: unknown, opts?: unknown) => {
+    if (entity === Character) return Promise.resolve(defaultCharacter);
+    return providedFindOne(entity, opts);
+  });
   return {
-    findOne: calls.findOne ?? jest.fn(),
+    findOne,
     find: calls.find ?? jest.fn().mockResolvedValue([]),
     save: calls.save ?? jest.fn(async (_entity, value) => value),
     update: calls.update ?? jest.fn().mockResolvedValue({ affected: 1 }),
@@ -680,12 +705,11 @@ describe("InventoryService.unequipItem — chemin INSTANCE", () => {
     const instance = makeInstance({ state: ItemInstanceState.EQUIPPED, containerType: ItemInstanceContainerType.EQUIPMENT });
     const availInstance = makeInstance({ state: ItemInstanceState.AVAILABLE, containerType: ItemInstanceContainerType.INVENTORY });
     const equipment = { characterId, itemId: "sword-1", slot, itemInstanceId: instance.id } as CharacterEquipment;
-    const characterBase = { id: characterId, baseAttack: 10, baseDefense: 5 };
     const itemTransfer = { transfer: jest.fn().mockResolvedValue(availInstance) };
     const manager = makeManager({
       findOne: jest.fn()
-        .mockResolvedValueOnce(equipment)      // CharacterEquipment
-        .mockResolvedValueOnce(characterBase), // Character pour recalc
+        .mockResolvedValueOnce(equipment),     // CharacterEquipment
+      character: { baseAttack: 10, baseDefense: 5 }, // Character dispatché (recalc)
       find: jest.fn().mockResolvedValue([]),   // aucun item equipe apres unequip
       save: jest.fn(async (_, v) => v),
       delete: jest.fn(),
@@ -957,5 +981,70 @@ describe("InventoryService — ownership (audit sécurité)", () => {
     await expect(
       service.addItem({ characterId: "char-1", itemId: "item-1", quantity: 1 } as any, DEFAULT_USER_ID),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe("InventoryService.equipItemInstance — prérequis & clamp (Équipement V1-A)", () => {
+  const characterId = "char-1";
+
+  function makeEquipInstanceManager(item: Item, extra: Partial<Character> = {}) {
+    const instance = makeInstance();
+    return makeManager({
+      findOne: jest.fn()
+        .mockResolvedValueOnce(instance) // rawInstance (ItemInstance)
+        .mockResolvedValueOnce(item)     // Item
+        .mockResolvedValueOnce(null),    // CharacterEquipment: slot libre
+      character: { id: characterId, level: 1, ...extra },
+    });
+  }
+
+  it("refuse si le niveau requis n'est pas atteint", async () => {
+    const item = makeItem({ id: "sword-1", slot: "weapon" as any, requiredLevel: 10 } as Partial<Item>);
+    const manager = makeEquipInstanceManager(item, { level: 3 });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const service = makeEquipService({ dataSource });
+    await expect(
+      service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID),
+    ).rejects.toThrow("Niveau requis insuffisant.");
+  });
+
+  it("refuse si une maîtrise requise est insuffisante", async () => {
+    const item = makeItem({ id: "sword-1", slot: "weapon" as any, requiredLevel: 1, requiredMasteries: { two_handed: 5 } } as Partial<Item>);
+    const manager = makeEquipInstanceManager(item, { level: 5 });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const masteriesService = { getCharacterMasteries: jest.fn().mockResolvedValue([{ key: "two_handed", level: 2 }]) };
+    const service = makeEquipService({ dataSource, masteriesService });
+    await expect(
+      service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID),
+    ).rejects.toThrow("Maîtrise requise insuffisante.");
+  });
+
+  it("autorise si niveau et maîtrises sont satisfaits", async () => {
+    const item = makeItem({ id: "sword-1", slot: "weapon" as any, requiredLevel: 1, requiredMasteries: { two_handed: 2 } } as Partial<Item>);
+    const manager = makeEquipInstanceManager(item, { level: 5 });
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(makeInstance()) };
+    const masteriesService = { getCharacterMasteries: jest.fn().mockResolvedValue([{ key: "two_handed", level: 3 }]) };
+    const service = makeEquipService({ dataSource, itemTransfer, masteriesService });
+    await expect(
+      service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID),
+    ).resolves.toBeDefined();
+  });
+
+  it("clampe la mana courante si le max dérivé baisse après mutation d'équipement", async () => {
+    // Personnage à mana 999 mais maxMana dérivé = 0 (aucune int/wis) → clamp à 0.
+    const item = makeItem({ id: "sword-1", slot: "weapon" as any, requiredLevel: 1 } as Partial<Item>);
+    const manager = makeEquipInstanceManager(item, {
+      level: 1, health: 100, mana: 999, energy: 5, maxHealth: 100,
+      baseIntelligence: 0, baseWisdom: 0,
+    } as Partial<Character>);
+    const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
+    const itemTransfer = { transfer: jest.fn().mockResolvedValue(makeInstance()) };
+    const service = makeEquipService({ dataSource, itemTransfer });
+    await service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID);
+    // clampResourcesToDerivedMax → update Character avec mana clampée (0).
+    expect(manager.update).toHaveBeenCalledWith(
+      Character, { id: characterId }, expect.objectContaining({ mana: 0 }),
+    );
   });
 });

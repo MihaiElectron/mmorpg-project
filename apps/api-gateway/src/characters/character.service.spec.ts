@@ -215,7 +215,9 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
 
     const dataSource = {
       transaction: jest.fn().mockImplementation(async (cb: any) => {
-        const manager = { findOne: managerFindOne, save: managerSave };
+        // `find` : équipement chargé par allocateStats (Équipement V1-A) → [] par
+        // défaut (aucun bonus → dérivées identiques à avant l'équipement).
+        const manager = { findOne: managerFindOne, save: managerSave, find: jest.fn().mockResolvedValue([]) };
         return cb(manager);
       }),
     };

@@ -19,12 +19,16 @@ import { InventoryProjectionService } from './projection/inventory-projection.se
 import { InventoryEntryResolverService } from './resolution/inventory-entry-resolver.service';
 import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { WorldModule } from '../world/world.module';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Inventory, Character, Item, ItemInstance, CharacterEquipment]),
     ItemTransferModule,
     WorldModule,
+    DerivedStatsModule,
+    MasteriesModule,
   ],
   providers: [InventoryService, InventoryProjectionService, InventoryEntryResolverService],
   controllers: [InventoryController],
