@@ -700,22 +700,35 @@ describe('WorldService — P7-B : guards WU explicites', () => {
       const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
       expect(result).not.toBeNull();
       expect(charRepo.update).toHaveBeenCalledWith('c-1', { mana: 50, energy: 40 });
+      // Snapshot renvoyé pour la sync UI (character_resource_update).
+      expect(result?.resources).toEqual({
+        characterId: 'c-1',
+        health: 100,
+        mana: 50,
+        energy: 40,
+        maxHealth: 100,
+        maxMana: 50,
+        maxEnergy: 40,
+      });
     });
 
     it('clamp : mana/énergie au-dessus des max → ramenés aux max', async () => {
       const charRepo = makeCharRepo({ mana: 999, energy: 999 });
       const svc = makeSvc(charRepo);
       const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
-      await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
       expect(charRepo.update).toHaveBeenCalledWith('c-1', { mana: 50, energy: 40 });
+      expect(result?.resources).toMatchObject({ mana: 50, energy: 40, maxMana: 50, maxEnergy: 40 });
     });
 
-    it('aucune écriture si mana/énergie déjà dans [0, max] et non nuls', async () => {
+    it('aucune écriture si mana/énergie déjà dans [0, max] et non nuls, mais snapshot renvoyé', async () => {
       const charRepo = makeCharRepo({ mana: 30, energy: 20 });
       const svc = makeSvc(charRepo);
       const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
-      await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
       expect(charRepo.update).not.toHaveBeenCalled();
+      // Même sans écriture DB, le snapshot reflète l'état courant pour l'UI.
+      expect(result?.resources).toMatchObject({ mana: 30, energy: 20, maxMana: 50, maxEnergy: 40 });
     });
   });
 

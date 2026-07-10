@@ -137,9 +137,26 @@ export type JoinWorldPayload = {
   direction?: string;
 };
 
+/**
+ * Ressources courantes + max dérivés renvoyés au join (Skills V1-J-C).
+ * Permet à la gateway d'émettre `character_resource_update` au client afin que
+ * l'UI reflète immédiatement le refill/clamp du join (sans F5). Les max sont
+ * des stats DÉRIVÉES serveur, jamais des colonnes DB.
+ */
+export type JoinResourceSnapshot = {
+  characterId: string;
+  health: number;
+  mana: number;
+  energy: number;
+  maxHealth: number;
+  maxMana: number;
+  maxEnergy: number;
+};
+
 export type JoinedPlayer = {
   player: ConnectedPlayer;
   previousSocketId: string | null;
+  resources: JoinResourceSnapshot;
 };
 
 @Injectable()
@@ -313,7 +330,8 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     }
 
     // Ressources mana/énergie : clamp aux max dérivés + refill V1 temporaire.
-    await this.refillCharacterResourcesOnJoin(character);
+    // Renvoie le snapshot pour que la gateway sync l'UI (character_resource_update).
+    const resources = await this.refillCharacterResourcesOnJoin(character);
 
     const player: ConnectedPlayer = {
       socketId: client.id,
@@ -342,7 +360,7 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
       direction: player.direction,
     };
 
-    return { player, previousSocketId };
+    return { player, previousSocketId, resources };
   }
 
   /**
@@ -358,9 +376,15 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
    * `ConnectedPlayer` n'est pas suivi runtime : la source reste la DB, lue à
    * chaque cast par `SkillCastService`.
    */
-  private async refillCharacterResourcesOnJoin(character: Character): Promise<void> {
+  private async refillCharacterResourcesOnJoin(
+    character: Character,
+  ): Promise<JoinResourceSnapshot> {
     const derivedDefinitions = await this.derivedStats.getDefinitions();
     const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+
+    const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));
+    const maxMana = Math.max(0, Math.round(stats.derived.maxMana));
+    const maxEnergy = Math.max(0, Math.round(stats.derived.maxEnergy));
 
     const mana = resolveJoinResource(character.mana, stats.derived.maxMana);
     const energy = resolveJoinResource(character.energy, stats.derived.maxEnergy);
@@ -370,6 +394,19 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
       character.energy = energy;
       await this.characterRepository.update(character.id, { mana, energy });
     }
+
+    // Snapshot TOUJOURS renvoyé (même sans changement) : la gateway émet
+    // character_resource_update au join pour que l'UI affiche les valeurs
+    // courantes + max dérivés sans F5, quelle que soit la course avec loadCharacter.
+    return {
+      characterId: character.id,
+      health: character.health,
+      mana,
+      energy,
+      maxHealth,
+      maxMana,
+      maxEnergy,
+    };
   }
 
   /**

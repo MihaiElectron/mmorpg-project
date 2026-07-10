@@ -122,6 +122,29 @@ describe('WorldGateway — rooms par mapId', () => {
       // getPlayersExcept doit recevoir le mapId du joueur
       expect(getPlayersExcept).toHaveBeenCalledWith(client.id, 3);
     });
+
+    it("émet character_resource_update au lanceur après le join (sync UI V1-J-C)", async () => {
+      const player = makePlayer({ mapId: 1 });
+      const resources = {
+        characterId: 'char-1',
+        health: 100,
+        mana: 50,
+        energy: 40,
+        maxHealth: 100,
+        maxMana: 50,
+        maxEnergy: 40,
+      };
+      const worldService = {
+        joinPlayer: jest.fn().mockResolvedValue({ player, previousSocketId: null, resources }),
+        getPlayersExcept: jest.fn().mockReturnValue([]),
+      };
+      const { gateway } = makeGateway(worldService);
+      const client = makeClient();
+
+      await gateway.handleJoinWorld(client, { characterId: 'char-1', name: 'Hero' });
+
+      expect(client.emit).toHaveBeenCalledWith('character_resource_update', resources);
+    });
   });
 
   describe('player_move', () => {

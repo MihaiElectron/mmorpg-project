@@ -123,6 +123,9 @@ export class WorldGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
       this.worldService.getPlayersExcept(client.id, player.mapId).map(playerBroadcast),
     );
     client.emit('world_joined', playerBroadcast(player));
+    // Sync ressources courantes + max dérivés au seul lanceur après le
+    // refill/clamp du join (Skills V1-J-C) : l'UI reflète energy/mana sans F5.
+    client.emit('character_resource_update', joined.resources);
     client.broadcast.to(mapRoom).emit('player_joined', playerBroadcast(player));
   }
 
