@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,6 +10,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
+import { CreateMasteryDefinitionDto } from './dto/create-mastery-definition.dto';
+import { UpdateMasteryDefinitionDto } from './dto/update-mastery-definition.dto';
 
 export interface MasteryUpdatePayload {
   masteryDefinitionKey: string;
@@ -84,6 +87,52 @@ export class MasteriesService implements OnModuleInit {
       );
       this.logger.log(`Mastery seeded: ${def.key}`);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // CRUD admin des définitions (Masteries V1-C-A — Studio SDK)
+  //
+  // La `key` est IMMUABLE après création (référencée en copie string par
+  // skills/items/recettes + FK player_mastery). Pas de delete physique :
+  // retrait = PATCH { enabled: false } (réversible, progression conservée).
+  // Aucune logique XP/level ici — le CRUD ne touche que le catalogue.
+  // ---------------------------------------------------------------------------
+
+  /** Une définition par sa key. NotFoundException si absente. */
+  async getMasteryDefinitionByKey(key: string): Promise<MasteryDefinition> {
+    const found = await this.masteryDefinitionRepo.findOne({ where: { key } });
+    if (!found) throw new NotFoundException(`Mastery "${key}" introuvable.`);
+    return found;
+  }
+
+  /** Crée une définition. ConflictException si la key existe déjà. */
+  async createMasteryDefinition(
+    dto: CreateMasteryDefinitionDto,
+  ): Promise<MasteryDefinition> {
+    const existing = await this.masteryDefinitionRepo.findOne({
+      where: { key: dto.key },
+    });
+    if (existing) {
+      throw new ConflictException(`Mastery "${dto.key}" existe déjà.`);
+    }
+    const entity = this.masteryDefinitionRepo.create(dto);
+    return this.masteryDefinitionRepo.save(entity);
+  }
+
+  /**
+   * Patch partiel (name/category/maxLevel/baseXpPerLevel/xpCurveExponent/enabled).
+   * La key n'est jamais modifiable (absente du DTO — forbidNonWhitelisted la
+   * rejette en 400). `enabled: false` = désactivation soft : player_mastery est
+   * conservé, la réactivation retrouve la progression.
+   */
+  async updateMasteryDefinition(
+    key: string,
+    dto: UpdateMasteryDefinitionDto,
+  ): Promise<MasteryDefinition> {
+    const existing = await this.masteryDefinitionRepo.findOne({ where: { key } });
+    if (!existing) throw new NotFoundException(`Mastery "${key}" introuvable.`);
+    const merged = this.masteryDefinitionRepo.merge(existing, dto);
+    return this.masteryDefinitionRepo.save(merged);
   }
 
   // ---------------------------------------------------------------------------

@@ -15,6 +15,9 @@ import { PreviewDerivedStatsDto } from '../derived-stats/dto/preview-derived-sta
 import { ActiveSkillsService } from '../active-skills/active-skills.service';
 import { CreateSkillDefinitionDto } from '../active-skills/dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from '../active-skills/dto/update-skill-definition.dto';
+import { MasteriesService } from '../masteries/masteries.service';
+import { CreateMasteryDefinitionDto } from '../masteries/dto/create-mastery-definition.dto';
+import { UpdateMasteryDefinitionDto } from '../masteries/dto/update-mastery-definition.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +30,7 @@ export class AdminController {
     private readonly buildingsService: BuildingsService,
     private readonly derivedStatsService: DerivedStatsService,
     private readonly activeSkillsService: ActiveSkillsService,
+    private readonly masteriesService: MasteriesService,
   ) {}
 
   @Get('overview')
@@ -261,6 +265,29 @@ export class AdminController {
 
   @Get('mastery-definitions/world-objects')
   getMasteryDefinitionWorldObjects() { return this.adminService.getMasteryDefinitionWorldObjects(); }
+
+  @Get('mastery-definitions/:key')
+  getMasteryDefinition(@Param('key') key: string) {
+    return this.masteriesService.getMasteryDefinitionByKey(key);
+  }
+
+  @Post('mastery-definitions')
+  createMasteryDefinition(@Body() dto: CreateMasteryDefinitionDto) {
+    return this.masteriesService.createMasteryDefinition(dto);
+  }
+
+  /**
+   * Patch partiel — `key` immuable (absente du DTO, rejetée par le
+   * ValidationPipe). Pas de DELETE en V1-C : pour retirer une maîtrise du jeu,
+   * PATCH `{ enabled: false }` (réversible, player_mastery conservé).
+   */
+  @Patch('mastery-definitions/:key')
+  updateMasteryDefinition(
+    @Param('key') key: string,
+    @Body() dto: UpdateMasteryDefinitionDto,
+  ) {
+    return this.masteriesService.updateMasteryDefinition(key, dto);
+  }
 
   // ── Items ─────────────────────────────────────────────────────────────────
 

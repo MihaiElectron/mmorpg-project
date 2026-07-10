@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MasteriesService } from './masteries.service';
 import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
@@ -49,8 +49,9 @@ describe('MasteriesService', () => {
     masteryDefRepo = {
       findOne: jest.fn(),
       find: jest.fn(),
-      save: jest.fn(),
+      save: jest.fn((x) => Promise.resolve(x)),
       create: jest.fn((x) => x),
+      merge: jest.fn((a, b) => ({ ...a, ...b })),
     };
 
     playerMasteryRepo = {
@@ -374,6 +375,81 @@ describe('MasteriesService', () => {
       expect(masteryDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
       expect(result.every((s) => s.enabled)).toBe(true);
       expect(result.map((s) => s.key)).toEqual(["smithing"]);
+    });
+  });
+
+  // ─── CRUD admin des définitions (V1-C-A) ──────────────────────────────────
+  describe('getMasteryDefinitionByKey', () => {
+    it('retourne la définition trouvée', async () => {
+      const def = makeMasteryDef({ key: 'mining' });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+
+      const result = await service.getMasteryDefinitionByKey('mining');
+
+      expect(result).toBe(def);
+      expect(masteryDefRepo.findOne).toHaveBeenCalledWith({ where: { key: 'mining' } });
+    });
+
+    it('lève NotFoundException si absente', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      await expect(service.getMasteryDefinitionByKey('ghost')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('createMasteryDefinition', () => {
+    it('crée une définition quand la key est libre', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      const dto = { key: 'alchemy', name: 'Alchemy', category: 'crafting' };
+
+      const result = await service.createMasteryDefinition(dto);
+
+      expect(masteryDefRepo.create).toHaveBeenCalledWith(dto);
+      expect(masteryDefRepo.save).toHaveBeenCalled();
+      expect(result).toMatchObject({ key: 'alchemy', name: 'Alchemy' });
+    });
+
+    it('lève ConflictException si la key existe déjà', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'smithing' }));
+
+      await expect(
+        service.createMasteryDefinition({ key: 'smithing', name: 'Dup' }),
+      ).rejects.toThrow(ConflictException);
+      expect(masteryDefRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateMasteryDefinition', () => {
+    it('applique un patch partiel (name/category/xp config/enabled) sans toucher la key', async () => {
+      const existing = makeMasteryDef({ key: 'smithing', name: 'Smithing', maxLevel: 100 });
+      masteryDefRepo.findOne.mockResolvedValue(existing);
+      const dto = { name: 'Blacksmithing', category: 'combat', maxLevel: 120, xpCurveExponent: 2, enabled: false };
+
+      const result = await service.updateMasteryDefinition('smithing', dto);
+
+      expect(masteryDefRepo.merge).toHaveBeenCalledWith(existing, dto);
+      expect(result).toMatchObject({ key: 'smithing', name: 'Blacksmithing', enabled: false, maxLevel: 120 });
+      // La key reste celle de l'entité chargée — jamais dérivée du patch.
+      expect(result.key).toBe('smithing');
+    });
+
+    it('désactive sans supprimer la définition (enabled=false)', async () => {
+      const existing = makeMasteryDef({ key: 'smithing', enabled: true });
+      masteryDefRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.updateMasteryDefinition('smithing', { enabled: false });
+
+      expect(result.enabled).toBe(false);
+      // Le CRUD ne touche jamais player_mastery : aucun accès au repo de progression.
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
+      expect(playerMasteryRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('lève NotFoundException si la définition est absente', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.updateMasteryDefinition('ghost', { enabled: false }),
+      ).rejects.toThrow(NotFoundException);
+      expect(masteryDefRepo.save).not.toHaveBeenCalled();
     });
   });
 
