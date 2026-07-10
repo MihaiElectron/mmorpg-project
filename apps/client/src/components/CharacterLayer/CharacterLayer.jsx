@@ -31,6 +31,17 @@ export default function CharacterLayer() {
     return <div className="character-layer__loading">Chargement du personnage...</div>;
   }
 
+  // Ressources courantes (live via character_resource_update, Skills V1-J-C).
+  // Les max sont des stats DÉRIVÉES serveur (jamais recalculées ici) ; fallback
+  // à 0 pour toute valeur absente afin de ne jamais afficher "undefined".
+  const derived = character.stats?.derived ?? {};
+  const health = character.health ?? 0;
+  const maxHealth = Math.round(derived.maxHealth ?? character.maxHealth ?? 0);
+  const mana = character.mana ?? 0;
+  const maxMana = Math.round(derived.maxMana ?? 0);
+  const energy = character.energy ?? 0;
+  const maxEnergy = Math.round(derived.maxEnergy ?? 0);
+
   const slots = [
     "left-earring",
     "right-earring",
@@ -108,7 +119,21 @@ export default function CharacterLayer() {
       <div className="character-layer-header">
         <div className="character-layer-header__name">{character.name}</div>
         <div className="character-layer-header__stats">
-          Niveau {character.level} | PV: {character.health} / {character.maxHealth} | XP: {character.experience ?? 0} / {character.nextLevelXp ?? "—"}
+          Niveau {character.level} | XP: {character.experience ?? 0} / {character.nextLevelXp ?? "—"}
+        </div>
+        <div className="character-layer-header__resources">
+          <span className="character-resource character-resource--hp">
+            <span className="character-resource__label">PV</span>
+            <span className="character-resource__value">{health} / {maxHealth}</span>
+          </span>
+          <span className="character-resource character-resource--mana">
+            <span className="character-resource__label">Mana</span>
+            <span className="character-resource__value">{mana} / {maxMana}</span>
+          </span>
+          <span className="character-resource character-resource--energy">
+            <span className="character-resource__label">Énergie</span>
+            <span className="character-resource__value">{energy} / {maxEnergy}</span>
+          </span>
         </div>
       </div>
 

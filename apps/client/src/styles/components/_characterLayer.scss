@@ -44,6 +44,34 @@
     color: vars.$color-text-primary;
     font-size: 0.9rem;
   }
+
+  // Ressources courantes PV / Mana / Énergie (live, Skills V1-J-C).
+  &__resources {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 6px;
+  }
+}
+
+.character-resource {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+
+  &__label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: vars.$color-text-muted;
+  }
+
+  &--hp     .character-resource__value { color: vars.$color-stat-attack; }
+  &--mana   .character-resource__value { color: #4aa3ff; }
+  &--energy .character-resource__value { color: vars.$color-magic-amber; }
 }
 
 .character-layer__character {

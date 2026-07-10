@@ -52,6 +52,38 @@ const storeLogic = (set, get) => ({
   setCharacter: (data) => set({ character: data }),
   setHealth: (health) =>
     set((s) => s.character ? { character: { ...s.character, health } } : {}),
+
+  // Sync live des ressources courantes (Skills V1-J-C) suite à
+  // `character_resource_update`. Serveur autoritaire : on applique les valeurs
+  // reçues sans jamais recalculer. Les max (maxHealth/maxMana/maxEnergy) sont
+  // des stats DÉRIVÉES serveur : s'ils sont fournis, on les intègre dans
+  // `character.stats.derived` (jamais inventés côté client). Mise à jour
+  // immuable pour déclencher le re-render React.
+  setResources: ({ health, mana, energy, maxHealth, maxMana, maxEnergy } = {}) =>
+    set((s) => {
+      if (!s.character) return {};
+      const nextCharacter = { ...s.character };
+      if (health !== undefined) nextCharacter.health = health;
+      if (mana !== undefined) nextCharacter.mana = mana;
+      if (energy !== undefined) nextCharacter.energy = energy;
+
+      // Intègre les max dérivés reçus uniquement si la structure existe déjà —
+      // on n'invente pas `stats.derived` à partir de rien.
+      const hasMax =
+        maxHealth !== undefined || maxMana !== undefined || maxEnergy !== undefined;
+      if (hasMax && s.character.stats?.derived) {
+        nextCharacter.stats = {
+          ...s.character.stats,
+          derived: {
+            ...s.character.stats.derived,
+            ...(maxHealth !== undefined ? { maxHealth } : {}),
+            ...(maxMana !== undefined ? { maxMana } : {}),
+            ...(maxEnergy !== undefined ? { maxEnergy } : {}),
+          },
+        };
+      }
+      return { character: nextCharacter };
+    }),
   clearCharacter: () => set({ character: null, inventory: [], equipment: {}, masteries: [], balance: null, dragEquipSource: null }),
   setDragEquipSource: (source) => set({ dragEquipSource: source }),
   clearDragEquipSource: () => set({ dragEquipSource: null }),

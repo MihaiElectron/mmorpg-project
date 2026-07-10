@@ -1191,6 +1191,20 @@ export default class WorldScene extends Phaser.Scene {
       }
     });
 
+    // Resync live des ressources (PV/mana/énergie) du lanceur après un cast qui
+    // consomme une ressource (Skills V1-J-C). Le serveur n'émet cet event qu'au
+    // seul lanceur ; garde-fou par id quand le store connaît déjà le personnage
+    // (sinon on applique quand même, comme character_health_update). Serveur
+    // autoritaire : valeurs appliquées telles quelles, aucun recalcul.
+    this.socket.on("character_resource_update", (data) => {
+      const local = getCharacterStore().getState().character;
+      if (local?.id && data?.characterId && data.characterId !== local.id) return;
+      getCharacterStore().getState().setResources(data);
+      if (!this.playerHpBar && this.player) {
+        this.playerHpBar = createHpBar(this, this.player.x, this.player.y);
+      }
+    });
+
     // combat:event = feedback visuel V1 uniquement (dégâts flottants / "Mort").
     // Ne modifie PAS les HP : ceux-ci restent gérés par creature_update /
     // character_damaged. Le client n'affiche que ce que le serveur émet.
@@ -2418,6 +2432,7 @@ export default class WorldScene extends Phaser.Scene {
       this.socket.off("mastery_update");
       this.socket.off("character_damaged");
       this.socket.off("character_health_update");
+      this.socket.off("character_resource_update");
       this.socket.off("character_teleport");
       this.socket.off("character_respawn");
       this.socket.off("player_position_correction");

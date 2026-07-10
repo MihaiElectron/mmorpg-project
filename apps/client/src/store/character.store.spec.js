@@ -336,6 +336,74 @@ describe("character.store — equipItem (choix endpoint)", () => {
   });
 });
 
+describe("character.store — setResources (Skills V1-J-C)", () => {
+  let store;
+
+  beforeEach(() => {
+    store = getCharacterStore();
+    store.setState({
+      character: {
+        id: "char-1",
+        health: 80,
+        mana: 30,
+        energy: 10,
+        maxHealth: 100,
+        stats: { derived: { maxHealth: 100, maxMana: 50, maxEnergy: 40 } },
+      },
+    });
+  });
+
+  it("met à jour health/mana/energy de façon immuable", () => {
+    const before = store.getState().character;
+    store.getState().setResources({ health: 80, mana: 20, energy: 8 });
+    const after = store.getState().character;
+    expect(after.mana).toBe(20);
+    expect(after.energy).toBe(8);
+    expect(after.health).toBe(80);
+    expect(after).not.toBe(before); // nouvelle référence → re-render
+  });
+
+  it("intègre les max reçus dans stats.derived sans écraser le reste", () => {
+    store.setState({
+      character: {
+        id: "char-1",
+        health: 50,
+        mana: 10,
+        energy: 5,
+        stats: { derived: { maxHealth: 100, maxMana: 50, maxEnergy: 40, physicalAttack: 13 } },
+      },
+    });
+    store.getState().setResources({ health: 50, mana: 10, energy: 5, maxMana: 60, maxEnergy: 44 });
+    const d = store.getState().character.stats.derived;
+    expect(d.maxMana).toBe(60);
+    expect(d.maxEnergy).toBe(44);
+    expect(d.maxHealth).toBe(100); // inchangé
+    expect(d.physicalAttack).toBe(13); // préservé
+  });
+
+  it("n'invente pas stats.derived s'il n'existe pas", () => {
+    store.setState({ character: { id: "char-1", health: 50, mana: 10, energy: 5 } });
+    store.getState().setResources({ mana: 8, maxMana: 60 });
+    const c = store.getState().character;
+    expect(c.mana).toBe(8);
+    expect(c.stats).toBeUndefined();
+  });
+
+  it("ne fait rien sans personnage chargé", () => {
+    store.setState({ character: null });
+    store.getState().setResources({ mana: 5 });
+    expect(store.getState().character).toBeNull();
+  });
+
+  it("ne touche qu'aux ressources fournies (undefined ignoré)", () => {
+    store.getState().setResources({ mana: 25 });
+    const c = store.getState().character;
+    expect(c.mana).toBe(25);
+    expect(c.health).toBe(80); // inchangé
+    expect(c.energy).toBe(10); // inchangé
+  });
+});
+
 describe("character.store — allocateStats", () => {
   let store;
 
