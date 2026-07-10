@@ -897,4 +897,58 @@ describe('ItemService', () => {
       expect(manager.remove).toHaveBeenCalled();
     });
   });
+
+  // ── Équipement V1-C-A : acceptation + sanitization des champs d'équipement ──
+  describe('create/update — champs d\'équipement (V1-C-A)', () => {
+    const baseDto = { name: 'Épée', type: 'weapon', category: 'sword' } as any;
+
+    it('create persiste des statBonuses valides', async () => {
+      await service.create({ ...baseDto, statBonuses: { strength: 5, intelligence: 3 } });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.statBonuses).toEqual({ strength: 5, intelligence: 3 });
+    });
+
+    it('create supprime les clés statBonuses inconnues et valeurs non finies', async () => {
+      await service.create({
+        ...baseDto,
+        statBonuses: { strength: 5, foo: 9, vitality: Number.NaN, agility: 'x' } as any,
+      });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.statBonuses).toEqual({ strength: 5 });
+    });
+
+    it('update sanitize aussi les statBonuses', async () => {
+      repo.findOne.mockResolvedValue({ id: 'i1', objectMode: 'STACKABLE' });
+      await service.update('i1', { statBonuses: { wisdom: 2, bogus: 1 } as any });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.statBonuses).toEqual({ wisdom: 2 });
+    });
+
+    it('nettoie requiredMasteries (clé vide / valeur <= 0 / non entier droppées)', async () => {
+      await service.create({
+        ...baseDto,
+        requiredMasteries: { woodcutting: 2, '': 3, mining: 0, fishing: -1, herbalism: 1.5 } as any,
+      });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.requiredMasteries).toEqual({ woodcutting: 2 });
+    });
+
+    it('persiste requiredClass et normalise une chaîne vide en null', async () => {
+      await service.create({ ...baseDto, requiredClass: 'guerrier' });
+      expect(repo.save.mock.calls[0][0].requiredClass).toBe('guerrier');
+
+      repo.save.mockClear();
+      await service.create({ ...baseDto, requiredClass: '   ' });
+      expect(repo.save.mock.calls[0][0].requiredClass).toBeNull();
+    });
+
+    it('reste compatible avec un ancien payload sans champs d\'équipement', async () => {
+      await service.create({ ...baseDto });
+      const saved = repo.save.mock.calls[0][0];
+      // Aucun champ d'équipement forcé → laissés au défaut entity/DB.
+      expect(saved).not.toHaveProperty('statBonuses');
+      expect(saved).not.toHaveProperty('requiredMasteries');
+      expect(saved).not.toHaveProperty('requiredClass');
+    });
+  });
 });

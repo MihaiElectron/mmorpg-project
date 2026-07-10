@@ -5,6 +5,7 @@ import { Item, ObjectMode } from './entities/item.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { sanitizeStatBonuses } from '../characters/equipment-stats.helper';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -310,8 +311,47 @@ export class ItemService implements OnModuleInit {
     }
   }
 
+  /**
+   * Nettoie les champs d'équipement V1 fournis par l'admin (Équipement V1-C-A).
+   * Le serveur reste autoritaire : `statBonuses` est réduit aux stats primaires
+   * connues (whitelist V1-A), `requiredMasteries` aux entrées valides (clé non
+   * vide, entier > 0), `requiredClass` vide → null. Ne touche QUE les champs
+   * présents dans le DTO (partial patch), les autres restent inchangés.
+   */
+  private sanitizeEquipmentFields<T extends CreateItemDto | UpdateItemDto>(dto: T): T {
+    const out: T = { ...dto };
+    if (dto.statBonuses !== undefined) {
+      out.statBonuses = sanitizeStatBonuses(dto.statBonuses);
+    }
+    if (dto.requiredMasteries !== undefined) {
+      out.requiredMasteries = this.sanitizeRequiredMasteries(dto.requiredMasteries);
+    }
+    if (dto.requiredClass !== undefined) {
+      const trimmed = typeof dto.requiredClass === 'string' ? dto.requiredClass.trim() : null;
+      out.requiredClass = trimmed ? trimmed : null;
+    }
+    return out;
+  }
+
+  /** Ne conserve que les maîtrises à clé non vide et niveau entier > 0. */
+  private sanitizeRequiredMasteries(raw: unknown): Record<string, number> {
+    const result: Record<string, number> = {};
+    if (!raw || typeof raw !== 'object') return result;
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (
+        key.trim().length > 0 &&
+        typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value > 0
+      ) {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
   async create(dto: CreateItemDto): Promise<Item> {
-    const entity = this.repo.create(dto);
+    const entity = this.repo.create(this.sanitizeEquipmentFields(dto));
     return this.repo.save(entity);
   }
 
@@ -332,7 +372,7 @@ export class ItemService implements OnModuleInit {
     if (dto.objectMode !== undefined && dto.objectMode !== entity.objectMode) {
       await this.assertObjectModeChangeable(id);
     }
-    Object.assign(entity, dto);
+    Object.assign(entity, this.sanitizeEquipmentFields(dto));
     return this.repo.save(entity);
   }
 

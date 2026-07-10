@@ -55,3 +55,54 @@ describe('Item DTO — validation range (Progression / Combat V1)', () => {
     });
   });
 });
+
+// ── Équipement V1-C-A : validation des nouveaux champs ─────────────────────────
+
+async function errorsFor<T extends object>(
+  cls: new () => T,
+  payload: Record<string, unknown>,
+  property: string,
+): Promise<boolean> {
+  const dto = plainToInstance(cls, payload);
+  const errors = await validate(dto);
+  return errors.some((e) => e.property === property);
+}
+
+describe('Item DTO — validation champs équipement (V1-C-A)', () => {
+  const base = { name: 'Épée', type: 'weapon', category: 'sword' };
+
+  it('refuse requiredLevel = 0', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base, requiredLevel: 0 }, 'requiredLevel')).toBe(true);
+  });
+
+  it('refuse requiredLevel non entier', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base, requiredLevel: 2.5 }, 'requiredLevel')).toBe(true);
+  });
+
+  it('accepte requiredLevel absent (défaut entity)', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base }, 'requiredLevel')).toBe(false);
+  });
+
+  it('accepte requiredLevel = 5', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base, requiredLevel: 5 }, 'requiredLevel')).toBe(false);
+  });
+
+  it('accepte statBonuses objet', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base, statBonuses: { strength: 5 } }, 'statBonuses')).toBe(false);
+  });
+
+  it('refuse statBonuses non-objet (string)', async () => {
+    expect(await errorsFor(CreateItemDto, { ...base, statBonuses: 'nope' }, 'statBonuses')).toBe(true);
+  });
+
+  it('accepte requiredMasteries objet et requiredClass string/null', async () => {
+    expect(await errorsFor(UpdateItemDto, { requiredMasteries: { woodcutting: 2 } }, 'requiredMasteries')).toBe(false);
+    expect(await errorsFor(UpdateItemDto, { requiredClass: 'guerrier' }, 'requiredClass')).toBe(false);
+    expect(await errorsFor(UpdateItemDto, { requiredClass: null }, 'requiredClass')).toBe(false);
+  });
+
+  it('ancien payload sans champs équipement reste valide', async () => {
+    const dto = plainToInstance(CreateItemDto, { ...base });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+});

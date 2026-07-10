@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsObject, IsOptional, IsString, Min } from 'class-validator';
 import { ObjectMode } from '../entities/item.entity';
 import { EquipmentSlot } from '../../characters/dto/equip-item.dto';
 
@@ -43,4 +43,29 @@ export class CreateItemDto {
   @IsEnum(ObjectMode)
   @IsOptional()
   objectMode?: ObjectMode;
+
+  // ── Équipement V1-C-A ──────────────────────────────────────────────────────
+  // Le contenu (clés/valeurs) est validé et NETTOYÉ côté service (whitelist).
+  // Le DTO ne garantit ici que la forme « objet » ; le serveur reste autoritaire.
+
+  /** Bonus de stats primaires (ex: { strength: 5 }). Sanitizé au service. */
+  @IsObject()
+  @IsOptional()
+  statBonuses?: Record<string, number>;
+
+  /** Niveau minimum requis (entier >= 1). Absent → défaut entity (1). */
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  requiredLevel?: number;
+
+  /** Classe requise (informatif, non appliqué en V1). null accepté. */
+  @IsString()
+  @IsOptional()
+  requiredClass?: string | null;
+
+  /** Maîtrises requises (ex: { woodcutting: 2 }). Sanitizé au service. */
+  @IsObject()
+  @IsOptional()
+  requiredMasteries?: Record<string, number>;
 }
