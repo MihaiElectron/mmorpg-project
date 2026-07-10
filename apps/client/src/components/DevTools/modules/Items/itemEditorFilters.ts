@@ -4,6 +4,14 @@ import type {
   ItemEditorDraft,
   ItemEditorPatch,
 } from "./itemEditor.types";
+import {
+  statBonusesDraftFromItem,
+  cleanStatBonuses,
+  cleanRequiredMasteries,
+  normalizeRequiredLevel,
+  normalizeRequiredClass,
+  recordsEqual,
+} from "./equipmentItemEditor.helpers";
 
 export const ALL_FILTER = "__all__";
 
@@ -48,6 +56,10 @@ export function draftFromItem(item: ItemCatalogEntry): ItemEditorDraft {
     defense: item.defense != null ? String(item.defense) : "",
     range: item.range != null ? String(item.range) : "",
     weaponType: item.weaponType ?? "",
+    statBonuses: statBonusesDraftFromItem(item.statBonuses),
+    requiredLevel: String(item.requiredLevel ?? 1),
+    requiredClass: item.requiredClass ?? "",
+    requiredMasteries: item.requiredMasteries ?? {},
   };
 }
 
@@ -91,6 +103,21 @@ export function buildItemPatch(
   if (nextRange !== (item.range ?? null)) patch.range = nextRange;
   if (nextWeaponType !== (item.weaponType ?? null)) patch.weaponType = nextWeaponType;
 
+  // ── Équipement V1-C-B : bonus / prérequis (JSONB comparés en stable) ────────
+  const nextStatBonuses = cleanStatBonuses(draft.statBonuses);
+  if (!recordsEqual(nextStatBonuses, item.statBonuses)) patch.statBonuses = nextStatBonuses;
+
+  const nextRequiredLevel = normalizeRequiredLevel(draft.requiredLevel);
+  if (nextRequiredLevel !== (item.requiredLevel ?? 1)) patch.requiredLevel = nextRequiredLevel;
+
+  const nextRequiredClass = normalizeRequiredClass(draft.requiredClass);
+  if (nextRequiredClass !== (item.requiredClass ?? null)) patch.requiredClass = nextRequiredClass;
+
+  const nextRequiredMasteries = cleanRequiredMasteries(draft.requiredMasteries);
+  if (!recordsEqual(nextRequiredMasteries, item.requiredMasteries)) {
+    patch.requiredMasteries = nextRequiredMasteries;
+  }
+
   return patch;
 }
 
@@ -121,6 +148,18 @@ export function buildItemCreateInput(
   if (range != null) input.range = range;
   const weaponType = asString(draft.weaponType).trim() || null;
   if (weaponType) input.weaponType = weaponType;
+
+  // Équipement V1-C-B : n'envoie que ce qui diffère du défaut entity.
+  // Bonus/masteries seulement si non vides ; requiredLevel seulement si > 1
+  // (défaut serveur = 1) ; requiredClass seulement si renseignée.
+  const statBonuses = cleanStatBonuses(draft.statBonuses);
+  if (Object.keys(statBonuses).length > 0) input.statBonuses = statBonuses;
+  const requiredLevel = normalizeRequiredLevel(draft.requiredLevel);
+  if (requiredLevel > 1) input.requiredLevel = requiredLevel;
+  const requiredClass = normalizeRequiredClass(draft.requiredClass);
+  if (requiredClass) input.requiredClass = requiredClass;
+  const requiredMasteries = cleanRequiredMasteries(draft.requiredMasteries);
+  if (Object.keys(requiredMasteries).length > 0) input.requiredMasteries = requiredMasteries;
 
   return input;
 }

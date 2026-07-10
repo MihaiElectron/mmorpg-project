@@ -2,6 +2,7 @@
 // RESET CSS - MMORPG PROJECT
 // ============================================
 // Fichier : src/styles/base/_reset.scss
+@use '../abstracts/variables' as vars;
 
 // Box-sizing pour tous les éléments
 *,
@@ -99,6 +100,20 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
+}
+
+// Lisibilité globale des menus déroulants natifs (corrige le blanc-sur-blanc des
+// <option> dans tous les select DevTools/jeu). `color-scheme: dark` aligne le
+// rendu natif ; la couleur explicite des <option> couvre les navigateurs qui
+// l'ignorent. Variables globales uniquement.
+select {
+  color-scheme: dark;
+}
+
+option,
+optgroup {
+  background-color: vars.$panel-header-bg;
+  color: vars.$color-text-primary;
 }
 
 // Supprimer les flèches des inputs number

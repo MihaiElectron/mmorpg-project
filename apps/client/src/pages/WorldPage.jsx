@@ -13,6 +13,7 @@ import { io } from "socket.io-client";
 import PreloadScene from "../phaser/core/PreloadScene.js";
 import WorldScene from "../phaser/core/WorldScene.js";
 import CoordinatesLayer from "../components/CoordinatesLayer/CoordinatesLayer.jsx";
+import { onItemDefinitionsChanged } from "../components/DevTools/modules/Items/itemEvents";
 
 function WorldPage() {
   const navigate = useNavigate();
@@ -41,6 +42,16 @@ function WorldPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Recharge le personnage (inventaire + slots équipés + stats) quand le
+  // catalogue d'items change dans le Studio (Équipement V1-C-B). Serveur
+  // autoritaire : on relit getMe, aucun recalcul client.
+  useEffect(() => {
+    return onItemDefinitionsChanged(() => {
+      loadCharacter().catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Trigger pour initialiser Phaser quand character devient disponible
   useEffect(() => {

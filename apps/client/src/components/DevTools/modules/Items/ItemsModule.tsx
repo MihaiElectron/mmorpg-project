@@ -21,6 +21,11 @@ import type {
   ItemUsageStats,
 } from "./itemEditor.types";
 import { EQUIPMENT_SLOTS, ITEM_CATEGORIES_BY_TYPE, ITEM_TYPES, OBJECT_MODES, WEAPON_TYPES } from "./itemEditor.types";
+import { EQUIPMENT_STAT_FIELDS, emptyStatBonusesDraft } from "./equipmentItemEditor.helpers";
+import { notifyItemDefinitionsChanged } from "./itemEvents";
+import KeyValueRowsEditor from "../Skills/KeyValueRowsEditor";
+import { fetchMasterySuggestions } from "../Skills/skillsApi";
+import type { KeySuggestion } from "../Skills/skills.types";
 import "./ItemsModule.scss";
 
 function shortId(id: string): string {
@@ -68,7 +73,95 @@ function RangeField({
 }
 
 function emptyDraft(): ItemEditorDraft {
-  return { name: "", type: "", category: "", image: "", objectMode: "STACKABLE", slot: "", attack: "", defense: "", range: "", weaponType: "" };
+  return {
+    name: "", type: "", category: "", image: "", objectMode: "STACKABLE", slot: "",
+    attack: "", defense: "", range: "", weaponType: "",
+    statBonuses: emptyStatBonusesDraft(), requiredLevel: "1", requiredClass: "",
+    requiredMasteries: {},
+  };
+}
+
+/**
+ * Section « Équipement · Bonus · Prérequis » (Équipement V1-C-B). Édition des
+ * données BRUTES uniquement : bonus de stats primaires (liste fixe), niveau,
+ * classe (informatif) et maîtrises requises. Aucune stat dérivée calculée ici —
+ * le serveur reste autoritaire et re-valide au save.
+ */
+function EquipmentFields({
+  draft,
+  onPatch,
+  resetToken,
+  masterySuggestions,
+}: {
+  draft: ItemEditorDraft;
+  onPatch: (partial: Partial<ItemEditorDraft>) => void;
+  resetToken: string;
+  masterySuggestions: KeySuggestion[];
+}) {
+  return (
+    <fieldset className="item-editor__equipment">
+      <legend className="item-editor__equipment-legend">Équipement · Bonus · Prérequis</legend>
+
+      <div className="item-editor__equipment-block">
+        <span className="item-editor__equipment-title">Bonus de stats</span>
+        <div className="item-editor__stat-grid">
+          {EQUIPMENT_STAT_FIELDS.map((field) => (
+            <label key={field.key} className="item-editor__stat-field">
+              <span className="item-editor__stat-label">{field.label}</span>
+              <input
+                type="number"
+                className="item-editor__input item-editor__stat-input"
+                value={draft.statBonuses[field.key] ?? ""}
+                onChange={(e) =>
+                  onPatch({ statBonuses: { ...draft.statBonuses, [field.key]: e.target.value } })
+                }
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="item-editor__equipment-block">
+        <label className="item-editor__field">
+          <span className="item-editor__label">Niveau requis</span>
+          <input
+            type="number"
+            min={1}
+            className="item-editor__input"
+            value={draft.requiredLevel}
+            onChange={(e) => onPatch({ requiredLevel: e.target.value })}
+          />
+        </label>
+
+        <label className="item-editor__field">
+          <span className="item-editor__label">Classe requise</span>
+          <input
+            type="text"
+            className="item-editor__input"
+            value={draft.requiredClass}
+            onChange={(e) => onPatch({ requiredClass: e.target.value })}
+          />
+          <span className="item-editor__hint">
+            Stockée mais non appliquée tant que le système de classe n&apos;existe pas.
+          </span>
+        </label>
+      </div>
+
+      <div className="item-editor__equipment-block">
+        <span className="item-editor__equipment-title">Maîtrises requises</span>
+        <KeyValueRowsEditor
+          resetToken={resetToken}
+          initial={draft.requiredMasteries}
+          onChange={(record) => onPatch({ requiredMasteries: record })}
+          suggestions={masterySuggestions}
+          keyMode="select"
+          integer
+          keyPlaceholder="— maîtrise —"
+          valuePlaceholder="niv."
+        />
+      </div>
+    </fieldset>
+  );
 }
 
 function hasGameplayUsage(stats: ItemUsageStats | null): boolean {
@@ -127,6 +220,12 @@ export default function ItemsModule() {
     "idle" | "loading" | "loaded" | "error"
   >("idle");
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  // Catalogue des maîtrises (select strict de requiredMasteries — V1-C-B fix).
+  const [masterySuggestions, setMasterySuggestions] = useState<KeySuggestion[]>([]);
+
+  useEffect(() => {
+    void fetchMasterySuggestions().then(setMasterySuggestions).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -225,7 +324,7 @@ export default function ItemsModule() {
       setCreateDraft(emptyDraft());
       setCreateOpen(false);
       setMessage("Item créé.");
-      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
+      notifyItemDefinitionsChanged();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erreur création.");
     } finally {
@@ -245,7 +344,7 @@ export default function ItemsModule() {
       setSelectedId(updated.id);
       setDraft(draftFromItem(updated));
       setMessage("Item sauvegardé.");
-      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
+      notifyItemDefinitionsChanged();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erreur sauvegarde.");
     } finally {
@@ -281,13 +380,6 @@ export default function ItemsModule() {
         </button>
       </div>
 
-      <datalist id="item-types-list">
-        {ITEM_TYPES.map((t) => <option key={t} value={t} />)}
-      </datalist>
-      <datalist id="weapon-types-list">
-        {WEAPON_TYPES.map((w) => <option key={w} value={w} />)}
-      </datalist>
-
       {createOpen && (
         <form
           className="item-editor__create-form"
@@ -303,26 +395,29 @@ export default function ItemsModule() {
           </label>
           <label className="item-editor__field">
             <span className="item-editor__label">Type</span>
-            <input
+            <select
               className="item-editor__input"
-              list="item-types-list"
               value={createDraft.type}
               onChange={(e) => updateCreateDraft("type", e.target.value)}
-            />
+            >
+              <option value="">— choisir —</option>
+              {ITEM_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
           </label>
           <label className="item-editor__field">
             <span className="item-editor__label">Category</span>
-            <input
+            <select
               className="item-editor__input"
-              list="item-categories-list-create"
               value={createDraft.category}
               onChange={(e) => updateCreateDraft("category", e.target.value)}
-            />
-            <datalist id="item-categories-list-create">
+            >
+              <option value="">— choisir —</option>
               {(ITEM_CATEGORIES_BY_TYPE[createDraft.type] ?? []).map((c) => (
-                <option key={c} value={c} />
+                <option key={c} value={c}>{c}</option>
               ))}
-            </datalist>
+            </select>
           </label>
           <label className="item-editor__field">
             <span className="item-editor__label">Image</span>
@@ -376,14 +471,23 @@ export default function ItemsModule() {
           <RangeField draft={createDraft} onChange={(v) => updateCreateDraft("range", v)} />
           <label className="item-editor__field">
             <span className="item-editor__label">Type d&apos;arme</span>
-            <input
+            <select
               className="item-editor__input"
-              list="weapon-types-list"
               value={createDraft.weaponType}
               onChange={(e) => updateCreateDraft("weaponType", e.target.value)}
-              placeholder="— aucun —"
-            />
+            >
+              <option value="">— aucun —</option>
+              {WEAPON_TYPES.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
           </label>
+          <EquipmentFields
+            draft={createDraft}
+            onPatch={(partial) => setCreateDraft((c) => ({ ...c, ...partial }))}
+            resetToken="create"
+            masterySuggestions={masterySuggestions}
+          />
           <button
             className="item-editor__save"
             type="button"
@@ -542,27 +646,30 @@ export default function ItemsModule() {
 
                 <label className="item-editor__field">
                   <span className="item-editor__label">Type</span>
-                  <input
+                  <select
                     className="item-editor__input"
-                    list="item-types-list"
                     value={draft.type}
                     onChange={(e) => updateDraft("type", e.target.value)}
-                  />
+                  >
+                    <option value="">— choisir —</option>
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="item-editor__field">
                   <span className="item-editor__label">Category</span>
-                  <input
+                  <select
                     className="item-editor__input"
-                    list="item-categories-list-edit"
                     value={draft.category}
                     onChange={(e) => updateDraft("category", e.target.value)}
-                  />
-                  <datalist id="item-categories-list-edit">
+                  >
+                    <option value="">— choisir —</option>
                     {(ITEM_CATEGORIES_BY_TYPE[draft.type] ?? []).map((c) => (
-                      <option key={c} value={c} />
+                      <option key={c} value={c}>{c}</option>
                     ))}
-                  </datalist>
+                  </select>
                 </label>
 
                 <label className="item-editor__field">
@@ -623,14 +730,24 @@ export default function ItemsModule() {
 
                 <label className="item-editor__field">
                   <span className="item-editor__label">Type d&apos;arme</span>
-                  <input
+                  <select
                     className="item-editor__input"
-                    list="weapon-types-list"
                     value={draft.weaponType}
                     onChange={(e) => updateDraft("weaponType", e.target.value)}
-                    placeholder="— aucun —"
-                  />
+                  >
+                    <option value="">— aucun —</option>
+                    {WEAPON_TYPES.map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
                 </label>
+
+                <EquipmentFields
+                  draft={draft}
+                  onPatch={(partial) => setDraft((c) => ({ ...c, ...partial }))}
+                  resetToken={selectedId ?? "new"}
+                  masterySuggestions={masterySuggestions}
+                />
 
                 <div className="item-editor__usage">
                   <div className="item-editor__usage-header">
@@ -755,7 +872,7 @@ export default function ItemsModule() {
                     onChanged={async () => {
                       const refreshed = await fetchItems();
                       setItems(refreshed);
-                      window.dispatchEvent(new CustomEvent("devtools:items-changed"));
+                      notifyItemDefinitionsChanged();
                     }}
                   />
                 )}

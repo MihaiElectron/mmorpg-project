@@ -59,6 +59,11 @@ export interface ItemCatalogEntry {
   range: number | null;
   weaponType: string | null;
   enabled: boolean;
+  // ── Équipement V1-C-B (données brutes, éditables ; jamais recalculées) ──────
+  statBonuses: Record<string, number>;
+  requiredLevel: number;
+  requiredClass: string | null;
+  requiredMasteries: Record<string, number>;
 }
 
 export interface ItemEditorDraft {
@@ -72,6 +77,12 @@ export interface ItemEditorDraft {
   defense: string;
   range: string;
   weaponType: string;
+  // statBonuses édités comme champs texte (un par stat primaire) ; requiredMasteries
+  // comme Record édité par KeyValueRowsEditor.
+  statBonuses: Record<string, string>;
+  requiredLevel: string;
+  requiredClass: string;
+  requiredMasteries: Record<string, number>;
 }
 
 export type ItemEditorPatch = Partial<{
@@ -85,6 +96,10 @@ export type ItemEditorPatch = Partial<{
   defense: number | null;
   range: number | null;
   weaponType: string | null;
+  statBonuses: Record<string, number>;
+  requiredLevel: number;
+  requiredClass: string | null;
+  requiredMasteries: Record<string, number>;
 }>;
 
 export type ItemCreateInput = Omit<ItemEditorPatch, "slot" | "attack" | "defense" | "range" | "weaponType"> & {
@@ -98,6 +113,10 @@ export type ItemCreateInput = Omit<ItemEditorPatch, "slot" | "attack" | "defense
   defense?: number;
   range?: number;
   weaponType?: string | null;
+  statBonuses?: Record<string, number>;
+  requiredLevel?: number;
+  requiredClass?: string | null;
+  requiredMasteries?: Record<string, number>;
 };
 
 export interface ItemUsageRef {

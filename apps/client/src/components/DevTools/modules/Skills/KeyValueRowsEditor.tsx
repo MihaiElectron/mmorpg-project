@@ -12,8 +12,16 @@ interface KeyValueRowsEditorProps {
   resetToken: string;
   initial: Record<string, number>;
   onChange: (record: Record<string, number>) => void;
-  /** Suggestions de clés (datalist). Vide = saisie libre. */
+  /** Suggestions de clés (datalist ou options de select). Vide = saisie libre. */
   suggestions?: KeySuggestion[];
+  /**
+   * Mode d'édition de la clé :
+   * - "input" (défaut) : champ texte + datalist d'autocomplétion (Skills) ;
+   * - "select" : liste déroulante stricte depuis `suggestions` (catalogue), la
+   *   saisie libre est impossible. Une clé existante hors catalogue reste
+   *   sélectionnée (fallback "inconnue") pour ne pas perdre la donnée.
+   */
+  keyMode?: "input" | "select";
   keyPlaceholder?: string;
   valuePlaceholder?: string;
   /** Entiers seulement (ex: niveau de mastery requis). Sinon flottant. */
@@ -44,6 +52,7 @@ export default function KeyValueRowsEditor({
   initial,
   onChange,
   suggestions = [],
+  keyMode = "input",
   keyPlaceholder = "clé",
   valuePlaceholder = "valeur",
   integer = false,
@@ -110,16 +119,33 @@ export default function KeyValueRowsEditor({
 
       {rows.map((row) => (
         <div key={row.id} className="skills-editor__kv-row">
-          <input
-            className="skills-editor__kv-key"
-            type="text"
-            value={row.key}
-            placeholder={keyPlaceholder}
-            list={suggestions.length > 0 ? datalistId : undefined}
-            onChange={(e) => updateRow(row.id, { key: e.target.value })}
-            autoComplete="off"
-            spellCheck={false}
-          />
+          {keyMode === "select" ? (
+            <select
+              className="skills-editor__kv-key"
+              value={row.key}
+              onChange={(e) => updateRow(row.id, { key: e.target.value })}
+            >
+              <option value="">{keyPlaceholder}</option>
+              {suggestions.map((s) => (
+                <option key={s.key} value={s.key}>{s.label}</option>
+              ))}
+              {/* Clé existante hors catalogue : conservée (fallback inconnue). */}
+              {row.key && !suggestions.some((s) => s.key === row.key) && (
+                <option value={row.key}>{row.key} (inconnue)</option>
+              )}
+            </select>
+          ) : (
+            <input
+              className="skills-editor__kv-key"
+              type="text"
+              value={row.key}
+              placeholder={keyPlaceholder}
+              list={suggestions.length > 0 ? datalistId : undefined}
+              onChange={(e) => updateRow(row.id, { key: e.target.value })}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
           <input
             className="skills-editor__kv-value"
             type="number"

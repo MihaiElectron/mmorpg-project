@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getCharacterStore } from "./character.store";
+import { getCombatLogStore } from "./combatLog.store";
 
 const VITE_API_URL = "http://localhost:3000";
 
+// En env "node", les stores sont des singletons sur `window` : sans window,
+// chaque getXStore() crée une instance distincte (le log d'équipement du store
+// ne serait pas visible ici). On fournit un window stable partagé.
+vi.stubGlobal("window", globalThis);
 vi.stubGlobal("import", { meta: { env: { VITE_API_URL } } });
 
 const localStorageMock = { getItem: vi.fn().mockReturnValue("test-token") };
@@ -297,7 +302,7 @@ describe("character.store — equipItem (choix endpoint)", () => {
     expect(url).not.toContain("/characters/char-1/equip");
   });
 
-  it("refuse le legacy et alerte si item INSTANCE sans instanceId (projection invalide)", async () => {
+  it("refuse le legacy et logue dans le chat combat si item INSTANCE sans instanceId", async () => {
     const entry = {
       id: "inv-legacy",
       instanceId: null,
@@ -308,13 +313,15 @@ describe("character.store — equipItem (choix endpoint)", () => {
     store.setState({ inventory: [entry] });
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
-    const alertMock = vi.fn();
-    vi.stubGlobal("alert", alertMock);
+    getCombatLogStore().getState().clearLogs();
 
     await store.getState().equipItem("inv-legacy");
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(alertMock).toHaveBeenCalledWith("InstanceId manquant — projection invalide");
+    // Plus de window.alert : message routé dans le chat combat, préfixe [Équipement].
+    const entries = getCombatLogStore().getState().entries;
+    expect(entries.at(-1)?.message).toBe("[Équipement] InstanceId manquant — projection invalide");
+    expect(entries.at(-1)?.severity).toBe("warn");
   });
 
   it("utilise le legacy pour un item STACKABLE sans instanceId", async () => {

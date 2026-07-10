@@ -2,6 +2,21 @@
  * character.store.js
  */
 import { create } from "zustand";
+import { getCombatLogStore } from "./combatLog.store";
+
+/**
+ * Retour d'erreur d'équipement dans le chat combat existant (préfixe
+ * [Équipement]), sans window.alert ni popup navigateur. Serveur autoritaire :
+ * on n'affiche que le message renvoyé.
+ */
+function logEquipment(message) {
+  if (!message) return;
+  getCombatLogStore().getState().pushLog({
+    category: "combat",
+    message: `[Équipement] ${message}`,
+    severity: "warn",
+  });
+}
 
 const storeLogic = (set, get) => ({
   character: null,
@@ -125,8 +140,12 @@ const storeLogic = (set, get) => ({
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
+      // no-store : évite qu'un rechargement (ex: après édition d'item dans le
+      // Studio, qui ne change pas le personnage) serve une réponse mise en cache
+      // par le navigateur (ETag/304) → stats/tooltips restés obsolètes.
       const res = await fetch(`${import.meta.env.VITE_API_URL}/characters/me`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       if (!res.ok) {
         const error = new Error("Character not found");
@@ -282,7 +301,7 @@ const storeLogic = (set, get) => ({
       if (invEntry.item?.objectMode === "INSTANCE" && !invEntry.instanceId) {
         const msg = "InstanceId manquant — projection invalide";
         console.error("[CharacterStore] equipItem:", msg, invEntry);
-        alert(msg);
+        logEquipment(msg);
         return;
       }
       let res;
@@ -304,7 +323,7 @@ const storeLogic = (set, get) => ({
         let msg = `Équipement impossible (HTTP ${res.status})`;
         try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
         console.error("[CharacterStore] equipItem failed:", msg);
-        alert(msg);
+        logEquipment(msg);
       }
     } catch (err) {
       console.error("[CharacterStore] equipItem error:", err);
@@ -327,7 +346,7 @@ const storeLogic = (set, get) => ({
       let msg = `Déséquipement impossible (HTTP ${res.status})`;
       try { const body = await res.json(); if (body?.message) msg = body.message; } catch { /* ignore */ }
       console.error("[CharacterStore] unequipItem failed:", msg);
-      alert(msg);
+      logEquipment(msg);
       return { ok: false };
     } catch (err) {
       console.error("[CharacterStore] unequipItem error:", err);

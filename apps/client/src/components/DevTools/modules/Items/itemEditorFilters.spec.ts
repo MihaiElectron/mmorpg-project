@@ -75,6 +75,27 @@ describe("item editor filters", () => {
     expect(buildItemPatch(ITEMS[0], draft)).toEqual({ name: "Bâton poli" });
   });
 
+  it("détecte un changement de statBonuses (JSONB) dans le patch", () => {
+    const item = { ...ITEMS[2], statBonuses: { strength: 3 } } as ItemCatalogEntry;
+    const draft = draftFromItem(item);
+    draft.statBonuses = { ...draft.statBonuses, strength: "5" };
+    expect(buildItemPatch(item, draft)).toEqual({ statBonuses: { strength: 5 } });
+  });
+
+  it("ne marque pas dirty si statBonuses équivalent (ordre de clés indifférent)", () => {
+    const item = { ...ITEMS[2], statBonuses: { strength: 3, vitality: 2 } } as ItemCatalogEntry;
+    const draft = draftFromItem(item);
+    expect(buildItemPatch(item, draft)).toEqual({});
+  });
+
+  it("détecte requiredLevel et requiredClass modifiés", () => {
+    const item = { ...ITEMS[2], requiredLevel: 1, requiredClass: null } as ItemCatalogEntry;
+    const draft = draftFromItem(item);
+    draft.requiredLevel = "5";
+    draft.requiredClass = "guerrier";
+    expect(buildItemPatch(item, draft)).toEqual({ requiredLevel: 5, requiredClass: "guerrier" });
+  });
+
   it("valide les champs requis", () => {
     expect(isValidItemDraft(draftFromItem(ITEMS[0]))).toBe(true);
     expect(

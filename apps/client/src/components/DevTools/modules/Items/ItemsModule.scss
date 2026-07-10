@@ -397,6 +397,58 @@
       }
     }
   }
+
+  // ── Section Équipement · Bonus · Prérequis (V1-C-B) ─────────────────────────
+  &__equipment {
+    margin: vars.$dt-gap-sm 0 0;
+    padding: vars.$dt-gap-sm;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__equipment-legend {
+    padding: 0 4px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: vars.$color-text-gold;
+  }
+
+  &__equipment-block {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__equipment-title {
+    font-size: 0.7rem;
+    color: vars.$color-text-muted;
+  }
+
+  &__stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__stat-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  &__stat-label {
+    font-size: 0.72rem;
+    color: vars.$color-text-primary;
+  }
+
+  &__stat-input {
+    width: 64px;
+  }
 }
 
 .item-maintenance {
