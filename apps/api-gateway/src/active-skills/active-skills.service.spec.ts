@@ -253,14 +253,33 @@ describe("ActiveSkillsService", () => {
       expect(res[0]).not.toHaveProperty("id");
     });
 
-    it("marque non exécutable un coût mana > 0 (ressource non implémentée)", async () => {
+    it("rend exécutable un coût mana > 0 (consommé au cast V1-J-B)", async () => {
       repo.find.mockResolvedValue([
         makeSkill({ key: "mana", resourceType: "mana", resourceCost: 10 }),
       ]);
       const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res).toHaveLength(1);
+      expect(res[0].executable).toBe(true);
+      expect(res[0].disabledReason).toBeUndefined();
+    });
+
+    it("rend exécutable un coût energy > 0 (consommé au cast V1-J-B)", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ key: "energy", resourceType: "energy", resourceCost: 5 }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
+      expect(res).toHaveLength(1);
+      expect(res[0].executable).toBe(true);
+      expect(res[0].disabledReason).toBeUndefined();
+    });
+
+    it("marque non exécutable un type de ressource inconnu (donnée corrompue)", async () => {
+      repo.find.mockResolvedValue([
+        makeSkill({ key: "weird", resourceType: "stamina" as never, resourceCost: 5 }),
+      ]);
+      const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
       expect(res[0].executable).toBe(false);
-      expect(res[0].disabledReason).toMatch(/mana/i);
+      expect(res[0].disabledReason).toMatch(/inconnu/i);
     });
 
     it("marque non exécutable un effet non damage", async () => {
@@ -287,13 +306,13 @@ describe("ActiveSkillsService", () => {
       expect(res[0].disabledReason).toBeUndefined();
     });
 
-    it("marque non exécutable un heal/self avec coût mana > 0", async () => {
+    it("rend exécutable un heal/self avec coût mana > 0 (consommé au cast)", async () => {
       repo.find.mockResolvedValue([
         makeSkill({ key: "h", targetMode: "self", effectType: "heal", resourceType: "mana", resourceCost: 5 }),
       ]);
       const res = await service.getUsableSkillsForCharacter("char-1", 10, {});
-      expect(res[0].executable).toBe(false);
-      expect(res[0].disabledReason).toMatch(/mana/i);
+      expect(res[0].executable).toBe(true);
+      expect(res[0].disabledReason).toBeUndefined();
     });
 
     // ── Déverrouillage (V1-H) ────────────────────────────────────────────────

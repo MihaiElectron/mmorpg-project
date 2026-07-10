@@ -12,6 +12,7 @@ import { CreateSkillDefinitionDto } from './dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
 import {
   ActionBarUnavailableReason,
+  isSupportedResourceType,
   SKILL_UNLOCK_SOURCES,
   SkillEffectType,
   SkillKind,
@@ -220,17 +221,19 @@ export class ActiveSkillsService {
       //  - soin sur soi (V1-G)
       const isDamageCreature = s.effectType === 'damage' && s.targetMode === 'creature';
       const isHealSelf = s.effectType === 'heal' && s.targetMode === 'self';
-      const costBlocked =
-        (s.resourceType === 'mana' || s.resourceType === 'energy') && s.resourceCost > 0;
+      // health/mana/energy sont consommés au cast (V1-J-B) : tous exécutables.
+      // Seul un type inconnu bloque. La quantité courante n'est PAS vérifiée ici
+      // (le manque est refusé au cast par SkillCastService).
+      const resourceUnsupported = !isSupportedResourceType(s.resourceType);
 
       let executable = true;
       let disabledReason: string | undefined;
       if (!isDamageCreature && !isHealSelf) {
         executable = false;
         disabledReason = 'Combinaison effet/cible non supportée (V1).';
-      } else if (costBlocked) {
+      } else if (resourceUnsupported) {
         executable = false;
-        disabledReason = `Coût ${s.resourceType} indisponible (non implémenté).`;
+        disabledReason = `Type de ressource inconnu (${s.resourceType}).`;
       }
 
       result.push({
@@ -282,9 +285,10 @@ export class ActiveSkillsService {
     const isHealSelf = skill.effectType === 'heal' && skill.targetMode === 'self';
     if (!isDamageCreature && !isHealSelf) return 'unsupported_target';
 
-    const costBlocked =
-      (skill.resourceType === 'mana' || skill.resourceType === 'energy') && skill.resourceCost > 0;
-    if (costBlocked) return 'unsupported_resource';
+    // health/mana/energy consommés au cast (V1-J-B) → disponibles. Seul un type
+    // inconnu reste `unsupported_resource`. La suffisance de ressource courante
+    // n'est PAS testée ici : le cast répondra "Mana insuffisant." si besoin.
+    if (!isSupportedResourceType(skill.resourceType)) return 'unsupported_resource';
 
     return null;
   }

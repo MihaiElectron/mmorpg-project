@@ -206,4 +206,25 @@ describe("ActionBarService", () => {
     });
     expect(slots[0]).not.toHaveProperty("skillDefinitionId");
   });
+
+  it("GET marque available:true pour un skill à coût mana (prérequis OK, V1-J-B)", async () => {
+    skillRows = [makeSkill({ id: "s1", key: "manabolt", resourceType: "mana", resourceCost: 10 })];
+    slotRepo.find.mockResolvedValue([{ slotIndex: 0, skillDefinitionId: "s1" }]);
+    const { slots } = await service.getActionBar("c1");
+    expect(slots[0]).toMatchObject({ skillKey: "manabolt", available: true, unavailableReason: null });
+  });
+
+  it("GET marque available:true pour un skill à coût energy (prérequis OK, V1-J-B)", async () => {
+    skillRows = [makeSkill({ id: "s1", key: "dash", resourceType: "energy", resourceCost: 5 })];
+    slotRepo.find.mockResolvedValue([{ slotIndex: 2, skillDefinitionId: "s1" }]);
+    const { slots } = await service.getActionBar("c1");
+    expect(slots[2]).toMatchObject({ skillKey: "dash", available: true, unavailableReason: null });
+  });
+
+  it("GET marque available:false (unsupported_resource) pour un type de ressource inconnu", async () => {
+    skillRows = [makeSkill({ id: "s1", key: "weird", resourceType: "stamina" as never, resourceCost: 5 })];
+    slotRepo.find.mockResolvedValue([{ slotIndex: 0, skillDefinitionId: "s1" }]);
+    const { slots } = await service.getActionBar("c1");
+    expect(slots[0]).toMatchObject({ skillKey: "weird", available: false, unavailableReason: "unsupported_resource" });
+  });
 });

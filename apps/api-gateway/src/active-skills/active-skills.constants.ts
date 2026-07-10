@@ -9,9 +9,21 @@
  * un domaine distinct (action active), jamais adossé au catalogue de masteries.
  */
 
-/** Ressource de coût (préparée V1 — mana/energy non exécutables tant qu'absents). */
+/** Ressource de coût. Toutes consommées au cast par SkillCastService (V1-J-B). */
 export const SKILL_RESOURCE_TYPES = ['health', 'mana', 'energy'] as const;
 export type SkillResourceType = (typeof SKILL_RESOURCE_TYPES)[number];
+
+/**
+ * `true` si le type de ressource est supporté au cast (Skills V1-J-B) :
+ * `null` (aucun coût) ou l'un des `SKILL_RESOURCE_TYPES`. Seul un type hors de
+ * cette liste (donnée DB corrompue — impossible via l'enum en temps normal)
+ * reste non supporté (`unsupported_resource`). Ne vérifie PAS la quantité
+ * courante : le manque de ressource est refusé au cast, pas ici.
+ */
+export function isSupportedResourceType(resourceType: string | null | undefined): boolean {
+  if (resourceType == null) return true;
+  return (SKILL_RESOURCE_TYPES as readonly string[]).includes(resourceType);
+}
 
 /** Ciblage V1-A : soi-même ou une créature. Pas de joueur/allié/zone. */
 export const SKILL_TARGET_MODES = ['self', 'creature'] as const;
