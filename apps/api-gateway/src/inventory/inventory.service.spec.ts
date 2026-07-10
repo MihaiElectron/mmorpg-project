@@ -18,6 +18,22 @@ import { InventoryProjectionService } from './projection/inventory-projection.se
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 
+// Mock MasteriesService : `hasRequiredMasteries` délègue à la vraie logique pure
+// (evaluateRequiredMasteries) en s'appuyant sur les niveaux du mock — préserve
+// l'intention des tests (niveaux → satisfait/insuffisant).
+function makeMasteriesMock(rows: { key: string; level: number }[] = []) {
+  const getCharacterMasteries = jest.fn().mockResolvedValue(rows);
+  const levels: Record<string, number> = {};
+  for (const r of rows) levels[r.key] = r.level;
+  return {
+    getCharacterMasteries,
+    hasRequiredMasteries: jest.fn(
+      async (_characterId: string, requirements: Record<string, number> | null | undefined) =>
+        MasteriesService.evaluateRequiredMasteries(levels, requirements),
+    ),
+  };
+}
+
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
     id: 'item-1',
@@ -72,7 +88,7 @@ describe('InventoryService — findItemForLoot', () => {
         { provide: WorldService, useValue: { emitAdminCharacterDirty: jest.fn() } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
-        { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteriesService, useValue: makeMasteriesMock() },
       ],
     }).compile();
 
@@ -178,7 +194,7 @@ function makeEquipService(overrides: {
   instanceRepo?: Record<string, jest.Mock>;
   inventoryProjection?: { project: jest.Mock };
   derivedStats?: { getDefinitions: jest.Mock };
-  masteriesService?: { getCharacterMasteries: jest.Mock };
+  masteriesService?: ReturnType<typeof makeMasteriesMock>;
 } = {}): InventoryService {
   const inventoryRepo = overrides.inventoryRepo ?? { findOne: jest.fn(), save: jest.fn(), create: jest.fn((x) => x), find: jest.fn().mockResolvedValue([]) };
   const characterRepo = overrides.characterRepo ?? { findOneBy: jest.fn().mockResolvedValue(DEFAULT_CHARACTER) };
@@ -190,7 +206,7 @@ function makeEquipService(overrides: {
   const worldService = overrides.worldService ?? { emitAdminCharacterDirty: jest.fn() };
   const inventoryProjection = overrides.inventoryProjection ?? { project: jest.fn().mockResolvedValue([]) };
   const derivedStats = overrides.derivedStats ?? { getDefinitions: jest.fn().mockResolvedValue([]) };
-  const masteriesService = overrides.masteriesService ?? { getCharacterMasteries: jest.fn().mockResolvedValue([]) };
+  const masteriesService = overrides.masteriesService ?? makeMasteriesMock();
 
   return new InventoryService(
     inventoryRepo as any,
@@ -1012,7 +1028,7 @@ describe("InventoryService.equipItemInstance — prérequis & clamp (Équipement
     const item = makeItem({ id: "sword-1", slot: "weapon" as any, requiredLevel: 1, requiredMasteries: { two_handed: 5 } } as Partial<Item>);
     const manager = makeEquipInstanceManager(item, { level: 5 });
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
-    const masteriesService = { getCharacterMasteries: jest.fn().mockResolvedValue([{ key: "two_handed", level: 2 }]) };
+    const masteriesService = makeMasteriesMock([{ key: "two_handed", level: 2 }]);
     const service = makeEquipService({ dataSource, masteriesService });
     await expect(
       service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID),
@@ -1024,7 +1040,7 @@ describe("InventoryService.equipItemInstance — prérequis & clamp (Équipement
     const manager = makeEquipInstanceManager(item, { level: 5 });
     const dataSource = { transaction: jest.fn(async (fn: (m: EntityManager) => unknown) => fn(manager)) };
     const itemTransfer = { transfer: jest.fn().mockResolvedValue(makeInstance()) };
-    const masteriesService = { getCharacterMasteries: jest.fn().mockResolvedValue([{ key: "two_handed", level: 3 }]) };
+    const masteriesService = makeMasteriesMock([{ key: "two_handed", level: 3 }]);
     const service = makeEquipService({ dataSource, itemTransfer, masteriesService });
     await expect(
       service.equipItemInstance(characterId, "instance-1", DEFAULT_USER_ID),

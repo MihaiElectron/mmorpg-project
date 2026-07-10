@@ -22,6 +22,19 @@ export interface MasteryUpdatePayload {
   leveledUp: boolean;
 }
 
+/** Détail d'une maîtrise requise non satisfaite. */
+export interface MissingMasteryRequirement {
+  key: string;
+  required: number;
+  current: number;
+}
+
+/** Résultat de la vérification des maîtrises requises (Masteries V1-A). */
+export interface MasteryRequirementCheck {
+  ok: boolean;
+  missing: MissingMasteryRequirement[];
+}
+
 const DEFAULT_MASTERIES: Pick<
   MasteryDefinition,
   'key' | 'name' | 'category' | 'maxLevel' | 'baseXpPerLevel' | 'xpCurveExponent' | 'enabled'
@@ -312,6 +325,59 @@ export class MasteriesService implements OnModuleInit {
         enabled: sd.enabled,
       };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vérification des prérequis de maîtrise (Masteries V1-A)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Vérification PURE (aucune I/O) des maîtrises requises contre des niveaux
+   * déjà chargés. Source unique de la règle de comparaison — réutilisée par les
+   * chemins qui possèdent déjà `masteryLevels` (skill cast, disponibilité skill,
+   * action bar) via cette méthode statique, et par `hasRequiredMasteries` pour
+   * les appelants sans niveaux pré-chargés (équipement).
+   *
+   * Règles :
+   * - `requirements` vide/null/undefined → `{ ok: true, missing: [] }` ;
+   * - niveau requis <= 0 ou non numérique → ignoré (considéré satisfait) ;
+   * - maîtrise absente de `masteryLevels` → `current = 0` ;
+   * - `current < required` → ajouté à `missing`.
+   */
+  static evaluateRequiredMasteries(
+    masteryLevels: Record<string, number> | null | undefined,
+    requirements: Record<string, number> | null | undefined,
+  ): MasteryRequirementCheck {
+    const levels = masteryLevels ?? {};
+    const missing: MissingMasteryRequirement[] = [];
+    for (const [key, rawMin] of Object.entries(requirements ?? {})) {
+      const required = typeof rawMin === 'number' ? rawMin : 0;
+      if (!(required > 0)) continue;
+      const current = levels[key] ?? 0;
+      if (current < required) missing.push({ key, required, current });
+    }
+    return { ok: missing.length === 0, missing };
+  }
+
+  /**
+   * Vérifie que le personnage satisfait `requirements`. Charge les niveaux de
+   * maîtrise du personnage (lecture seule, sans créer de `PlayerMastery`) puis
+   * délègue à `evaluateRequiredMasteries`. Court-circuit sans lecture DB quand
+   * aucune exigence positive n'est présente. Serveur autoritaire.
+   */
+  async hasRequiredMasteries(
+    characterId: string,
+    requirements: Record<string, number> | null | undefined,
+  ): Promise<MasteryRequirementCheck> {
+    const hasPositiveRequirement = Object.values(requirements ?? {}).some(
+      (min) => typeof min === 'number' && min > 0,
+    );
+    if (!hasPositiveRequirement) return { ok: true, missing: [] };
+
+    const rows = await this.getCharacterMasteries(characterId);
+    const levels: Record<string, number> = {};
+    for (const row of rows) levels[row.key] = row.level;
+    return MasteriesService.evaluateRequiredMasteries(levels, requirements);
   }
 
   // ---------------------------------------------------------------------------

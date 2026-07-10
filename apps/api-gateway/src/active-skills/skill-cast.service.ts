@@ -185,10 +185,13 @@ export class SkillCastService {
     const masteryLevels: Record<string, number> = {};
     for (const m of masteryRows) masteryLevels[m.key] = m.level;
 
-    for (const [key, minLevel] of Object.entries(skill.requiredMasteries ?? {})) {
-      if ((masteryLevels[key] ?? 0) < minLevel) {
-        return { success: false, error: `Mastery "${key}" niveau ${minLevel} requise.` };
-      }
+    const masteryCheck = MasteriesService.evaluateRequiredMasteries(
+      masteryLevels,
+      skill.requiredMasteries,
+    );
+    if (!masteryCheck.ok) {
+      const first = masteryCheck.missing[0];
+      return { success: false, error: `Mastery "${first.key}" niveau ${first.required} requise.` };
     }
 
     // ── Coût (vérification SEULE — décrément après succès réel) ────────────
@@ -317,10 +320,13 @@ export class SkillCastService {
     const masteryLevels: Record<string, number> = {};
     for (const m of masteryRows) masteryLevels[m.key] = m.level;
 
-    for (const [key, minLevel] of Object.entries(skill.requiredMasteries ?? {})) {
-      if ((masteryLevels[key] ?? 0) < minLevel) {
-        return { success: false, error: `Mastery "${key}" niveau ${minLevel} requise.` };
-      }
+    const masteryCheck = MasteriesService.evaluateRequiredMasteries(
+      masteryLevels,
+      skill.requiredMasteries,
+    );
+    if (!masteryCheck.ok) {
+      const first = masteryCheck.missing[0];
+      return { success: false, error: `Mastery "${first.key}" niveau ${first.required} requise.` };
     }
 
     // ── Coût (vérification SEULE — décrément après succès réel) ────────────

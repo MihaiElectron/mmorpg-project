@@ -377,6 +377,84 @@ describe('MasteriesService', () => {
     });
   });
 
+  // ─── evaluateRequiredMasteries (pur, statique) ────────────────────────────
+  describe('evaluateRequiredMasteries', () => {
+    it("retourne ok pour des requirements vides / null / undefined", () => {
+      expect(MasteriesService.evaluateRequiredMasteries({}, {})).toEqual({ ok: true, missing: [] });
+      expect(MasteriesService.evaluateRequiredMasteries({}, null)).toEqual({ ok: true, missing: [] });
+      expect(MasteriesService.evaluateRequiredMasteries({}, undefined)).toEqual({ ok: true, missing: [] });
+    });
+
+    it("ignore un niveau requis <= 0 (considere satisfait)", () => {
+      const result = MasteriesService.evaluateRequiredMasteries({}, { smithing: 0, mining: -3 });
+      expect(result).toEqual({ ok: true, missing: [] });
+    });
+
+    it("traite une mastery absente comme current 0", () => {
+      const result = MasteriesService.evaluateRequiredMasteries({}, { smithing: 5 });
+      expect(result.ok).toBe(false);
+      expect(result.missing).toEqual([{ key: "smithing", required: 5, current: 0 }]);
+    });
+
+    it("signale une mastery de niveau insuffisant", () => {
+      const result = MasteriesService.evaluateRequiredMasteries({ smithing: 2 }, { smithing: 5 });
+      expect(result.ok).toBe(false);
+      expect(result.missing).toEqual([{ key: "smithing", required: 5, current: 2 }]);
+    });
+
+    it("retourne ok quand le niveau est suffisant (egal ou superieur)", () => {
+      expect(MasteriesService.evaluateRequiredMasteries({ smithing: 5 }, { smithing: 5 }).ok).toBe(true);
+      expect(MasteriesService.evaluateRequiredMasteries({ smithing: 7 }, { smithing: 5 }).ok).toBe(true);
+    });
+
+    it("echoue si au moins une mastery parmi plusieurs est insuffisante", () => {
+      const result = MasteriesService.evaluateRequiredMasteries(
+        { smithing: 5, mining: 1 },
+        { smithing: 5, mining: 3 },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.missing).toEqual([{ key: "mining", required: 3, current: 1 }]);
+    });
+  });
+
+  // ─── hasRequiredMasteries (async) ─────────────────────────────────────────
+  describe('hasRequiredMasteries', () => {
+    it("court-circuite sans lecture DB ni creation quand aucune exigence positive", async () => {
+      const result = await service.hasRequiredMasteries("char-1", {});
+      expect(result).toEqual({ ok: true, missing: [] });
+      // Aucune lecture des masteries ni creation de PlayerMastery pour une simple verification
+      expect(masteryDefRepo.find).not.toHaveBeenCalled();
+      expect(playerMasteryRepo.find).not.toHaveBeenCalled();
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("autorise quand le niveau du personnage satisfait l'exigence", async () => {
+      masteryDefRepo.find.mockResolvedValue([makeMasteryDef({ id: "def-1", key: "smithing" })]);
+      playerMasteryRepo.find.mockResolvedValue([
+        makePlayerMastery({ masteryDefinitionId: "def-1", level: 6, xp: 0 }),
+      ]);
+
+      const result = await service.hasRequiredMasteries("char-1", { smithing: 5 });
+
+      expect(result.ok).toBe(true);
+      // Verification en lecture seule : aucune ligne PlayerMastery creee
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("refuse quand le niveau est insuffisant et detaille le manque", async () => {
+      masteryDefRepo.find.mockResolvedValue([makeMasteryDef({ id: "def-1", key: "smithing" })]);
+      playerMasteryRepo.find.mockResolvedValue([
+        makePlayerMastery({ masteryDefinitionId: "def-1", level: 2, xp: 0 }),
+      ]);
+
+      const result = await service.hasRequiredMasteries("char-1", { smithing: 5 });
+
+      expect(result.ok).toBe(false);
+      expect(result.missing).toEqual([{ key: "smithing", required: 5, current: 2 }]);
+      expect(playerMasteryRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── getOrCreatePlayerMasteryInTx ──────────────────────────────────────────
 
   describe('getOrCreatePlayerMasteryInTx', () => {

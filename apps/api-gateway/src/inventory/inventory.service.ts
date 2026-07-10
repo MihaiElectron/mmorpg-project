@@ -357,18 +357,13 @@ export class InventoryService {
       throw new BadRequestException('Niveau requis insuffisant.');
     }
 
-    const requiredMasteries = item.requiredMasteries ?? {};
-    const requiredEntries = Object.entries(requiredMasteries).filter(
-      ([, min]) => typeof min === 'number' && min > 0,
+    // Prérequis de maîtrise — point unique de vérification (Masteries V1-A).
+    const masteryCheck = await this.masteriesService.hasRequiredMasteries(
+      characterId,
+      item.requiredMasteries,
     );
-    if (requiredEntries.length > 0) {
-      const masteries = await this.masteriesService.getCharacterMasteries(characterId);
-      const levelByKey = new Map(masteries.map((m) => [m.key, m.level]));
-      for (const [key, min] of requiredEntries) {
-        if ((levelByKey.get(key) ?? 0) < (min as number)) {
-          throw new BadRequestException('Maîtrise requise insuffisante.');
-        }
-      }
+    if (!masteryCheck.ok) {
+      throw new BadRequestException('Maîtrise requise insuffisante.');
     }
   }
 

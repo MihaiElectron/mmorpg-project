@@ -20,6 +20,7 @@ import {
   SkillTargetMode,
   SkillUnlockSource,
 } from './active-skills.constants';
+import { MasteriesService } from '../masteries/masteries.service';
 
 /** Vue ADMIN de l'état de déverrouillage d'un skill pour un personnage (V1-H-B). */
 export interface AdminSkillUnlockView {
@@ -211,9 +212,10 @@ export class ActiveSkillsService {
       if (!s.autoUnlock && !unlockedIds.has(s.id)) continue;
       if ((characterLevel ?? 1) < s.requiredLevel) continue;
 
-      const masteriesMet = Object.entries(s.requiredMasteries ?? {}).every(
-        ([key, min]) => (masteryLevels[key] ?? 0) >= min,
-      );
+      const masteriesMet = MasteriesService.evaluateRequiredMasteries(
+        masteryLevels,
+        s.requiredMasteries,
+      ).ok;
       if (!masteriesMet) continue;
 
       // Combinaisons effet/cible exécutables en V1 :
@@ -276,9 +278,10 @@ export class ActiveSkillsService {
     if (!skill.autoUnlock && !isUnlocked) return 'locked';
     if ((characterLevel ?? 1) < skill.requiredLevel) return 'level_required';
 
-    const masteriesMet = Object.entries(skill.requiredMasteries ?? {}).every(
-      ([key, min]) => (masteryLevels[key] ?? 0) >= min,
-    );
+    const masteriesMet = MasteriesService.evaluateRequiredMasteries(
+      masteryLevels,
+      skill.requiredMasteries,
+    ).ok;
     if (!masteriesMet) return 'mastery_required';
 
     const isDamageCreature = skill.effectType === 'damage' && skill.targetMode === 'creature';
