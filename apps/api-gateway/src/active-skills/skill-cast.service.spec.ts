@@ -264,6 +264,7 @@ describe("SkillCastService", () => {
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
       expect(r.cooldownMs).toBe(1000);
+      expect(r.skillName).toBe("Power Strike"); // attribution combat log
     }
   });
 

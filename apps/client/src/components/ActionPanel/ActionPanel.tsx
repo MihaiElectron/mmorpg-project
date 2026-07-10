@@ -43,6 +43,9 @@ export default function ActionPanel() {
     function onMouseDown(e: MouseEvent) {
       const t = e.target as HTMLElement;
       if (t.tagName === "CANVAS") return;
+      // Cliquer la barre de skills ne doit PAS désélectionner la cible : sinon
+      // un skill sur créature (ex: strike) perd sa cible avant le cast.
+      if (t.closest?.(".skill-action-bar")) return;
       if (panelRef.current && !panelRef.current.contains(t)) closePanel();
     }
     document.addEventListener("mousedown", onMouseDown);

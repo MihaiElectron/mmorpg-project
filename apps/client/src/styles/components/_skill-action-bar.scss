@@ -9,13 +9,20 @@ $slot-size: 44px;
 
 .skill-action-bar {
   position: absolute;
-  left: 16px;
-  bottom: 16px;
   z-index: 9000;
   display: flex;
   flex-direction: column;
   gap: vars.$dt-gap-xs;
   pointer-events: none; // seuls les slots captent le pointeur
+
+  // ── Positions prédéfinies amovibles (snap, V1-L-B) ──────────────────────────
+  // Aucun style inline : la position vient d'une classe modificatrice persistée.
+  &--bottom-left   { left: 16px;  bottom: 16px; align-items: flex-start; }
+  &--bottom-center { left: 50%;   bottom: 16px; transform: translateX(-50%); align-items: center; }
+  &--bottom-right  { right: 16px; bottom: 16px; align-items: flex-end; }
+  &--top-left      { left: 16px;  top: 16px;    align-items: flex-start; }
+  &--top-center    { left: 50%;   top: 16px;    transform: translateX(-50%); align-items: center; }
+  &--top-right     { right: 16px; top: 16px;    align-items: flex-end; }
 
   &__feedback {
     align-self: flex-start;
@@ -256,16 +263,39 @@ $slot-size: 44px;
     color: vars.$color-text-primary;
   }
 
-  &__cooldown {
+  // Balayage d'horloge (V1-L-B) : voile conique matérialisant le temps RESTANT.
+  // Le segment se réduit à mesure que le cooldown descend. Sous le texte "Xs".
+  &__cooldown-sweep {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.55);
     border-radius: vars.$panel-radius-sm;
-    font-weight: 700;
-    font-size: 14px;
-    color: vars.$color-text-primary;
+    pointer-events: none;
+  }
+
+  @for $i from 0 through 20 {
+    &__cooldown-sweep--fill-#{$i * 5} {
+      background: conic-gradient(
+        vars.$cooldown-sweep-color math.percentage(math.div($i * 5, 100)),
+        transparent math.percentage(math.div($i * 5, 100))
+      );
+    }
+  }
+
+  // Bouton discret de déplacement (cycle les positions prédéfinies).
+  &__move {
+    align-self: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 12px;
+    line-height: 1;
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    background: vars.$panel-inner-bg;
+    color: vars.$color-text-muted;
+    cursor: pointer;
+    pointer-events: auto;
+
+    &:hover { border-color: vars.$color-text-gold; color: vars.$color-text-primary; }
   }
 }

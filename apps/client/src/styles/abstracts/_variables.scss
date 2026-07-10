@@ -118,3 +118,6 @@ $hp-bar-bg:         rgba(0, 0, 0, 0.55);
 $resource-health: $hp-color-high;   // vert = vie
 $resource-mana:   #4aa3ff;          // bleu = mana
 $resource-energy: $color-magic-amber; // ambre = énergie
+
+// Voile du balayage d'horloge de cooldown (segment restant sur l'icône).
+$cooldown-sweep-color: rgba(0, 0, 0, 0.62);

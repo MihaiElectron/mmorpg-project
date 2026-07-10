@@ -18,12 +18,14 @@ const storeLogic = (set) => ({
 
   /**
    * Ajoute une entrée de log. `category` sert au filtrage par onglet
-   * ("combat" aujourd'hui ; "event"/"loot"/... plus tard).
+   * ("combat" aujourd'hui ; "event"/"loot"/... plus tard). `severity`
+   * (défaut "info") permet une coloration par gravité ("info"|"warn"|"error")
+   * sans casser les producteurs existants (appel sans severity = "info").
    */
-  pushLog: ({ category = "combat", message }) => {
+  pushLog: ({ category = "combat", message, severity = "info" }) => {
     if (!message) return;
     set((state) => {
-      const entry = { id: nextId++, category, message, createdAt: Date.now() };
+      const entry = { id: nextId++, category, message, severity, createdAt: Date.now() };
       const entries = [...state.entries, entry];
       // Tronque par le début si on dépasse la borne.
       if (entries.length > MAX_LOG_ENTRIES) {

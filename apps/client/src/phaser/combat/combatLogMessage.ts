@@ -58,20 +58,26 @@ export function formatCombatLogMessage(
     if (!hasAmount) return null;
     const amount = event.amount as number;
 
+    // Attribution du skill si le serveur l'a fourni (absent = auto-attaque).
+    const withSkill =
+      typeof event.skillName === "string" && event.skillName.length > 0
+        ? ` avec ${event.skillName}`
+        : "";
+
     const sourceLocal = isLocalPlayer(event.sourceType, event.sourceId, opts.localCharacterId);
     const targetLocal = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId);
 
     if (sourceLocal) {
       const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
-      return `Vous infligez ${amount} dégâts à ${target}`;
+      return `Vous infligez ${amount} dégâts à ${target}${withSkill}`;
     }
     if (targetLocal) {
       const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
-      return `${source} vous inflige ${amount} dégâts`;
+      return `${source} vous inflige ${amount} dégâts${withSkill}`;
     }
     const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
     const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
-    return `${source} inflige ${amount} dégâts à ${target}`;
+    return `${source} inflige ${amount} dégâts à ${target}${withSkill}`;
   }
 
   return null;

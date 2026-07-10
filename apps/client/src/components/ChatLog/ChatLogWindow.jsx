@@ -52,7 +52,12 @@ function LogList({ categories, emptyText }) {
   return (
     <ul className="chat-log__list" ref={listRef}>
       {filtered.map((entry) => (
-        <li key={entry.id} className="chat-log__line">
+        <li
+          key={entry.id}
+          className={`chat-log__line${
+            entry.severity && entry.severity !== "info" ? ` chat-log__line--${entry.severity}` : ""
+          }`}
+        >
           <span className="chat-log__time">{formatClock(entry.createdAt)}</span>
           <span className="chat-log__message">{entry.message}</span>
         </li>

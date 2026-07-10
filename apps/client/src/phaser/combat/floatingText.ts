@@ -19,6 +19,8 @@ export interface CombatEventPayload {
   worldX?: number;
   worldY?: number;
   text?: string;
+  /** Nom du skill à l'origine des dégâts (absent pour une auto-attaque). */
+  skillName?: string;
   createdAt?: number;
 }
 

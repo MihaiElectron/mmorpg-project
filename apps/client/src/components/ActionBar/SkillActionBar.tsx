@@ -8,6 +8,15 @@ import {
 } from "./actionBarApi";
 import { getActionPanelStore } from "../../store/actionPanel.store";
 import { useCharacterStore } from "../../store/character.store";
+import { addSkillLog } from "./skillLog";
+import {
+  cooldownRemainingBucket,
+  buildCastSuccessMessage,
+  loadBarPosition,
+  nextBarPosition,
+  saveBarPosition,
+  type BarPosition,
+} from "./skillActionBar.helpers";
 import { onSkillDefinitionsChanged } from "../DevTools/modules/Skills/skillEvents";
 
 /**
@@ -41,9 +50,11 @@ function getSocket(): SocketLike | null {
 }
 
 /** Cible créature actuellement sélectionnée dans l'ActionPanel, sinon null. */
-function getSelectedCreature(): { id: string } | null {
+function getSelectedCreature(): { id: string; name?: string } | null {
   const target = getActionPanelStore().getState().target;
-  return target && target.kind === "creature" ? { id: target.id } : null;
+  return target && target.kind === "creature"
+    ? { id: target.id, name: target.name ?? target.type }
+    : null;
 }
 
 function shortLabel(name: string): string {
@@ -168,12 +179,48 @@ export default function SkillActionBar() {
   const [now, setNow] = useState(Date.now());
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
+  // Position amovible (snap prédéfini, persistée en localStorage — V1-L-B).
+  const [position, setPosition] = useState<BarPosition>(() => loadBarPosition());
+  const cyclePosition = useCallback(() => {
+    setPosition((prev) => {
+      const next = nextBarPosition(prev);
+      saveBarPosition(next);
+      return next;
+    });
+  }, []);
+  // Socket résolu tardivement : `window.game.socket` peut ne pas exister au
+  // montage (créé par WorldPage). On attend qu'il soit prêt puis on (ré)attache
+  // les listeners — sinon skill:error/skill:cooldown ne s'attachaient jamais.
+  const [socket, setSocket] = useState<SocketLike | null>(() => getSocket());
   const feedbackTimer = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  // Casts en attente de confirmation serveur (skill:cooldown) pour logguer le
+  // succès. Le client n'affirme jamais un succès sans ce signal serveur.
+  const pendingCastsRef = useRef<
+    Map<string, { skillName: string; targetType: "self" | "creature"; targetLabel?: string; ts: number }>
+  >(new Map());
   useEffect(() => () => { mountedRef.current = false; }, []);
 
+  // Attente de disponibilité du socket (poll court, arrêté dès qu'il existe).
+  useEffect(() => {
+    if (socket) return;
+    const id = window.setInterval(() => {
+      const s = getSocket();
+      if (s) {
+        setSocket(s);
+        window.clearInterval(id);
+      }
+    }, 300);
+    return () => window.clearInterval(id);
+  }, [socket]);
+
+  // Retour utilisateur unifié : bulle éphémère près de la barre (visible même
+  // chat replié) + ligne persistante dans le chat combat (V1-L-B). Toutes les
+  // sources d'erreur/état de skill passent par ici (skill:error serveur et
+  // refus locaux), donc router ici couvre tout le composant sans duplication.
   const showFeedback = useCallback((text: string) => {
     setFeedback(text);
+    addSkillLog(text, "warn");
     if (feedbackTimer.current != null) window.clearTimeout(feedbackTimer.current);
     feedbackTimer.current = window.setTimeout(() => setFeedback(null), 2500);
   }, []);
@@ -205,40 +252,50 @@ export default function SkillActionBar() {
     const onFocus = () => loadAll();
     window.addEventListener("focus", onFocus);
 
-    const socket = getSocket();
-    const onReload = () => loadAll();
-    socket?.on("character:reload", onReload);
-
     const offCatalog = onSkillDefinitionsChanged(loadAll);
 
     return () => {
       window.removeEventListener("focus", onFocus);
-      socket?.off("character:reload", onReload);
       offCatalog();
     };
   }, [loadAll]);
 
-  // Listeners socket : cooldown + erreur (nettoyés au démontage).
+  // Listeners socket (character:reload + cooldown + erreur) attachés dès que le
+  // socket est prêt. skill:cooldown = confirmation serveur d'un cast réussi →
+  // on logue alors le skill utilisé + cible depuis le pending cast local.
   useEffect(() => {
-    const socket = getSocket();
     if (!socket) return;
+    const onReload = () => loadAll();
     function onCooldown(data: unknown) {
       const d = data as { skillKey?: string; readyAt?: number; cooldownMs?: number };
       if (!d?.skillKey) return;
       const readyAt = d.readyAt ?? Date.now() + (d.cooldownMs ?? 0);
       setCooldowns((prev) => ({ ...prev, [d.skillKey as string]: readyAt }));
+
+      // Cast confirmé par le serveur → log succès depuis le pending cast.
+      const pending = pendingCastsRef.current.get(d.skillKey);
+      pendingCastsRef.current.delete(d.skillKey);
+      if (pending && Date.now() - pending.ts < 5000) {
+        addSkillLog(
+          buildCastSuccessMessage(pending.skillName, pending.targetType, pending.targetLabel),
+          "info",
+        );
+      }
     }
     function onError(data: unknown) {
-      const d = data as { error?: string };
+      const d = data as { skillKey?: string; error?: string };
+      if (d?.skillKey) pendingCastsRef.current.delete(d.skillKey); // refus → pas de log succès
       showFeedback(d?.error ?? "Skill refusé.");
     }
+    socket.on("character:reload", onReload);
     socket.on("skill:cooldown", onCooldown);
     socket.on("skill:error", onError);
     return () => {
+      socket.off("character:reload", onReload);
       socket.off("skill:cooldown", onCooldown);
       socket.off("skill:error", onError);
     };
-  }, [showFeedback]);
+  }, [socket, showFeedback, loadAll]);
 
   // Tick léger uniquement s'il reste un cooldown actif.
   const hasActiveCooldown = Object.values(cooldowns).some((t) => t > now);
@@ -263,7 +320,19 @@ export default function SkillActionBar() {
         showFeedback("Socket indisponible.");
         return;
       }
+
+      // Purge des pending casts périmés (> 5 s) : évite un log succès erroné.
+      const nowTs = Date.now();
+      for (const [key, p] of pendingCastsRef.current) {
+        if (nowTs - p.ts >= 5000) pendingCastsRef.current.delete(key);
+      }
+
       if (meta.targetMode === "self") {
+        pendingCastsRef.current.set(slot.skillKey, {
+          skillName: meta.name,
+          targetType: "self",
+          ts: nowTs,
+        });
         socket.emit("skill:cast", { skillKey: slot.skillKey, targetType: "self" });
         return;
       }
@@ -272,6 +341,12 @@ export default function SkillActionBar() {
         showFeedback("Sélectionne une créature.");
         return;
       }
+      pendingCastsRef.current.set(slot.skillKey, {
+        skillName: meta.name,
+        targetType: "creature",
+        targetLabel: creature.name,
+        ts: nowTs,
+      });
       socket.emit("skill:cast", {
         skillKey: slot.skillKey,
         targetType: "creature",
@@ -331,7 +406,7 @@ export default function SkillActionBar() {
     pickerSlot != null ? slots.find((s) => s.slotIndex === pickerSlot) ?? null : null;
 
   return (
-    <div className="skill-action-bar">
+    <div className={`skill-action-bar skill-action-bar--${position}`}>
       {feedback && <div className="skill-action-bar__feedback">{feedback}</div>}
 
       {pickerSlot != null && (
@@ -379,12 +454,23 @@ export default function SkillActionBar() {
       )}
 
       <div className="skill-action-bar__slots">
+        <button
+          type="button"
+          className="skill-action-bar__move"
+          onClick={cyclePosition}
+          title="Déplacer la barre"
+          aria-label="Déplacer la barre d'action"
+        >
+          ↕
+        </button>
         <ResourceGauges />
         {slots.map((slot, i) => {
           const filled = !!slot.skillKey;
           const readyAt = filled ? cooldowns[slot.skillKey as string] ?? 0 : 0;
           const remainingMs = Math.max(0, readyAt - now);
           const onCooldown = remainingMs > 0;
+          const cooldownTotalMs = filled ? skillMeta[slot.skillKey as string]?.cooldownMs ?? 0 : 0;
+          const sweepBucket = cooldownRemainingBucket(remainingMs, cooldownTotalMs);
           const unavailable = filled && !slot.available;
           const title = buildSlotTitle(slot, slot.skillKey ? skillMeta[slot.skillKey] : undefined);
           const cls =
@@ -405,7 +491,10 @@ export default function SkillActionBar() {
                   <span className="skill-action-bar__plus">+</span>
                 )}
                 {onCooldown && (
-                  <span className="skill-action-bar__cooldown">{Math.ceil(remainingMs / 1000)}s</span>
+                  <span
+                    className={`skill-action-bar__cooldown-sweep skill-action-bar__cooldown-sweep--fill-${sweepBucket}`}
+                    aria-hidden="true"
+                  />
                 )}
               </button>
               {filled && (

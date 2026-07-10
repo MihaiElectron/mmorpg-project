@@ -31,6 +31,8 @@ export interface ResourceSnapshot {
 export interface SkillCastSuccess {
   success: true;
   skillKey: string;
+  /** Nom lisible du skill — attribution dans le combat log (event `combat:event`). */
+  skillName: string;
   dto: CreatureDto;
   damage: number;
   attackerId: string;
@@ -257,6 +259,7 @@ export class SkillCastService {
     return {
       success: true,
       skillKey: skill.key,
+      skillName: skill.name,
       dto: result.dto,
       damage: result.damage,
       attackerId: result.attackerId,

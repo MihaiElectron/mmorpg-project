@@ -29,6 +29,22 @@ describe("formatCombatLogMessage", () => {
     expect(msg).toBe("turkey vous inflige 3 dégâts");
   });
 
+  it("attribue le skill quand skillName est fourni (dégâts joueur → créature)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 37, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", skillName: "strike" },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 37 dégâts à turkey avec strike");
+  });
+
+  it("sans skillName → pas de suffixe (auto-attaque)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 8, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", skillName: "" },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 8 dégâts à turkey");
+  });
+
   it("mort d'une créature nommée", () => {
     const msg = formatCombatLogMessage(
       { type: "death", sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },

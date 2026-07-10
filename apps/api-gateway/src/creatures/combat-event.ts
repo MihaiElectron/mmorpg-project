@@ -22,6 +22,8 @@ export interface CombatEvent {
   worldX: number;
   worldY: number;
   text?: string;
+  /** Nom du skill à l'origine des dégâts (absent pour une auto-attaque). */
+  skillName?: string;
   createdAt: number;
 }
 
@@ -35,6 +37,7 @@ export interface CombatEventInput {
   worldX: number;
   worldY: number;
   text?: string;
+  skillName?: string;
 }
 
 /** Construit un CombatEvent en remplissant `id` (unique) et `createdAt`. */

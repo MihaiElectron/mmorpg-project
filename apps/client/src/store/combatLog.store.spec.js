@@ -29,6 +29,18 @@ describe("combatLog.store", () => {
     expect(store.getState().entries[0].category).toBe("combat");
   });
 
+  it("severity par défaut = info (rétrocompatible)", () => {
+    const store = getCombatLogStore();
+    store.getState().pushLog({ category: "combat", message: "sans severity" });
+    expect(store.getState().entries[0].severity).toBe("info");
+  });
+
+  it("stocke la severity fournie (warn)", () => {
+    const store = getCombatLogStore();
+    store.getState().pushLog({ category: "combat", message: "avertissement", severity: "warn" });
+    expect(store.getState().entries[0].severity).toBe("warn");
+  });
+
   it(`borne le journal à ${MAX_LOG_ENTRIES} entrées (garde les plus récentes)`, () => {
     const store = getCombatLogStore();
     for (let i = 0; i < MAX_LOG_ENTRIES + 50; i++) {

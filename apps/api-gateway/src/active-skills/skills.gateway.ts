@@ -132,6 +132,7 @@ export class SkillsGateway implements OnGatewayConnection {
         worldX: result.dto.worldX ?? 0,
         worldY: result.dto.worldY ?? 0,
         text: `-${result.damage}`,
+        skillName: result.skillName,
       }),
     );
     if (result.dto.state === 'dead') {
