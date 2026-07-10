@@ -25,6 +25,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
 import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
+import { WorldService } from '../world/world.service';
 import {
   ItemInstance,
   ItemInstanceContainerType,
@@ -86,6 +87,7 @@ describe('CraftJobService — launch()', () => {
   let mockCrafting: { findNearestCompatibleStationOrThrow: jest.Mock };
   let mockProgression: { applyCharacterXpInTx: jest.Mock };
   let mockMaterialization: { materialize: jest.Mock };
+  let mockWorld: { emitMasteryUpdate: jest.Mock };
   let craftJobRepo: { find: jest.Mock };
   let savedCraftJob: any;
   let lockedInstances: Partial<ItemInstance>[];
@@ -132,6 +134,7 @@ describe('CraftJobService — launch()', () => {
     mockCrafting = { findNearestCompatibleStationOrThrow: jest.fn().mockResolvedValue({ id: 'station-1' }) };
     mockProgression = { applyCharacterXpInTx: jest.fn().mockResolvedValue({ level: 1, experience: 0, nextLevelXp: 100, leveledUp: false }) };
     mockMaterialization = { materialize: jest.fn().mockResolvedValue({ stacks: [], instances: [], worldItems: [] }) };
+    mockWorld = { emitMasteryUpdate: jest.fn() };
     craftJobRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -146,6 +149,7 @@ describe('CraftJobService — launch()', () => {
         { provide: CraftingService, useValue: mockCrafting },
         { provide: ProgressionService, useValue: mockProgression },
         { provide: ItemMaterializationService, useValue: mockMaterialization },
+        { provide: WorldService, useValue: mockWorld },
         CraftIngredientResolver,
       ],
     }).compile();
@@ -460,6 +464,43 @@ describe('CraftJobService — launch()', () => {
     });
     expect(mockMasteries.applyMasteryXpInTx).toHaveBeenCalledWith('char-1', 'smithing', 12, mockManager);
     expect(mockProgression.applyCharacterXpInTx).not.toHaveBeenCalled();
+  });
+
+  it("complete avec XP mastery → émet mastery_update avec le payload serveur (XP appliquée une seule fois)", async () => {
+    const payload = {
+      masteryDefinitionKey: 'smithing', key: 'smithing', name: 'Smithing',
+      category: 'crafting', enabled: true, level: 3, xp: 5, nextLevelXp: 300, leveledUp: true,
+    };
+    mockMasteries.applyMasteryXpInTx.mockResolvedValue(payload);
+    setupComplete(makeJob({ quantity: 1 }));
+    forceRandom(0); // succès garanti
+
+    await service.complete('job-1');
+
+    // Le payload émis est celui retourné par MasteriesService (leveledUp inclus),
+    // jamais recalculé par le craft.
+    expect(mockWorld.emitMasteryUpdate).toHaveBeenCalledWith('char-1', payload);
+    expect(mockWorld.emitMasteryUpdate).toHaveBeenCalledTimes(1);
+    // L'XP n'est pas appliquée deux fois : une seule application transactionnelle.
+    expect(mockMasteries.applyMasteryXpInTx).toHaveBeenCalledTimes(1);
+  });
+
+  it("complete sans XP mastery (mastery disparue) → n'émet pas mastery_update", async () => {
+    setupComplete(makeJob({ quantity: 1 }), [], [], null); // MasteryDefinition introuvable
+    forceRandom(0);
+
+    await service.complete('job-1');
+
+    expect(mockMasteries.applyMasteryXpInTx).not.toHaveBeenCalled();
+    expect(mockWorld.emitMasteryUpdate).not.toHaveBeenCalled();
+  });
+
+  it("complete d'un job déjà terminé → n'émet pas mastery_update (idempotence)", async () => {
+    setupComplete(makeJob({ state: CraftJobState.COMPLETED }));
+
+    await service.complete('job-1');
+
+    expect(mockWorld.emitMasteryUpdate).not.toHaveBeenCalled();
   });
 
   it('consomme les ingrédients INSTANCE réservés via CONSUME_FROM_CRAFT_ORDER', async () => {

@@ -11,7 +11,8 @@ import { Character } from '../characters/entities/character.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
 import { MasteryDefinition } from '../masteries/entities/mastery-definition.entity';
-import { MasteriesService } from '../masteries/masteries.service';
+import { MasteriesService, MasteryUpdatePayload } from '../masteries/masteries.service';
+import { WorldService } from '../world/world.service';
 import {
   ItemInstance,
   ItemInstanceContainerType,
@@ -99,6 +100,7 @@ export class CraftJobService {
     private readonly progressionService: ProgressionService,
     private readonly itemMaterialization: ItemMaterializationService,
     private readonly craftIngredientResolver: CraftIngredientResolver,
+    private readonly worldService: WorldService,
   ) {}
 
   /**
@@ -291,7 +293,11 @@ export class CraftJobService {
    * production (succès/échec, quantités d'output) est figé dans le snapshot.
    */
   async complete(jobId: string): Promise<CraftJobCompletionResult | null> {
-    return this.dataSource.transaction(async (manager) => {
+    // Capturés dans la transaction, émis uniquement après commit (jamais sur
+    // rollback) — le scheduler n'a pas de socket requête, on passe par WorldService.
+    let masteryUpdate: MasteryUpdatePayload | null = null;
+    let completedCharacterId: string | null = null;
+    const result = await this.dataSource.transaction(async (manager) => {
       const job = await manager
         .getRepository(CraftJob)
         .createQueryBuilder('j')
@@ -407,12 +413,13 @@ export class CraftJobService {
       const grantedCharacterXp = Math.max(0, job.craftCharacterXpReward) * successes;
 
       if (grantedMasteryXp > 0 && masteryDefinitionKey) {
-        await this.masteriesService.applyMasteryXpInTx(
+        masteryUpdate = await this.masteriesService.applyMasteryXpInTx(
           job.characterId,
           masteryDefinitionKey,
           grantedMasteryXp,
           manager,
         );
+        completedCharacterId = job.characterId;
       }
       if (grantedCharacterXp > 0) {
         await this.progressionService.applyCharacterXpInTx(
@@ -440,6 +447,12 @@ export class CraftJobService {
         grantedMasteryXp,
       };
     });
+    // Masteries V1-B : émission live du même payload que combat/récolte. L'XP a
+    // été appliquée UNE seule fois (dans la transaction) — ici on ne fait qu'émettre.
+    if (masteryUpdate && completedCharacterId) {
+      this.worldService.emitMasteryUpdate(completedCharacterId, masteryUpdate);
+    }
+    return result;
   }
 
   /**

@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { ADMIN_ROOM } from '../common/socket-rooms';
+import type { MasteryUpdatePayload } from '../masteries/masteries.service';
 
 export type AdminCharacterDirtyReason =
   | 'equipment'
@@ -702,6 +703,18 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     if (!this.server) return;
     const player = this.getConnectedPlayerByCharacterId(characterId);
     if (player) this.server.to(player.socketId).emit('character:reload');
+  }
+
+  /**
+   * Émet `mastery_update` vers le socket du personnage s'il est connecté
+   * (Masteries V1-B). Même payload que combat/récolte (MasteryUpdatePayload).
+   * No-op silencieux si hors ligne ou serveur non enregistré — utilisé par les
+   * chemins hors contexte socket (ex : scheduler de complétion des CraftJobs).
+   */
+  emitMasteryUpdate(characterId: string, payload: MasteryUpdatePayload): void {
+    if (!this.server) return;
+    const player = this.getConnectedPlayerByCharacterId(characterId);
+    if (player) this.server.to(player.socketId).emit('mastery_update', payload);
   }
 
   /**

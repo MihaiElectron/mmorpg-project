@@ -18,6 +18,21 @@ function logEquipment(message) {
   });
 }
 
+/**
+ * Ligne [Maîtrise] dans le chat combat (Masteries V1-B). Utilisé pour les
+ * level-up uniquement — les gains d'XP simples ne sont pas loggés (anti-spam :
+ * combat/récolte émettent mastery_update à chaque action). Aucun calcul côté
+ * client : on affiche le niveau envoyé par le serveur.
+ */
+function logMastery(message) {
+  if (!message) return;
+  getCombatLogStore().getState().pushLog({
+    category: "combat",
+    message: `[Maîtrise] ${message}`,
+    severity: "info",
+  });
+}
+
 const storeLogic = (set, get) => ({
   character: null,
   isOpen: false,
@@ -184,6 +199,11 @@ const storeLogic = (set, get) => ({
     const resolvedKey = masteryData.key || masteryData.masteryDefinitionKey;
     if (!resolvedKey) return;
     const normalized = { ...masteryData, key: resolvedKey };
+    // Level-up serveur (leveledUp) → message dans le chat combat. Fallback sur
+    // la key si name absent ; niveau final atteint (multi-level inclus).
+    if (masteryData.leveledUp === true && masteryData.level != null) {
+      logMastery(`${masteryData.name || resolvedKey} passe niveau ${masteryData.level}.`);
+    }
     set((state) => {
       const masteries = [...(state.masteries || [])];
       const index = masteries.findIndex((s) => s.key === resolvedKey);

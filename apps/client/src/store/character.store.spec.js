@@ -272,6 +272,55 @@ describe("character.store — updateMastery", () => {
 // equipItem — choix endpoint instance vs legacy + garde INSTANCE sans instanceId
 // ---------------------------------------------------------------------------
 
+// updateMastery — level-up serveur → ligne [Maîtrise] dans le chat combat (V1-B).
+// Teste le VRAI store (singleton window) : le log vit dans updateMastery.
+describe("character.store — updateMastery (level-up → chat combat)", () => {
+  let store;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    store = getCharacterStore();
+    store.setState({
+      masteries: [{ key: "woodcutting", name: "Woodcutting", category: "gathering", level: 1, xp: 90, nextLevelXp: 100 }],
+    });
+    getCombatLogStore().getState().clearLogs();
+  });
+
+  it("pousse un log [Maîtrise] quand leveledUp est true et met à jour le store", () => {
+    store.getState().updateMastery({
+      key: "woodcutting", name: "Woodcutting", level: 2, xp: 0, nextLevelXp: 283, leveledUp: true,
+    });
+
+    const entries = getCombatLogStore().getState().entries;
+    expect(entries.at(-1)?.message).toBe("[Maîtrise] Woodcutting passe niveau 2.");
+    expect(entries.at(-1)?.severity).toBe("info");
+    // Aucun calcul client : le niveau affiché/stocké est celui du serveur.
+    expect(store.getState().masteries.find((m) => m.key === "woodcutting").level).toBe(2);
+  });
+
+  it("ne pousse aucun log sans level-up (gain d'XP simple, anti-spam)", () => {
+    store.getState().updateMastery({ key: "woodcutting", level: 1, xp: 95, nextLevelXp: 100, leveledUp: false });
+
+    expect(getCombatLogStore().getState().entries).toHaveLength(0);
+    expect(store.getState().masteries.find((m) => m.key === "woodcutting").xp).toBe(95);
+  });
+
+  it("fallback sur la key si name absent", () => {
+    store.getState().updateMastery({ masteryDefinitionKey: "woodcutting", level: 3, xp: 0, nextLevelXp: 500, leveledUp: true });
+
+    expect(getCombatLogStore().getState().entries.at(-1)?.message).toBe("[Maîtrise] woodcutting passe niveau 3.");
+  });
+
+  it("n'utilise jamais window.alert", () => {
+    const alertSpy = vi.fn();
+    vi.stubGlobal("alert", alertSpy);
+
+    store.getState().updateMastery({ key: "woodcutting", name: "Woodcutting", level: 2, xp: 0, leveledUp: true });
+
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("character.store — equipItem (choix endpoint)", () => {
   let store;
 
