@@ -10,6 +10,7 @@ import {
   isValidWorldDrop,
 } from "./inventoryWorldDrop";
 import { buildSlotMap, MIN_SLOT_COUNT } from "./inventorySlots";
+import { formatItemTooltip } from "./itemTooltip";
 
 export default function Inventory() {
   const inventory = useCharacterStore((s) => s.inventory);
@@ -305,7 +306,9 @@ export default function Inventory() {
               onDoubleClick={() => inv && equipItem(inv.id)}
               title={
                 item
-                  ? `Double-clic pour equiper ${item.name} · Glisser sur le monde pour deposer`
+                  ? formatItemTooltip(item, {
+                      actionHint: "Double-clic pour équiper · Glisser sur le monde pour déposer",
+                    })
                   : "Slot vide"
               }
             >

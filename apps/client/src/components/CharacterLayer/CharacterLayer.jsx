@@ -3,6 +3,7 @@
  */
 import { useState } from "react";
 import { useCharacterStore } from "../../store/character.store";
+import { formatItemTooltip } from "../Inventory/itemTooltip";
 
 const SLOT_PAIRS = [
   ["left-earring", "right-earring"],
@@ -164,7 +165,11 @@ export default function CharacterLayer() {
               onDragLeave={handleSlotDragLeave}
               onDrop={(e) => handleSlotDrop(e)}
               onDoubleClick={() => handleUnequip(slot)}
-              title={item ? `Double-clic pour déséquiper ${item.name}` : `Slot ${slot} vide`}
+              title={
+                item
+                  ? formatItemTooltip(item, { actionHint: "Double-clic pour déséquiper · Glisser vers l'inventaire" })
+                  : `Slot ${slot} vide`
+              }
             >
               {item?.image ? (
                 <img

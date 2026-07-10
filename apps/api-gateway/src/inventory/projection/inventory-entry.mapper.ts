@@ -2,7 +2,31 @@ import { CharacterEquipment } from '../../characters/entities/character-equipmen
 import { ItemInstance, ItemInstanceType } from '../../item-instances/entities/item-instance.entity';
 import { Item } from '../../items/entities/item.entity';
 import { Inventory } from '../entities/inventory.entity';
-import { InventoryEntryDto } from './inventory-entry.dto';
+import { InventoryEntryDto, ItemSummary } from './inventory-entry.dto';
+
+/**
+ * Résumé item exposé à l'inventaire (Équipement V1-B). Champs BRUTS de l'Item,
+ * aucun recalcul : le tooltip client n'affiche que ce que l'item porte en base.
+ */
+export function mapItemSummary(item: Item): ItemSummary {
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    category: item.category,
+    image: item.image ?? null,
+    objectMode: item.objectMode,
+    slot: item.slot ?? null,
+    attack: item.attack ?? null,
+    defense: item.defense ?? null,
+    range: item.range ?? null,
+    weaponType: item.weaponType ?? null,
+    statBonuses: item.statBonuses ?? {},
+    requiredLevel: item.requiredLevel ?? 1,
+    requiredClass: item.requiredClass ?? null,
+    requiredMasteries: item.requiredMasteries ?? {},
+  };
+}
 
 export interface EquippedSets {
   equippedItemIds: Set<string>;
@@ -26,15 +50,7 @@ export function mapStackToEntry(inv: Inventory, sets: EquippedSets): InventoryEn
     quantity: inv.quantity,
     equipped: sets.equippedItemIds.has(inv.item.id),
     slotIndex: inv.slotIndex ?? null,
-    item: {
-      id: inv.item.id,
-      name: inv.item.name,
-      type: inv.item.type,
-      category: inv.item.category,
-      image: inv.item.image ?? null,
-      objectMode: inv.item.objectMode,
-      slot: inv.item.slot ?? null,
-    },
+    item: mapItemSummary(inv.item),
   };
 }
 
@@ -52,14 +68,6 @@ export function mapInstanceToEntry(
     quantity,
     equipped: sets.equippedInstanceIds.has(instance.id),
     slotIndex: instance.slotIndex ?? null,
-    item: {
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      category: item.category,
-      image: item.image ?? null,
-      objectMode: item.objectMode,
-      slot: item.slot ?? null,
-    },
+    item: mapItemSummary(item),
   };
 }

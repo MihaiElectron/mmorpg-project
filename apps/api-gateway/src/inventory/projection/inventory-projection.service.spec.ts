@@ -78,6 +78,49 @@ describe("InventoryProjectionService", () => {
     });
   });
 
+  it("expose les données brutes d'équipement (V1-B) : stats/bonus/prérequis", async () => {
+    const equipItem = {
+      id: "sword-1", name: "Épée", type: "weapon", category: "sword", image: null,
+      objectMode: "INSTANCE", slot: "right-hand",
+      attack: 10, defense: 2, range: 1000, weaponType: "one_handed_sword",
+      statBonuses: { strength: 3, vitality: 2 },
+      requiredLevel: 5, requiredClass: null, requiredMasteries: { two_handed: 2 },
+    } as unknown as Item;
+    const inv = { id: "inv-2", quantity: 1, equipped: false, item: equipItem } as Inventory;
+    inventoryRepo.find.mockResolvedValue([inv]);
+    instanceRepo.find.mockResolvedValue([]);
+    equipmentRepo.find.mockResolvedValue([]);
+
+    const result = await service.project("char-1");
+
+    expect(result[0].item).toMatchObject({
+      slot: "right-hand",
+      attack: 10,
+      defense: 2,
+      range: 1000,
+      weaponType: "one_handed_sword",
+      statBonuses: { strength: 3, vitality: 2 },
+      requiredLevel: 5,
+      requiredClass: null,
+      requiredMasteries: { two_handed: 2 },
+    });
+  });
+
+  it("applique des défauts sûrs si les champs d'équipement sont absents (compat)", async () => {
+    // item1 n'a ni statBonuses ni requiredLevel → défauts {} / 1 / null.
+    const inv = { id: "inv-3", quantity: 1, equipped: false, item: item1 } as Inventory;
+    inventoryRepo.find.mockResolvedValue([inv]);
+    instanceRepo.find.mockResolvedValue([]);
+    equipmentRepo.find.mockResolvedValue([]);
+
+    const result = await service.project("char-1");
+
+    expect(result[0].item).toMatchObject({
+      attack: null, defense: null, range: null, weaponType: null,
+      statBonuses: {}, requiredLevel: 1, requiredClass: null, requiredMasteries: {},
+    });
+  });
+
   it("calcule equipped depuis CharacterEquipment meme si Inventory.equipped est false", async () => {
     const inv = { id: "inv-1", quantity: 1, equipped: false, item: item1 } as Inventory;
     const equipment = [
