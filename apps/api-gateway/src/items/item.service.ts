@@ -5,7 +5,8 @@ import { Item, ObjectMode } from './entities/item.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
-import { sanitizeStatBonuses } from '../characters/equipment-stats.helper';
+import { sanitizeStatBonuses, recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { ResourceTemplate } from '../resources/entities/resource-template.entity';
@@ -220,6 +221,7 @@ export class ItemService implements OnModuleInit {
     private readonly mailMessageRepo: Repository<MailMessage>,
     @InjectRepository(Character)
     private readonly characterRepo: Repository<Character>,
+    private readonly derivedStats: DerivedStatsService,
   ) {}
 
   async onModuleInit() {
@@ -373,7 +375,28 @@ export class ItemService implements OnModuleInit {
       await this.assertObjectModeChangeable(id);
     }
     Object.assign(entity, this.sanitizeEquipmentFields(dto));
-    return this.repo.save(entity);
+    return this.repo.manager.transaction(async (manager) => {
+      const saved = await manager.save(Item, entity);
+      // Équipement V1-C-B : les stats PLATES `attack`/`defense` sont persistées
+      // sur `character` (via recalculateEquipmentStats à l'equip). Sans ce
+      // recalcul, modifier item.attack/defense dans le Studio laisse les stats
+      // des porteurs obsolètes jusqu'à un equip/unequip. On rafraîchit ici les
+      // personnages qui portent l'item. Les statBonuses primaires, eux, sont
+      // recalculés dynamiquement par getMe (aucune action requise ici).
+      const wearers = await manager.find(CharacterEquipment, { where: { itemId: id } });
+      const characterIds = [...new Set(wearers.map((e) => e.characterId))];
+      if (characterIds.length > 0) {
+        // Définitions dérivées chargées UNE fois pour le clamp (V1-C-B) : si les
+        // nouveaux statBonuses font baisser maxHealth/maxMana/maxEnergy, on cape
+        // les ressources courantes des porteurs (jamais de remplissage si hausse).
+        const definitions = await this.derivedStats.getDefinitions();
+        for (const characterId of characterIds) {
+          await recalculateEquipmentStats(manager, characterId); // stats plates attack/defense
+          await clampCharacterResourcesToDerivedMax(manager, characterId, definitions);
+        }
+      }
+      return saved;
+    });
   }
 
   /**

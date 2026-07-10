@@ -15,6 +15,7 @@ export type AdminCharacterDirtyReason =
   | 'unknown';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import {
@@ -206,7 +207,10 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async respawnCharacter(characterId: string, server: Server): Promise<void> {
-    const character = await this.characterRepository.findOne({ where: { id: characterId } });
+    const character = await this.characterRepository.findOne({
+      where: { id: characterId },
+      relations: ['equipment', 'equipment.item'],
+    });
     if (!character) return;
 
     const points = await this.respawnPointRepository.find();
@@ -263,7 +267,11 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     // Mana/énergie également remis au max dérivé (V1-K-A) : cohérent avec le
     // full-life, évite une ressource morte juste après la mort.
     const derivedStatDefinitions = await this.derivedStats.getDefinitions();
-    const derived = CharacterStatsCalculator.compute(character, derivedStatDefinitions).derived;
+    const derived = CharacterStatsCalculator.compute(
+      character,
+      derivedStatDefinitions,
+      aggregateEquipmentBonuses(character.equipment),
+    ).derived;
     const derivedMaxHealth = derived.maxHealth;
     const newHealth = derivedMaxHealth;
     const newMana = Math.max(0, Math.round(derived.maxMana));
@@ -335,6 +343,7 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
 
     const character = await this.characterRepository.findOne({
       where: { id: payload.characterId },
+      relations: ['equipment', 'equipment.item'],
     });
     if (!character) return null;
 
@@ -397,7 +406,14 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     character: Character,
   ): Promise<JoinResourceSnapshot> {
     const derivedDefinitions = await this.derivedStats.getDefinitions();
-    const stats = CharacterStatsCalculator.compute(character, derivedDefinitions);
+    // Bonus d'équipement inclus : les max dérivés (PV/mana/énergie) doivent être
+    // cohérents avec l'équipement porté, sinon le join écrase l'UI avec des max
+    // non équipés (regressions Équipement V1).
+    const stats = CharacterStatsCalculator.compute(
+      character,
+      derivedDefinitions,
+      aggregateEquipmentBonuses(character.equipment),
+    );
 
     const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));
     const maxMana = Math.max(0, Math.round(stats.derived.maxMana));

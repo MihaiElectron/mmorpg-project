@@ -100,6 +100,73 @@ describe("computeResourceRegenStep", () => {
 describe("ResourceRegenerationService.tick", () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it("utilise les max dérivés AVEC équipement (Équipement V1) et n'écrase pas l'UI", async () => {
+    // maxMana = intelligence × 10. Perso base int 0 mais item équipé +5 int.
+    const defsEquip = [
+      { key: "maxMana", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: { intelligence: 10 } },
+      { key: "maxEnergy", enabled: true, rawStatSource: null, baseValue: 40, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "manaRegen", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "energyRegen", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "maxHealth", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {} },
+    ] as any;
+    const equippedChar = makeChar({
+      mana: 0, energy: 40, baseIntelligence: 0,
+      equipment: [{ item: { statBonuses: { intelligence: 5 } } }],
+    });
+    const { service, charRepo, emit } = makeService({
+      players: [{ characterId: "c1", socketId: "sock-1" }],
+      characters: [equippedChar],
+      defs: defsEquip,
+    });
+    await service.tick();
+    // Sans équipement maxMana serait 0 → aucune regen. Avec équipement = 50.
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { mana: 50 });
+    expect(emit).toHaveBeenCalledWith(
+      "character_resource_update",
+      expect.objectContaining({ mana: 50, maxMana: 50 }),
+    );
+    service.stop();
+  });
+
+  it("régénère les PV (healthRegen) plafonnés à maxHealth, gère les fractions", async () => {
+    const defsHp = [
+      { key: "maxHealth", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "healthRegen", enabled: true, rawStatSource: null, baseValue: 2.2, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "maxMana", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "maxEnergy", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {} },
+    ] as any;
+    // healthRegen 2.2/s, dt 1s → +2 (0.2 reporté). health 50 → 52.
+    const { service, charRepo, emit } = makeService({
+      players: [{ characterId: "c1", socketId: "sock-1" }],
+      characters: [makeChar({ health: 50, mana: 0, energy: 0 })],
+      defs: defsHp,
+    });
+    await service.tick();
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 52 });
+    expect(emit).toHaveBeenCalledWith(
+      "character_resource_update",
+      expect.objectContaining({ health: 52, maxHealth: 100 }),
+    );
+    service.stop();
+  });
+
+  it("ne régénère jamais les PV au-dessus de maxHealth", async () => {
+    const defsHp = [
+      { key: "maxHealth", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "healthRegen", enabled: true, rawStatSource: null, baseValue: 50, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "maxMana", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {} },
+      { key: "maxEnergy", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {} },
+    ] as any;
+    const { service, charRepo } = makeService({
+      players: [{ characterId: "c1", socketId: "sock-1" }],
+      characters: [makeChar({ health: 90, mana: 0, energy: 0 })],
+      defs: defsHp,
+    });
+    await service.tick();
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 100 });
+    service.stop();
+  });
+
   it("régénère mana et énergie et persiste + émet au seul socket concerné", async () => {
     const { service, charRepo, emit, to } = makeService({
       players: [{ characterId: "c1", socketId: "sock-1" }],

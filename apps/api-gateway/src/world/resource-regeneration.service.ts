@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { WorldService } from './world.service';
 
@@ -75,6 +76,7 @@ export function computeResourceRegenStep(input: RegenStepInput): RegenStepResult
 }
 
 interface ResourceAccumulators {
+  health: number;
   mana: number;
   energy: number;
   /** Dernier tick appliqué (ms) — sert au calcul du dt réel. */
@@ -154,7 +156,10 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
       if (!socketByCharacter.has(id)) this.accumulators.delete(id);
     }
 
-    const characters = await this.characterRepository.find({ where: { id: In(characterIds) } });
+    const characters = await this.characterRepository.find({
+      where: { id: In(characterIds) },
+      relations: ['equipment', 'equipment.item'],
+    });
     if (characters.length === 0) return;
 
     const definitions = await this.derivedStats.getDefinitions();
@@ -171,13 +176,30 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
       const elapsedSeconds = acc
         ? Math.min(MAX_REGEN_ELAPSED_SECONDS, Math.max(0, (now - acc.lastTickAt) / 1000))
         : RESOURCE_REGEN_TICK_MS / 1000;
+      const healthAcc = acc?.health ?? 0;
       const manaAcc = acc?.mana ?? 0;
       const energyAcc = acc?.energy ?? 0;
 
-      const derived = CharacterStatsCalculator.compute(character, definitions).derived;
+      // Max dérivés AVEC équipement : la regen ne doit pas plafonner à un max
+      // non équipé (regression Équipement V1) ni écraser l'UI via l'event.
+      const derived = CharacterStatsCalculator.compute(
+        character,
+        definitions,
+        aggregateEquipmentBonuses(character.equipment),
+      ).derived;
+      const maxHealth = Math.max(1, Math.round(derived.maxHealth));
       const maxMana = Math.max(0, Math.round(derived.maxMana));
       const maxEnergy = Math.max(0, Math.round(derived.maxEnergy));
 
+      // HP régénérée comme mana/énergie (healthRegen dérivé), même modèle
+      // fractionnaire, plafonnée au maxHealth ÉQUIPÉ, joueur vivant uniquement.
+      const healthStep = computeResourceRegenStep({
+        current: character.health ?? 0,
+        max: maxHealth,
+        regenPerSecond: derived.healthRegen,
+        elapsedSeconds,
+        accumulator: healthAcc,
+      });
       const manaStep = computeResourceRegenStep({
         current: character.mana ?? 0,
         max: maxMana,
@@ -194,14 +216,16 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
       });
 
       this.accumulators.set(character.id, {
+        health: healthStep.accumulator,
         mana: manaStep.accumulator,
         energy: energyStep.accumulator,
         lastTickAt: now,
       });
 
-      if (!manaStep.changed && !energyStep.changed) continue; // pas d'update DB, pas d'event
+      if (!healthStep.changed && !manaStep.changed && !energyStep.changed) continue; // rien à faire
 
       const update: Partial<Character> = {};
+      if (healthStep.changed) update.health = healthStep.next;
       if (manaStep.changed) update.mana = manaStep.next;
       if (energyStep.changed) update.energy = energyStep.next;
       await this.characterRepository.update(character.id, update);
@@ -210,10 +234,10 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
       if (socketId && this.server) {
         this.server.to(socketId).emit('character_resource_update', {
           characterId: character.id,
-          health: character.health,
+          health: healthStep.next,
           mana: manaStep.next,
           energy: energyStep.next,
-          maxHealth: Math.max(1, Math.round(derived.maxHealth)),
+          maxHealth,
           maxMana,
           maxEnergy,
         });

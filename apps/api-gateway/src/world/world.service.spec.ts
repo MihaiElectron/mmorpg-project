@@ -701,6 +701,21 @@ describe('WorldService — P7-B : guards WU explicites', () => {
       return new WorldService(charRepo as any, respawnRepo as any, derivedStatsMock as any);
     }
 
+    it('inclut les bonus d\'équipement dans les max au join (Équipement V1)', async () => {
+      // Base int 0 → maxMana 0 sans équipement ; item +5 int → maxMana 50.
+      const charRepo = makeCharRepo({
+        baseIntelligence: 0, baseWisdom: 0, baseEndurance: 0, baseAgility: 0,
+        mana: 0, energy: 0,
+        equipment: [{ item: { statBonuses: { intelligence: 5 } } }],
+      });
+      const svc = makeSvc(charRepo);
+      const socket = makeSocket({ data: { userId: 'u-1', role: 'player', player: undefined as any } });
+      const result = await svc.joinPlayer(socket, { characterId: 'c-1', name: 'Hero' });
+      // maxMana dérivé AVEC équipement = 50 (sinon 0 → aucune ressource).
+      expect(result?.resources?.maxMana).toBe(50);
+      expect(result?.resources?.mana).toBe(50);
+    });
+
     it('refill V1 : mana/énergie à 0 → remontés aux max dérivés', async () => {
       const charRepo = makeCharRepo({ mana: 0, energy: 0 });
       const svc = makeSvc(charRepo);

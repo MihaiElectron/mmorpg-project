@@ -19,6 +19,7 @@ import { WorldItem } from '../world-items/entities/world-item.entity';
 import { AuctionListing } from '../auction/entities/auction-listing.entity';
 import { MailMessage } from '../mail/entities/mail-message.entity';
 import { Character } from '../characters/entities/character.entity';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,17 @@ describe('ItemService', () => {
       create: jest.fn().mockImplementation((e) => e),
       remove: jest.fn().mockResolvedValue(undefined),
     };
+    // Transaction par défaut (update V1-C-B) : manager délégué, aucun porteur.
+    (repo as any).manager = {
+      transaction: jest.fn().mockImplementation(async (fn: any) =>
+        fn({
+          save: jest.fn().mockImplementation((_entity, e) => Promise.resolve(e)),
+          find: jest.fn().mockResolvedValue([]),
+          findOne: repo.findOne,
+          update: jest.fn().mockResolvedValue(undefined),
+        }),
+      ),
+    };
     inventoryRepo = {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
@@ -235,6 +247,10 @@ describe('ItemService', () => {
         {
           provide: getRepositoryToken(Character),
           useValue: characterRepo,
+        },
+        {
+          provide: DerivedStatsService,
+          useValue: { getDefinitions: jest.fn().mockResolvedValue([]) },
         },
       ],
     }).compile();
@@ -501,6 +517,8 @@ describe('ItemService', () => {
       const item = makeItem({ image: null });
       repo.findOne.mockResolvedValue(item);
 
+      // update passe par une transaction (manager.save) ; la valeur résolue
+      // reflète la mutation.
       await expect(
         service.update('item-uuid-1', {
           image: '/assets/images/items/wooden_stick.png',
@@ -508,12 +526,6 @@ describe('ItemService', () => {
       ).resolves.toMatchObject({
         image: '/assets/images/items/wooden_stick.png',
       });
-
-      expect(repo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          image: '/assets/images/items/wooden_stick.png',
-        }),
-      );
     });
 
     it("refuse de changer objectMode si des instances runtime existent", async () => {
@@ -919,9 +931,76 @@ describe('ItemService', () => {
 
     it('update sanitize aussi les statBonuses', async () => {
       repo.findOne.mockResolvedValue({ id: 'i1', objectMode: 'STACKABLE' });
-      await service.update('i1', { statBonuses: { wisdom: 2, bogus: 1 } as any });
-      const saved = repo.save.mock.calls[0][0];
+      // update passe par une transaction (manager.save) → on lit la valeur retournée.
+      const saved = await service.update('i1', { statBonuses: { wisdom: 2, bogus: 1 } as any });
       expect(saved.statBonuses).toEqual({ wisdom: 2 });
+    });
+
+    it('recalcule les stats plates des porteurs quand un item équipé est modifié', async () => {
+      repo.findOne.mockResolvedValue({ id: 'sword-1', objectMode: 'INSTANCE' });
+      const updateMock = jest.fn().mockResolvedValue(undefined);
+      const character = { id: 'c1', baseAttack: 5, baseDefense: 0 };
+      const equipRows = [{ characterId: 'c1', item: { attack: 10, defense: 0 } }];
+      (repo as any).manager = {
+        transaction: jest.fn().mockImplementation(async (fn: any) =>
+          fn({
+            save: jest.fn().mockImplementation((_e: any, x: any) => Promise.resolve(x)),
+            find: jest.fn().mockResolvedValue(equipRows),   // porteurs + lignes d'équipement
+            findOne: jest.fn().mockResolvedValue(character),
+            update: updateMock,
+          }),
+        ),
+      };
+      await service.update('sword-1', { attack: 10 });
+      // recalculateEquipmentStats : character.attack = base 5 + item 10 = 15.
+      expect(updateMock).toHaveBeenCalledWith(Character, { id: 'c1' }, { attack: 15, defense: 0 });
+    });
+
+    function makeWearerManager(character: any, equipRows: any[], updateMock: jest.Mock) {
+      return {
+        transaction: jest.fn().mockImplementation(async (fn: any) =>
+          fn({
+            save: jest.fn().mockImplementation((_e: any, x: any) => Promise.resolve(x)),
+            find: jest.fn().mockResolvedValue(equipRows),
+            findOne: jest.fn().mockResolvedValue(character),
+            update: updateMock,
+          }),
+        ),
+      };
+    }
+
+    it('clampe les ressources des porteurs si un statBonus abaisse un max (V1-C-B)', async () => {
+      repo.findOne.mockResolvedValue({ id: 'staff-1', objectMode: 'INSTANCE' });
+      const updateMock = jest.fn().mockResolvedValue(undefined);
+      // Item ne donne plus que +1 int → maxMana dérivé (DEFAULT int×10) = 10.
+      const equipRows = [{ characterId: 'c1', item: { statBonuses: { intelligence: 1 } } }];
+      const character = {
+        id: 'c1', baseIntelligence: 0, baseAttack: 0, baseDefense: 0,
+        health: 100, maxHealth: 100, mana: 40, energy: 0,
+      };
+      (repo as any).manager = makeWearerManager(character, equipRows, updateMock);
+      await service.update('staff-1', { statBonuses: { intelligence: 1 } });
+      // mana courante 40 capée au nouveau maxMana 10.
+      expect(updateMock).toHaveBeenCalledWith(
+        Character, { id: 'c1' }, expect.objectContaining({ mana: 10 }),
+      );
+    });
+
+    it('ne remplit pas les ressources si le max monte (V1-C-B)', async () => {
+      repo.findOne.mockResolvedValue({ id: 'staff-1', objectMode: 'INSTANCE' });
+      const updateMock = jest.fn().mockResolvedValue(undefined);
+      // Item donne +10 int → maxMana 100, mais mana courante reste basse.
+      const equipRows = [{ characterId: 'c1', item: { statBonuses: { intelligence: 10 } } }];
+      const character = {
+        id: 'c1', baseIntelligence: 0, baseAttack: 0, baseDefense: 0,
+        health: 100, maxHealth: 100, mana: 5, energy: 0,
+      };
+      (repo as any).manager = makeWearerManager(character, equipRows, updateMock);
+      await service.update('staff-1', { statBonuses: { intelligence: 10 } });
+      // Aucun update ne remonte la mana (clamp ne fait que réduire).
+      expect(updateMock).not.toHaveBeenCalledWith(
+        Character, { id: 'c1' }, expect.objectContaining({ mana: 100 }),
+      );
     });
 
     it('nettoie requiredMasteries (clé vide / valeur <= 0 / non entier droppées)', async () => {

@@ -14,6 +14,7 @@ import { WorldItem } from '../world-items/entities/world-item.entity';
 import { AuctionListing } from '../auction/entities/auction-listing.entity';
 import { MailMessage } from '../mail/entities/mail-message.entity';
 import { Character } from '../characters/entities/character.entity';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { Character } from '../characters/entities/character.entity';
       MailMessage,
       Character,
     ]),
+    DerivedStatsModule,
   ],
   controllers: [ItemController],
   providers: [ItemService],

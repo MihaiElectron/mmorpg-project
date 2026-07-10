@@ -1,7 +1,8 @@
 import { EntityManager } from 'typeorm';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
-import { PRIMARY_STAT_KEYS, PrimaryStats } from './character-stats-calculator';
+import { CharacterStatsCalculator, PRIMARY_STAT_KEYS, PrimaryStats } from './character-stats-calculator';
+import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
 
 /** PrimaryStats à zéro (clone local — évite tout cycle d'import runtime). */
 function zeroPrimaryStats(): PrimaryStats {
@@ -101,4 +102,45 @@ export async function recalculateEquipmentStats(
     attack: finalAttack,
     defense: finalDefense,
   });
+}
+
+/**
+ * Clampe `health`/`mana`/`energy` aux max DÉRIVÉS serveur (équipement inclus)
+ * dans la transaction de l'appelant (Équipement V1-C-B). Ne fait que RÉDUIRE :
+ * si un max baisse (statBonus retiré/diminué), la ressource courante est capée ;
+ * si un max monte, on ne remplit pas (cohérent avec allocateStats/join/respawn).
+ * Persiste uniquement en cas de changement. Aucune régénération inventée.
+ *
+ * PURE côté logique de calcul (délègue à `CharacterStatsCalculator.compute`) ;
+ * l'I/O (find/update) reste ici, via le `manager` fourni. `definitions` est
+ * passé par l'appelant (chargé depuis `DerivedStatsService`) pour ne pas coupler
+ * ce helper au service de dérivées.
+ */
+export async function clampCharacterResourcesToDerivedMax(
+  manager: EntityManager,
+  characterId: string,
+  definitions: DerivedStatDefinition[],
+): Promise<void> {
+  const [character, equipment] = await Promise.all([
+    manager.findOne(Character, { where: { id: characterId } }),
+    manager.find(CharacterEquipment, { where: { characterId }, relations: ['item'] }),
+  ]);
+  if (!character) return;
+
+  const derived = CharacterStatsCalculator.compute(
+    character,
+    definitions,
+    aggregateEquipmentBonuses(equipment),
+  ).derived;
+  const maxHealth = Math.max(1, Math.round(derived.maxHealth));
+  const maxMana = Math.max(0, Math.round(derived.maxMana));
+  const maxEnergy = Math.max(0, Math.round(derived.maxEnergy));
+
+  const health = Math.min(character.health ?? 0, maxHealth);
+  const mana = Math.min(character.mana ?? 0, maxMana);
+  const energy = Math.min(character.energy ?? 0, maxEnergy);
+
+  if (health !== character.health || mana !== character.mana || energy !== character.energy) {
+    await manager.update(Character, { id: characterId }, { health, mana, energy });
+  }
 }

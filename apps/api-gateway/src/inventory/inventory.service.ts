@@ -16,8 +16,7 @@ import { Character } from '../characters/entities/character.entity';
 import { Item, ObjectMode } from '../items/entities/item.entity';
 import { ItemInstance, ItemInstanceContainerType, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
-import { recalculateEquipmentStats, aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
-import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
+import { recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 import { WorldService } from '../world/world.service';
@@ -384,29 +383,9 @@ export class InventoryService {
     manager: EntityManager,
     characterId: string,
   ): Promise<void> {
-    const [character, equipment, definitions] = await Promise.all([
-      manager.findOne(Character, { where: { id: characterId } }),
-      manager.find(CharacterEquipment, { where: { characterId }, relations: ['item'] }),
-      this.derivedStats.getDefinitions(),
-    ]);
-    if (!character) return;
-
-    const derived = CharacterStatsCalculator.compute(
-      character,
-      definitions,
-      aggregateEquipmentBonuses(equipment),
-    ).derived;
-    const maxHealth = Math.max(1, Math.round(derived.maxHealth));
-    const maxMana = Math.max(0, Math.round(derived.maxMana));
-    const maxEnergy = Math.max(0, Math.round(derived.maxEnergy));
-
-    const health = Math.min(character.health ?? 0, maxHealth);
-    const mana = Math.min(character.mana ?? 0, maxMana);
-    const energy = Math.min(character.energy ?? 0, maxEnergy);
-
-    if (health !== character.health || mana !== character.mana || energy !== character.energy) {
-      await manager.update(Character, { id: characterId }, { health, mana, energy });
-    }
+    // Délègue au helper partagé (réutilisé aussi par item.service.update — V1-C-B).
+    const definitions = await this.derivedStats.getDefinitions();
+    await clampCharacterResourcesToDerivedMax(manager, characterId, definitions);
   }
 
   /**
