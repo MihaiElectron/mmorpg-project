@@ -995,6 +995,82 @@ export class CreaturesService implements OnModuleInit {
     return dto;
   }
 
+  /**
+   * Défense dérivée runtime d'une créature (même source que le combat :
+   * `derived.defenseTotal`, incluant les modificateurs debug). Réutilisée par
+   * le mode "combat simulé" de l'outil admin de dégâts.
+   */
+  private computeCreatureDefense(creature: Creature): number {
+    const { template } = creature.spawn;
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+    return derived.defenseTotal;
+  }
+
+  /**
+   * Inflige des dégâts admin à une créature (outil Studio/DevTools). Deux modes :
+   *  - `direct` : retire `amount` PV bruts, IGNORE la défense (maintenance/debug HP).
+   *  - `combat` : simule un coup réel via `calculateCombatDamage` — applique la
+   *    défense dérivée de la cible (`effectiveDefense = max(0, defense − pénétration)`,
+   *    jamais < 0). `attackerDefensePenetration` optionnel (défaut 0).
+   * Ne recalcule aucune formule en parallèle : réutilise le calculateur pur.
+   * Retourne `null` si la créature est absente ou déjà morte.
+   */
+  async adminDamageCreature(
+    id: string,
+    amount: number,
+    mode: 'direct' | 'combat' = 'direct',
+    attackerDefensePenetration = 0,
+  ): Promise<{ dto: CreatureDto; damage: number; targetDefense: number; mode: 'direct' | 'combat' } | null> {
+    const creature = this.liveCreatures.get(id);
+    if (!creature || creature.state === 'dead') return null;
+
+    const rawAmount = Math.max(0, Math.floor(amount));
+    let finalDamage: number;
+    let targetDefense = 0;
+
+    if (mode === 'combat') {
+      targetDefense = this.computeCreatureDefense(creature);
+      // minimumDamage 0 : en simulation, une défense >= dégâts absorbe tout
+      // (0 dégât), jamais de valeur négative. minimumAttack 0 : pas de plancher
+      // d'attaque admin (le montant saisi est la valeur brute).
+      const result = calculateCombatDamage({
+        attackerValue: rawAmount,
+        targetDefense,
+        attackerDefensePenetration,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: creature.health,
+      });
+      finalDamage = result.finalDamage;
+      creature.health = result.hpAfter;
+    } else {
+      // Mode direct : comportement historique (retrait brut, défense ignorée).
+      finalDamage = rawAmount;
+      creature.health = Math.max(0, creature.health - finalDamage);
+    }
+
+    if (creature.health === 0) {
+      creature.state = 'dead';
+      this.patrolStates.delete(creature.id);
+      const delay =
+        creature.respawnDelayMs ?? creature.spawn.respawnDelayMs ?? creature.spawn.template.respawnDelayMs;
+      creature.respawnAt = new Date(Date.now() + delay);
+      setTimeout(() => this.respawnCreature(creature.id), delay);
+    }
+
+    await this.creatureRepository.save(creature);
+
+    const dto = this.toDto(creature);
+    if (this.server) this.server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit('creature_update', dto);
+    return { dto, damage: finalDamage, targetDefense, mode };
+  }
+
   async moveCreature(creatureId: string, worldX: number, worldY: number): Promise<CreatureDto | null> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature || creature.state === 'dead') return null;

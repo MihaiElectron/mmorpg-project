@@ -1112,6 +1112,94 @@ function PlayerSection({
   );
 }
 
+/**
+ * Outil admin "infliger des dégâts" à une créature (V4-A+). Deux modes clairs :
+ *  - Directs : retire les PV bruts, ignore la défense (maintenance/debug HP) ;
+ *  - Combat simulé : applique la défense de la cible via le calcul serveur
+ *    (`calculateCombatDamage`), pénétration optionnelle. Le serveur reste
+ *    autoritaire — aucun calcul de dégâts côté client.
+ */
+function CreatureDamageControl({
+  creatureId,
+  onResult,
+}: {
+  creatureId: string;
+  onResult: (text: string, ok: boolean) => void;
+}) {
+  const [amount, setAmount] = useState(30);
+  const [mode, setMode] = useState<"direct" | "combat">("direct");
+  const [penetration, setPenetration] = useState(0);
+  const [running, setRunning] = useState(false);
+
+  async function inflict() {
+    const socket = getSocket();
+    if (!socket?.connected) {
+      onResult("Socket non connecté.", false);
+      return;
+    }
+    setRunning(true);
+    const payload: Record<string, unknown> = { creatureId, amount, mode };
+    if (mode === "combat" && penetration > 0) {
+      payload.attackerDefensePenetration = penetration;
+    }
+    const result = await ackPromise(socket, "admin:damage_creature", payload);
+    setRunning(false);
+    onResult(result.message, result.success);
+  }
+
+  return (
+    <div className="admin-panel__creature-damage">
+      <span className="admin-panel__template-stat-label">Infliger des dégâts</span>
+      <div className="admin-panel__creature-damage-row">
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Montant</span>
+          <input
+            className="admin-panel__template-stat-input"
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
+          />
+        </label>
+        <label className="admin-panel__template-stat">
+          <span className="admin-panel__template-stat-label">Mode</span>
+          <select
+            className="admin-panel__template-stat-input"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as "direct" | "combat")}
+          >
+            <option value="direct">Directs</option>
+            <option value="combat">Combat simulé</option>
+          </select>
+        </label>
+        {mode === "combat" && (
+          <label className="admin-panel__template-stat">
+            <span className="admin-panel__template-stat-label">Pénétration</span>
+            <input
+              className="admin-panel__template-stat-input"
+              type="number"
+              min={0}
+              value={penetration}
+              onChange={(e) => setPenetration(Math.max(0, Number(e.target.value)))}
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="admin-panel__apply-btn"
+          disabled={running}
+          onClick={() => void inflict()}
+        >
+          {running ? "…" : "Infliger"}
+        </button>
+      </div>
+      <span className="admin-panel__field-hint">
+        Directs ignore la défense. Combat simulé applique la défense de la cible.
+      </span>
+    </div>
+  );
+}
+
 export default function AdminPanelWOM() {
   const token = localStorage.getItem("token") ?? "";
   const selectedWO = useDevToolsStore((s) => s.selectedWorldObject);
@@ -1515,6 +1603,9 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
+          renderInstanceExtra={(inst) => (
+            <CreatureDamageControl creatureId={inst.id} onResult={pushResult} />
+          )}
           rightHeader={
             <span className="admin-panel__count">
               {(groupData["creatures"] ?? []).length} créature{(groupData["creatures"] ?? []).length > 1 ? "s" : ""}

@@ -15,6 +15,7 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { calculateCombatDamage } from './combat-damage.calculator';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1309,6 +1310,90 @@ describe('CreaturesService', () => {
       (service as any).doPatrolMovement(creature, state, makeTemplate(), Date.now());
 
       expect(state.speed).toBe(0); // rand(0, 0) = 0
+    });
+  });
+
+  // ── V4-A+ : outil admin "infliger des dégâts" (direct vs combat simulé) ────
+  describe('adminDamageCreature', () => {
+    // Arme une créature avec une défense (baseArmor → defenseTotal) et des PV.
+    function armDmgCreature(baseArmor: number, health = 100) {
+      const template = makeTemplate({ baseArmor, baseHealth: 100 });
+      const spawn = makeSpawn(template);
+      const creature = { id: 'dmg-1', spawn, health, state: 'alive' } as Creature;
+      (service as any).liveCreatures.set(creature.id, creature);
+      return creature;
+    }
+
+    it('mode direct : retire les PV bruts, IGNORE la défense', async () => {
+      const creature = armDmgCreature(20, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'direct');
+      expect(result?.damage).toBe(30);
+      expect(result?.dto.health).toBe(70);
+      expect(creature.health).toBe(70);
+    });
+
+    it('mode direct : défaut si mode omis', async () => {
+      const creature = armDmgCreature(20, 100);
+      const result = await service.adminDamageCreature(creature.id, 30);
+      expect(result?.mode).toBe('direct');
+      expect(result?.damage).toBe(30);
+    });
+
+    it('mode combat, défense 0 → dégâts inchangés (baseline)', async () => {
+      const creature = armDmgCreature(0, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'combat');
+      expect(result?.targetDefense).toBe(0);
+      expect(result?.damage).toBe(30);
+      expect(creature.health).toBe(70);
+    });
+
+    it('mode combat, défense 20 → dégâts réduits (30 → 10)', async () => {
+      const creature = armDmgCreature(20, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'combat');
+      expect(result?.targetDefense).toBe(20);
+      expect(result?.damage).toBe(10);
+      expect(creature.health).toBe(90);
+    });
+
+    it('mode combat, défense supérieure aux dégâts → 0 dégât, jamais négatif', async () => {
+      const creature = armDmgCreature(40, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'combat');
+      expect(result?.damage).toBe(0);
+      expect(creature.health).toBe(100);
+    });
+
+    it('mode combat : défensePenetration réduit la défense effective (déf 20, pén 5 → 15 dégât)', async () => {
+      const creature = armDmgCreature(20, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'combat', 5);
+      expect(result?.damage).toBe(15); // 30 - max(0, 20 - 5)
+      expect(creature.health).toBe(85);
+    });
+
+    it('mode combat : donne le même résultat que calculateCombatDamage', async () => {
+      const creature = armDmgCreature(20, 100);
+      const result = await service.adminDamageCreature(creature.id, 30, 'combat');
+      const expected = calculateCombatDamage({
+        attackerValue: 30,
+        targetDefense: 20,
+        attackerDefensePenetration: 0,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 100,
+      });
+      expect(result?.damage).toBe(expected.finalDamage);
+      expect(result?.dto.health).toBe(expected.hpAfter);
+    });
+
+    it('créature introuvable → null', async () => {
+      const result = await service.adminDamageCreature('unknown', 30, 'combat');
+      expect(result).toBeNull();
+    });
+
+    it('créature morte → null (aucune mutation)', async () => {
+      const creature = armDmgCreature(20, 100);
+      creature.state = 'dead';
+      const result = await service.adminDamageCreature(creature.id, 30, 'direct');
+      expect(result).toBeNull();
     });
   });
 });
