@@ -4,7 +4,7 @@
 
 - Status: Living document
 - Owner: Project
-- Last updated: 2026-06-26
+- Last updated: 2026-07-11
 - Depends on: STATUS.md, docs/01_Architecture/adr/, docs/README.md
 - Used by: Project owner, developers, conversational assistants
 
@@ -126,6 +126,8 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [x] Aggro creature (détection, poursuite, fuite, auto-attaque, riposte)
 - [ ] Creatures (système complet)
 - [ ] Combat (système complet)
+- [x] Masteries V1-D — effets contextuels serveur (`mastery_definition.effects`, `MasteryEffectsService`, `damagePercentPerLevel` sur auto-attaque + skills weapon-based) — **ADR-0020 Accepted** (2026-07-11)
+- [ ] Effets de maîtrise futurs — critique, pénétration, stun/knockback, block, mitigation armure, succès/qualité craft — au rythme des hooks serveur combat/craft (ADR-0020)
 
 ---
 
@@ -138,6 +140,8 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] Overlays debug : chunks, collisions, aggro, pathfinding (DevTools)
 - [ ] LiveOps : audit log, rate limiting, auth WebSocket indépendante
 - [ ] Validation monde (Validation)
+- [x] Skill Editor — `skill.weaponType` éditable (select, « Aucun » = null) (2026-07-11)
+- [ ] Module « Maîtrises / Effets » — édition de `mastery_definition.effects` orientée progression/gameplay (pas un CRUD générique de définitions — ADR-0020)
 
 Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.
 

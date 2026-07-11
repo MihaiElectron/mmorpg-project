@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-22
+- Last updated: 2026-07-11
 - Depends on: docs/10_AI/project-philosophy.md, docs/00_Project/domains.md, docs/07_Admin/devtools-architecture.md, docs/07_Admin/admin-tool.md
 - Used by: Project owner, developers, Claude Code, Claude, tout agent IA travaillant sur ce projet
 
@@ -88,7 +88,9 @@ Périmètre :
 - overlays de debug sur la scène Phaser (chunks, collisions, aggro, pathfinding) ;
 - console de commandes avec autocomplétion et historique ;
 - inspection des payloads WebSocket ;
-- modification contrôlée des entités pour tests.
+- modification contrôlée des entités pour tests ;
+- édition des catalogues de configuration gameplay (items, skills, masteries)
+  via l'API admin HTTP.
 
 Disponibilité : **développement uniquement**. Le DevTools n'est pas disponible
 en production. Son bundle doit être séparé ou exclu des builds de production.
@@ -96,6 +98,21 @@ en production. Son bundle doit être séparé ou exclu des builds de production.
 Profils : Developer, Lead.
 
 Spécification complète : `docs/07_Admin/devtools-architecture.md`.
+
+État actuel — configuration gameplay (2026-07-11) :
+
+- le **Skill Editor** expose `skill.weaponType` (select, « Aucun » = null) —
+  Implemented. Ce champ déclare la compatibilité d'un skill avec un type
+  d'arme pour les bonus de maîtrise ; il n'impose pas l'arme au cast ;
+- `mastery_definition.effects` (bonus contextuels, ADR-0020) s'édite
+  uniquement via `PATCH /admin/mastery-definitions/:key` — le chemin socket
+  admin rejette `effects` volontairement. Un module Studio dédié
+  **« Maîtrises / Effets »**, orienté progression/gameplay, est Planned : ni
+  un CRUD générique de définitions, ni une édition durable dans SkillsModule ;
+- règle constante : le Studio **édite la configuration mais ne calcule aucun
+  bonus** ni aucune éligibilité — résolution serveur
+  (`MasteryEffectsService`) et validation finale serveur (whitelist, bornes,
+  clamp — ADR-0020).
 
 ### 3.2 LiveOps
 
