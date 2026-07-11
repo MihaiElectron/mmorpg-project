@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-07-07_
+_Dernière mise à jour : 2026-07-11_
 _Branche : main — État : développement local_
 
 ---
@@ -17,6 +17,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 **Craft joueur unifié (CraftJob)** : une seule action joueur **FABRIQUER** → `POST /crafting/craft` → **CraftJob** (RUNNING → COMPLETED via scheduler 10 s → CLAIM). Durée minimale 3 s, **output uniquement au claim**. Onglet Production = vue/liste des fabrications (pas une action). Règles permanentes : ADR-0009.
 **Studio Asset System V1** : `GET /admin/assets/tree` sandboxé, composant `AssetPicker` générique, intégré sur Items/Creatures/Resources/Buildings. `loadTextureIfMissing` helper Phaser pour chargement dynamique sans rebuild.
 **Progression personnage V1 (fondation backend — en cours)** : nouvelles colonnes `Character` `baseStrength/baseVitality/baseEndurance/baseAgility/baseDexterity/baseIntelligence/baseWisdom/baseCritical/unspentStatPoints` (à migrer en prod). Level-up accorde `STAT_POINTS_PER_LEVEL = 5` points par niveau (`ProgressionService`, même transaction/verrou que le level-up, multi-level géré). Stats finales/dérivées calculées **serveur** par `CharacterStatsCalculator` (base → modifiers → final → derived) et exposées via `GET /characters/me` (`stats`). En V1 seules Force/Vitalité/Endurance impactent attaque/PV/défense ; critique/esquive/précision affichées mais **non branchées combat**. Équipement/buffs/passifs/debuffs prévus comme `modifiers` futurs (structure déjà en place, valeurs à 0). Masteries : `GET /characters/me/masteries` renvoie désormais **toutes** les masteries `enabled` (level 1/xp 0 par défaut, sans créer de `PlayerMastery`). **Allocation livrée (étape 2)** : `POST /characters/me/stats/allocate` (personnage dérivé du JWT, transaction + verrou pessimiste, somme validée contre `unspentStatPoints`, renvoie le même format enrichi que `GET /characters/me`, émet `character:reload`). Allouer de la Vitalité augmente les PV courants du delta de PV max dérivé (capé). **Le combat lit désormais les stats dérivées serveur** : `physicalAttack` (dégâts), `defense` (réduction/riposte), `maxHealth` (respawn full-life) — plus jamais les colonnes brutes. Critique/esquive/précision/initiative calculées et affichées mais **non branchées au combat V1**. `WorldService.emitCharacterReload()` = nouveau helper réutilisable (serveur enregistré par `WorldGateway.afterInit`). **DevTools Character Editor expose les stats joueur V1** (progression, stats principales, valeurs brutes combat/debug éditables via `admin:update_character` ; stats dérivées `stats.derived` lecture seule, calculées serveur via `getCharacters`). UI joueur d'allocation livrée (onglet Stats).
+**Masteries V1-D — effets contextuels (ADR-0020, Accepted)** : `mastery_definition.effects` (JSONB whitelisté : `context.weaponType` + `combat.damagePercentPerLevel` 0–5, validation stricte à l'écriture / lecture défensive) + `skill_definition.weaponType` nullable (null = jamais de bonus d'arme, n'impose pas l'arme au cast). Résolution serveur unique par `MasteryEffectsService` / calculateur pur : `bonus = (level − 1) × percentPerLevel`, level 1 = 0 %, **clamp total 50 %**. Définitions servies par cache mémoire (`getEnabledMasteryDefinitions`), invalidé sur CRUD HTTP **et** chemin socket admin. Surfaces consommatrices : **auto-attaque** (`physicalAttack × (1 + %)` avant `calculateCombatDamage`) et **skills weapon-based** damage/creature (`effect.amount × (1 + %)` après `calculateSkillEffect`, si arme équipée = `skill.weaponType` — arme résolue serveur via `resolveEquippedWeaponType`). Studio : Skill Editor expose `weaponType` (select, Aucun = null) ; **édition des `effects` pas encore implémentée** (futur module « Maîtrises / Effets », Planned). Runtime validé 2026-07-11 : auto-attaque 16 → 18 (effects two_handed_sword), 16 (mismatch bow) ; skill test_strike 52 → 57 (matching), 52 (weaponType seul, mismatch) ; resets OK. Commits : 5432eb1, b357a21, cd65900, d40865a, 6b16cd7, c2e404d.
 
 ---
 
@@ -29,6 +30,7 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Loot | Hybrid STACKABLE/INSTANCE — `ItemMaterializationService` 4 chemins |
 | Craft | Action joueur unique **FABRIQUER** (station en WU, validation distance, UX produit-first) → **CraftJob** : `POST /crafting/craft` → `launch` (snapshot + escrow ingrédients STACKABLE/INSTANCE) → `scheduler.complete` (10 s, XP à la complétion) → `claim` (**seule matérialisation d'output**). Durée min 3 s (`MIN_CRAFT_TIME_MS`, garde Runtime `max(craftTimeMs, MIN)`). Craft instantané supprimé : CraftJob = unique workflow joueur, aucun output avant le claim. **XP V1** : succès = XP perso + mastery pleines ; échec = 0 perso + 25 % mastery (`FAILURE_MASTERY_XP_MULTIPLIER`), figée `grantedCharacterXp`/`grantedMasteryXp` au complete(). DTO job enrichi (ingrédients réservés/consommés, chance output, XP accordée) + résumé de claim affiché en carte "Résultat réclamé". Détail : ADR-0009, ADR-0016. |
 | Masteries joueur | Niveau, XP, nextLevelXp par mastery — onglet panneau personnage |
+| Mastery Effects (V1-D) | Bonus contextuels serveur `(level − 1) × %/niveau`, clamp 50 % — auto-attaque + skills weapon-based via `weaponType` équipé ; config `mastery_definition.effects`, résolution `MasteryEffectsService` (ADR-0020) |
 | Runtime V2 | `ItemTransferService` 20 transitions — Equipment, WorldItem, Loot, Craft, Auction, Bank, Mail, GuildStorage, Housing, Trade |
 | Trade | Peer-to-peer `ItemInstance`, sessions PENDING/COMPLETED/CANCELLED, anti-deadlock lexicographique |
 | Bank / Mail / Guild / Housing | MVPs Instance-only opérationnels (endpoints REST, pas d'UI en jeu) |
@@ -70,6 +72,11 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | — | `TILEMAP_TEST_OFFSET_X = 936` temporaire dans `WorldScene.js` | Low | — |
 | — | Sprite goblin utilise `textureKey: 'turkey'` en placeholder | Low | contenu |
 | — | `synchronize: true` en dev — migrations TypeORM pour prod non créées (inclut `craft_job` / `craft_job_ingredient` / `craft_job_output` et `crafting_recipe.version`, ainsi que `craft_job.grantedCharacterXp INT DEFAULT 0` et `craft_job.grantedMasteryXp INT DEFAULT 0`, **et les colonnes Progression V1 `character.base{Strength,Vitality,Endurance,Agility,Dexterity,Intelligence,Wisdom,Critical} INT DEFAULT 0` + `character.unspentStatPoints INT DEFAULT 0`**) | Medium | prod-readiness |
+| — | Migrations Masteries V1-D versionnées mais aucun runner prod ne les exécute (`1784332800000-AddEffectsToMasteryDefinition`, `1784419200000-AddWeaponTypeToSkillDefinition`) — `synchronize: true` crée les colonnes en dev uniquement | Medium | prod-readiness |
+| — | Mastery Effects : seul `damagePercentPerLevel` implémenté — critique/pénétration/stun/knockback/block/mitigation armure/succès-qualité craft volontairement hors whitelist tant que leurs hooks gameplay n'existent pas (ADR-0020) | Low | Mastery Effects V2 |
+| — | Double cumul possible `mastery effects` × `skill.scaling.masteryCoefficients` (un skill peut scaler additivement sur le même niveau de maîtrise) — mécanismes distincts, à surveiller à l'équilibrage | Low | équilibrage |
+| — | Mapping XP `COMBAT_WEAPON_MASTERY_MAP` (weaponType → mastery) encore hardcodé dans `CreaturesService` — relation weaponType↔mastery encodée à deux endroits (`effects.context` étant l'autre), unification future | Low | Mastery Effects V2 |
+| — | Studio « Maîtrises / Effets » non implémenté — `effects` éditable uniquement via `PATCH /admin/mastery-definitions/:key` (le socket admin rejette `effects` volontairement) | Medium | Studio V1-D-C-B |
 | — | Progression V1 — pas de backfill `unspentStatPoints` pour les persos existants (points des niveaux déjà acquis non rétro-attribués) ; stratégie proposée non appliquée (voir rapport) | Low | Progression V1 |
 | — | Mail monétaire expiré — l'argent reste bloqué dans le wallet `auction_escrow` (pas de retour vendeur automatique) | Medium | Auction MVP 2 |
 | — | Building : aucun seed créé, aucune texture réelle — placeholder debug diamond visible seulement | Low | contenu |
@@ -81,12 +88,16 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 
 **Gameplay V1** — voir `docs/09_Workflow/runtime-roadmap.md` section "Gameplay V1" et ADR-0012.
 
-1. **Masteries Runtime Foundation** — entité `MasteryRuntime`, XP award, level-up, validation craft/récolte
-2. **Combat avancé** — effets, cooldowns, résistances
-3. **Récolte avancée** — mastery check, XP, qualité
-4. **Craft avancé** — `craftedBy`, quality, `MasteryRuntime` check
-5. **Économie** — UI Auction/Mail en jeu via buildings (WindowManager livré, buildings à créer en DB via AdminPanel)
-6. **Social, Quêtes, IA, Contenu**
+1. **Studio « Maîtrises / Effets »** — module dédié orienté progression/gameplay pour éditer `mastery_definition.effects` (pas un CRUD générique, pas une édition durable dans SkillsModule) — V1-D-C-B
+2. **Effets de maîtrise futurs** — critique, pénétration, stun/knockback, block, mitigation armure, succès/qualité craft — au rythme des hooks serveur combat/craft (ADR-0020)
+3. **Documentation gameplay masteries** — `docs/08_Gameplay/masteries.md` + corrections glossaire (Doc-B)
+4. **Combat avancé** — effets, cooldowns, résistances
+5. **Récolte avancée** — mastery check, XP, qualité
+6. **Craft avancé** — `craftedBy`, quality
+7. **Économie** — UI Auction/Mail en jeu via buildings (WindowManager livré, buildings à créer en DB via AdminPanel)
+8. **Social, Quêtes, IA, Contenu**
+
+> Note : « Masteries Runtime Foundation » (XP award, level-up, validation craft/récolte, effets) est **livrée** — progression XP/level (ADR-0016), prérequis centralisés, effets contextuels (ADR-0020). L'entité `MasteryRuntime` dédiée n'a pas été nécessaire.
 
 **DevTools — Admin WOM** :
 - [ ] Phase A — auth WS admin, pagination serveur, spawns éditables (`docs/01_Architecture/admin-tool-roadmap.md`)
