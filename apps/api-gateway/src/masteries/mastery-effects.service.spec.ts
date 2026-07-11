@@ -51,16 +51,16 @@ describe('MasteryEffectsService (V2)', () => {
       weaponType: 'two_handed_sword',
     });
 
-    // Contextuel : (3−1)×5 = 10 %. Permanent : (5−1)×2 = 8 % maxHealth.
-    expect(result.combat).toEqual({ damagePercent: 10, damageFlat: 0 });
-    expect(result.statModifiers).toEqual({ percent: { maxHealth: 8 }, flat: {} });
+    // Contextuel : 3×5 = 15 %. Permanent : 5×2 = 10 % maxHealth.
+    expect(result.combat).toEqual({ damagePercent: 15, damageFlat: 0 });
+    expect(result.statModifiers).toEqual({ percent: { maxHealth: 10 }, flat: {} });
     expect(masteriesService.getEnabledMasteryDefinitions).toHaveBeenCalledTimes(1);
     expect(masteriesService.getCharacterMasteries).toHaveBeenCalledTimes(1);
   });
 
   it('getPermanentStatModifiers : ignore les effets contextuels', async () => {
     const result = await service.getPermanentStatModifiers('char-1');
-    expect(result).toEqual({ percent: { maxHealth: 8 }, flat: {} });
+    expect(result).toEqual({ percent: { maxHealth: 10 }, flat: {} });
   });
 
   it('getCombatMasteryEffects : court-circuit sans weaponType (aucune lecture)', async () => {
@@ -70,12 +70,12 @@ describe('MasteryEffectsService (V2)', () => {
   });
 
   it('façades pures : computeCombatEffects et aggregatePermanentModifiers', () => {
-    const levels = { two_handed: 3, vitality_training: 5 };
+    const levels = { two_handed: 3, vitality_training: 5 }; // bonus = level × value
     expect(
       service.computeCombatEffects([TWO_HANDED_DEF], levels, { weaponType: 'two_handed_sword' }),
-    ).toEqual({ damagePercent: 10, damageFlat: 0 });
+    ).toEqual({ damagePercent: 15, damageFlat: 0 });
     expect(service.aggregatePermanentModifiers([VITALITY_DEF], levels)).toEqual({
-      percent: { maxHealth: 8 },
+      percent: { maxHealth: 10 },
       flat: {},
     });
     expect(service.emptyStatModifiers()).toEqual({ percent: {}, flat: {} });

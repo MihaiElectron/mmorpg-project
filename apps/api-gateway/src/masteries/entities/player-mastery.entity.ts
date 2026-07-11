@@ -31,8 +31,10 @@ export class PlayerMastery {
   @Column()
   masteryDefinitionId: string;
 
-  // Level dénormalisé — recalculé à chaque addXp, jamais lu sans recalcul
-  @Column({ type: 'int', default: 1 })
+  // Level dénormalisé — recalculé à chaque addXp, jamais lu sans recalcul.
+  // Démarre à 0 : le niveau affiché = nombre réel de coefficients d'effet
+  // appliqués (bonus = level × value), aucun niveau gratuit.
+  @Column({ type: 'int', default: 0 })
   level: number;
 
   // XP accumulée vers le prochain level (reset + carry-over à chaque level up)

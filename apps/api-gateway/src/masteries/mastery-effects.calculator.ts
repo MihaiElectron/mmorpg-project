@@ -31,7 +31,8 @@
  *   clampée, jamais levée. Le legacy est interprété comme un modifier
  *   `physicalAttack / percentPerLevel`.
  *
- * Formule par modifier : `bonus = (level − 1) × value` (level 1 = 0).
+ * Formule par modifier : `bonus = level × value` (les maîtrises démarrent au
+ * niveau 0 : level 0 = aucun bonus, le niveau affiché = coefficients appliqués).
  * Clamps serveur par stat : percent total ≤ 50, flat total ≤ 1000.
  */
 
@@ -339,7 +340,7 @@ function readModifiers(effects: MasteryEffects | null | undefined): MasteryStatM
 
 function effectiveLevels(levels: Record<string, number> | null | undefined, key: string): number {
   const raw = (levels ?? {})[key];
-  return isFiniteNumber(raw) ? Math.max(0, raw - 1) : 0;
+  return isFiniteNumber(raw) ? Math.max(0, raw) : 0;
 }
 
 /**

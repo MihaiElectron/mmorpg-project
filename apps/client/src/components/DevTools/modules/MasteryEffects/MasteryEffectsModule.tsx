@@ -514,7 +514,7 @@ export default function MasteryEffectsModule() {
 
                   <div className="mastery-effects-editor__hints">
                     <p className="mastery-effects-editor__hint">
-                      bonus = (niveau − 1) × coefficient. Clamps serveur : 50 % max
+                      bonus = niveau × coefficient. Clamps serveur : 50 % max
                       par stat en %, 1000 max par stat en valeur fixe.
                     </p>
                     <p className="mastery-effects-editor__hint">

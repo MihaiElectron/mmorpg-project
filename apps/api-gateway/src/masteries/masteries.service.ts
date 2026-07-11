@@ -202,14 +202,15 @@ export class MasteriesService implements OnModuleInit {
 
   /**
    * XP nécessaire pour passer du level courant au level suivant.
-   * Formule : baseXpPerLevel × level ^ xpCurveExponent
+   * Formule : baseXpPerLevel × (level + 1) ^ xpCurveExponent
+   * (les maîtrises démarrent à 0 : passer 0 → 1 coûte baseXpPerLevel × 1^exp).
    * Retourne Infinity si level >= maxLevel (aucun level suivant).
    */
   getNextLevelXp(masteryDefinition: MasteryDefinition, level: number): number {
     if (level >= masteryDefinition.maxLevel) return Infinity;
     return Math.round(
       masteryDefinition.baseXpPerLevel *
-        Math.pow(Math.max(1, level), masteryDefinition.xpCurveExponent),
+        Math.pow(Math.max(0, level) + 1, masteryDefinition.xpCurveExponent),
     );
   }
 
@@ -241,7 +242,7 @@ export class MasteriesService implements OnModuleInit {
   // ---------------------------------------------------------------------------
 
   /**
-   * Retourne le PlayerMastery existant ou le crée avec level=1, xp=0.
+   * Retourne le PlayerMastery existant ou le crée avec level=0, xp=0.
    * Lance NotFoundException si la MasteryDefinition est introuvable.
    */
   async getOrCreatePlayerMastery(
@@ -320,7 +321,7 @@ export class MasteriesService implements OnModuleInit {
       const created = manager.create(PlayerMastery, {
         characterId,
         masteryDefinitionId: masteryDef.id,
-        level: 1,
+        level: 0,
         xp: 0,
       });
       const saved = await manager.save(PlayerMastery, created);
@@ -410,7 +411,8 @@ export class MasteriesService implements OnModuleInit {
   }[]> {
     // Progression V1 : on part de TOUTES les définitions activées, puis on mappe
     // la progression du personnage si elle existe. Un mastery enabled sans
-    // PlayerMastery est renvoyé avec level=1 / xp=0 — SANS créer de ligne DB.
+    // PlayerMastery est renvoyé avec level=0 / xp=0 — SANS créer de ligne DB
+    // (les maîtrises démarrent au niveau 0 : aucun niveau gratuit).
     const [definitions, playerMasteries] = await Promise.all([
       this.masteryDefinitionRepo.find({ where: { enabled: true } }),
       this.playerMasteryRepo.find({ where: { characterId } }),
@@ -422,7 +424,7 @@ export class MasteriesService implements OnModuleInit {
 
     return definitions.map((sd) => {
       const ps = progressById.get(sd.id);
-      const level = ps?.level ?? 1;
+      const level = ps?.level ?? 0;
       const xp = ps?.xp ?? 0;
       return {
         masteryDefinitionId: sd.id,
@@ -507,7 +509,7 @@ export class MasteriesService implements OnModuleInit {
     const created = this.playerMasteryRepo.create({
       characterId,
       masteryDefinitionId: masteryDef.id,
-      level: 1,
+      level: 0,
       xp: 0,
     });
     const saved = await this.playerMasteryRepo.save(created);

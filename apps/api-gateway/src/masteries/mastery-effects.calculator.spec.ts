@@ -185,13 +185,16 @@ describe('computeCombatMasteryEffects (V2)', () => {
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
-  it('level 1 = 0 ; level 3 × 5 %/niveau = +10 %', () => {
+  it('level 0 = 0 ; level 1 × 5 %/niveau = +5 % ; level 3 = +15 %', () => {
     expect(
-      computeCombatMasteryEffects([makeDef()], { two_handed: 1 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([makeDef()], { two_handed: 0 }, { weaponType: 'two_handed_sword' }),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
     expect(
+      computeCombatMasteryEffects([makeDef()], { two_handed: 1 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 5, damageFlat: 0 });
+    expect(
       computeCombatMasteryEffects([makeDef()], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
-    ).toEqual({ damagePercent: 10, damageFlat: 0 });
+    ).toEqual({ damagePercent: 15, damageFlat: 0 });
   });
 
   it('mismatch weaponType → 0', () => {
@@ -209,7 +212,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
     });
     expect(
       computeCombatMasteryEffects([legacyDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
-    ).toEqual({ damagePercent: 10, damageFlat: 0 });
+    ).toEqual({ damagePercent: 15, damageFlat: 0 });
   });
 
   it('somme percent + flat et clampe les totaux', () => {
@@ -222,9 +225,9 @@ describe('computeCombatMasteryEffects (V2)', () => {
         ],
       },
     });
-    // level 101 → 500 % bruts → 50 ; 10 000 flat bruts → 1 000.
+    // level 100 → 500 % bruts → 50 ; 10 000 flat bruts → 1 000.
     expect(
-      computeCombatMasteryEffects([def], { two_handed: 101 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([def], { two_handed: 100 }, { weaponType: 'two_handed_sword' }),
     ).toEqual({
       damagePercent: MAX_TOTAL_PERCENT_PER_STAT,
       damageFlat: MAX_TOTAL_FLAT_PER_STAT,
@@ -250,7 +253,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
 // ─── aggregateMasteryStatModifiers (permanent, défensif) ─────────────────────
 
 describe('aggregateMasteryStatModifiers (V2)', () => {
-  it('effects {} / disabled / level 1 → agrégat vide', () => {
+  it('effects {} / disabled / level 0 → agrégat vide', () => {
     const defs = [
       makeDef({ key: 'a', effects: {} }),
       makeDef({
@@ -263,10 +266,10 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
         effects: { modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 5 }] },
       }),
     ];
-    expect(aggregateMasteryStatModifiers(defs, { c: 1 })).toEqual({ percent: {}, flat: {} });
+    expect(aggregateMasteryStatModifiers(defs, { c: 0 })).toEqual({ percent: {}, flat: {} });
   });
 
-  it('agrège percent et flat par stat : level 3 × (5 % + 2 flat)', () => {
+  it('agrège percent et flat par stat : level 3 × (5 % + 2 flat) = 15 % + 6', () => {
     const defs = [
       makeDef({
         key: 'vitality_training',
@@ -279,8 +282,8 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
       }),
     ];
     expect(aggregateMasteryStatModifiers(defs, { vitality_training: 3 })).toEqual({
-      percent: { maxHealth: 10 },
-      flat: { healthRegen: 4 },
+      percent: { maxHealth: 15 },
+      flat: { healthRegen: 6 },
     });
   });
 
@@ -295,8 +298,8 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
         effects: { modifiers: [{ stat: 'defense', mode: 'percentPerLevel', value: 5 }] },
       }),
     ];
-    // (11−1)×5 + (11−1)×5 = 100 → clamp 50.
-    expect(aggregateMasteryStatModifiers(defs, { a: 11, b: 11 })).toEqual({
+    // 10×5 + 10×5 = 100 → clamp 50.
+    expect(aggregateMasteryStatModifiers(defs, { a: 10, b: 10 })).toEqual({
       percent: { defense: MAX_TOTAL_PERCENT_PER_STAT },
       flat: {},
     });
@@ -323,8 +326,9 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
         },
       }),
     ];
+    // level 3 × 2 = 6 (les deux entrées corrompues sont ignorées).
     expect(aggregateMasteryStatModifiers(defs, { corrupt: 3 })).toEqual({
-      percent: { maxMana: 4 },
+      percent: { maxMana: 6 },
       flat: {},
     });
   });

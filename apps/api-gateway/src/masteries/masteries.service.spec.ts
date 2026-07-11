@@ -31,7 +31,7 @@ function makePlayerMastery(overrides: Partial<PlayerMastery> = {}): PlayerMaster
     id: 'ps-1',
     characterId: 'char-1',
     masteryDefinitionId: 'def-1',
-    level: 1,
+    level: 0,
     xp: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -76,22 +76,28 @@ describe('MasteriesService', () => {
   // ─── getNextLevelXp (pure) ────────────────────────────────────────────────
 
   describe('getNextLevelXp', () => {
-    it('retourne la formule correcte pour level 1', () => {
+    it('retourne baseXpPerLevel pour passer de 0 à 1', () => {
       const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      // 100 × 1^1.5 = 100
-      expect(service.getNextLevelXp(def, 1)).toBe(100);
+      // 100 × (0+1)^1.5 = 100
+      expect(service.getNextLevelXp(def, 0)).toBe(100);
     });
 
-    it('retourne la formule correcte pour level 2', () => {
+    it('retourne la formule correcte pour level 1 (coût 1 → 2)', () => {
       const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      // 100 × 2^1.5 ≈ 282.8 → arrondi 283
-      expect(service.getNextLevelXp(def, 2)).toBe(283);
+      // 100 × (1+1)^1.5 ≈ 282.8 → arrondi 283
+      expect(service.getNextLevelXp(def, 1)).toBe(283);
+    });
+
+    it('retourne la formule correcte pour level 2 (coût 2 → 3)', () => {
+      const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.5 });
+      // 100 × (2+1)^1.5 ≈ 519.6 → arrondi 520
+      expect(service.getNextLevelXp(def, 2)).toBe(520);
     });
 
     it('respecte baseXpPerLevel et xpCurveExponent configurés', () => {
       const def = makeMasteryDef({ baseXpPerLevel: 200, xpCurveExponent: 2.0 });
-      // 200 × 3^2 = 1800
-      expect(service.getNextLevelXp(def, 3)).toBe(1800);
+      // 200 × (3+1)^2 = 3200
+      expect(service.getNextLevelXp(def, 3)).toBe(3200);
     });
 
     it('retourne Infinity quand level >= maxLevel', () => {
@@ -104,33 +110,33 @@ describe('MasteriesService', () => {
   // ─── recomputeLevel (pure) ────────────────────────────────────────────────
 
   describe('recomputeLevel', () => {
-    it('reste au level 1 si xp < seuil', () => {
+    it('reste au level 0 si xp < seuil', () => {
       const def = makeMasteryDef();
-      // seuil 1→2 = 100, xp = 50
-      const result = service.recomputeLevel(def, 1, 50);
+      // seuil 0→1 = 100, xp = 50
+      const result = service.recomputeLevel(def, 0, 50);
+      expect(result).toEqual({ level: 0, xp: 50 });
+    });
+
+    it('monte au level 1 quand xp atteint exactement le seuil', () => {
+      const def = makeMasteryDef();
+      // seuil 0→1 = 100
+      const result = service.recomputeLevel(def, 0, 100);
+      expect(result).toEqual({ level: 1, xp: 0 });
+    });
+
+    it('monte au niveau 1 avec carry-over si xp > seuil', () => {
+      const def = makeMasteryDef();
+      // seuil 0→1 = 100, xp = 150 → level 1, carry 50
+      const result = service.recomputeLevel(def, 0, 150);
       expect(result).toEqual({ level: 1, xp: 50 });
-    });
-
-    it('monte au level 2 quand xp atteint exactement le seuil', () => {
-      const def = makeMasteryDef();
-      // seuil 1→2 = 100
-      const result = service.recomputeLevel(def, 1, 100);
-      expect(result).toEqual({ level: 2, xp: 0 });
-    });
-
-    it('monte au niveau 2 avec carry-over si xp > seuil', () => {
-      const def = makeMasteryDef();
-      // seuil 1→2 = 100, xp = 150 → level 2, carry 50
-      const result = service.recomputeLevel(def, 1, 150);
-      expect(result).toEqual({ level: 2, xp: 50 });
     });
 
     it('enchaîne plusieurs level ups en un seul appel', () => {
       const def = makeMasteryDef({ baseXpPerLevel: 100, xpCurveExponent: 1.0, maxLevel: 100 });
-      // seuil = 100 × level × 1.0 → 1→2 : 100, 2→3 : 200
-      // xp = 350 → level 1 coûte 100, level 2 coûte 200 = total 300, reste 50
-      const result = service.recomputeLevel(def, 1, 350);
-      expect(result.level).toBe(3);
+      // seuil = 100 × (level+1) → 0→1 : 100, 1→2 : 200
+      // xp = 350 → 0→1 coûte 100, 1→2 coûte 200 = total 300, reste 50
+      const result = service.recomputeLevel(def, 0, 350);
+      expect(result.level).toBe(2);
       expect(result.xp).toBe(50);
     });
 
@@ -219,9 +225,9 @@ describe('MasteriesService', () => {
       expect(playerMasteryRepo.save).not.toHaveBeenCalled();
     });
 
-    it('crée un PlayerMastery level=1 xp=0 si absent', async () => {
+    it('crée un PlayerMastery level=0 xp=0 si absent', async () => {
       const def = makeMasteryDef();
-      const created = makePlayerMastery({ level: 1, xp: 0 });
+      const created = makePlayerMastery({ level: 0, xp: 0 });
       masteryDefRepo.findOne.mockResolvedValue(def);
       playerMasteryRepo.findOne.mockResolvedValue(null);
       playerMasteryRepo.save.mockResolvedValue(created);
@@ -229,7 +235,10 @@ describe('MasteriesService', () => {
       const result = await service.getOrCreatePlayerMastery('char-1', 'crafting');
 
       expect(playerMasteryRepo.save).toHaveBeenCalledTimes(1);
-      expect(result.level).toBe(1);
+      expect(playerMasteryRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 0, xp: 0 }),
+      );
+      expect(result.level).toBe(0);
       expect(result.xp).toBe(0);
     });
 
@@ -269,29 +278,29 @@ describe('MasteriesService', () => {
 
     it('augmente xp sans changer le level si seuil non atteint', async () => {
       const def = makeMasteryDef();
-      const ps = makePlayerMastery({ level: 1, xp: 0 });
+      const ps = makePlayerMastery({ level: 0, xp: 0 });
       masteryDefRepo.findOne.mockResolvedValue(def);
       playerMasteryRepo.findOne.mockResolvedValue(ps);
       playerMasteryRepo.save.mockImplementation(async (x) => x);
 
       const result = await service.addXp('char-1', 'crafting', 50);
 
-      // seuil 1→2 = 100, 0+50 = 50 < 100 → level reste 1
-      expect(result.level).toBe(1);
+      // seuil 0→1 = 100, 0+50 = 50 < 100 → level reste 0
+      expect(result.level).toBe(0);
       expect(result.xp).toBe(50);
     });
 
-    it('monte le level quand le seuil est atteint', async () => {
+    it('monte le level 0 → 1 quand le seuil est atteint', async () => {
       const def = makeMasteryDef();
-      const ps = makePlayerMastery({ level: 1, xp: 0 });
+      const ps = makePlayerMastery({ level: 0, xp: 0 });
       masteryDefRepo.findOne.mockResolvedValue(def);
       playerMasteryRepo.findOne.mockResolvedValue(ps);
       playerMasteryRepo.save.mockImplementation(async (x) => x);
 
       const result = await service.addXp('char-1', 'crafting', 100);
 
-      // seuil 1→2 = 100 → level 2, xp 0
-      expect(result.level).toBe(2);
+      // seuil 0→1 = 100 → level 1, xp 0
+      expect(result.level).toBe(1);
       expect(result.xp).toBe(0);
     });
 
@@ -325,7 +334,7 @@ describe('MasteriesService', () => {
   // ─── getCharacterMasteries ───────────────────────────────────────────────────
 
   describe('getCharacterMasteries', () => {
-    it("retourne tous les masteries enabled pour un personnage neuf (level 1 / xp 0)", async () => {
+    it("retourne tous les masteries enabled pour un personnage neuf (level 0 / xp 0)", async () => {
       const defs = [
         makeMasteryDef({ id: "def-1", key: "smithing", category: "crafting" }),
         makeMasteryDef({ id: "def-2", key: "mining", category: "gathering" }),
@@ -336,7 +345,7 @@ describe('MasteriesService', () => {
       const result = await service.getCharacterMasteries("char-1");
 
       expect(result).toHaveLength(2);
-      expect(result.every((s) => s.level === 1 && s.xp === 0)).toBe(true);
+      expect(result.every((s) => s.level === 0 && s.xp === 0)).toBe(true);
       expect(result.map((s) => s.key).sort()).toEqual(["mining", "smithing"]);
       // Aucune ligne PlayerMastery créée juste pour l'affichage
       expect(playerMasteryRepo.save).not.toHaveBeenCalled();
@@ -358,9 +367,9 @@ describe('MasteriesService', () => {
       const mining = result.find((s) => s.key === "mining")!;
       expect(smithing.level).toBe(4);
       expect(smithing.xp).toBe(120);
-      // nextLevelXp recalculé depuis le level progressé, pas depuis 1
+      // nextLevelXp recalculé depuis le level progressé, pas depuis 0
       expect(smithing.nextLevelXp).toBe(service.getNextLevelXp(defs[0], 4));
-      expect(mining.level).toBe(1);
+      expect(mining.level).toBe(0);
       expect(mining.xp).toBe(0);
     });
 
@@ -606,6 +615,15 @@ describe('MasteriesService', () => {
       expect(result).toEqual({ ok: true, missing: [] });
     });
 
+    it("requirement level 1 échoue à level 0 et passe à level 1 (départ niveau 0)", () => {
+      expect(
+        MasteriesService.evaluateRequiredMasteries({ smithing: 0 }, { smithing: 1 }).ok,
+      ).toBe(false);
+      expect(
+        MasteriesService.evaluateRequiredMasteries({ smithing: 1 }, { smithing: 1 }).ok,
+      ).toBe(true);
+    });
+
     it("traite une mastery absente comme current 0", () => {
       const result = MasteriesService.evaluateRequiredMasteries({}, { smithing: 5 });
       expect(result.ok).toBe(false);
@@ -695,9 +713,9 @@ describe('MasteriesService', () => {
       expect(mgr.save).not.toHaveBeenCalled();
     });
 
-    it('crée un PlayerMastery level=1 xp=0 si absent et attache la def', async () => {
+    it('crée un PlayerMastery level=0 xp=0 si absent et attache la def', async () => {
       const def = makeMasteryDef();
-      const saved = makePlayerMastery({ level: 1, xp: 0 });
+      const saved = makePlayerMastery({ level: 0, xp: 0 });
       mgr.findOne.mockResolvedValue(null);
       mgr.save.mockResolvedValue(saved);
 
@@ -770,14 +788,14 @@ describe('MasteriesService', () => {
     });
 
     it('level up quand le seuil est dépassé', async () => {
-      // seuil level 1→2 : 100 × 1^1.5 = 100
+      // seuil level 0→1 : 100 × (0+1)^1.5 = 100
       const def = makeMasteryDef({ maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 });
-      const ps = makePlayerMastery({ level: 1, xp: 80 });
+      const ps = makePlayerMastery({ level: 0, xp: 80 });
 
-      // 80 + 50 = 130 ≥ 100 → level 2, xp 30
+      // 80 + 50 = 130 ≥ 100 → level 1, xp 30
       const result = await service.applyXpInTx(ps, 50, def, mgr as any);
 
-      expect(result.level).toBe(2);
+      expect(result.level).toBe(1);
       expect(result.xp).toBe(30);
     });
 

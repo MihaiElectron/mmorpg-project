@@ -157,8 +157,8 @@ export class SkillCastService {
    * - `skill.weaponType` null → montant inchangé (sort/soin/utilitaire) ;
    * - pas d'arme équipée ou weaponType différent → montant inchangé ;
    * - sinon `round(amount × (1 + damagePercent / 100))` — le damagePercent
-   *   vient du calculateur pur V1-D-A (formule (level − 1) × perLevel,
-   *   mastery disabled/level 1/effects mismatch → 0, clamp 50 %), jamais
+   *   vient du calculateur pur (formule level × perLevel — les maîtrises
+   *   démarrent à 0 ; mastery disabled/level 0/effects mismatch → 0, clamp 50 %), jamais
    *   recalculé ici. Définitions servies par le cache, niveaux déjà chargés
    *   par le cast : aucune lecture DB supplémentaire.
    */
