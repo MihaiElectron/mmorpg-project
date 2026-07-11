@@ -159,6 +159,19 @@ describe('sanitizeMasteryEffects (V2)', () => {
   it('retire un tableau modifiers vide du stockage', () => {
     expect(sanitizeMasteryEffects({ modifiers: [] })).toEqual({});
   });
+
+  it("préséance V2 à l'écriture : modifiers[] gagne, le legacy est ignoré (jamais fusionné)", () => {
+    const result = sanitizeMasteryEffects({
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 2 }],
+      combat: { damagePercentPerLevel: 5 },
+    });
+    expect(result).toEqual({
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 2 }],
+    });
+    expect(result).not.toHaveProperty('combat');
+  });
 });
 
 // ─── computeCombatMasteryEffects (contextuel, défensif) ──────────────────────
@@ -203,7 +216,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
-  it('lit le legacy combat.damagePercentPerLevel comme physicalAttack percent', () => {
+  it('lit le legacy combat.damagePercentPerLevel comme physicalAttack percent (lecture défensive)', () => {
     const legacyDef = makeDef({
       effects: {
         context: { weaponType: 'two_handed_sword' },
@@ -213,6 +226,20 @@ describe('computeCombatMasteryEffects (V2)', () => {
     expect(
       computeCombatMasteryEffects([legacyDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
     ).toEqual({ damagePercent: 15, damageFlat: 0 });
+  });
+
+  it('préséance V2 à la lecture : si modifiers[] existe, le legacy est ignoré (pas de cumul)', () => {
+    const mixedDef = makeDef({
+      effects: {
+        context: { weaponType: 'two_handed_sword' },
+        modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 2 }],
+        combat: { damagePercentPerLevel: 5 },
+      },
+    });
+    // 3 × 2 = 6 % — jamais 3 × (2 + 5) = 21 %.
+    expect(
+      computeCombatMasteryEffects([mixedDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 6, damageFlat: 0 });
   });
 
   it('somme percent + flat et clampe les totaux', () => {

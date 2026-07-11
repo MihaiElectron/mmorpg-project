@@ -248,6 +248,9 @@ export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
   }
 
   // Legacy V1 : combat.damagePercentPerLevel → modifier physicalAttack percent.
+  // PRÉSÉANCE V2 : si `modifiers[]` est fourni, il gagne — le legacy est
+  // ignoré (jamais fusionné). Le legacy n'est converti que pour un payload
+  // purement V1. Dans tous les cas, seul le format V2 est persisté.
   if (raw.combat !== undefined) {
     if (!isPlainObject(raw.combat)) {
       throw new MasteryEffectsValidationError('effects.combat doit être un objet.');
@@ -260,7 +263,7 @@ export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
       }
     }
     const legacy = raw.combat.damagePercentPerLevel;
-    if (legacy !== undefined) {
+    if (legacy !== undefined && modifiers.length === 0) {
       if (!isFiniteNumber(legacy) || legacy < 0 || legacy > MAX_PERCENT_PER_LEVEL) {
         throw new MasteryEffectsValidationError(
           `effects.combat.damagePercentPerLevel doit être entre 0 et ${MAX_PERCENT_PER_LEVEL}.`,
@@ -322,14 +325,17 @@ function readModifiers(effects: MasteryEffects | null | undefined): MasteryStatM
     }
   }
 
-  // Legacy V1 lu comme physicalAttack percent.
-  const legacy = effects.combat?.damagePercentPerLevel;
-  if (isFiniteNumber(legacy) && legacy > 0) {
-    result.push({
-      stat: 'physicalAttack',
-      mode: 'percentPerLevel',
-      value: Math.min(legacy, MAX_PERCENT_PER_LEVEL),
-    });
+  // Legacy V1 lu comme physicalAttack percent — UNIQUEMENT si aucun
+  // modifiers[] valide n'existe (préséance V2 : jamais de cumul legacy + V2).
+  if (result.length === 0) {
+    const legacy = effects.combat?.damagePercentPerLevel;
+    if (isFiniteNumber(legacy) && legacy > 0) {
+      result.push({
+        stat: 'physicalAttack',
+        mode: 'percentPerLevel',
+        value: Math.min(legacy, MAX_PERCENT_PER_LEVEL),
+      });
+    }
   }
 
   return result;

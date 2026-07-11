@@ -71,32 +71,11 @@ type MovementMetrics = {
   mapMismatch: number;
 };
 
-// ── Constantes masteries ─────────────────────────────────────────────────────────
+// ── Constantes partagées (stations, buildings) ──────────────────────────────────
 
-const MASTERY_CATEGORIES = ["gathering", "crafting", "combat", "social", "leadership", "general"];
 const STATION_TYPES = ["forge", "workbench", "sawmill", "alchemy_table", "cooking_station", "tailoring_station", "jewelry_table"];
 const BUILDING_TYPES = ["auction_house", "mailbox", "bank", "guild_hall", "house_door", "teleport", "dungeon_entrance", "shrine"];
 const BUILDING_STATES = ["ACTIVE", "DISABLED", "LOCKED", "UNDER_CONSTRUCTION", "DESTROYED"];
-
-const MASTERY_FIELDS = [
-  { key: "name",            label: "Nom",       type: "text" as const },
-  { key: "category",        label: "Catégorie", options: MASTERY_CATEGORIES },
-  { key: "maxLevel",        label: "Niv. max",  min: 2 },
-  { key: "baseXpPerLevel",  label: "XP/niv",    min: 1 },
-  { key: "xpCurveExponent", label: "Courbe",    min: 1, step: 0.1 },
-  { key: "enabled",         label: "Actif",     options: ["true", "false"] },
-];
-
-const MASTERIES_SECTION_CONFIG: SectionConfig = {
-  id: "masteries",
-  title: "Mastery Editor",
-  fetchPath: "/admin/mastery-definitions",
-  saveEvent: "admin:update_mastery_definition",
-  getEntityKey:  (sd) => sd.id,
-  getDisplayKey: (sd) => sd.key,
-  getName: (sd) => `${sd.name} (${sd.key})`,
-  fields: MASTERY_FIELDS,
-};
 
 // ── Estimation XP mastery récolte (lecture seule) ───────────────────────────────
 // TODO(shared): dupliquer temporairement la résolution + le calcul du Runtime.
@@ -618,7 +597,6 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
-const NEW_MASTERY_DEFAULT = { key: "", name: "", category: "gathering", maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5 };
 const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
 const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0, lootPool: [] as Array<{ itemId: string; minQty: number; maxQty: number; probability: number }> };
 const NEW_STATION_TEMPLATE_DEFAULT = {
@@ -1169,9 +1147,6 @@ export default function AdminPanelWOM() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
-  const [masteriesOpen, setMasteriesOpen] = useState(false);
-  const [createMasteryOpen, setCreateMasteryOpen] = useState(false);
-  const [newMastery, setNewMastery] = useState({ ...NEW_MASTERY_DEFAULT });
   const [createCreatureOpen, setCreateCreatureOpen] = useState(false);
   const [newCreature, setNewCreature] = useState({ ...NEW_CREATURE_DEFAULT });
   const [createResourceTemplateOpen, setCreateResourceTemplateOpen] = useState(false);
@@ -2025,99 +2000,10 @@ export default function AdminPanelWOM() {
 
       <PlayerSection players={sectionData["players"] ?? []} items={items} onResult={pushResult} onPlayerRowUpdated={patchPlayerRow} />
 
-      <section className="admin-panel__section">
-        <div className="admin-panel__dual-header">
-          <div className="admin-panel__section-toggle" onClick={() => setMasteriesOpen((o) => !o)}>
-            <span className="admin-panel__section-chevron">{masteriesOpen ? "▼" : "▶"}</span>
-            Mastery Editor
-          </div>
-          <span className="admin-panel__count">
-            {(sectionData["masteries"] ?? []).length} master{(sectionData["masteries"] ?? []).length > 1 ? "ies" : "y"}
-          </span>
-        </div>
-        {masteriesOpen && (
-          <div className="admin-panel__create-head">
-            <button type="button" className="admin-panel__create-toggle" onClick={() => setCreateMasteryOpen((o) => !o)}>
-              <span className="admin-panel__section-chevron">{createMasteryOpen ? "▼" : "▶"}</span>
-              Créer une maîtrise
-            </button>
-          </div>
-        )}
-        {masteriesOpen && createMasteryOpen && (
-          <div className="admin-panel__template-item admin-panel__template-item--create">
-            <div className="admin-panel__template-stats admin-panel__template-stats--create">
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Key</span>
-                <input className="admin-panel__template-stat-input" type="text"
-                  value={newMastery.key}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, key: e.target.value }))}
-                  {...kbHandlers} />
-                <span className="admin-panel__field-hint">snake_case, non modifiable après création</span>
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Nom</span>
-                <input className="admin-panel__template-stat-input" type="text"
-                  value={newMastery.name}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, name: e.target.value }))}
-                  {...kbHandlers} />
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Catégorie</span>
-                <select className="admin-panel__template-stat-input"
-                  value={newMastery.category}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, category: e.target.value }))}
-                  {...kbHandlers}>
-                  {MASTERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Niv. max</span>
-                <input className="admin-panel__template-stat-input" type="number" min={1}
-                  value={newMastery.maxLevel}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, maxLevel: Number(e.target.value) }))}
-                  {...kbHandlers} />
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">XP/niv</span>
-                <input className="admin-panel__template-stat-input" type="number" min={1}
-                  value={newMastery.baseXpPerLevel}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, baseXpPerLevel: Number(e.target.value) }))}
-                  {...kbHandlers} />
-              </label>
-              <label className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">Exposant XP</span>
-                <input className="admin-panel__template-stat-input" type="number" min={1} max={3} step={0.1}
-                  value={newMastery.xpCurveExponent}
-                  onChange={(e) => setNewMastery((prev) => ({ ...prev, xpCurveExponent: Number(e.target.value) }))}
-                  {...kbHandlers} />
-              </label>
-            </div>
-            <button className="admin-panel__apply-btn" disabled={creating}
-              onClick={async () => {
-                const socket = getSocket();
-                if (!socket?.connected) { pushResult("Socket non connecté.", false); return; }
-                setCreating(true);
-                const result = await ackPromise(socket, "admin:create_mastery_definition", { fields: newMastery });
-                setCreating(false);
-                pushResult(result.message, result.success);
-                if (result.success && result.data) {
-                  setSectionData((prev) => ({ ...prev, masteries: [...(prev["masteries"] ?? []), result.data as any] }));
-                  setNewMastery({ ...NEW_MASTERY_DEFAULT });
-                }
-              }}>
-              {creating ? "…" : "Créer"}
-            </button>
-          </div>
-        )}
-        {masteriesOpen && (
-          <EntitySection
-            config={MASTERIES_SECTION_CONFIG}
-            items={sectionData["masteries"] ?? []}
-            onResult={pushResult}
-            embedded
-          />
-        )}
-      </section>
+      {/* L'édition/création des maîtrises vit dans le module Studio
+          « Maîtrises / Effets » (MasteryEffectsModule) — l'ancien Mastery Editor
+          socket a été retiré (Mastery Effects V2). sectionData["masteries"]
+          reste chargé : recettes et stations en dépendent (selects). */}
 
       <RecipesSection
         recipes={recipes}

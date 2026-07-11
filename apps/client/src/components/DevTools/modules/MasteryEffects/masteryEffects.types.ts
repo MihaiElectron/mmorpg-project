@@ -104,8 +104,10 @@ export function emptyModifierRow(): ModifierRowDraft {
 
 /**
  * Brouillon depuis les effects chargés. `{}`/absent → brouillon vide.
- * Le legacy `combat.damagePercentPerLevel` est affiché comme une ligne
- * physicalAttack / percentPerLevel (il sera réécrit au nouveau format au save).
+ * Préséance V2 : si `modifiers[]` existe, le legacy
+ * `combat.damagePercentPerLevel` est ignoré. Un effects purement legacy est
+ * affiché comme une ligne physicalAttack / percentPerLevel (réécrit au format
+ * V2 au save).
  */
 export function draftFromMasteryEffects(
   effects: MasteryEffects | null | undefined,
@@ -119,9 +121,11 @@ export function draftFromMasteryEffects(
       value: typeof m.value === "number" ? String(m.value) : "",
     });
   }
-  const legacy = effects?.combat?.damagePercentPerLevel;
-  if (typeof legacy === "number" && Number.isFinite(legacy)) {
-    modifiers.push({ stat: "physicalAttack", mode: "percentPerLevel", value: String(legacy) });
+  if (modifiers.length === 0) {
+    const legacy = effects?.combat?.damagePercentPerLevel;
+    if (typeof legacy === "number" && Number.isFinite(legacy)) {
+      modifiers.push({ stat: "physicalAttack", mode: "percentPerLevel", value: String(legacy) });
+    }
   }
   return {
     weaponType: effects?.context?.weaponType ?? "",

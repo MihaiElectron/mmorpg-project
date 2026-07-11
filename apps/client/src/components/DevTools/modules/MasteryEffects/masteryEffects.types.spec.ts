@@ -63,10 +63,21 @@ describe("draftFromMasteryEffects", () => {
     });
   });
 
-  it("affiche le legacy combat.damagePercentPerLevel comme ligne physicalAttack", () => {
+  it("affiche le legacy combat.damagePercentPerLevel comme ligne physicalAttack (effects purement V1)", () => {
     const draft = draftFromMasteryEffects({
       context: { weaponType: "bow" },
       combat: { damagePercentPerLevel: 2 },
+    });
+    expect(draft.modifiers).toEqual([
+      { stat: "physicalAttack", mode: "percentPerLevel", value: "2" },
+    ]);
+  });
+
+  it("préséance V2 : si modifiers[] existe, le legacy est ignoré (pas de double ligne)", () => {
+    const draft = draftFromMasteryEffects({
+      context: { weaponType: "bow" },
+      modifiers: [{ stat: "physicalAttack", mode: "percentPerLevel", value: 2 }],
+      combat: { damagePercentPerLevel: 5 },
     });
     expect(draft.modifiers).toEqual([
       { stat: "physicalAttack", mode: "percentPerLevel", value: "2" },
