@@ -274,13 +274,33 @@ describe("SkillCastService", () => {
       POSITION,
       20,
       5,
-      0, // V4-A : defensePenetration (0 par défaut)
+      0, // V4-B0 : armorPenetrationPercent (0 par défaut)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
       expect(r.cooldownMs).toBe(1000);
       expect(r.skillName).toBe("Power Strike"); // attribution combat log
     }
+  });
+
+  it("transmet armorPenetrationPercent dérivé au hook applySkillDamage (V4-B0)", async () => {
+    // Une maîtrise permanente ajoute +50 % de pénétration d'armure : la stat
+    // dérivée serveur doit être transmise telle quelle au hook skill.
+    // Échoue si on repasse à defensePenetration ou si l'argument n'est plus passé.
+    masteryEffects.aggregatePermanentModifiers.mockResolvedValue({
+      percent: {},
+      flat: { armorPenetrationPercent: 50 },
+    });
+    const r = await cast();
+    expect(r.success).toBe(true);
+    expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+      TARGET_ID,
+      "c1",
+      POSITION,
+      20,
+      5,
+      50, // armorPenetrationPercent dérivé (0 + flat 50)
+    );
   });
 
   it("applique le coût de vie et resync sans tuer le lanceur", async () => {
