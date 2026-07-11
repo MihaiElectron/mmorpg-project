@@ -10,6 +10,7 @@ import {
   CRITICAL_DERIVED_STAT_KEYS,
   MASTERY_IMPLEMENTED_DERIVED_KEYS,
   PRIMARY_STAT_LABELS,
+  isSystemDerivedStat,
 } from './derived-stats.constants';
 import { UpdateDerivedStatDefinitionDto } from './dto/update-derived-stat-definition.dto';
 import { CreateDerivedStatDefinitionDto } from './dto/create-derived-stat-definition.dto';
@@ -146,6 +147,27 @@ export class DerivedStatsService implements OnModuleInit {
     const found = await this.repo.findOne({ where: { key } });
     if (!found) throw new NotFoundException(`Dérivée "${key}" introuvable.`);
     return found;
+  }
+
+  /** true si la dérivée est une stat système (seedée, non supprimable). */
+  isSystemStat(key: string): boolean {
+    return isSystemDerivedStat(key);
+  }
+
+  /**
+   * Supprime une dérivée CUSTOM (V3 maintenance). Refuse : clé inconnue
+   * (404), stat système (400). Ne vérifie PAS les références externes —
+   * l'appelant (AdminController) le fait avant via le rapport de références.
+   * Auto-suffisant sur la règle système (garde en profondeur).
+   */
+  async deleteDefinition(key: string): Promise<void> {
+    const existing = await this.repo.findOne({ where: { key } });
+    if (!existing) throw new NotFoundException(`Dérivée "${key}" introuvable.`);
+    if (isSystemDerivedStat(key)) {
+      throw new BadRequestException('Stat système non supprimable.');
+    }
+    await this.repo.remove(existing);
+    this.invalidateCache();
   }
 
   /**

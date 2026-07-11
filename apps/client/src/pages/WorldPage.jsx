@@ -14,6 +14,7 @@ import PreloadScene from "../phaser/core/PreloadScene.js";
 import WorldScene from "../phaser/core/WorldScene.js";
 import CoordinatesLayer from "../components/CoordinatesLayer/CoordinatesLayer.jsx";
 import { onItemDefinitionsChanged } from "../components/DevTools/modules/Items/itemEvents";
+import { onDerivedStatsChanged } from "../components/DevTools/modules/DerivedStats/derivedStatsEvents";
 
 function WorldPage() {
   const navigate = useNavigate();
@@ -48,6 +49,16 @@ function WorldPage() {
   // autoritaire : on relit getMe, aucun recalcul client.
   useEffect(() => {
     return onItemDefinitionsChanged(() => {
+      loadCharacter().catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Recharge le personnage quand une stat dérivée change dans le Studio
+  // (create/update/duplicate/delete/retrait de référence de maîtrise). Le
+  // serveur recalcule `stats.derived` ; on relit getMe, aucun recalcul client.
+  useEffect(() => {
+    return onDerivedStatsChanged(() => {
       loadCharacter().catch(() => {});
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCreateDerivedStatPayload,
+  buildDuplicateDerivedStatPayload,
   buildUpdateDerivedStatPayload,
   draftFromDerivedStat,
   emptyDerivedStatDraft,
   validateDerivedStatDraft,
+  validateDerivedStatKey,
   type DerivedStatDraft,
   type DerivedStatFullDto,
 } from "./derivedStats.types";
@@ -121,6 +123,54 @@ describe("buildCreateDerivedStatPayload", () => {
     const payload = buildCreateDerivedStatPayload(validDraft({ minValue: "", maxValue: "" }));
     expect(payload.minValue).toBeNull();
     expect(payload.maxValue).toBeNull();
+  });
+});
+
+describe("validateDerivedStatKey", () => {
+  it("accepte une key camelCase, refuse vide et snake_case", () => {
+    expect(validateDerivedStatKey("luckReworked")).toBeNull();
+    expect(validateDerivedStatKey("")).toMatch(/key/i);
+    expect(validateDerivedStatKey("snake_case")).toMatch(/camelCase/);
+  });
+});
+
+describe("buildDuplicateDerivedStatPayload", () => {
+  it("copie les champs de config et remplace uniquement la key", () => {
+    const def = makeDef({
+      key: "luck",
+      label: "Chance",
+      enabled: false,
+      baseValue: 3,
+      minValue: 0,
+      maxValue: 100,
+      primaryCoefficients: { charisma: 0.5 },
+      masteryEligible: true,
+      allowedModifierModes: ["percentPerLevel"],
+      runtimeStatus: "notHooked",
+      description: "desc",
+    });
+    const payload = buildDuplicateDerivedStatPayload(def, " luckReworked ");
+    expect(payload).toEqual({
+      key: "luckReworked",
+      label: "Chance",
+      category: def.category,
+      enabled: false,
+      baseValue: 3,
+      minValue: 0,
+      maxValue: 100,
+      primaryCoefficients: { charisma: 0.5 },
+      masteryEligible: true,
+      allowedModifierModes: ["percentPerLevel"],
+      runtimeStatus: "notHooked",
+      description: "desc",
+    });
+  });
+
+  it("clone les structures (pas de partage de référence)", () => {
+    const def = makeDef({ primaryCoefficients: { charisma: 0.5 }, allowedModifierModes: [] });
+    const payload = buildDuplicateDerivedStatPayload(def, "luckCopy");
+    expect(payload.primaryCoefficients).not.toBe(def.primaryCoefficients);
+    expect(payload.allowedModifierModes).not.toBe(def.allowedModifierModes);
   });
 });
 

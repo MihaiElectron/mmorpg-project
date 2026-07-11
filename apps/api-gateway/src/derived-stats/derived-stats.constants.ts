@@ -214,3 +214,18 @@ function def(
     description: null,
   } as DerivedStatDefinition;
 }
+
+/**
+ * Clés des dérivées SYSTÈME (V3 maintenance) : celles seedées par le code
+ * (`DEFAULT_DERIVED_STAT_DEFINITIONS`). Non supprimables depuis le Studio —
+ * elles sont référencées par le calculateur et le contrat `stats.derived`.
+ * Toute clé absente de cet ensemble est une stat CUSTOM (créée dans le Studio),
+ * supprimable si aucune référence.
+ */
+export const SYSTEM_DERIVED_STAT_KEYS: ReadonlySet<string> = new Set(
+  DEFAULT_DERIVED_STAT_DEFINITIONS.map((d) => d.key),
+);
+
+export function isSystemDerivedStat(key: string): boolean {
+  return SYSTEM_DERIVED_STAT_KEYS.has(key);
+}

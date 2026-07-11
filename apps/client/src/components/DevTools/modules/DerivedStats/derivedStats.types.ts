@@ -61,6 +61,33 @@ export interface DerivedStatFullDto {
   description: string | null;
 }
 
+// ── Références / maintenance (V3) ────────────────────────────────────────────
+// Miroir de GET /admin/derived-stat-definitions/:key/references.
+
+/** Une référence d'une stat dérivée dans les `effects.modifiers[]` d'une maîtrise. */
+export interface DerivedStatMasteryReference {
+  masteryKey: string;
+  masteryName: string;
+  modifierIndex: number;
+  mode: string;
+  value: number;
+}
+
+/** Rapport de références + éligibilité à la suppression (source serveur). */
+export interface DerivedStatReferencesReport {
+  key: string;
+  isSystem: boolean;
+  canDelete: boolean;
+  references: { masteryEffects: DerivedStatMasteryReference[] };
+  counts: { masteryEffects: number };
+}
+
+/** Payload de retrait d'un modifier de maîtrise ciblant la stat. */
+export interface RemoveMasteryReferencePayload {
+  masteryKey: string;
+  modifierIndex: number;
+}
+
 // ── Brouillon d'édition (champs contrôlés, numériques en string) ─────────────
 
 export interface DerivedStatDraft {
@@ -127,15 +154,22 @@ export function draftFromDerivedStat(def: DerivedStatFullDto): DerivedStatDraft 
 
 const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{1,63}$/;
 
+/** Validation d'une key (create + duplication). Le serveur reste juge final. */
+export function validateDerivedStatKey(key: string): string | null {
+  if (key.trim() === "") return "La key est requise.";
+  if (!KEY_PATTERN.test(key.trim())) {
+    return "Key invalide : camelCase ([a-z][a-zA-Z0-9]*, 2–64 caractères).";
+  }
+  return null;
+}
+
 export function validateDerivedStatDraft(
   draft: DerivedStatDraft,
   mode: "create" | "edit",
 ): string | null {
   if (mode === "create") {
-    if (draft.key.trim() === "") return "La key est requise.";
-    if (!KEY_PATTERN.test(draft.key.trim())) {
-      return "Key invalide : camelCase ([a-z][a-zA-Z0-9]*, 2–64 caractères).";
-    }
+    const keyError = validateDerivedStatKey(draft.key);
+    if (keyError) return keyError;
   }
   if (draft.label.trim() === "") return "Le label est requis.";
   if ((draft.category as string).trim() === "") return "La catégorie est requise.";
@@ -211,6 +245,32 @@ export function buildCreateDerivedStatPayload(draft: DerivedStatDraft): CreateDe
     allowedModifierModes: draft.allowedModifierModes,
     runtimeStatus: draft.runtimeStatus,
     description: draft.description.trim() === "" ? null : draft.description.trim(),
+  };
+}
+
+/**
+ * Payload de duplication (V3 maintenance) : copie tous les champs de config de
+ * la stat source et remplace UNIQUEMENT la key. Ne copie jamais les références
+ * mastery effects (elles vivent côté maîtrises, pas dans la définition). Sert à
+ * corriger une key mal saisie sans rename direct.
+ */
+export function buildDuplicateDerivedStatPayload(
+  def: DerivedStatFullDto,
+  newKey: string,
+): CreateDerivedStatPayload {
+  return {
+    key: newKey.trim(),
+    label: def.label,
+    category: def.category,
+    enabled: def.enabled,
+    baseValue: def.baseValue,
+    minValue: def.minValue,
+    maxValue: def.maxValue,
+    primaryCoefficients: { ...(def.primaryCoefficients ?? {}) },
+    masteryEligible: def.masteryEligible,
+    allowedModifierModes: [...(def.allowedModifierModes ?? [])],
+    runtimeStatus: def.runtimeStatus,
+    description: def.description,
   };
 }
 

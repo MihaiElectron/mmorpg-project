@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCharacterStore } from "../../store/character.store";
+import { onDerivedStatsChanged } from "../DevTools/modules/DerivedStats/derivedStatsEvents";
 
 type DerivedStats = Record<string, number>;
 
@@ -49,7 +50,7 @@ export default function DerivedStatsTab() {
 
   useEffect(() => {
     let mounted = true;
-    void (async () => {
+    async function loadCatalog() {
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/characters/stat-definitions`,
@@ -61,9 +62,15 @@ export default function DerivedStatsTab() {
       } catch {
         // Échec silencieux : repli sur les clés de stats.derived (voir rows).
       }
-    })();
+    }
+    void loadCatalog();
+    // Recharge le catalogue quand une stat dérivée est créée/supprimée dans le
+    // Studio (sinon une clé supprimée resterait affichée avec "—", la valeur
+    // ayant disparu de stats.derived). Serveur autoritaire, aucun calcul client.
+    const off = onDerivedStatsChanged(() => void loadCatalog());
     return () => {
       mounted = false;
+      off();
     };
   }, []);
 

@@ -71,7 +71,11 @@ describe('MasteriesService', () => {
         { provide: getRepositoryToken(PlayerMastery), useValue: playerMasteryRepo },
         {
           provide: DerivedStatsService,
-          useValue: { getDefinitions: jest.fn().mockResolvedValue(IMPLEMENTED_SOURCES) },
+          useValue: {
+            getDefinitions: jest.fn().mockResolvedValue(IMPLEMENTED_SOURCES),
+            getDefinition: jest.fn().mockResolvedValue({ key: 'luck' }),
+            isSystemStat: jest.fn().mockReturnValue(false),
+          },
         },
       ],
     }).compile();
@@ -567,6 +571,92 @@ describe('MasteriesService', () => {
       const result = await service.updateMasteryDefinition('dagger', { effects: {} });
 
       expect(result.effects).toEqual({});
+    });
+  });
+
+  // ─── Références / maintenance stats dérivées (V3) ─────────────────────────
+  describe('stat references (V3 maintenance)', () => {
+    const twoHandedRef = makeMasteryDef({
+      key: 'two_handed',
+      name: 'Two-Handed',
+      effects: {
+        context: { weaponType: 'two_handed_sword' },
+        modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+      },
+    });
+    const vitalityRef = makeMasteryDef({
+      key: 'vitality',
+      name: 'Vitality',
+      effects: { modifiers: [{ stat: 'maxHealth', mode: 'flatPerLevel', value: 10 }] },
+    });
+
+    it('findEffectReferencesToStat liste les modifiers ciblant la stat', async () => {
+      masteryDefRepo.find.mockResolvedValue([twoHandedRef, vitalityRef]);
+      const refs = await service.findEffectReferencesToStat('physicalAttack');
+      expect(refs).toEqual([
+        { masteryKey: 'two_handed', masteryName: 'Two-Handed', modifierIndex: 0, mode: 'percentPerLevel', value: 5 },
+      ]);
+    });
+
+    it('getStatReferencesReport : custom référencée → canDelete false', async () => {
+      masteryDefRepo.find.mockResolvedValue([vitalityRef]);
+      const report = await service.getStatReferencesReport('maxHealth');
+      expect(report.isSystem).toBe(false);
+      expect(report.canDelete).toBe(false);
+      expect(report.counts.masteryEffects).toBe(1);
+    });
+
+    it('getStatReferencesReport : custom sans référence → canDelete true', async () => {
+      masteryDefRepo.find.mockResolvedValue([vitalityRef]);
+      const report = await service.getStatReferencesReport('luck');
+      expect(report.canDelete).toBe(true);
+      expect(report.counts.masteryEffects).toBe(0);
+    });
+
+    it('removeEffectModifier retire le modifier ciblé et re-sanitize', async () => {
+      const def = makeMasteryDef({
+        key: 'two_handed',
+        effects: {
+          modifiers: [
+            { stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 },
+            { stat: 'maxHealth', mode: 'flatPerLevel', value: 10 },
+          ],
+        },
+      });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      const saved = await service.removeEffectModifier('two_handed', 0);
+      expect(saved.effects.modifiers).toEqual([
+        { stat: 'maxHealth', mode: 'flatPerLevel', value: 10 },
+      ]);
+    });
+
+    it('removeEffectModifier : dernier modifier retiré → effects {}', async () => {
+      const def = makeMasteryDef({
+        key: 'two_handed',
+        effects: {
+          context: { weaponType: 'two_handed_sword' },
+          modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+        },
+      });
+      masteryDefRepo.findOne.mockResolvedValue(def);
+      const saved = await service.removeEffectModifier('two_handed', 0);
+      expect(saved.effects).toEqual({});
+    });
+
+    it('removeEffectModifier : index hors bornes → BadRequest', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(
+        makeMasteryDef({ key: 'two_handed', effects: { modifiers: [] } }),
+      );
+      await expect(service.removeEffectModifier('two_handed', 0)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('removeEffectModifier : maîtrise inconnue → NotFound', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      await expect(service.removeEffectModifier('ghost', 0)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

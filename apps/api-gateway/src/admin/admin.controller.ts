@@ -12,6 +12,7 @@ import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalcula
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { UpdateDerivedStatDefinitionDto } from '../derived-stats/dto/update-derived-stat-definition.dto';
 import { CreateDerivedStatDefinitionDto } from '../derived-stats/dto/create-derived-stat-definition.dto';
+import { RemoveMasteryReferenceDto } from '../derived-stats/dto/remove-mastery-reference.dto';
 import { PreviewDerivedStatsDto } from '../derived-stats/dto/preview-derived-stats.dto';
 import { ActiveSkillsService } from '../active-skills/active-skills.service';
 import { CreateSkillDefinitionDto } from '../active-skills/dto/create-skill-definition.dto';
@@ -188,6 +189,40 @@ export class AdminController {
     @Body() dto: UpdateDerivedStatDefinitionDto,
   ) {
     return this.derivedStatsService.updateDefinition(key, dto);
+  }
+
+  /** Références d'une stat dérivée + éligibilité à la suppression (V3 maintenance). */
+  @Get('derived-stat-definitions/:key/references')
+  getDerivedStatReferences(@Param('key') key: string) {
+    return this.masteriesService.getStatReferencesReport(key);
+  }
+
+  /**
+   * Suppression sûre d'une stat dérivée CUSTOM (V3 maintenance) :
+   * refuse système, refuse si encore référencée, refuse clé inconnue.
+   */
+  @Delete('derived-stat-definitions/:key')
+  async deleteDerivedStatDefinition(@Param('key') key: string) {
+    const report = await this.masteriesService.getStatReferencesReport(key);
+    if (report.isSystem) {
+      throw new BadRequestException('Stat système non supprimable.');
+    }
+    if (!report.canDelete) {
+      throw new BadRequestException(
+        'Stat encore référencée par des effets de maîtrise. Désactive la stat ou retire les références avant suppression.',
+      );
+    }
+    await this.derivedStatsService.deleteDefinition(key);
+    return { deleted: true, key };
+  }
+
+  /** Retire un modifier d'effet de maîtrise ciblant cette stat (V3 maintenance). */
+  @Post('derived-stat-definitions/:key/remove-mastery-reference')
+  removeMasteryReference(
+    @Param('key') _key: string,
+    @Body() dto: RemoveMasteryReferenceDto,
+  ) {
+    return this.masteriesService.removeEffectModifier(dto.masteryKey, dto.modifierIndex);
   }
 
   @Post('derived-stat-definitions/preview')

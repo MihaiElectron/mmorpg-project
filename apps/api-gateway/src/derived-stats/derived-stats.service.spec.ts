@@ -13,6 +13,7 @@ function makeRepo() {
     create: jest.fn().mockImplementation((d) => d),
     save: jest.fn().mockImplementation((d) => Promise.resolve(d)),
     merge: jest.fn().mockImplementation((existing, patch) => ({ ...existing, ...patch })),
+    remove: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -81,6 +82,34 @@ describe("DerivedStatsService", () => {
       ]);
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("suppression / système (V3 maintenance)", () => {
+    it("isSystemStat true pour une clé seedée, false pour une custom", () => {
+      expect(service.isSystemStat("maxHealth")).toBe(true);
+      expect(service.isSystemStat("luck")).toBe(false);
+    });
+
+    it("supprime une stat CUSTOM existante", async () => {
+      repo.findOne.mockResolvedValue({ key: "luck" });
+      await service.deleteDefinition("luck");
+      expect(repo.remove).toHaveBeenCalledWith({ key: "luck" });
+    });
+
+    it("refuse la suppression d'une stat SYSTÈME", async () => {
+      repo.findOne.mockResolvedValue({ key: "maxHealth" });
+      await expect(service.deleteDefinition("maxHealth")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(repo.remove).not.toHaveBeenCalled();
+    });
+
+    it("refuse la suppression d'une clé inconnue (404)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.deleteDefinition("ghost")).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

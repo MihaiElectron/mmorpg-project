@@ -190,6 +190,101 @@ export class MasteriesService implements OnModuleInit {
     return saved;
   }
 
+  // ---------------------------------------------------------------------------
+  // Références des stats dérivées (V3 maintenance)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Références d'une stat dérivée dans les `effects.modifiers[]` des maîtrises.
+   * Pure lecture (scan du catalogue). Une entrée par modifier ciblant `statKey`.
+   */
+  async findEffectReferencesToStat(statKey: string): Promise<
+    {
+      masteryKey: string;
+      masteryName: string;
+      modifierIndex: number;
+      mode: string;
+      value: number;
+    }[]
+  > {
+    const definitions = await this.masteryDefinitionRepo.find();
+    const refs: {
+      masteryKey: string;
+      masteryName: string;
+      modifierIndex: number;
+      mode: string;
+      value: number;
+    }[] = [];
+    for (const def of definitions) {
+      const modifiers = def.effects?.modifiers ?? [];
+      modifiers.forEach((m, index) => {
+        if (m?.stat === statKey) {
+          refs.push({
+            masteryKey: def.key,
+            masteryName: def.name,
+            modifierIndex: index,
+            mode: m.mode,
+            value: m.value,
+          });
+        }
+      });
+    }
+    return refs;
+  }
+
+  /**
+   * Rapport de références d'une stat dérivée + éligibilité à la suppression
+   * (V3 maintenance). Vérifie l'existence via `DerivedStatsService` (404 si
+   * absente). `canDelete = !isSystem && aucune référence`.
+   */
+  async getStatReferencesReport(key: string): Promise<{
+    key: string;
+    isSystem: boolean;
+    canDelete: boolean;
+    references: { masteryEffects: Awaited<ReturnType<MasteriesService['findEffectReferencesToStat']>> };
+    counts: { masteryEffects: number };
+  }> {
+    await this.derivedStats.getDefinition(key); // 404 si la stat n'existe pas
+    const isSystem = this.derivedStats.isSystemStat(key);
+    const masteryEffects = await this.findEffectReferencesToStat(key);
+    return {
+      key,
+      isSystem,
+      canDelete: !isSystem && masteryEffects.length === 0,
+      references: { masteryEffects },
+      counts: { masteryEffects: masteryEffects.length },
+    };
+  }
+
+  /**
+   * Retire UN modifier de `effects.modifiers[]` d'une maîtrise (V3 maintenance).
+   * Conserve les autres modifiers ; re-sanitize (normalise `{}` si vide) ;
+   * invalide le cache. 404 si maîtrise absente, 400 si index hors bornes.
+   */
+  async removeEffectModifier(
+    masteryKey: string,
+    modifierIndex: number,
+  ): Promise<MasteryDefinition> {
+    const def = await this.masteryDefinitionRepo.findOne({ where: { key: masteryKey } });
+    if (!def) throw new NotFoundException(`Mastery "${masteryKey}" introuvable.`);
+    const modifiers = def.effects?.modifiers ?? [];
+    if (modifierIndex < 0 || modifierIndex >= modifiers.length) {
+      throw new BadRequestException(`modifierIndex ${modifierIndex} hors bornes.`);
+    }
+    const nextModifiers = modifiers.filter((_, i) => i !== modifierIndex);
+    // Plus aucun modifier → effets vidés (un context seul n'a aucun effet).
+    const rawEffects: Record<string, unknown> = {};
+    if (nextModifiers.length > 0) {
+      rawEffects.modifiers = nextModifiers;
+      if (def.effects?.context) rawEffects.context = def.effects.context;
+    }
+    // Re-sanitize : normalise et valide le reste des modifiers.
+    def.effects = sanitizeMasteryEffects(rawEffects, await this.getMasteryEffectTargets());
+    const saved = await this.masteryDefinitionRepo.save(def);
+    this.invalidateDefinitionsCache();
+    return saved;
+  }
+
   /**
    * Sanitize `effects` avant persistance (V1-D-A). `undefined` → patch vide
    * (le champ n'est pas touché : défaut entity `{}` en création, valeur

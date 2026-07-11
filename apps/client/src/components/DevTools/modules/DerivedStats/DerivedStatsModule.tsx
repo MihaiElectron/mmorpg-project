@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createDerivedStat, fetchDerivedStats, updateDerivedStat } from "./derivedStatsApi";
+import {
+  createDerivedStat,
+  deleteDerivedStatDefinition,
+  fetchDerivedStatReferences,
+  fetchDerivedStats,
+  removeDerivedStatMasteryReference,
+  updateDerivedStat,
+} from "./derivedStatsApi";
 import {
   buildCreateDerivedStatPayload,
+  buildDuplicateDerivedStatPayload,
   buildUpdateDerivedStatPayload,
   draftFromDerivedStat,
   emptyDerivedStatDraft,
   validateDerivedStatDraft,
+  validateDerivedStatKey,
   DERIVED_STAT_CATEGORY_LABELS,
   MODIFIER_MODE_OPTIONS,
   PRIMARY_STAT_KEYS,
@@ -13,10 +22,14 @@ import {
   type DerivedStatCategory,
   type DerivedStatDraft,
   type DerivedStatFullDto,
+  type DerivedStatMasteryReference,
   type DerivedStatModifierMode,
+  type DerivedStatReferencesReport,
   type DerivedStatRuntimeStatus,
 } from "./derivedStats.types";
 import { hasFormChanges } from "../../shared/formDirty";
+import { useConfirmDialog } from "../../../common/useConfirmDialog";
+import { notifyDerivedStatsChanged } from "./derivedStatsEvents";
 import "./DerivedStatsModule.scss";
 
 const CATEGORY_LABEL = new Map(DERIVED_STAT_CATEGORY_LABELS.map((c) => [c.key, c.label]));
@@ -221,6 +234,15 @@ export default function DerivedStatsModule() {
   const [createDraft, setCreateDraft] = useState<DerivedStatDraft>(emptyDerivedStatDraft);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Maintenance V3 (références, suppression, retrait de référence, duplication).
+  const [references, setReferences] = useState<DerivedStatReferencesReport | null>(null);
+  const [refBusy, setRefBusy] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateKey, setDuplicateKey] = useState("");
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
+
   const initialDraftRef = useRef<DerivedStatDraft>(draft);
 
   const sorted = useMemo(() => sortDefinitions(definitions), [definitions]);
@@ -256,8 +278,28 @@ export default function DerivedStatsModule() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  async function loadReferences(key: string): Promise<void> {
+    if (!key) {
+      setReferences(null);
+      return;
+    }
+    setRefBusy(true);
+    try {
+      setReferences(await fetchDerivedStatReferences(key));
+    } catch (err) {
+      setReferences(null);
+      setMessage((err as Error).message);
+    } finally {
+      setRefBusy(false);
+    }
+  }
+
   useEffect(() => {
     syncDraftFrom(selected);
+    setDuplicateOpen(false);
+    setDuplicateKey("");
+    setDuplicateError(null);
+    void loadReferences(selectedKey);
     // selectedKey est le déclencheur voulu ; selected est lu à travers lui.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey]);
@@ -280,6 +322,7 @@ export default function DerivedStatsModule() {
       await updateDerivedStat(selected.key, patch);
       const list = await reload();
       syncDraftFrom(list.find((d) => d.key === selected.key) ?? null);
+      notifyDerivedStatsChanged();
       setMessage(`Stat "${selected.key}" enregistrée.`);
     } catch (error) {
       setMessage((error as Error).message);
@@ -308,6 +351,7 @@ export default function DerivedStatsModule() {
       setSelectedKey(created.key);
       setCreateDraft(emptyDerivedStatDraft());
       setCreateOpen(false);
+      notifyDerivedStatsChanged();
       setMessage(`Stat "${created.key}" créée.`);
     } catch (error) {
       setCreateError((error as Error).message);
@@ -316,8 +360,93 @@ export default function DerivedStatsModule() {
     }
   }
 
+  async function handleDelete() {
+    if (!selected || !references?.canDelete) return;
+    const confirmed = await confirm({
+      title: "Confirmer la suppression",
+      message: `Supprimer la stat dérivée "${selected.label}" est définitif. Cette action est possible uniquement parce qu'aucune référence bloquante n'existe.`,
+      confirmLabel: "Supprimer",
+      cancelLabel: "Annuler",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await deleteDerivedStatDefinition(selected.key);
+      const removedKey = selected.key;
+      const list = await reload();
+      // Sélectionne une autre stat (jamais de suppression silencieuse).
+      setSelectedKey(sortDefinitions(list)[0]?.key ?? "");
+      notifyDerivedStatsChanged();
+      setMessage(`Stat "${removedKey}" supprimée.`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveReference(ref: DerivedStatMasteryReference) {
+    if (!selected) return;
+    setRefBusy(true);
+    setMessage(null);
+    try {
+      await removeDerivedStatMasteryReference(selected.key, {
+        masteryKey: ref.masteryKey,
+        modifierIndex: ref.modifierIndex,
+      });
+      // Recharge le rapport (les index se décalent) puis la liste.
+      await loadReferences(selected.key);
+      await reload();
+      // Le retrait modifie les modificateurs de maîtrise → stats.derived joueur.
+      notifyDerivedStatsChanged();
+      setMessage(`Référence "${ref.masteryName}" (#${ref.modifierIndex}) retirée.`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setRefBusy(false);
+    }
+  }
+
+  async function handleDuplicate() {
+    if (!selected) return;
+    const err = validateDerivedStatKey(duplicateKey);
+    if (err) {
+      setDuplicateError(err);
+      return;
+    }
+    setDuplicateError(null);
+    setBusy(true);
+    setMessage(null);
+    try {
+      const created = await createDerivedStat(
+        buildDuplicateDerivedStatPayload(selected, duplicateKey),
+      );
+      await reload();
+      setSelectedKey(created.key);
+      setDuplicateKey("");
+      setDuplicateOpen(false);
+      notifyDerivedStatsChanged();
+      setMessage(
+        "Nouvelle stat créée. Tu peux désactiver ou supprimer l'ancienne si elle n'est plus référencée.",
+      );
+    } catch (error) {
+      setDuplicateError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const deleteReason = references?.isSystem
+    ? "Stat système non supprimable."
+    : (references?.counts.masteryEffects ?? 0) > 0
+      ? "Stat encore référencée par des effets de maîtrise."
+      : null;
+
   return (
     <section className="derived-stats-module">
+      {confirmDialog}
       <button
         type="button"
         className="derived-stats-module__header"
@@ -472,6 +601,148 @@ export default function DerivedStatsModule() {
                       {busy ? "…" : "Sauvegarder"}
                     </button>
                   </div>
+
+                  <fieldset className="derived-stats-editor__group derived-stats-maintenance">
+                    <legend className="derived-stats-editor__legend">Maintenance</legend>
+
+                    {refBusy && !references && (
+                      <p className="derived-stats-module__muted">Chargement des références…</p>
+                    )}
+
+                    {references && (
+                      <>
+                        <div className="derived-stats-maintenance__status">
+                          <span
+                            className={
+                              "derived-stats-editor__badge" +
+                              (references.isSystem
+                                ? " derived-stats-editor__badge--muted"
+                                : " derived-stats-editor__badge--on")
+                            }
+                          >
+                            {references.isSystem ? "Stat système" : "Stat custom"}
+                          </span>
+                          <span className="derived-stats-maintenance__count">
+                            {references.counts.masteryEffects} référence
+                            {references.counts.masteryEffects > 1 ? "s" : ""} mastery
+                          </span>
+                          <span className="derived-stats-maintenance__count">
+                            canDelete : {references.canDelete ? "oui" : "non"}
+                          </span>
+                        </div>
+
+                        <div className="derived-stats-editor__actions">
+                          <button
+                            type="button"
+                            className="derived-stats-editor__btn derived-stats-editor__btn--neutral"
+                            onClick={() => void loadReferences(selected.key)}
+                            disabled={busy || refBusy}
+                          >
+                            Rafraîchir
+                          </button>
+                          <button
+                            type="button"
+                            className="derived-stats-editor__btn derived-stats-editor__btn--danger"
+                            onClick={() => void handleDelete()}
+                            disabled={busy || refBusy || !references.canDelete}
+                            title={deleteReason ?? undefined}
+                          >
+                            {busy ? "…" : "Supprimer la stat"}
+                          </button>
+                        </div>
+
+                        {deleteReason && (
+                          <p className="derived-stats-module__hint">{deleteReason}</p>
+                        )}
+
+                        {references.references.masteryEffects.length > 0 && (
+                          <ul className="derived-stats-maintenance__refs">
+                            {references.references.masteryEffects.map((ref) => (
+                              <li
+                                className="derived-stats-maintenance__ref"
+                                key={`${ref.masteryKey}#${ref.modifierIndex}`}
+                              >
+                                <span className="derived-stats-maintenance__ref-info">
+                                  <strong>{ref.masteryName}</strong> ({ref.masteryKey}) · #
+                                  {ref.modifierIndex} · {ref.mode} · {ref.value}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="derived-stats-editor__btn derived-stats-editor__btn--neutral"
+                                  onClick={() => void handleRemoveReference(ref)}
+                                  disabled={busy || refBusy}
+                                >
+                                  Retirer
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        <div className="derived-stats-maintenance__duplicate">
+                          {!duplicateOpen ? (
+                            <button
+                              type="button"
+                              className="derived-stats-editor__btn derived-stats-editor__btn--neutral"
+                              onClick={() => {
+                                setDuplicateOpen(true);
+                                setDuplicateKey("");
+                                setDuplicateError(null);
+                              }}
+                              disabled={busy}
+                            >
+                              Dupliquer
+                            </button>
+                          ) : (
+                            <div className="derived-stats-maintenance__duplicate-form">
+                              <label className="derived-stats-editor__field">
+                                <span className="derived-stats-editor__label">
+                                  Nouvelle key (camelCase)
+                                </span>
+                                <input
+                                  className="derived-stats-editor__input"
+                                  type="text"
+                                  value={duplicateKey}
+                                  placeholder="luckReworked"
+                                  onChange={(e) => setDuplicateKey(e.target.value)}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                              </label>
+                              {duplicateError && (
+                                <p className="derived-stats-editor__error">{duplicateError}</p>
+                              )}
+                              <div className="derived-stats-editor__actions">
+                                <button
+                                  type="button"
+                                  className="derived-stats-editor__btn derived-stats-editor__btn--neutral"
+                                  onClick={() => {
+                                    setDuplicateOpen(false);
+                                    setDuplicateError(null);
+                                  }}
+                                  disabled={busy}
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="button"
+                                  className="derived-stats-editor__btn derived-stats-editor__btn--confirm"
+                                  onClick={() => void handleDuplicate()}
+                                  disabled={busy}
+                                >
+                                  {busy ? "…" : "Créer la copie"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <p className="derived-stats-module__hint">
+                            Duplique la configuration sous une nouvelle key (pas de rename
+                            direct). Les références de maîtrise ne sont pas copiées.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </fieldset>
                 </div>
               )}
 
