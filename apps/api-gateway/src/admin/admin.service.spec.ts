@@ -601,6 +601,7 @@ describe('AdminService — createMasteryDefinition', () => {
   let service: AdminService;
   let masteryDefinitionRepo: Record<string, jest.Mock>;
   let playerMasteryRepo: Record<string, jest.Mock>;
+  let masteriesServiceMock: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     masteryDefinitionRepo = {
@@ -610,13 +611,17 @@ describe('AdminService — createMasteryDefinition', () => {
       save: jest.fn().mockImplementation((v) => Promise.resolve({ ...v, id: 'new-uuid', createdAt: new Date(), updatedAt: new Date() })),
     };
     playerMasteryRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
+    masteriesServiceMock = {
+      getCharacterMasteries: jest.fn().mockResolvedValue([]),
+      invalidateDefinitionsCache: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
-        { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteriesService, useValue: masteriesServiceMock },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
@@ -645,6 +650,18 @@ describe('AdminService — createMasteryDefinition', () => {
     expect(masteryDefinitionRepo.save).toHaveBeenCalled();
     expect(sd.key).toBe('fishing');
     expect(sd.name).toBe('Fishing');
+  });
+
+  it('invalide le cache des définitions après création (chemin socket)', async () => {
+    await service.createMasteryDefinition({ key: 'fishing', name: 'Fishing' });
+    expect(masteriesServiceMock.invalidateDefinitionsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("n'invalide pas le cache si la création est rejetée", async () => {
+    masteryDefinitionRepo.findOne.mockResolvedValue({ key: 'fishing' });
+    await expect(service.createMasteryDefinition({ key: 'fishing', name: 'Dup' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(masteriesServiceMock.invalidateDefinitionsCache).not.toHaveBeenCalled();
   });
 
   it('applique les valeurs par défaut si champs optionnels absents', async () => {
@@ -705,6 +722,7 @@ describe('AdminService — updateMasteryDefinition', () => {
   let service: AdminService;
   let masteryDefinitionRepo: Record<string, jest.Mock>;
   let playerMasteryRepo: Record<string, jest.Mock>;
+  let masteriesServiceMock: Record<string, jest.Mock>;
 
   function makeSd(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return { id: 'sd-1', key: 'woodcutting', name: 'Woodcutting', category: 'gathering', maxLevel: 100, baseXpPerLevel: 100, xpCurveExponent: 1.5, enabled: true, ...overrides };
@@ -718,13 +736,17 @@ describe('AdminService — updateMasteryDefinition', () => {
       save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
     };
     playerMasteryRepo = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn(), save: jest.fn() };
+    masteriesServiceMock = {
+      getCharacterMasteries: jest.fn().mockResolvedValue([]),
+      invalidateDefinitionsCache: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
-        { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteriesService, useValue: masteriesServiceMock },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
@@ -759,6 +781,31 @@ describe('AdminService — updateMasteryDefinition', () => {
     masteryDefinitionRepo.findOne.mockResolvedValue(null);
     const result = await service.updateMasteryDefinition('unknown', { name: 'X' });
     expect(result).toBeNull();
+  });
+
+  // ── Invalidation du cache des définitions (dette V1-D-B — chemin socket) ───
+  it('invalide le cache des définitions après un update réussi', async () => {
+    await service.updateMasteryDefinition('sd-1', { name: 'Bûcheronnage' });
+    expect(masteriesServiceMock.invalidateDefinitionsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalide le cache quand enabled passe de true à false', async () => {
+    masteryDefinitionRepo.findOne.mockResolvedValue(makeSd({ enabled: true }));
+    const updated = await service.updateMasteryDefinition('sd-1', { enabled: false });
+    expect(updated?.enabled).toBe(false);
+    expect(masteriesServiceMock.invalidateDefinitionsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("n'invalide pas le cache si l'id est introuvable", async () => {
+    masteryDefinitionRepo.findOne.mockResolvedValue(null);
+    await service.updateMasteryDefinition('unknown', { name: 'X' });
+    expect(masteriesServiceMock.invalidateDefinitionsCache).not.toHaveBeenCalled();
+  });
+
+  it("n'invalide pas le cache si la validation rejette le patch", async () => {
+    await expect(service.updateMasteryDefinition('sd-1', { xpCurveExponent: 4.0 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(masteriesServiceMock.invalidateDefinitionsCache).not.toHaveBeenCalled();
   });
 
   it('rejette xpCurveExponent > 3.0', async () => {

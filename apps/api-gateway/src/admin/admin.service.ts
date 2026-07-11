@@ -1132,7 +1132,13 @@ export class AdminService {
       toCreate.enabled = Boolean(fields.enabled);
     }
 
-    return this.masteryDefinitionRepo.save(this.masteryDefinitionRepo.create(toCreate));
+    const saved = await this.masteryDefinitionRepo.save(
+      this.masteryDefinitionRepo.create(toCreate),
+    );
+    // Chemin socket (repo direct) : invalider le cache des définitions enabled
+    // lu par MasteryEffectsService à chaque auto-attaque (V1-D-B).
+    this.masteriesService.invalidateDefinitionsCache();
+    return saved;
   }
 
   async updateMasteryDefinition(
@@ -1179,7 +1185,12 @@ export class AdminService {
       sd.enabled = Boolean(fields.enabled);
     }
 
-    return this.masteryDefinitionRepo.save(sd);
+    const saved = await this.masteryDefinitionRepo.save(sd);
+    // Chemin socket (repo direct, hors MasteriesService.updateMasteryDefinition) :
+    // sans cette invalidation, un toggle enabled/maxLevel via le Studio servirait
+    // des effets de maîtrise périmés à l'auto-attaque jusqu'au redémarrage.
+    this.masteriesService.invalidateDefinitionsCache();
+    return saved;
   }
 
   // ── Items ────────────────────────────────────────────────────────────────
