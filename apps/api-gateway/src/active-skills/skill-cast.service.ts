@@ -9,6 +9,8 @@ import { CharacterStatsCalculator } from '../characters/character-stats-calculat
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
+import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { CreaturesService } from '../creatures/creatures.service';
 import { isAttackFailure } from '../creatures/creatures.service';
 import type { CreatureDto } from '../creatures/dto/creature.dto';
@@ -95,6 +97,7 @@ export class SkillCastService {
     private readonly characterRepository: Repository<Character>,
     private readonly derivedStats: DerivedStatsService,
     private readonly masteries: MasteriesService,
+    private readonly masteryEffects: MasteryEffectsService,
     private readonly creatures: CreaturesService,
   ) {}
 
@@ -146,6 +149,37 @@ export class SkillCastService {
       default:
         return null;
     }
+  }
+
+  /**
+   * Bonus de maîtrise d'arme sur le montant d'un skill weapon-based
+   * (V1-D-Skills-B). Règle stricte, opt-in :
+   * - `skill.weaponType` null → montant inchangé (sort/soin/utilitaire) ;
+   * - pas d'arme équipée ou weaponType différent → montant inchangé ;
+   * - sinon `round(amount × (1 + damagePercent / 100))` — le damagePercent
+   *   vient du calculateur pur V1-D-A (formule (level − 1) × perLevel,
+   *   mastery disabled/level 1/effects mismatch → 0, clamp 50 %), jamais
+   *   recalculé ici. Définitions servies par le cache, niveaux déjà chargés
+   *   par le cast : aucune lecture DB supplémentaire.
+   */
+  private async applyWeaponMasteryBonus(
+    skill: SkillDefinition,
+    character: Character,
+    masteryLevels: Record<string, number>,
+    amount: number,
+  ): Promise<number> {
+    if (!skill.weaponType) return amount;
+    const equippedWeaponType = resolveEquippedWeaponType(character.equipment);
+    if (!equippedWeaponType || equippedWeaponType !== skill.weaponType) return amount;
+
+    const definitions = await this.masteries.getEnabledMasteryDefinitions();
+    const { damagePercent } = this.masteryEffects.computeCombatEffects(
+      definitions,
+      masteryLevels,
+      { weaponType: equippedWeaponType },
+    );
+    if (damagePercent <= 0) return amount;
+    return Math.round(amount * (1 + damagePercent / 100));
   }
 
   async castCreatureSkill(
@@ -220,12 +254,24 @@ export class SkillCastService {
       masteryLevels,
     });
 
+    // ── Bonus de maîtrise d'arme (V1-D-Skills-B) ────────────────────────────
+    // Appliqué au MONTANT du skill (pas aux stats d'entrée) : un skill scale
+    // sur strength/physicalAttack/mastery indifféremment, le bonus d'arme doit
+    // porter sur son résultat offensif. Skill sans weaponType (sort, soin) ou
+    // arme non correspondante → montant inchangé.
+    const boostedAmount = await this.applyWeaponMasteryBonus(
+      skill,
+      character,
+      masteryLevels,
+      effect.amount,
+    );
+
     // ── Application côté créature (portée/mort/loot/XP réutilisés) ──────────
     const result = await this.creatures.applySkillDamage(
       targetId,
       characterId,
       attackerPosition,
-      effect.amount,
+      boostedAmount,
       skill.rangeWU,
     );
     if (isAttackFailure(result)) {

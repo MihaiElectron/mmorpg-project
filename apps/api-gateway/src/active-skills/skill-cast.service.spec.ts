@@ -4,8 +4,10 @@ import { SkillCastService, isSkillCastFailure } from "./skill-cast.service";
 import { ActiveSkillsService } from "./active-skills.service";
 import { DerivedStatsService } from "../derived-stats/derived-stats.service";
 import { MasteriesService } from "../masteries/masteries.service";
+import { MasteryEffectsService } from "../masteries/mastery-effects.service";
 import { CreaturesService } from "../creatures/creatures.service";
 import { Character } from "../characters/entities/character.entity";
+import { EquipmentSlot } from "../characters/dto/equip-item.dto";
 import type { SkillDefinition } from "./entities/skill-definition.entity";
 
 const POSITION = { worldX: 0, worldY: 0, mapId: 1 };
@@ -57,7 +59,8 @@ describe("SkillCastService", () => {
   let service: SkillCastService;
   let activeSkills: { listDefinitions: jest.Mock; isSkillUnlocked: jest.Mock };
   let derivedStats: { getDefinitions: jest.Mock };
-  let masteries: { getCharacterMasteries: jest.Mock };
+  let masteries: { getCharacterMasteries: jest.Mock; getEnabledMasteryDefinitions: jest.Mock };
+  let masteryEffects: { computeCombatEffects: jest.Mock };
   let creatures: { applySkillDamage: jest.Mock };
   let charRepo: { findOne: jest.Mock; update: jest.Mock };
 
@@ -73,7 +76,13 @@ describe("SkillCastService", () => {
       isSkillUnlocked: jest.fn(async () => true),
     };
     derivedStats = { getDefinitions: jest.fn(async () => []) };
-    masteries = { getCharacterMasteries: jest.fn(async () => []) };
+    masteries = {
+      getCharacterMasteries: jest.fn(async () => []),
+      getEnabledMasteryDefinitions: jest.fn(async () => []),
+    };
+    // Par défaut : aucun effet de maîtrise (montant inchangé) — les tests
+    // V1-D-Skills-B surchargent ce mock.
+    masteryEffects = { computeCombatEffects: jest.fn(() => ({ damagePercent: 0 })) };
     creatures = {
       applySkillDamage: jest.fn(async () => ({
         success: true,
@@ -95,6 +104,7 @@ describe("SkillCastService", () => {
         { provide: ActiveSkillsService, useValue: activeSkills },
         { provide: DerivedStatsService, useValue: derivedStats },
         { provide: MasteriesService, useValue: masteries },
+        { provide: MasteryEffectsService, useValue: masteryEffects },
         { provide: CreaturesService, useValue: creatures },
         { provide: getRepositoryToken(Character), useValue: charRepo },
       ],
@@ -298,6 +308,120 @@ describe("SkillCastService", () => {
     expect(isSkillCastFailure(r2) && r2.error).toMatch(/dead/i);
   });
 
+  // ── Bonus de maîtrise d'arme (V1-D-Skills-B) ────────────────────────────────
+  describe("bonus de maîtrise d'arme (V1-D-Skills-B)", () => {
+    function armedWith(weaponType: string | null) {
+      return [
+        { slot: EquipmentSlot.RIGHT_HAND, item: { id: "w", type: "weapon", weaponType } },
+      ] as unknown as Character["equipment"];
+    }
+
+    // Montant de base : scaling strength(10)×2 = 20 (cf. test transmission).
+
+    it("skill weaponType matching + arme équipée + bonus 10 % → montant boosté 22", async () => {
+      currentSkill = makeSkill({ weaponType: "two_handed_sword" });
+      currentCharacter = makeCharacter({ equipment: armedWith("two_handed_sword") });
+      masteries.getEnabledMasteryDefinitions.mockResolvedValue([
+        { key: "two_handed", enabled: true, effects: {} },
+      ]);
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10 });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      // round(20 × 1.10) = 22.
+      expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+        TARGET_ID,
+        "c1",
+        POSITION,
+        22,
+        currentSkill.rangeWU,
+      );
+      // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
+      // les définitions du cache et les niveaux déjà chargés.
+      expect(masteryEffects.computeCombatEffects).toHaveBeenCalledWith(
+        [{ key: "two_handed", enabled: true, effects: {} }],
+        expect.any(Object),
+        { weaponType: "two_handed_sword" },
+      );
+    });
+
+    it("mauvais weaponType équipé → montant inchangé, calcul non invoqué", async () => {
+      currentSkill = makeSkill({ weaponType: "two_handed_sword" });
+      currentCharacter = makeCharacter({ equipment: armedWith("bow") });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+      );
+      expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
+    });
+
+    it("skill.weaponType null (sort/magie) → montant inchangé même armé", async () => {
+      currentSkill = makeSkill({ weaponType: null });
+      currentCharacter = makeCharacter({ equipment: armedWith("two_handed_sword") });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50 });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+      );
+      expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
+    });
+
+    it("aucune arme équipée → montant inchangé", async () => {
+      currentSkill = makeSkill({ weaponType: "two_handed_sword" });
+      currentCharacter = makeCharacter({ equipment: [] });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+      );
+      expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
+    });
+
+    it("damagePercent 0 (mastery level 1, disabled, effects vides…) → montant inchangé", async () => {
+      currentSkill = makeSkill({ weaponType: "two_handed_sword" });
+      currentCharacter = makeCharacter({ equipment: armedWith("two_handed_sword") });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 0 });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+      );
+    });
+
+    it("le bonus n'altère ni le coût ressource ni le cooldown", async () => {
+      currentSkill = makeSkill({
+        weaponType: "two_handed_sword",
+        resourceType: "mana",
+        resourceCost: 30,
+        cooldownMs: 5000,
+      });
+      currentCharacter = makeCharacter({
+        equipment: armedWith("two_handed_sword"),
+        mana: 50,
+        energy: 0,
+      } as Partial<Character>);
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10 });
+
+      const r = await cast();
+
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.cooldownMs).toBe(5000);
+      // Coût décrémenté à l'identique (50 − 30 = 20), indépendant du bonus.
+      expect(charRepo.update).toHaveBeenCalledWith("c1", { mana: 20 });
+    });
+  });
+
   // ── castSelfSkill (V1-G : soin sur soi) ─────────────────────────────────────
   describe("castSelfSkill", () => {
     function makeHealSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
@@ -320,6 +444,26 @@ describe("SkillCastService", () => {
       currentCharacter = char;
       charRepo.findOne.mockResolvedValue(char);
     }
+
+    it("un heal ne reçoit JAMAIS le bonus de maîtrise d'arme (V1-D-Skills-B)", async () => {
+      // Même armé et même avec un weaponType configuré par erreur sur le skill,
+      // le chemin self/heal ne passe pas par applyWeaponMasteryBonus.
+      useSkill(makeHealSkill({ weaponType: "two_handed_sword" }));
+      useCharacter(makeCharacter({
+        health: 50,
+        equipment: [
+          { slot: EquipmentSlot.RIGHT_HAND, item: { id: "w", type: "weapon", weaponType: "two_handed_sword" } },
+        ] as unknown as Character["equipment"],
+      }));
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50 });
+
+      const r = await castSelf();
+
+      expect(r.success).toBe(true);
+      // Soin de base 30 (strength 10 × 3), non boosté : 50 + 30 = 80.
+      if (r.success) expect(r.health).toBe(80);
+      expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
+    });
 
     it("soigne et clampe à maxHealth dérivé (~100)", async () => {
       useSkill(makeHealSkill());
