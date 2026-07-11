@@ -1,5 +1,6 @@
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { AdminController } from './admin.controller';
+import { STANDARD_TARGETS } from '../masteries/mastery-effect-targets.spec';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { ROLES_KEY } from '../common/roles.decorator';
@@ -26,7 +27,18 @@ describe('AdminController — movement metrics', () => {
 
     return {
       adminService,
-      controller: new AdminController(adminService as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any),
+      masteriesService: {
+        getMasteryEffectTargets: jest.fn().mockResolvedValue(STANDARD_TARGETS),
+      },
+      controller: new AdminController(
+        adminService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        { getMasteryEffectTargets: jest.fn().mockResolvedValue(STANDARD_TARGETS) } as any,
+      ),
     };
   }
 
@@ -63,10 +75,10 @@ describe('AdminController — movement metrics', () => {
     });
   });
 
-  it('GET mastery-effect-targets expose la source serveur unique (V2-E)', () => {
+  it('GET mastery-effect-targets expose les targets dynamiques (V3-B)', async () => {
     const { controller } = makeController();
 
-    const result = controller.getMasteryEffectTargets();
+    const result = await controller.getMasteryEffectTargets();
 
     expect(result.targets).toHaveLength(10);
     expect(result.targets.map((t) => t.key)).toContain('physicalAttack');

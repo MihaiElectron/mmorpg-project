@@ -22,7 +22,6 @@ import { UpdateMasteryDefinitionDto } from '../masteries/dto/update-mastery-defi
 import {
   CONTEXTUAL_MASTERY_EFFECT_STATS,
   MASTERY_EFFECT_MODES,
-  MASTERY_EFFECT_TARGETS,
 } from '../masteries/mastery-effect-targets';
 
 @Controller('admin')
@@ -283,9 +282,11 @@ export class AdminController {
    * Lecture pure de constantes : le Studio ne code aucune liste en dur.
    */
   @Get('mastery-effect-targets')
-  getMasteryEffectTargets() {
+  async getMasteryEffectTargets() {
     return {
-      targets: MASTERY_EFFECT_TARGETS,
+      // V3-B : targets construits depuis les DerivedStatDefinition
+      // (enabled + masteryEligible + implemented + au moins un mode).
+      targets: await this.masteriesService.getMasteryEffectTargets(),
       modes: MASTERY_EFFECT_MODES,
       contextualStats: CONTEXTUAL_MASTERY_EFFECT_STATS,
     };

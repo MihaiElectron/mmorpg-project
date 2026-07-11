@@ -17,6 +17,8 @@ import {
   MasteryEffectsValidationError,
   sanitizeMasteryEffects,
 } from './mastery-effects.calculator';
+import { buildMasteryEffectTargets, MasteryEffectTarget } from './mastery-effect-targets';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 export interface MasteryUpdatePayload {
   masteryDefinitionKey: string;
@@ -80,7 +82,18 @@ export class MasteriesService implements OnModuleInit {
     private readonly masteryDefinitionRepo: Repository<MasteryDefinition>,
     @InjectRepository(PlayerMastery)
     private readonly playerMasteryRepo: Repository<PlayerMastery>,
+    private readonly derivedStats: DerivedStatsService,
   ) {}
+
+  /**
+   * Targets d'effets de maîtrise (V3-B) — construits depuis les
+   * DerivedStatDefinition (cache DerivedStatsService) : enabled +
+   * masteryEligible + implemented + au moins un mode.
+   */
+  async getMasteryEffectTargets(): Promise<MasteryEffectTarget[]> {
+    const definitions = await this.derivedStats.getDefinitions();
+    return buildMasteryEffectTargets(definitions);
+  }
 
   async onModuleInit(): Promise<void> {
     await this.seedDefaultMasteries();
@@ -149,7 +162,7 @@ export class MasteriesService implements OnModuleInit {
     }
     const entity = this.masteryDefinitionRepo.create({
       ...dto,
-      ...this.sanitizedEffectsPatch(dto.effects),
+      ...(await this.sanitizedEffectsPatch(dto.effects)),
     });
     const saved = await this.masteryDefinitionRepo.save(entity);
     this.invalidateDefinitionsCache();
@@ -170,7 +183,7 @@ export class MasteriesService implements OnModuleInit {
     if (!existing) throw new NotFoundException(`Mastery "${key}" introuvable.`);
     const merged = this.masteryDefinitionRepo.merge(existing, {
       ...dto,
-      ...this.sanitizedEffectsPatch(dto.effects),
+      ...(await this.sanitizedEffectsPatch(dto.effects)),
     });
     const saved = await this.masteryDefinitionRepo.save(merged);
     this.invalidateDefinitionsCache();
@@ -182,12 +195,12 @@ export class MasteriesService implements OnModuleInit {
    * (le champ n'est pas touché : défaut entity `{}` en création, valeur
    * existante conservée en update). Structure non supportée → 400.
    */
-  private sanitizedEffectsPatch(
+  private async sanitizedEffectsPatch(
     rawEffects: Record<string, unknown> | undefined,
-  ): { effects?: MasteryEffects } {
+  ): Promise<{ effects?: MasteryEffects }> {
     if (rawEffects === undefined) return {};
     try {
-      return { effects: sanitizeMasteryEffects(rawEffects) };
+      return { effects: sanitizeMasteryEffects(rawEffects, await this.getMasteryEffectTargets()) };
     } catch (error) {
       if (error instanceof MasteryEffectsValidationError) {
         throw new BadRequestException(error.message);

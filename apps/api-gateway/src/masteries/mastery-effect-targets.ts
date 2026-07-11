@@ -1,19 +1,17 @@
 /**
- * Mastery Effect Targets (V2-E) — SOURCE SERVEUR UNIQUE des stats ciblables
- * par les effets de maîtrises, de leurs modes et de leurs bornes.
+ * Mastery Effect Targets (V3-B) — targets construits depuis les
+ * DerivedStatDefinition (source de vérité éditable dans le Studio
+ * « Stats secondaires »), plus aucune liste statique.
  * ---------------------------------------------------------------------------
- * Consommée par :
- * - `sanitizeMasteryEffects` (validation d'écriture — aucune whitelist locale
- *   séparée) ;
- * - `GET /admin/mastery-effect-targets` (le Studio ne code plus aucune liste
- *   de stats en dur) ;
- * - les tests.
+ * Consommé par :
+ * - `sanitizeMasteryEffects` (validation d'écriture) ;
+ * - `GET /admin/mastery-effect-targets` (le Studio ne code aucune liste) ;
+ * - la résolution runtime (`MasteryEffectsService`).
  *
- * N'expose QUE les stats réellement consommées par un hook serveur
- * (`runtimeStatus: 'implemented'`). Critique / esquive / block / stun / craft /
- * résistances / vitesses : volontairement absentes tant que leur hook gameplay
- * n'existe pas — les statuts `calculatedOnly` / `notHooked` sont prêts pour le
- * jour où on choisira d'exposer des stats non branchées à titre informatif.
+ * N'expose QUE les dérivées enabled + masteryEligible + implemented + au
+ * moins un mode. Critique / esquive / block / stun / craft / vitesses /
+ * résistances restent calculatedOnly → jamais exposées tant que leur hook
+ * gameplay n'existe pas.
  */
 
 import type { MasteryModifierMode } from './mastery-effects.calculator';
@@ -37,50 +35,60 @@ export interface MasteryEffectModeInfo {
   description: string;
 }
 
-const BOTH_MODES: readonly MasteryModifierMode[] = ['percentPerLevel', 'flatPerLevel'];
 const MIN_BY_MODE = { percentPerLevel: 0, flatPerLevel: 0 } as const;
 const MAX_BY_MODE = { percentPerLevel: 5, flatPerLevel: 100 } as const;
 
-function target(
-  key: string,
-  label: string,
-  category: string,
-  description: string,
-): MasteryEffectTarget {
-  return {
-    key,
-    label,
-    category,
-    allowedModes: BOTH_MODES,
-    minValueByMode: MIN_BY_MODE,
-    maxValueByMode: MAX_BY_MODE,
-    runtimeStatus: 'implemented',
-    description,
-  };
+/**
+ * Vue structurelle minimale d'une DerivedStatDefinition — évite le couplage
+ * TypeORM (le builder reste pur).
+ */
+export interface MasteryTargetSourceDefinition {
+  key: string;
+  label: string;
+  category: string;
+  enabled: boolean;
+  masteryEligible: boolean;
+  allowedModifierModes: MasteryModifierMode[] | null;
+  runtimeStatus: string;
+  description: string | null;
 }
 
-export const MASTERY_EFFECT_TARGETS: readonly MasteryEffectTarget[] = [
-  target('physicalAttack', 'Attaque physique', 'combat',
-    'Consommée par auto-attaque et skills weapon-based (seule stat autorisée avec un contexte weaponType).'),
-  target('defense', 'Défense', 'combat',
-    'Réduit les dégâts reçus des créatures (riposte et auto-attaque).'),
-  target('maxHealth', 'Vie max', 'ressources',
-    'Plafond de PV — respawn, clamp de régénération, coûts de skills.'),
-  target('maxMana', 'Mana max', 'ressources',
-    'Plafond de mana — coûts de skills et régénération.'),
-  target('maxEnergy', 'Énergie max', 'ressources',
-    'Plafond d’énergie — coûts de skills et régénération.'),
-  target('healthRegen', 'Régénération vie', 'régénération',
-    'Points de vie régénérés par seconde (tick serveur).'),
-  target('manaRegen', 'Régénération mana', 'régénération',
-    'Mana régénéré par seconde (tick serveur).'),
-  target('energyRegen', 'Régénération énergie', 'régénération',
-    'Énergie régénérée par seconde (tick serveur).'),
-  target('healingPower', 'Puissance de soin', 'puissance',
-    'Alimente le scaling des skills de soin.'),
-  target('magicPower', 'Puissance magique', 'puissance',
-    'Alimente le scaling des skills magiques.'),
-];
+/**
+ * V3-B : les targets sont CONSTRUITS depuis les DerivedStatDefinition
+ * (éditables dans le Studio « Stats secondaires ») — plus aucune liste
+ * statique. Règle d'exposition stricte :
+ *   enabled && masteryEligible && runtimeStatus === 'implemented'
+ *   && allowedModifierModes non vide.
+ * Les stats disabled / calculatedOnly / notHooked / sans mode ne sont JAMAIS
+ * exposées (ni ciblables par sanitize, ni visibles dans le Studio).
+ * Bornes par mode : percent 0–5, flat 0–100 (invariants serveur).
+ */
+export function buildMasteryEffectTargets(
+  definitions: readonly MasteryTargetSourceDefinition[],
+): MasteryEffectTarget[] {
+  const targets: MasteryEffectTarget[] = [];
+  for (const def of definitions) {
+    if (!def?.enabled) continue;
+    if (!def.masteryEligible) continue;
+    if (def.runtimeStatus !== 'implemented') continue;
+    const modes = (def.allowedModifierModes ?? []).filter(
+      (m): m is MasteryModifierMode => m === 'percentPerLevel' || m === 'flatPerLevel',
+    );
+    if (modes.length === 0) continue;
+    if (typeof def.key !== 'string' || def.key.length === 0) continue;
+    targets.push({
+      key: def.key,
+      label: def.label,
+      category: def.category,
+      allowedModes: modes,
+      minValueByMode: MIN_BY_MODE,
+      maxValueByMode: MAX_BY_MODE,
+      runtimeStatus: 'implemented',
+      description: def.description ?? '',
+    });
+  }
+  return targets;
+}
 
 export const MASTERY_EFFECT_MODES: readonly MasteryEffectModeInfo[] = [
   {
@@ -101,9 +109,9 @@ export const MASTERY_EFFECT_MODES: readonly MasteryEffectModeInfo[] = [
  */
 export const CONTEXTUAL_MASTERY_EFFECT_STATS: readonly string[] = ['physicalAttack'];
 
-const TARGETS_BY_KEY = new Map(MASTERY_EFFECT_TARGETS.map((t) => [t.key, t]));
-
-/** Target par sa key, ou undefined si la stat n'est pas ciblable. */
-export function getMasteryEffectTarget(key: string): MasteryEffectTarget | undefined {
-  return TARGETS_BY_KEY.get(key);
+/** Index par key d'une liste de targets (helper des consommateurs). */
+export function indexMasteryEffectTargets(
+  targets: readonly MasteryEffectTarget[],
+): Map<string, MasteryEffectTarget> {
+  return new Map(targets.map((t) => [t.key, t]));
 }

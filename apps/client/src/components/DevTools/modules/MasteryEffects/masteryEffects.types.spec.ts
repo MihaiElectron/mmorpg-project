@@ -229,6 +229,23 @@ describe("validateMasteryEffectsDraft (bornes et règles SERVEUR)", () => {
     ).toBeNull();
   });
 
+  it("accepte une stat CUSTOM venue du serveur (aucune liste locale figée)", () => {
+    const customTargets = [
+      ...SERVER_TARGETS,
+      makeTarget({ key: "luck", label: "Chance", category: "social_threat" }),
+    ];
+    expect(
+      validateMasteryEffectsDraft(
+        {
+          weaponType: "",
+          modifiers: [{ stat: "luck", mode: "percentPerLevel", value: "2" }],
+        },
+        customTargets,
+        CONTEXTUAL_STATS,
+      ),
+    ).toBeNull();
+  });
+
   it("contexte weaponType : refuse une stat non contextuelle (règle serveur)", () => {
     expect(
       validate({

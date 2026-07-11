@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { DerivedStatDefinition } from './entities/derived-stat-definition.entity';
 import {
   DEFAULT_DERIVED_STAT_DEFINITIONS,
@@ -8,6 +8,8 @@ import {
   PRIMARY_STAT_KEYS,
   RAW_STAT_SOURCES,
   CRITICAL_DERIVED_STAT_KEYS,
+  MASTERY_IMPLEMENTED_DERIVED_KEYS,
+  PRIMARY_STAT_LABELS,
 } from './derived-stats.constants';
 import { UpdateDerivedStatDefinitionDto } from './dto/update-derived-stat-definition.dto';
 import { CreateDerivedStatDefinitionDto } from './dto/create-derived-stat-definition.dto';
@@ -57,7 +59,39 @@ export class DerivedStatsService implements OnModuleInit {
     if (count === 0) {
       const rows = DEFAULT_DERIVED_STAT_DEFINITIONS.map((d) => this.repo.create(d));
       await this.repo.save(rows);
+      return;
     }
+    await this.reconcileImplementedMasteryTargets();
+  }
+
+  /**
+   * Réconciliation NON DESTRUCTIVE (V3-B) : promeut les 10 dérivées consommées
+   * par un hook en cibles de Mastery Effects UNIQUEMENT si elles sont encore
+   * dans l'état par défaut V3-A jamais configuré (masteryEligible=false ET
+   * runtimeStatus='calculatedOnly' ET aucun mode). N'écrase JAMAIS une valeur
+   * éditée depuis le Studio. Nécessaire pour les bases déjà seedées avant V3-B
+   * (où `synchronize` ne réapplique pas les defaults). Idempotent.
+   */
+  private async reconcileImplementedMasteryTargets(): Promise<void> {
+    const implementedKeys = new Set<string>(MASTERY_IMPLEMENTED_DERIVED_KEYS);
+    const rows = await this.repo.find({
+      where: { key: In(MASTERY_IMPLEMENTED_DERIVED_KEYS as unknown as string[]) },
+    });
+    const toFix = rows.filter(
+      (r) =>
+        implementedKeys.has(r.key) &&
+        r.masteryEligible === false &&
+        r.runtimeStatus === 'calculatedOnly' &&
+        (r.allowedModifierModes ?? []).length === 0,
+    );
+    if (toFix.length === 0) return;
+    for (const r of toFix) {
+      r.masteryEligible = true;
+      r.runtimeStatus = 'implemented';
+      r.allowedModifierModes = ['percentPerLevel', 'flatPerLevel'];
+    }
+    await this.repo.save(toFix);
+    this.invalidateCache();
   }
 
   /** Définitions actives, triées par catégorie puis displayOrder. */
@@ -70,6 +104,41 @@ export class DerivedStatsService implements OnModuleInit {
 
   invalidateCache(): void {
     this.cache = null;
+  }
+
+  /**
+   * Catalogue read-only pour le panneau joueur (V3-B) : stats principales
+   * fixes + dérivées ENABLED (labels serveur). N'expose que ce qui est
+   * nécessaire à l'affichage — jamais de coefficients ni de config sensible.
+   */
+  async getStatCatalogForPlayer(): Promise<{
+    primaryStats: { key: string; label: string }[];
+    derivedStats: {
+      key: string;
+      label: string;
+      category: string;
+      runtimeStatus: string;
+      description: string | null;
+    }[];
+  }> {
+    const definitions = await this.getDefinitions();
+    return {
+      primaryStats: PRIMARY_STAT_LABELS.map((p) => ({ key: p.key, label: p.label })),
+      derivedStats: definitions
+        .filter((d) => d.enabled)
+        .sort((a, b) =>
+          a.category !== b.category
+            ? a.category.localeCompare(b.category)
+            : a.displayOrder - b.displayOrder,
+        )
+        .map((d) => ({
+          key: d.key,
+          label: d.label,
+          category: d.category,
+          runtimeStatus: d.runtimeStatus,
+          description: d.description,
+        })),
+    };
   }
 
   /** Une définition par sa key. NotFoundException si absente. */

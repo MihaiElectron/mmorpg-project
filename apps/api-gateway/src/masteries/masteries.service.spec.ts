@@ -3,6 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MasteriesService } from './masteries.service';
 import type { MasteryEffects } from './mastery-effects.calculator';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { IMPLEMENTED_SOURCES } from './mastery-effect-targets.spec';
 import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
 
@@ -67,6 +69,10 @@ describe('MasteriesService', () => {
         MasteriesService,
         { provide: getRepositoryToken(MasteryDefinition), useValue: masteryDefRepo },
         { provide: getRepositoryToken(PlayerMastery), useValue: playerMasteryRepo },
+        {
+          provide: DerivedStatsService,
+          useValue: { getDefinitions: jest.fn().mockResolvedValue(IMPLEMENTED_SOURCES) },
+        },
       ],
     }).compile();
 

@@ -173,7 +173,7 @@ export class SkillCastService {
     if (!equippedWeaponType || equippedWeaponType !== skill.weaponType) return amount;
 
     const definitions = await this.masteries.getEnabledMasteryDefinitions();
-    const { damagePercent, damageFlat } = this.masteryEffects.computeCombatEffects(
+    const { damagePercent, damageFlat } = await this.masteryEffects.computeCombatEffects(
       definitions,
       masteryLevels,
       { weaponType: equippedWeaponType },
@@ -250,7 +250,7 @@ export class SkillCastService {
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+      await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,
@@ -401,7 +401,7 @@ export class SkillCastService {
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+      await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,

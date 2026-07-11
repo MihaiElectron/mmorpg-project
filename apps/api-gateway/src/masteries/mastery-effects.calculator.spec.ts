@@ -9,6 +9,9 @@ import {
   MAX_TOTAL_PERCENT_PER_STAT,
   sanitizeMasteryEffects,
 } from './mastery-effects.calculator';
+import { STANDARD_TARGETS } from './mastery-effect-targets.spec';
+
+const T = STANDARD_TARGETS;
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -30,8 +33,8 @@ function makeDef(
 
 describe('sanitizeMasteryEffects (V2)', () => {
   it('retourne {} pour undefined et null', () => {
-    expect(sanitizeMasteryEffects(undefined)).toEqual({});
-    expect(sanitizeMasteryEffects(null)).toEqual({});
+    expect(sanitizeMasteryEffects(undefined, T)).toEqual({});
+    expect(sanitizeMasteryEffects(null, T)).toEqual({});
   });
 
   it('accepte et normalise une structure modifiers valide', () => {
@@ -40,7 +43,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
         { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
         { stat: 'healthRegen', mode: 'flatPerLevel', value: 0.5 },
       ],
-    });
+    }, T);
     expect(result).toEqual({
       modifiers: [
         { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
@@ -53,7 +56,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
     const result = sanitizeMasteryEffects({
       context: { weaponType: 'two_handed_sword' },
       modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
-    });
+    }, T);
     expect(result).toEqual({
       context: { weaponType: 'two_handed_sword' },
       modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
@@ -64,7 +67,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
     const result = sanitizeMasteryEffects({
       context: { weaponType: 'two_handed_sword' },
       combat: { damagePercentPerLevel: 5 },
-    });
+    }, T);
     expect(result).toEqual({
       context: { weaponType: 'two_handed_sword' },
       modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
@@ -73,9 +76,9 @@ describe('sanitizeMasteryEffects (V2)', () => {
   });
 
   it('refuse une valeur non-objet et un groupe inconnu', () => {
-    expect(() => sanitizeMasteryEffects('x')).toThrow(MasteryEffectsValidationError);
-    expect(() => sanitizeMasteryEffects([1])).toThrow(MasteryEffectsValidationError);
-    expect(() => sanitizeMasteryEffects({ crafting: {} })).toThrow(
+    expect(() => sanitizeMasteryEffects('x', T)).toThrow(MasteryEffectsValidationError);
+    expect(() => sanitizeMasteryEffects([1], T)).toThrow(MasteryEffectsValidationError);
+    expect(() => sanitizeMasteryEffects({ crafting: {} }, T)).toThrow(
       MasteryEffectsValidationError,
     );
   });
@@ -85,7 +88,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
       expect(() =>
         sanitizeMasteryEffects({
           modifiers: [{ stat, mode: 'percentPerLevel', value: 1 }],
-        }),
+        }, T),
       ).toThrow(MasteryEffectsValidationError);
     }
   });
@@ -94,7 +97,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
     expect(() =>
       sanitizeMasteryEffects({
         modifiers: [{ stat: 'maxHealth', mode: 'percentTotal', value: 1 }],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
   });
 
@@ -103,7 +106,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
       expect(() =>
         sanitizeMasteryEffects({
           modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value }],
-        }),
+        }, T),
       ).toThrow(MasteryEffectsValidationError);
     }
     expect(() =>
@@ -111,14 +114,14 @@ describe('sanitizeMasteryEffects (V2)', () => {
         modifiers: [
           { stat: 'maxHealth', mode: 'percentPerLevel', value: MAX_PERCENT_PER_LEVEL + 0.1 },
         ],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
     expect(() =>
       sanitizeMasteryEffects({
         modifiers: [
           { stat: 'maxHealth', mode: 'flatPerLevel', value: MAX_FLAT_PER_LEVEL + 1 },
         ],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
   });
 
@@ -126,7 +129,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
     expect(() =>
       sanitizeMasteryEffects({
         modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 1, bonus: 2 }],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
   });
 
@@ -137,7 +140,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
           { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
           { stat: 'maxHealth', mode: 'percentPerLevel', value: 2 },
         ],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
   });
 
@@ -146,18 +149,18 @@ describe('sanitizeMasteryEffects (V2)', () => {
       sanitizeMasteryEffects({
         context: { weaponType: 'two_handed_sword' },
         modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 1 }],
-      }),
+      }, T),
     ).toThrow(MasteryEffectsValidationError);
   });
 
   it('refuse un weaponType hors format', () => {
-    expect(() => sanitizeMasteryEffects({ context: { weaponType: 'Épée!' } })).toThrow(
+    expect(() => sanitizeMasteryEffects({ context: { weaponType: 'Épée!' } }, T)).toThrow(
       MasteryEffectsValidationError,
     );
   });
 
   it('retire un tableau modifiers vide du stockage', () => {
-    expect(sanitizeMasteryEffects({ modifiers: [] })).toEqual({});
+    expect(sanitizeMasteryEffects({ modifiers: [] }, T)).toEqual({});
   });
 
   it("préséance V2 à l'écriture : modifiers[] gagne, le legacy est ignoré (jamais fusionné)", () => {
@@ -165,7 +168,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
       context: { weaponType: 'two_handed_sword' },
       modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 2 }],
       combat: { damagePercentPerLevel: 5 },
-    });
+    }, T);
     expect(result).toEqual({
       context: { weaponType: 'two_handed_sword' },
       modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 2 }],
@@ -178,7 +181,7 @@ describe('sanitizeMasteryEffects (V2)', () => {
 
 describe('computeCombatMasteryEffects (V2)', () => {
   it('retourne 0 sans weaponType équipé, effects vide ou mastery disabled', () => {
-    expect(computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, {})).toEqual({
+    expect(computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, {}, T)).toEqual({
       damagePercent: 0,
       damageFlat: 0,
     });
@@ -186,33 +189,31 @@ describe('computeCombatMasteryEffects (V2)', () => {
       computeCombatMasteryEffects(
         [makeDef({ effects: {} })],
         { two_handed: 10 },
-        { weaponType: 'two_handed_sword' },
-      ),
+        { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
     expect(
       computeCombatMasteryEffects(
         [makeDef({ enabled: false })],
         { two_handed: 10 },
-        { weaponType: 'two_handed_sword' },
-      ),
+        { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
   it('level 0 = 0 ; level 1 × 5 %/niveau = +5 % ; level 3 = +15 %', () => {
     expect(
-      computeCombatMasteryEffects([makeDef()], { two_handed: 0 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([makeDef()], { two_handed: 0 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
     expect(
-      computeCombatMasteryEffects([makeDef()], { two_handed: 1 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([makeDef()], { two_handed: 1 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 5, damageFlat: 0 });
     expect(
-      computeCombatMasteryEffects([makeDef()], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([makeDef()], { two_handed: 3 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 15, damageFlat: 0 });
   });
 
   it('mismatch weaponType → 0', () => {
     expect(
-      computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, { weaponType: 'bow' }),
+      computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, { weaponType: 'bow' }, T),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
@@ -224,7 +225,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
       },
     });
     expect(
-      computeCombatMasteryEffects([legacyDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([legacyDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 15, damageFlat: 0 });
   });
 
@@ -238,7 +239,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
     });
     // 3 × 2 = 6 % — jamais 3 × (2 + 5) = 21 %.
     expect(
-      computeCombatMasteryEffects([mixedDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([mixedDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 6, damageFlat: 0 });
   });
 
@@ -254,7 +255,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
     });
     // level 100 → 500 % bruts → 50 ; 10 000 flat bruts → 1 000.
     expect(
-      computeCombatMasteryEffects([def], { two_handed: 100 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([def], { two_handed: 100 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({
       damagePercent: MAX_TOTAL_PERCENT_PER_STAT,
       damageFlat: MAX_TOTAL_FLAT_PER_STAT,
@@ -272,7 +273,7 @@ describe('computeCombatMasteryEffects (V2)', () => {
       },
     });
     expect(
-      computeCombatMasteryEffects([def], { two_handed: 5 }, { weaponType: 'two_handed_sword' }),
+      computeCombatMasteryEffects([def], { two_handed: 5 }, { weaponType: 'two_handed_sword' }, T),
     ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 });
@@ -293,7 +294,7 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
         effects: { modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 5 }] },
       }),
     ];
-    expect(aggregateMasteryStatModifiers(defs, { c: 0 })).toEqual({ percent: {}, flat: {} });
+    expect(aggregateMasteryStatModifiers(defs, { c: 0 }, T)).toEqual({ percent: {}, flat: {} });
   });
 
   it('agrège percent et flat par stat : level 3 × (5 % + 2 flat) = 15 % + 6', () => {
@@ -308,7 +309,7 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
         },
       }),
     ];
-    expect(aggregateMasteryStatModifiers(defs, { vitality_training: 3 })).toEqual({
+    expect(aggregateMasteryStatModifiers(defs, { vitality_training: 3 }, T)).toEqual({
       percent: { maxHealth: 15 },
       flat: { healthRegen: 6 },
     });
@@ -326,7 +327,7 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
       }),
     ];
     // 10×5 + 10×5 = 100 → clamp 50.
-    expect(aggregateMasteryStatModifiers(defs, { a: 10, b: 10 })).toEqual({
+    expect(aggregateMasteryStatModifiers(defs, { a: 10, b: 10 }, T)).toEqual({
       percent: { defense: MAX_TOTAL_PERCENT_PER_STAT },
       flat: {},
     });
@@ -334,7 +335,7 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
 
   it('EXCLUT les effets contextuels (réservés aux hooks combat)', () => {
     const defs = [makeDef()]; // contexte two_handed_sword
-    expect(aggregateMasteryStatModifiers(defs, { two_handed: 10 })).toEqual({
+    expect(aggregateMasteryStatModifiers(defs, { two_handed: 10 }, T)).toEqual({
       percent: {},
       flat: {},
     });
@@ -354,7 +355,7 @@ describe('aggregateMasteryStatModifiers (V2)', () => {
       }),
     ];
     // level 3 × 2 = 6 (les deux entrées corrompues sont ignorées).
-    expect(aggregateMasteryStatModifiers(defs, { corrupt: 3 })).toEqual({
+    expect(aggregateMasteryStatModifiers(defs, { corrupt: 3 }, T)).toEqual({
       percent: { maxMana: 6 },
       flat: {},
     });

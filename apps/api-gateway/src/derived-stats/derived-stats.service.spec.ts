@@ -47,6 +47,57 @@ describe("DerivedStatsService", () => {
     });
   });
 
+  describe("réconciliation V3-B — targets mastery (non destructif)", () => {
+    it("promeut une dérivée implémentée encore à l'état par défaut V3-A", async () => {
+      repo.count.mockResolvedValue(24);
+      repo.find.mockResolvedValue([
+        { key: "physicalAttack", masteryEligible: false, runtimeStatus: "calculatedOnly", allowedModifierModes: [] },
+      ]);
+      await service.onModuleInit();
+      expect(repo.save).toHaveBeenCalledWith([
+        expect.objectContaining({
+          key: "physicalAttack",
+          masteryEligible: true,
+          runtimeStatus: "implemented",
+          allowedModifierModes: ["percentPerLevel", "flatPerLevel"],
+        }),
+      ]);
+    });
+
+    it("n'écrase JAMAIS une dérivée déjà éditée (masteryEligible/runtimeStatus différents)", async () => {
+      repo.count.mockResolvedValue(24);
+      repo.find.mockResolvedValue([
+        { key: "physicalAttack", masteryEligible: true, runtimeStatus: "implemented", allowedModifierModes: ["percentPerLevel"] },
+        { key: "maxHealth", masteryEligible: false, runtimeStatus: "notHooked", allowedModifierModes: [] },
+      ]);
+      await service.onModuleInit();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("ignore une clé hors des 10 implémentées (garde défensif)", async () => {
+      repo.count.mockResolvedValue(24);
+      repo.find.mockResolvedValue([
+        { key: "criticalChance", masteryEligible: false, runtimeStatus: "calculatedOnly", allowedModifierModes: [] },
+      ]);
+      await service.onModuleInit();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getStatCatalogForPlayer (V3-B)", () => {
+    it("retourne les 10 primaires + les dérivées enabled avec labels serveur", async () => {
+      repo.find.mockResolvedValue([
+        { key: "maxHealth", label: "PV max", category: "resources", displayOrder: 1, enabled: true, runtimeStatus: "implemented", description: null },
+        { key: "hidden", label: "Cachée", category: "offensive", displayOrder: 2, enabled: false, runtimeStatus: "notHooked", description: null },
+      ]);
+      const catalog = await service.getStatCatalogForPlayer();
+      expect(catalog.primaryStats).toHaveLength(10);
+      expect(catalog.primaryStats[0]).toEqual({ key: "strength", label: "Force" });
+      expect(catalog.derivedStats.map((d) => d.key)).toEqual(["maxHealth"]);
+      expect(catalog.derivedStats[0]).toMatchObject({ label: "PV max", runtimeStatus: "implemented" });
+    });
+  });
+
   describe("getDefinitions — cache", () => {
     it("charge depuis le repo puis sert depuis le cache", async () => {
       const first = await service.getDefinitions();

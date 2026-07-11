@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CharacterService } from './character.service';
 import { MasteriesService } from '../masteries/masteries.service';
+import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { CreateCharacterDto } from './dto/create-character.dto';
 import { EquipItemDto } from './dto/equip-item.dto';
 import { UnequipItemDto } from './dto/unequip-item.dto';
@@ -23,7 +24,20 @@ export class CharacterController {
   constructor(
     private readonly characterService: CharacterService,
     private readonly masteriesService: MasteriesService,
+    private readonly derivedStatsService: DerivedStatsService,
   ) {}
+
+  /**
+   * GET /characters/stat-definitions
+   * Catalogue read-only (auth joueur) des stats principales + dérivées enabled,
+   * avec leurs libellés serveur (V3-B). Le panneau joueur affiche ces clés/
+   * labels et lit les VALEURS depuis `character.stats.derived` — jamais de
+   * calcul client, jamais de route admin.
+   */
+  @Get('stat-definitions')
+  getStatDefinitions() {
+    return this.derivedStatsService.getStatCatalogForPlayer();
+  }
 
   /**
    * POST /characters

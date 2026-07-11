@@ -39,18 +39,15 @@
 export const MASTERY_MODIFIER_MODES = ['percentPerLevel', 'flatPerLevel'] as const;
 export type MasteryModifierMode = (typeof MASTERY_MODIFIER_MODES)[number];
 
-// Source serveur UNIQUE des stats ciblables, modes autorisés et bornes :
-// `mastery-effect-targets.ts` (V2-E). Importée ici (import de valeurs) tandis
-// que targets n'importe que des TYPES d'ici — aucun cycle runtime.
+// V3-B : les stats ciblables viennent des DerivedStatDefinition (via
+// `buildMasteryEffectTargets`) — les fonctions de ce fichier reçoivent la
+// liste de targets en PARAMÈTRE et restent pures. Import de valeurs targets →
+// calculateur : targets n'importe que des TYPES d'ici, aucun cycle runtime.
 import {
   CONTEXTUAL_MASTERY_EFFECT_STATS,
-  getMasteryEffectTarget,
-  MASTERY_EFFECT_TARGETS,
+  indexMasteryEffectTargets,
+  MasteryEffectTarget,
 } from './mastery-effect-targets';
-
-/** Clés des stats ciblables — dérivées de la source unique (compat tests). */
-export const MASTERY_MODIFIER_STATS: readonly string[] =
-  MASTERY_EFFECT_TARGETS.map((t) => t.key);
 
 /** Stats autorisées avec un contexte d'arme — ré-export de la source unique. */
 export const CONTEXTUAL_MODIFIER_STATS = CONTEXTUAL_MASTERY_EFFECT_STATS;
@@ -158,7 +155,11 @@ function sanitizeContext(raw: unknown): MasteryEffectsContext | undefined {
   return { weaponType };
 }
 
-function sanitizeModifierEntry(raw: unknown, index: number): MasteryStatModifier {
+function sanitizeModifierEntry(
+  raw: unknown,
+  index: number,
+  targetsByKey: Map<string, MasteryEffectTarget>,
+): MasteryStatModifier {
   if (!isPlainObject(raw)) {
     throw new MasteryEffectsValidationError(
       `effects.modifiers[${index}] doit être un objet { stat, mode, value }.`,
@@ -172,10 +173,11 @@ function sanitizeModifierEntry(raw: unknown, index: number): MasteryStatModifier
     }
   }
   const { stat, mode, value } = raw;
-  const targetDef = typeof stat === 'string' ? getMasteryEffectTarget(stat) : undefined;
+  const targetDef = typeof stat === 'string' ? targetsByKey.get(stat) : undefined;
   if (!targetDef) {
+    const allowed = [...targetsByKey.keys()].join(', ') || '(aucune stat exposée)';
     throw new MasteryEffectsValidationError(
-      `effects.modifiers[${index}].stat "${String(stat)}" n'est pas une stat supportée (${MASTERY_MODIFIER_STATS.join(', ')}).`,
+      `effects.modifiers[${index}].stat "${String(stat)}" n'est pas une stat supportée (${allowed}).`,
     );
   }
   if (typeof mode !== 'string' || !(MASTERY_MODIFIER_MODES as readonly string[]).includes(mode)) {
@@ -216,7 +218,11 @@ function sanitizeModifierEntry(raw: unknown, index: number): MasteryStatModifier
  *   sont autorisées (les hooks weapon-based ne consomment rien d'autre) ;
  * - le stockage produit UNIQUEMENT le nouveau format (`combat` jamais persisté).
  */
-export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
+export function sanitizeMasteryEffects(
+  raw: unknown,
+  targets: readonly MasteryEffectTarget[],
+): MasteryEffects {
+  const targetsByKey = indexMasteryEffectTargets(targets);
   if (raw === undefined || raw === null) return {};
   if (!isPlainObject(raw)) {
     throw new MasteryEffectsValidationError('effects doit être un objet.');
@@ -243,7 +249,7 @@ export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
       throw new MasteryEffectsValidationError('effects.modifiers doit être un tableau.');
     }
     raw.modifiers.forEach((entry, index) => {
-      modifiers.push(sanitizeModifierEntry(entry, index));
+      modifiers.push(sanitizeModifierEntry(entry, index, targetsByKey));
     });
   }
 
@@ -308,7 +314,10 @@ export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
  * Modificateurs valides d'un `effects` stocké, legacy inclus. Jamais de throw :
  * entrée corrompue ignorée, value clampée à la borne par niveau.
  */
-function readModifiers(effects: MasteryEffects | null | undefined): MasteryStatModifier[] {
+function readModifiers(
+  effects: MasteryEffects | null | undefined,
+  targetsByKey: Map<string, MasteryEffectTarget>,
+): MasteryStatModifier[] {
   if (!effects) return [];
   const result: MasteryStatModifier[] = [];
 
@@ -316,7 +325,7 @@ function readModifiers(effects: MasteryEffects | null | undefined): MasteryStatM
     for (const entry of effects.modifiers) {
       if (!isPlainObject(entry as unknown as Record<string, unknown>)) continue;
       const { stat, mode, value } = entry as MasteryStatModifier;
-      const targetDef = typeof stat === 'string' ? getMasteryEffectTarget(stat) : undefined;
+      const targetDef = typeof stat === 'string' ? targetsByKey.get(stat) : undefined;
       if (!targetDef) continue;
       if (mode !== 'percentPerLevel' && mode !== 'flatPerLevel') continue;
       if (!targetDef.allowedModes.includes(mode)) continue;
@@ -354,9 +363,11 @@ export function computeCombatMasteryEffects(
   definitions: readonly MasteryEffectsDefinitionLike[],
   masteryLevels: Record<string, number> | null | undefined,
   context: CombatMasteryContext,
+  targets: readonly MasteryEffectTarget[],
 ): CombatMasteryEffectsResult {
   const weaponType = context?.weaponType;
   if (!weaponType) return { damagePercent: 0, damageFlat: 0 };
+  const targetsByKey = indexMasteryEffectTargets(targets);
 
   let percent = 0;
   let flat = 0;
@@ -366,7 +377,7 @@ export function computeCombatMasteryEffects(
     if (def.effects?.context?.weaponType !== weaponType) continue;
     const lvl = effectiveLevels(masteryLevels, def.key);
     if (lvl === 0) continue;
-    for (const m of readModifiers(def.effects)) {
+    for (const m of readModifiers(def.effects, targetsByKey)) {
       if (m.stat !== 'physicalAttack') continue;
       if (m.mode === 'percentPerLevel') percent += lvl * m.value;
       else flat += lvl * m.value;
@@ -387,9 +398,11 @@ export function computeCombatMasteryEffects(
 export function aggregateMasteryStatModifiers(
   definitions: readonly MasteryEffectsDefinitionLike[],
   masteryLevels: Record<string, number> | null | undefined,
+  targets: readonly MasteryEffectTarget[],
 ): AggregatedStatModifiers {
   const percent: Record<string, number> = {};
   const flat: Record<string, number> = {};
+  const targetsByKey = indexMasteryEffectTargets(targets);
 
   for (const def of definitions) {
     if (!def?.enabled) continue;
@@ -397,7 +410,7 @@ export function aggregateMasteryStatModifiers(
     if (def.effects?.context?.weaponType) continue;
     const lvl = effectiveLevels(masteryLevels, def.key);
     if (lvl === 0) continue;
-    for (const m of readModifiers(def.effects)) {
+    for (const m of readModifiers(def.effects, targetsByKey)) {
       if (m.mode === 'percentPerLevel') {
         percent[m.stat] = (percent[m.stat] ?? 0) + lvl * m.value;
       } else {

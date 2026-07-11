@@ -16,6 +16,20 @@ export const PRIMARY_STAT_KEYS = [
 
 export type PrimaryStatKey = (typeof PRIMARY_STAT_KEYS)[number];
 
+/** Libellés FR des 10 stats principales fixes (affichage panneau joueur). */
+export const PRIMARY_STAT_LABELS: { key: PrimaryStatKey; label: string }[] = [
+  { key: 'strength', label: 'Force' },
+  { key: 'vitality', label: 'Vitalité' },
+  { key: 'endurance', label: 'Endurance' },
+  { key: 'agility', label: 'Agilité' },
+  { key: 'dexterity', label: 'Dextérité' },
+  { key: 'intelligence', label: 'Intelligence' },
+  { key: 'wisdom', label: 'Sagesse' },
+  { key: 'spirit', label: 'Esprit' },
+  { key: 'willpower', label: 'Volonté' },
+  { key: 'charisma', label: 'Charisme' },
+];
+
 /** Colonnes Character brutes utilisables comme `rawStatSource`. */
 export const RAW_STAT_SOURCES = ['maxHealth', 'attack', 'defense'] as const;
 export type RawStatSource = (typeof RAW_STAT_SOURCES)[number];
@@ -29,6 +43,27 @@ export type RawStatSource = (typeof RAW_STAT_SOURCES)[number];
  */
 export const CRITICAL_DERIVED_STAT_KEYS = ['maxHealth', 'physicalAttack', 'defense'] as const;
 export type CriticalDerivedStatKey = (typeof CRITICAL_DERIVED_STAT_KEYS)[number];
+
+/**
+ * Dérivées réellement consommées par un hook runtime ET ciblables par les
+ * Mastery Effects (V3-B). Sur ces 10 stats, les defaults/seed posent
+ * `masteryEligible=true`, `runtimeStatus='implemented'`,
+ * `allowedModifierModes=['percentPerLevel','flatPerLevel']`. Les 14 autres
+ * dérivées restent `calculatedOnly` (calculées mais non branchées gameplay) —
+ * jamais exposées comme targets tant que leur hook n'existe pas.
+ */
+export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
+  'physicalAttack',
+  'defense',
+  'maxHealth',
+  'maxMana',
+  'maxEnergy',
+  'healthRegen',
+  'manaRegen',
+  'energyRegen',
+  'healingPower',
+  'magicPower',
+] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [
   { key: 'resources', label: 'Ressources' },
@@ -158,6 +193,7 @@ function def(
     maxValue?: number;
   },
 ): DerivedStatDefinition {
+  const masteryImplemented = (MASTERY_IMPLEMENTED_DERIVED_KEYS as readonly string[]).includes(key);
   return {
     key,
     label,
@@ -169,11 +205,12 @@ function def(
     maxValue: opts.maxValue ?? null,
     displayOrder,
     enabled: true,
-    // Métadonnées Studio (V3-A) — defaults sûrs pour le fallback mémoire ;
-    // les vraies valeurs vivent en DB (éditables depuis le Studio).
-    masteryEligible: false,
-    allowedModifierModes: [],
-    runtimeStatus: 'calculatedOnly',
+    // Métadonnées Studio (V3-A/B). Les 10 dérivées consommées par un hook sont
+    // exposées comme Mastery Effect targets (implemented + les 2 modes) ; les
+    // autres restent calculatedOnly. Éditables ensuite depuis le Studio.
+    masteryEligible: masteryImplemented,
+    allowedModifierModes: masteryImplemented ? ['percentPerLevel', 'flatPerLevel'] : [],
+    runtimeStatus: masteryImplemented ? 'implemented' : 'calculatedOnly',
     description: null,
   } as DerivedStatDefinition;
 }

@@ -4,9 +4,10 @@ import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
 import { MasteriesService } from './masteries.service';
 import { MasteryEffectsService } from './mastery-effects.service';
+import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MasteryDefinition, PlayerMastery])],
+  imports: [TypeOrmModule.forFeature([MasteryDefinition, PlayerMastery]), DerivedStatsModule],
   providers: [MasteriesService, MasteryEffectsService],
   exports: [MasteriesService, MasteryEffectsService],
 })

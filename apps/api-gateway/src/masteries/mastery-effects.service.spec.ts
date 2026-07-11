@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MasteryEffectsService } from './mastery-effects.service';
 import { MasteriesService } from './masteries.service';
 import type { MasteryEffectsDefinitionLike } from './mastery-effects.calculator';
+import { STANDARD_TARGETS } from './mastery-effect-targets.spec';
 
 const TWO_HANDED_DEF: MasteryEffectsDefinitionLike = {
   key: 'two_handed',
@@ -25,6 +26,7 @@ describe('MasteryEffectsService (V2)', () => {
   let masteriesService: {
     getEnabledMasteryDefinitions: jest.Mock;
     getCharacterMasteries: jest.Mock;
+    getMasteryEffectTargets: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -34,6 +36,7 @@ describe('MasteryEffectsService (V2)', () => {
         { key: 'two_handed', level: 3 },
         { key: 'vitality_training', level: 5 },
       ]),
+      getMasteryEffectTargets: jest.fn().mockResolvedValue(STANDARD_TARGETS),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -69,12 +72,14 @@ describe('MasteryEffectsService (V2)', () => {
     expect(masteriesService.getEnabledMasteryDefinitions).not.toHaveBeenCalled();
   });
 
-  it('façades pures : computeCombatEffects et aggregatePermanentModifiers', () => {
+  it('façades : computeCombatEffects et aggregatePermanentModifiers (async, V3-B)', async () => {
     const levels = { two_handed: 3, vitality_training: 5 }; // bonus = level × value
     expect(
-      service.computeCombatEffects([TWO_HANDED_DEF], levels, { weaponType: 'two_handed_sword' }),
+      await service.computeCombatEffects([TWO_HANDED_DEF], levels, {
+        weaponType: 'two_handed_sword',
+      }),
     ).toEqual({ damagePercent: 15, damageFlat: 0 });
-    expect(service.aggregatePermanentModifiers([VITALITY_DEF], levels)).toEqual({
+    expect(await service.aggregatePermanentModifiers([VITALITY_DEF], levels)).toEqual({
       percent: { maxHealth: 10 },
       flat: {},
     });
