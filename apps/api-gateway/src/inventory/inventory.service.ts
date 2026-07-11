@@ -17,6 +17,7 @@ import { Item, ObjectMode } from '../items/entities/item.entity';
 import { ItemInstance, ItemInstanceContainerType, ItemInstanceState } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 import { WorldService } from '../world/world.service';
@@ -53,6 +54,7 @@ export class InventoryService {
     private readonly worldService: WorldService,
     private readonly inventoryProjection: InventoryProjectionService,
     private readonly derivedStats: DerivedStatsService,
+    private readonly masteryEffects: MasteryEffectsService,
     private readonly masteriesService: MasteriesService,
   ) {}
 
@@ -380,7 +382,12 @@ export class InventoryService {
   ): Promise<void> {
     // Délègue au helper partagé (réutilisé aussi par item.service.update — V1-C-B).
     const definitions = await this.derivedStats.getDefinitions();
-    await clampCharacterResourcesToDerivedMax(manager, characterId, definitions);
+    await clampCharacterResourcesToDerivedMax(
+      manager,
+      characterId,
+      definitions,
+      await this.masteryEffects.getPermanentStatModifiers(characterId),
+    );
   }
 
   /**

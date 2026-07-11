@@ -1,9 +1,12 @@
 import {
+  aggregateMasteryStatModifiers,
   computeCombatMasteryEffects,
   MasteryEffectsDefinitionLike,
   MasteryEffectsValidationError,
+  MAX_FLAT_PER_LEVEL,
   MAX_PERCENT_PER_LEVEL,
-  MAX_TOTAL_COMBAT_DAMAGE_PERCENT,
+  MAX_TOTAL_FLAT_PER_STAT,
+  MAX_TOTAL_PERCENT_PER_STAT,
   sanitizeMasteryEffects,
 } from './mastery-effects.calculator';
 
@@ -13,11 +16,11 @@ function makeDef(
   overrides: Partial<MasteryEffectsDefinitionLike> = {},
 ): MasteryEffectsDefinitionLike {
   return {
-    key: 'dagger',
+    key: 'two_handed',
     enabled: true,
     effects: {
-      context: { weaponType: 'dagger' },
-      combat: { damagePercentPerLevel: 0.5 },
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
     },
     ...overrides,
   };
@@ -25,254 +28,304 @@ function makeDef(
 
 // ─── sanitizeMasteryEffects (écriture stricte) ───────────────────────────────
 
-describe('sanitizeMasteryEffects', () => {
+describe('sanitizeMasteryEffects (V2)', () => {
   it('retourne {} pour undefined et null', () => {
     expect(sanitizeMasteryEffects(undefined)).toEqual({});
     expect(sanitizeMasteryEffects(null)).toEqual({});
   });
 
-  it('accepte et normalise une structure V1 valide', () => {
+  it('accepte et normalise une structure modifiers valide', () => {
     const result = sanitizeMasteryEffects({
-      context: { weaponType: 'dagger' },
-      combat: { damagePercentPerLevel: 0.5 },
+      modifiers: [
+        { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
+        { stat: 'healthRegen', mode: 'flatPerLevel', value: 0.5 },
+      ],
     });
     expect(result).toEqual({
-      context: { weaponType: 'dagger' },
-      combat: { damagePercentPerLevel: 0.5 },
+      modifiers: [
+        { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
+        { stat: 'healthRegen', mode: 'flatPerLevel', value: 0.5 },
+      ],
     });
   });
 
-  it('retire les groupes vides du stockage', () => {
-    expect(sanitizeMasteryEffects({ context: {}, combat: {} })).toEqual({});
+  it('accepte un effet contextuel physicalAttack', () => {
+    const result = sanitizeMasteryEffects({
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+    });
+    expect(result).toEqual({
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+    });
   });
 
-  it('refuse une valeur non-objet', () => {
+  it('convertit le legacy combat.damagePercentPerLevel en modifier (écriture nouveau format)', () => {
+    const result = sanitizeMasteryEffects({
+      context: { weaponType: 'two_handed_sword' },
+      combat: { damagePercentPerLevel: 5 },
+    });
+    expect(result).toEqual({
+      context: { weaponType: 'two_handed_sword' },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+    });
+    expect(result).not.toHaveProperty('combat');
+  });
+
+  it('refuse une valeur non-objet et un groupe inconnu', () => {
     expect(() => sanitizeMasteryEffects('x')).toThrow(MasteryEffectsValidationError);
     expect(() => sanitizeMasteryEffects([1])).toThrow(MasteryEffectsValidationError);
-    expect(() => sanitizeMasteryEffects(3)).toThrow(MasteryEffectsValidationError);
-  });
-
-  it('refuse un groupe inconnu', () => {
     expect(() => sanitizeMasteryEffects({ crafting: {} })).toThrow(
       MasteryEffectsValidationError,
     );
   });
 
-  it('refuse les effets non whitelistés V1 (stun, knockback, block, craft)', () => {
-    for (const key of [
-      'stunChancePercentPerLevel',
-      'knockbackPowerPercentPerLevel',
-      'blockChancePercentPerLevel',
-      'successChancePercentPerLevel',
-    ]) {
+  it('refuse une stat hors whitelist (crit, stun, block…)', () => {
+    for (const stat of ['criticalChance', 'stunChance', 'blockChance', 'movementSpeed']) {
       expect(() =>
         sanitizeMasteryEffects({
-          context: { weaponType: 'two_handed_mace' },
-          combat: { [key]: 1 },
+          modifiers: [{ stat, mode: 'percentPerLevel', value: 1 }],
         }),
       ).toThrow(MasteryEffectsValidationError);
     }
   });
 
-  it('refuse une clé de contexte inconnue', () => {
-    expect(() => sanitizeMasteryEffects({ context: { itemCategory: 'sword' } })).toThrow(
-      MasteryEffectsValidationError,
-    );
+  it('refuse un mode inconnu', () => {
+    expect(() =>
+      sanitizeMasteryEffects({
+        modifiers: [{ stat: 'maxHealth', mode: 'percentTotal', value: 1 }],
+      }),
+    ).toThrow(MasteryEffectsValidationError);
   });
 
-  it('refuse un weaponType hors format [a-z0-9_]', () => {
-    expect(() => sanitizeMasteryEffects({ context: { weaponType: 'Dagger!' } })).toThrow(
-      MasteryEffectsValidationError,
-    );
-    expect(() => sanitizeMasteryEffects({ context: { weaponType: '' } })).toThrow(
-      MasteryEffectsValidationError,
-    );
-    expect(() => sanitizeMasteryEffects({ context: { weaponType: 42 } })).toThrow(
-      MasteryEffectsValidationError,
-    );
-  });
-
-  it('refuse damagePercentPerLevel non fini (NaN, Infinity, string)', () => {
-    for (const bad of [NaN, Infinity, -Infinity, '0.5', {}]) {
+  it('refuse value non finie, négative ou hors borne', () => {
+    for (const value of [NaN, Infinity, -1, '5', {}]) {
       expect(() =>
         sanitizeMasteryEffects({
-          context: { weaponType: 'dagger' },
-          combat: { damagePercentPerLevel: bad },
+          modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value }],
         }),
       ).toThrow(MasteryEffectsValidationError);
     }
-  });
-
-  it('refuse damagePercentPerLevel négatif ou au-dessus de la borne', () => {
     expect(() =>
       sanitizeMasteryEffects({
-        context: { weaponType: 'dagger' },
-        combat: { damagePercentPerLevel: -0.1 },
+        modifiers: [
+          { stat: 'maxHealth', mode: 'percentPerLevel', value: MAX_PERCENT_PER_LEVEL + 0.1 },
+        ],
       }),
     ).toThrow(MasteryEffectsValidationError);
     expect(() =>
       sanitizeMasteryEffects({
-        context: { weaponType: 'dagger' },
-        combat: { damagePercentPerLevel: MAX_PERCENT_PER_LEVEL + 0.1 },
+        modifiers: [
+          { stat: 'maxHealth', mode: 'flatPerLevel', value: MAX_FLAT_PER_LEVEL + 1 },
+        ],
       }),
     ).toThrow(MasteryEffectsValidationError);
   });
 
-  it('accepte les bornes exactes 0 et MAX_PERCENT_PER_LEVEL', () => {
-    expect(
-      sanitizeMasteryEffects({
-        context: { weaponType: 'dagger' },
-        combat: { damagePercentPerLevel: 0 },
-      }),
-    ).toEqual({ context: { weaponType: 'dagger' }, combat: { damagePercentPerLevel: 0 } });
-    expect(
-      sanitizeMasteryEffects({
-        context: { weaponType: 'dagger' },
-        combat: { damagePercentPerLevel: MAX_PERCENT_PER_LEVEL },
-      }),
-    ).toEqual({
-      context: { weaponType: 'dagger' },
-      combat: { damagePercentPerLevel: MAX_PERCENT_PER_LEVEL },
-    });
-  });
-
-  it('refuse un effet combat sans context.weaponType (effets V1 contextuels)', () => {
+  it('refuse une clé inconnue dans une entrée modifier', () => {
     expect(() =>
-      sanitizeMasteryEffects({ combat: { damagePercentPerLevel: 0.5 } }),
+      sanitizeMasteryEffects({
+        modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 1, bonus: 2 }],
+      }),
     ).toThrow(MasteryEffectsValidationError);
   });
 
-  it('accepte un context seul (sans effet combat)', () => {
-    expect(sanitizeMasteryEffects({ context: { weaponType: 'dagger' } })).toEqual({
-      context: { weaponType: 'dagger' },
-    });
+  it('refuse les doublons (stat, mode)', () => {
+    expect(() =>
+      sanitizeMasteryEffects({
+        modifiers: [
+          { stat: 'maxHealth', mode: 'percentPerLevel', value: 1 },
+          { stat: 'maxHealth', mode: 'percentPerLevel', value: 2 },
+        ],
+      }),
+    ).toThrow(MasteryEffectsValidationError);
+  });
+
+  it("contexte d'arme → seules les stats contextualisables (physicalAttack)", () => {
+    expect(() =>
+      sanitizeMasteryEffects({
+        context: { weaponType: 'two_handed_sword' },
+        modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 1 }],
+      }),
+    ).toThrow(MasteryEffectsValidationError);
+  });
+
+  it('refuse un weaponType hors format', () => {
+    expect(() => sanitizeMasteryEffects({ context: { weaponType: 'Épée!' } })).toThrow(
+      MasteryEffectsValidationError,
+    );
+  });
+
+  it('retire un tableau modifiers vide du stockage', () => {
+    expect(sanitizeMasteryEffects({ modifiers: [] })).toEqual({});
   });
 });
 
-// ─── computeCombatMasteryEffects (lecture défensive) ─────────────────────────
+// ─── computeCombatMasteryEffects (contextuel, défensif) ──────────────────────
 
-describe('computeCombatMasteryEffects', () => {
-  it('retourne 0 sans weaponType équipé', () => {
-    expect(computeCombatMasteryEffects([makeDef()], { dagger: 10 }, {})).toEqual({
+describe('computeCombatMasteryEffects (V2)', () => {
+  it('retourne 0 sans weaponType équipé, effects vide ou mastery disabled', () => {
+    expect(computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, {})).toEqual({
       damagePercent: 0,
+      damageFlat: 0,
     });
     expect(
-      computeCombatMasteryEffects([makeDef()], { dagger: 10 }, { weaponType: null }),
-    ).toEqual({ damagePercent: 0 });
-  });
-
-  it('retourne 0 pour effects vide ou absent', () => {
-    expect(
       computeCombatMasteryEffects(
-        [makeDef({ effects: {} }), makeDef({ effects: null })],
-        { dagger: 10 },
-        { weaponType: 'dagger' },
+        [makeDef({ effects: {} })],
+        { two_handed: 10 },
+        { weaponType: 'two_handed_sword' },
       ),
-    ).toEqual({ damagePercent: 0 });
-  });
-
-  it('ignore une mastery disabled', () => {
+    ).toEqual({ damagePercent: 0, damageFlat: 0 });
     expect(
       computeCombatMasteryEffects(
         [makeDef({ enabled: false })],
-        { dagger: 10 },
-        { weaponType: 'dagger' },
+        { two_handed: 10 },
+        { weaponType: 'two_handed_sword' },
       ),
-    ).toEqual({ damagePercent: 0 });
+    ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
-  it('retourne 0 au level 1 (jamais pratiquée) et au level absent', () => {
+  it('level 1 = 0 ; level 3 × 5 %/niveau = +10 %', () => {
     expect(
-      computeCombatMasteryEffects([makeDef()], { dagger: 1 }, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: 0 });
+      computeCombatMasteryEffects([makeDef()], { two_handed: 1 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 0, damageFlat: 0 });
     expect(
-      computeCombatMasteryEffects([makeDef()], {}, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: 0 });
-    expect(
-      computeCombatMasteryEffects([makeDef()], null, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: 0 });
+      computeCombatMasteryEffects([makeDef()], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 10, damageFlat: 0 });
   });
 
-  it('applique (level − 1) × perLevel : level 5 à 0.5 → 2 %', () => {
+  it('mismatch weaponType → 0', () => {
     expect(
-      computeCombatMasteryEffects([makeDef()], { dagger: 5 }, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: 2 });
+      computeCombatMasteryEffects([makeDef()], { two_handed: 10 }, { weaponType: 'bow' }),
+    ).toEqual({ damagePercent: 0, damageFlat: 0 });
   });
 
-  it('retourne 0 si le weaponType équipé ne matche pas le contexte', () => {
-    expect(
-      computeCombatMasteryEffects([makeDef()], { dagger: 10 }, { weaponType: 'bow' }),
-    ).toEqual({ damagePercent: 0 });
-  });
-
-  it('somme plusieurs masteries matchant le même contexte', () => {
-    const defs = [
-      makeDef({ key: 'dagger' }),
-      makeDef({
-        key: 'light_blades',
-        effects: {
-          context: { weaponType: 'dagger' },
-          combat: { damagePercentPerLevel: 1 },
-        },
-      }),
-    ];
-    // dagger: (5−1)×0.5 = 2 ; light_blades: (3−1)×1 = 2 → 4 %.
-    expect(
-      computeCombatMasteryEffects(
-        defs,
-        { dagger: 5, light_blades: 3 },
-        { weaponType: 'dagger' },
-      ),
-    ).toEqual({ damagePercent: 4 });
-  });
-
-  it('clampe le bonus total à MAX_TOTAL_COMBAT_DAMAGE_PERCENT', () => {
-    // level 101 à 5 %/niveau → 500 % bruts → clampés à 50.
-    const def = makeDef({
+  it('lit le legacy combat.damagePercentPerLevel comme physicalAttack percent', () => {
+    const legacyDef = makeDef({
       effects: {
-        context: { weaponType: 'dagger' },
+        context: { weaponType: 'two_handed_sword' },
         combat: { damagePercentPerLevel: 5 },
       },
     });
     expect(
-      computeCombatMasteryEffects([def], { dagger: 101 }, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: MAX_TOTAL_COMBAT_DAMAGE_PERCENT });
+      computeCombatMasteryEffects([legacyDef], { two_handed: 3 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 10, damageFlat: 0 });
   });
 
-  it('ignore un perLevel corrompu en base (non fini, négatif, 0)', () => {
-    for (const bad of [NaN, Infinity, -1, 0, '0.5' as unknown as number]) {
-      const def = makeDef({
-        effects: {
-          context: { weaponType: 'dagger' },
-          combat: { damagePercentPerLevel: bad },
-        },
-      });
-      expect(
-        computeCombatMasteryEffects([def], { dagger: 10 }, { weaponType: 'dagger' }),
-      ).toEqual({ damagePercent: 0 });
-    }
-  });
-
-  it('clampe à la lecture un perLevel au-dessus de la borne (base corrompue)', () => {
+  it('somme percent + flat et clampe les totaux', () => {
     const def = makeDef({
       effects: {
-        context: { weaponType: 'dagger' },
-        combat: { damagePercentPerLevel: 100 },
+        context: { weaponType: 'two_handed_sword' },
+        modifiers: [
+          { stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 },
+          { stat: 'physicalAttack', mode: 'flatPerLevel', value: 100 },
+        ],
       },
     });
-    // perLevel clampé à 5 : (3−1)×5 = 10, pas (3−1)×100.
+    // level 101 → 500 % bruts → 50 ; 10 000 flat bruts → 1 000.
     expect(
-      computeCombatMasteryEffects([def], { dagger: 3 }, { weaponType: 'dagger' }),
-    ).toEqual({ damagePercent: 10 });
+      computeCombatMasteryEffects([def], { two_handed: 101 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({
+      damagePercent: MAX_TOTAL_PERCENT_PER_STAT,
+      damageFlat: MAX_TOTAL_FLAT_PER_STAT,
+    });
   });
 
-  it('ignore un level non fini (donnée corrompue)', () => {
+  it('ignore les stats non contextualisables et les valeurs corrompues', () => {
+    const def = makeDef({
+      effects: {
+        context: { weaponType: 'two_handed_sword' },
+        modifiers: [
+          { stat: 'maxHealth', mode: 'percentPerLevel', value: 5 }, // hors combat
+          { stat: 'physicalAttack', mode: 'percentPerLevel', value: NaN as unknown as number },
+        ],
+      },
+    });
     expect(
-      computeCombatMasteryEffects(
-        [makeDef()],
-        { dagger: NaN },
-        { weaponType: 'dagger' },
-      ),
-    ).toEqual({ damagePercent: 0 });
+      computeCombatMasteryEffects([def], { two_handed: 5 }, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 0, damageFlat: 0 });
+  });
+});
+
+// ─── aggregateMasteryStatModifiers (permanent, défensif) ─────────────────────
+
+describe('aggregateMasteryStatModifiers (V2)', () => {
+  it('effects {} / disabled / level 1 → agrégat vide', () => {
+    const defs = [
+      makeDef({ key: 'a', effects: {} }),
+      makeDef({
+        key: 'b',
+        enabled: false,
+        effects: { modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 5 }] },
+      }),
+      makeDef({
+        key: 'c',
+        effects: { modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 5 }] },
+      }),
+    ];
+    expect(aggregateMasteryStatModifiers(defs, { c: 1 })).toEqual({ percent: {}, flat: {} });
+  });
+
+  it('agrège percent et flat par stat : level 3 × (5 % + 2 flat)', () => {
+    const defs = [
+      makeDef({
+        key: 'vitality_training',
+        effects: {
+          modifiers: [
+            { stat: 'maxHealth', mode: 'percentPerLevel', value: 5 },
+            { stat: 'healthRegen', mode: 'flatPerLevel', value: 2 },
+          ],
+        },
+      }),
+    ];
+    expect(aggregateMasteryStatModifiers(defs, { vitality_training: 3 })).toEqual({
+      percent: { maxHealth: 10 },
+      flat: { healthRegen: 4 },
+    });
+  });
+
+  it('somme plusieurs maîtrises sur la même stat et clampe les totaux', () => {
+    const defs = [
+      makeDef({
+        key: 'a',
+        effects: { modifiers: [{ stat: 'defense', mode: 'percentPerLevel', value: 5 }] },
+      }),
+      makeDef({
+        key: 'b',
+        effects: { modifiers: [{ stat: 'defense', mode: 'percentPerLevel', value: 5 }] },
+      }),
+    ];
+    // (11−1)×5 + (11−1)×5 = 100 → clamp 50.
+    expect(aggregateMasteryStatModifiers(defs, { a: 11, b: 11 })).toEqual({
+      percent: { defense: MAX_TOTAL_PERCENT_PER_STAT },
+      flat: {},
+    });
+  });
+
+  it('EXCLUT les effets contextuels (réservés aux hooks combat)', () => {
+    const defs = [makeDef()]; // contexte two_handed_sword
+    expect(aggregateMasteryStatModifiers(defs, { two_handed: 10 })).toEqual({
+      percent: {},
+      flat: {},
+    });
+  });
+
+  it('ignore les entrées corrompues en base (stat inconnue, value invalide)', () => {
+    const defs = [
+      makeDef({
+        key: 'corrupt',
+        effects: {
+          modifiers: [
+            { stat: 'stunChance', mode: 'percentPerLevel', value: 5 },
+            { stat: 'maxHealth', mode: 'percentPerLevel', value: Infinity as unknown as number },
+            { stat: 'maxMana', mode: 'percentPerLevel', value: 2 },
+          ],
+        },
+      }),
+    ];
+    expect(aggregateMasteryStatModifiers(defs, { corrupt: 3 })).toEqual({
+      percent: { maxMana: 4 },
+      flat: {},
+    });
   });
 });

@@ -6,6 +6,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { WorldService } from './world.service';
 
 /**
@@ -108,6 +109,7 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
     private readonly derivedStats: DerivedStatsService,
+    private readonly masteryEffects: MasteryEffectsService,
     private readonly worldService: WorldService,
   ) {}
 
@@ -182,10 +184,13 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
 
       // Max dérivés AVEC équipement : la regen ne doit pas plafonner à un max
       // non équipé (regression Équipement V1) ni écraser l'UI via l'event.
+      // Modificateurs de maîtrise permanents inclus : les regens dérivées
+      // (healthRegen/manaRegen/energyRegen) et les max en dépendent (V2).
       const derived = CharacterStatsCalculator.compute(
         character,
         definitions,
         aggregateEquipmentBonuses(character.equipment),
+        await this.masteryEffects.getPermanentStatModifiers(character.id),
       ).derived;
       const maxHealth = Math.max(1, Math.round(derived.maxHealth));
       const maxMana = Math.max(0, Math.round(derived.maxMana));

@@ -1,4 +1,4 @@
-import { CharacterStatsCalculator } from './character-stats-calculator';
+import { CharacterStatsCalculator, applyDerivedStatModifiers } from './character-stats-calculator';
 import { Character } from './entities/character.entity';
 
 function makeCharacter(overrides: Partial<Character> = {}): Character {
@@ -157,6 +157,47 @@ describe('CharacterStatsCalculator', () => {
       expect(stats.derived.maxHealth).toBe(120);
       expect(stats.derived.physicalAttack).toBe(15);
       expect(stats.derived.defense).toBe(7);
+    });
+  });
+
+  // ─── Modificateurs post-dérivées (Mastery Effects V2) ──────────────────────
+  describe("derivedModifiers (post-dérivées)", () => {
+    it("applique percent puis flat : stat × (1 + %/100) + flat", () => {
+      const stats = CharacterStatsCalculator.compute(
+        makeCharacter({ maxHealth: 100, attack: 20, defense: 0 }),
+        undefined,
+        undefined,
+        { percent: { maxHealth: 10, physicalAttack: 50 }, flat: { maxHealth: 5 } },
+      );
+      // maxHealth : 100 × 1.10 + 5 = 115 ; physicalAttack : 20 × 1.5 = 30.
+      expect(stats.derived.maxHealth).toBeCloseTo(115, 9);
+      expect(stats.derived.physicalAttack).toBeCloseTo(30, 9);
+    });
+
+    it("sans modificateurs : comportement identique à l'historique", () => {
+      const withEmpty = CharacterStatsCalculator.compute(
+        makeCharacter({ maxHealth: 120, attack: 15, defense: 7 }),
+        undefined,
+        undefined,
+        { percent: {}, flat: {} },
+      );
+      const without = CharacterStatsCalculator.compute(
+        makeCharacter({ maxHealth: 120, attack: 15, defense: 7 }),
+      );
+      expect(withEmpty.derived).toEqual(without.derived);
+    });
+
+    it("applyDerivedStatModifiers est défensif : NaN/Infinity ignorés, plancher 0", () => {
+      const derived = CharacterStatsCalculator.compute(
+        makeCharacter({ maxHealth: 100 }),
+      ).derived;
+      const result = applyDerivedStatModifiers(derived, {
+        percent: { maxHealth: NaN },
+        flat: { maxMana: -99999, defense: Infinity },
+      });
+      expect(result.maxHealth).toBe(derived.maxHealth); // NaN ignoré
+      expect(result.maxMana).toBe(0); // plancher 0, jamais négatif
+      expect(result.defense).toBe(derived.defense); // Infinity → inchangé
     });
   });
 });

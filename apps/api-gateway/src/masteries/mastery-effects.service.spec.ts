@@ -1,8 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MasteryEffectsService } from './mastery-effects.service';
 import { MasteriesService } from './masteries.service';
+import type { MasteryEffectsDefinitionLike } from './mastery-effects.calculator';
 
-describe('MasteryEffectsService', () => {
+const TWO_HANDED_DEF: MasteryEffectsDefinitionLike = {
+  key: 'two_handed',
+  enabled: true,
+  effects: {
+    context: { weaponType: 'two_handed_sword' },
+    modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 5 }],
+  },
+};
+
+const VITALITY_DEF: MasteryEffectsDefinitionLike = {
+  key: 'vitality_training',
+  enabled: true,
+  effects: {
+    modifiers: [{ stat: 'maxHealth', mode: 'percentPerLevel', value: 2 }],
+  },
+};
+
+describe('MasteryEffectsService (V2)', () => {
   let service: MasteryEffectsService;
   let masteriesService: {
     getEnabledMasteryDefinitions: jest.Mock;
@@ -11,8 +29,11 @@ describe('MasteryEffectsService', () => {
 
   beforeEach(async () => {
     masteriesService = {
-      getEnabledMasteryDefinitions: jest.fn(),
-      getCharacterMasteries: jest.fn(),
+      getEnabledMasteryDefinitions: jest.fn().mockResolvedValue([TWO_HANDED_DEF, VITALITY_DEF]),
+      getCharacterMasteries: jest.fn().mockResolvedValue([
+        { key: 'two_handed', level: 3 },
+        { key: 'vitality_training', level: 5 },
+      ]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -25,76 +46,38 @@ describe('MasteryEffectsService', () => {
     service = module.get<MasteryEffectsService>(MasteryEffectsService);
   });
 
-  it('court-circuite sans weaponType : 0 % et AUCUNE lecture', async () => {
-    const result = await service.getCombatMasteryEffects('char-1', {});
-
-    expect(result).toEqual({ damagePercent: 0 });
-    expect(masteriesService.getEnabledMasteryDefinitions).not.toHaveBeenCalled();
-    expect(masteriesService.getCharacterMasteries).not.toHaveBeenCalled();
-  });
-
-  it('charge les définitions (cache MasteriesService) + niveaux joueur et calcule le bonus', async () => {
-    masteriesService.getEnabledMasteryDefinitions.mockResolvedValue([
-      {
-        key: 'dagger',
-        enabled: true,
-        effects: {
-          context: { weaponType: 'dagger' },
-          combat: { damagePercentPerLevel: 0.5 },
-        },
-      },
-    ]);
-    masteriesService.getCharacterMasteries.mockResolvedValue([
-      { key: 'dagger', level: 5 },
-      { key: 'bow', level: 20 },
-    ]);
-
-    const result = await service.getCombatMasteryEffects('char-1', {
-      weaponType: 'dagger',
+  it('getMasteryBonuses : un seul chargement → permanents + contextuel', async () => {
+    const result = await service.getMasteryBonuses('char-1', {
+      weaponType: 'two_handed_sword',
     });
 
-    // (5 − 1) × 0.5 = 2 %.
-    expect(result).toEqual({ damagePercent: 2 });
+    // Contextuel : (3−1)×5 = 10 %. Permanent : (5−1)×2 = 8 % maxHealth.
+    expect(result.combat).toEqual({ damagePercent: 10, damageFlat: 0 });
+    expect(result.statModifiers).toEqual({ percent: { maxHealth: 8 }, flat: {} });
     expect(masteriesService.getEnabledMasteryDefinitions).toHaveBeenCalledTimes(1);
-    expect(masteriesService.getCharacterMasteries).toHaveBeenCalledWith('char-1');
+    expect(masteriesService.getCharacterMasteries).toHaveBeenCalledTimes(1);
   });
 
-  it('retourne 0 quand aucune définition ne matche le contexte', async () => {
-    masteriesService.getEnabledMasteryDefinitions.mockResolvedValue([
-      {
-        key: 'bow',
-        enabled: true,
-        effects: {
-          context: { weaponType: 'bow' },
-          combat: { damagePercentPerLevel: 1 },
-        },
-      },
-    ]);
-    masteriesService.getCharacterMasteries.mockResolvedValue([{ key: 'bow', level: 10 }]);
+  it('getPermanentStatModifiers : ignore les effets contextuels', async () => {
+    const result = await service.getPermanentStatModifiers('char-1');
+    expect(result).toEqual({ percent: { maxHealth: 8 }, flat: {} });
+  });
 
-    const result = await service.getCombatMasteryEffects('char-1', {
-      weaponType: 'dagger',
+  it('getCombatMasteryEffects : court-circuit sans weaponType (aucune lecture)', async () => {
+    const result = await service.getCombatMasteryEffects('char-1', {});
+    expect(result).toEqual({ damagePercent: 0, damageFlat: 0 });
+    expect(masteriesService.getEnabledMasteryDefinitions).not.toHaveBeenCalled();
+  });
+
+  it('façades pures : computeCombatEffects et aggregatePermanentModifiers', () => {
+    const levels = { two_handed: 3, vitality_training: 5 };
+    expect(
+      service.computeCombatEffects([TWO_HANDED_DEF], levels, { weaponType: 'two_handed_sword' }),
+    ).toEqual({ damagePercent: 10, damageFlat: 0 });
+    expect(service.aggregatePermanentModifiers([VITALITY_DEF], levels)).toEqual({
+      percent: { maxHealth: 8 },
+      flat: {},
     });
-
-    expect(result).toEqual({ damagePercent: 0 });
-  });
-
-  it('computeCombatEffects (sans I/O) délègue au calculateur pur', () => {
-    const result = service.computeCombatEffects(
-      [
-        {
-          key: 'dagger',
-          enabled: true,
-          effects: {
-            context: { weaponType: 'dagger' },
-            combat: { damagePercentPerLevel: 1 },
-          },
-        },
-      ],
-      { dagger: 11 },
-      { weaponType: 'dagger' },
-    );
-
-    expect(result).toEqual({ damagePercent: 10 });
+    expect(service.emptyStatModifiers()).toEqual({ percent: {}, flat: {} });
   });
 });

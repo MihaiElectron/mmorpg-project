@@ -1,7 +1,7 @@
 import { EntityManager } from 'typeorm';
 import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
-import { CharacterStatsCalculator, PRIMARY_STAT_KEYS, PrimaryStats } from './character-stats-calculator';
+import { CharacterStatsCalculator, DerivedStatModifiers, PRIMARY_STAT_KEYS, PrimaryStats } from './character-stats-calculator';
 import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
 
 /** PrimaryStats à zéro (clone local — évite tout cycle d'import runtime). */
@@ -120,6 +120,10 @@ export async function clampCharacterResourcesToDerivedMax(
   manager: EntityManager,
   characterId: string,
   definitions: DerivedStatDefinition[],
+  // Modificateurs post-dérivées (maîtrises, Mastery Effects V2) fournis par
+  // l'appelant : sans eux, les max calculés seraient sous-estimés et le clamp
+  // rognerait des ressources légitimes.
+  derivedModifiers?: DerivedStatModifiers | null,
 ): Promise<void> {
   const [character, equipment] = await Promise.all([
     manager.findOne(Character, { where: { id: characterId } }),
@@ -131,6 +135,7 @@ export async function clampCharacterResourcesToDerivedMax(
     character,
     definitions,
     aggregateEquipmentBonuses(equipment),
+    derivedModifiers,
   ).derived;
   const maxHealth = Math.max(1, Math.round(derived.maxHealth));
   const maxMana = Math.max(0, Math.round(derived.maxMana));

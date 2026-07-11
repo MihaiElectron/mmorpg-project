@@ -19,6 +19,7 @@ import { WorldItem } from '../world-items/entities/world-item.entity';
 import { AuctionListing } from '../auction/entities/auction-listing.entity';
 import { MailMessage } from '../mail/entities/mail-message.entity';
 import { Character } from '../characters/entities/character.entity';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -251,6 +252,10 @@ describe('ItemService', () => {
         {
           provide: DerivedStatsService,
           useValue: { getDefinitions: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: MasteryEffectsService,
+          useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) },
         },
       ],
     }).compile();

@@ -94,6 +94,38 @@ export interface DerivedStats {
   threatGeneration: number;
 }
 
+/**
+ * Modificateurs appliqués APRÈS le calcul des dérivées (Mastery Effects V2) :
+ * `stat = stat × (1 + percent/100) + flat`, plancher 0, jamais NaN/Infinity.
+ * Générique : le calculateur ne sait pas d'où viennent les modificateurs
+ * (aujourd'hui : maîtrises via `aggregateMasteryStatModifiers`).
+ */
+export interface DerivedStatModifiers {
+  percent: Record<string, number>;
+  flat: Record<string, number>;
+}
+
+/** Applique les modificateurs post-dérivées. PURE, défensive, plancher 0. */
+export function applyDerivedStatModifiers(
+  derived: DerivedStats,
+  modifiers: DerivedStatModifiers | null | undefined,
+): DerivedStats {
+  if (!modifiers) return derived;
+  const result = { ...derived } as unknown as Record<string, number>;
+  for (const key of Object.keys(result)) {
+    const rawPct = modifiers.percent?.[key];
+    const rawFlat = modifiers.flat?.[key];
+    const pct = typeof rawPct === 'number' && Number.isFinite(rawPct) ? rawPct : 0;
+    const flat = typeof rawFlat === 'number' && Number.isFinite(rawFlat) ? rawFlat : 0;
+    if (pct === 0 && flat === 0) continue;
+    const next = result[key] * (1 + pct / 100) + flat;
+    // Défensif : jamais NaN/Infinity ni valeur négative (maxHealth/mana/energy
+    // notamment) — une config corrompue ne doit pas casser un consommateur.
+    result[key] = Number.isFinite(next) ? Math.max(0, next) : result[key];
+  }
+  return result as unknown as DerivedStats;
+}
+
 /** Contrat de sortie complet exposé par /characters/me. */
 export interface CharacterStats {
   base: PrimaryStats;
@@ -214,6 +246,7 @@ export class CharacterStatsCalculator {
     character: Character,
     definitions?: DerivedStatDefinition[],
     equipmentModifier?: PrimaryStats,
+    derivedModifiers?: DerivedStatModifiers | null,
   ): CharacterStats {
     const base = this.baseStats(character);
 
@@ -235,10 +268,16 @@ export class CharacterStatsCalculator {
       modifiers.debuffs,
     );
 
-    const derived = computeDerivedFromDefinitions(
-      final,
-      { maxHealth: character.maxHealth, attack: character.attack, defense: character.defense },
-      definitions,
+    // Modificateurs post-dérivées (Mastery Effects V2) : agrégés par l'appelant
+    // (`MasteryEffectsService`), appliqués après les formules. Absent → identique
+    // au comportement historique.
+    const derived = applyDerivedStatModifiers(
+      computeDerivedFromDefinitions(
+        final,
+        { maxHealth: character.maxHealth, attack: character.attack, defense: character.defense },
+        definitions,
+      ),
+      derivedModifiers,
     );
 
     return { base, modifiers, final, derived };

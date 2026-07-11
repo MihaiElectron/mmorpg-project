@@ -12,6 +12,7 @@ import { InventoryProjectionService } from '../inventory/projection/inventory-pr
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { WorldService } from '../world/world.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 function makeRepo() {
@@ -42,6 +43,7 @@ describe('CharacterService.create — initialisation WU (P7-A)', () => {
       providers: [
         CharacterService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
@@ -126,6 +128,7 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
       providers: [
         CharacterService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
@@ -226,6 +229,7 @@ describe('CharacterService.allocateStats — allocation de points (Progression V
       providers: [
         CharacterService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
@@ -375,6 +379,7 @@ describe('CharacterService.previewStats — aperçu sans persistance (Progressio
       providers: [
         CharacterService,
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: getRepositoryToken(Character), useValue: characterRepo },
         { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
         { provide: getRepositoryToken(Inventory), useValue: makeRepo() },

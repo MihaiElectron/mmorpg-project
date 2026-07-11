@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MasteriesService } from './masteries.service';
+import type { MasteryEffects } from './mastery-effects.calculator';
 import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
 
@@ -453,11 +454,11 @@ describe('MasteriesService', () => {
     });
   });
 
-  // ─── effects (Masteries V1-D-A) — sanitization au CRUD ────────────────────
-  describe('effects sanitization (V1-D-A)', () => {
-    const validEffects = {
+  // ─── effects (Mastery Effects V2) — sanitization au CRUD ──────────────────
+  describe('effects sanitization (V2)', () => {
+    const validEffects: MasteryEffects = {
       context: { weaponType: 'dagger' },
-      combat: { damagePercentPerLevel: 0.5 },
+      modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 0.5 }],
     };
 
     it("create sans effects ne touche pas le champ (défaut entity '{}')", async () => {
@@ -484,17 +485,31 @@ describe('MasteriesService', () => {
       expect(result).toMatchObject({ effects: validEffects });
     });
 
-    it('create avec effet non whitelisté → BadRequestException, rien de sauvegardé', async () => {
+    it('create avec stat non whitelistée → BadRequestException, rien de sauvegardé', async () => {
       masteryDefRepo.findOne.mockResolvedValue(null);
 
       await expect(
         service.createMasteryDefinition({
           key: 'dagger',
           name: 'Dagger',
-          effects: { combat: { stunChancePercentPerLevel: 1 } },
+          effects: { modifiers: [{ stat: 'stunChance', mode: 'percentPerLevel', value: 1 }] },
         }),
       ).rejects.toThrow(BadRequestException);
       expect(masteryDefRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('update legacy combat.damagePercentPerLevel → converti en modifiers[] au stockage', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'dagger' }));
+
+      const result = await service.updateMasteryDefinition('dagger', {
+        effects: {
+          context: { weaponType: 'dagger' },
+          combat: { damagePercentPerLevel: 0.5 },
+        },
+      });
+
+      expect(result.effects).toEqual(validEffects);
+      expect(result.effects).not.toHaveProperty('combat');
     });
 
     it('update avec effects valide → persisté proprement', async () => {
@@ -507,14 +522,14 @@ describe('MasteriesService', () => {
       expect(result).toMatchObject({ key: 'dagger', effects: validEffects });
     });
 
-    it('update avec perLevel hors borne → BadRequestException', async () => {
+    it('update avec value hors borne → BadRequestException', async () => {
       masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'dagger' }));
 
       await expect(
         service.updateMasteryDefinition('dagger', {
           effects: {
             context: { weaponType: 'dagger' },
-            combat: { damagePercentPerLevel: 99 },
+            modifiers: [{ stat: 'physicalAttack', mode: 'percentPerLevel', value: 99 }],
           },
         }),
       ).rejects.toThrow(BadRequestException);

@@ -26,6 +26,7 @@ import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { PreviewStatsDto } from './dto/preview-stats.dto';
 import { WorldService } from '../world/world.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 
 // Correspondance stat DTO → colonne base* de Character.
 const STAT_COLUMN: Record<keyof AllocateStatsDto, keyof Character> = {
@@ -84,6 +85,7 @@ export class CharacterService {
     private readonly progression: ProgressionService,
     private readonly worldService: WorldService,
     private readonly derivedStats: DerivedStatsService,
+    private readonly masteryEffects: MasteryEffectsService,
   ) {}
 
   /**
@@ -100,6 +102,8 @@ export class CharacterService {
     });
     // Ressources courantes initialisées au max dérivé (Skills V1-J-A). Pour un
     // perso frais (stats primaires à 0), maxMana/maxEnergy valent 0 → 0.
+    // Pas de modificateurs de maîtrise ici : personnage neuf = masteries
+    // level 1 partout = zéro bonus (et pas encore d'id avant le save).
     const derived = CharacterStatsCalculator.compute(
       character,
       await this.derivedStats.getDefinitions(),
@@ -150,6 +154,7 @@ export class CharacterService {
       character,
       derivedStatDefinitions,
       aggregateEquipmentBonuses(character.equipment),
+      await this.masteryEffects.getPermanentStatModifiers(character.id),
     );
     // Bloc combat séparé de stats.derived : portée effective issue de
     // l'équipement + règles combat (source serveur unique pour l'auto-attaque).
@@ -211,12 +216,17 @@ export class CharacterService {
         relations: ['item'],
       });
       const equipmentModifier = aggregateEquipmentBonuses(equipment);
+      // Modificateurs de maîtrise permanents — constants pendant l'allocation.
+      const masteryModifiers = await this.masteryEffects.getPermanentStatModifiers(
+        character.id,
+      );
 
       // Dérivées AVANT application (pour les deltas de max).
       const oldDerived = CharacterStatsCalculator.compute(
         character,
         derivedStatDefinitions,
         equipmentModifier,
+        masteryModifiers,
       ).derived;
 
       for (const [column, amount] of Object.entries(increments)) {
@@ -229,6 +239,7 @@ export class CharacterService {
         character,
         derivedStatDefinitions,
         equipmentModifier,
+        masteryModifiers,
       ).derived;
 
       // Vitalité : PV courants +delta, capés au nouveau PV max dérivé
@@ -311,6 +322,7 @@ export class CharacterService {
       tempChar,
       definitions,
       aggregateEquipmentBonuses(tempChar.equipment),
+      await this.masteryEffects.getPermanentStatModifiers(tempChar.id),
     );
     return { primary: stats.final, derived: stats.derived };
   }

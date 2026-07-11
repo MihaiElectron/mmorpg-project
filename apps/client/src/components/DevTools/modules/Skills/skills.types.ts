@@ -38,16 +38,9 @@ export interface SkillScaling {
   masteryCoefficients?: Record<string, number>;
 }
 
-// Suggestions de weaponType pour l'éditeur (datalist, saisie libre acceptée —
-// le serveur valide le format [a-z0-9_]). Même liste que WEAPON_TYPES du
-// module Items. TODO : partager cette liste (DevTools/shared) quand un
-// troisième usage apparaîtra, et l'alimenter depuis les items existants.
-export const WEAPON_TYPE_SUGGESTIONS = [
-  "two_handed_sword",
-  "two_handed_axe",
-  "bow",
-  "crossbow",
-] as const;
+// Suggestions de weaponType : désormais centralisées dans DevTools/shared
+// (réutilisées par Skills et MasteryEffects). Ré-export pour compatibilité.
+export { WEAPON_TYPE_SUGGESTIONS } from "../../shared/weaponTypes";
 
 export interface SkillDefinitionDto {
   id: string;

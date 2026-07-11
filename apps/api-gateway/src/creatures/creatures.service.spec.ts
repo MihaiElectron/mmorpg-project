@@ -132,7 +132,8 @@ describe('CreaturesService', () => {
     // Par défaut : aucun effet de maîtrise (dégâts inchangés) — les tests
     // V1-D-B surchargent ce mock.
     masteryEffectsService = {
-      getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }),
+      getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }),
+      getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }),
     };
     mockDataSource = {
       transaction: jest.fn().mockImplementation(async (fn: (manager: any) => any) => fn({})),
@@ -475,7 +476,7 @@ describe('CreaturesService', () => {
 
         const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
 
-        expect(masteryEffectsService.getCombatMasteryEffects).toHaveBeenCalledWith(
+        expect(masteryEffectsService.getMasteryBonuses).toHaveBeenCalledWith(
           'char-1',
           { weaponType: null },
         );
@@ -491,14 +492,14 @@ describe('CreaturesService', () => {
 
         await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
 
-        expect(masteryEffectsService.getCombatMasteryEffects).toHaveBeenCalledWith(
+        expect(masteryEffectsService.getMasteryBonuses).toHaveBeenCalledWith(
           'char-1',
           { weaponType: 'dagger' },
         );
       });
 
       it('damagePercent 0 (mastery level 1, sans effects, mismatch…) → dégâts inchangés', async () => {
-        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 0 });
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 300 });
         (service as any).liveCreatures.set(creature.id, creature);
         characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
@@ -510,7 +511,7 @@ describe('CreaturesService', () => {
       });
 
       it('damagePercent 2 (dagger level 5 × 0.5) → attaque effective 102, dégâts 100', async () => {
-        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 2 });
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 2, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 300 });
         (service as any).liveCreatures.set(creature.id, creature);
         characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
@@ -524,7 +525,7 @@ describe('CreaturesService', () => {
       });
 
       it('bonus clampé (50 %) → attaque effective 150, dégâts 148', async () => {
-        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 50 });
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 50, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 300 });
         (service as any).liveCreatures.set(creature.id, creature);
         characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
@@ -536,7 +537,7 @@ describe('CreaturesService', () => {
       });
 
       it("arrondit l'attaque effective (10 × 1.02 = 10.2 → 10, dégâts entiers inchangés)", async () => {
-        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 2 });
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 2, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 30 });
         (service as any).liveCreatures.set(creature.id, creature);
         characterRepository.findOne.mockResolvedValue(armedCharacter('dagger', 10));
@@ -549,7 +550,7 @@ describe('CreaturesService', () => {
       });
 
       it("n'empêche pas l'XP mastery existante (bow → applyMasteryXpInTx)", async () => {
-        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 0 });
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 300 });
         (service as any).liveCreatures.set(creature.id, creature);
         const equipment = [{ slot: EquipmentSlot.RANGED_WEAPON, item: { id: 'b', type: 'weapon', weaponType: 'bow', range: null } }];
@@ -1338,7 +1339,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
-        { provide: MasteryEffectsService, useValue: { getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }) } },
+        { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
@@ -1489,7 +1490,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
-        { provide: MasteryEffectsService, useValue: { getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }) } },
+        { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,

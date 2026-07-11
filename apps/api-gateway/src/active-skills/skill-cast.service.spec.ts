@@ -60,7 +60,7 @@ describe("SkillCastService", () => {
   let activeSkills: { listDefinitions: jest.Mock; isSkillUnlocked: jest.Mock };
   let derivedStats: { getDefinitions: jest.Mock };
   let masteries: { getCharacterMasteries: jest.Mock; getEnabledMasteryDefinitions: jest.Mock };
-  let masteryEffects: { computeCombatEffects: jest.Mock };
+  let masteryEffects: { computeCombatEffects: jest.Mock; aggregatePermanentModifiers: jest.Mock };
   let creatures: { applySkillDamage: jest.Mock };
   let charRepo: { findOne: jest.Mock; update: jest.Mock };
 
@@ -81,8 +81,11 @@ describe("SkillCastService", () => {
       getEnabledMasteryDefinitions: jest.fn(async () => []),
     };
     // Par défaut : aucun effet de maîtrise (montant inchangé) — les tests
-    // V1-D-Skills-B surchargent ce mock.
-    masteryEffects = { computeCombatEffects: jest.fn(() => ({ damagePercent: 0 })) };
+    // V1-D-Skills-B surchargent ce mock. Agrégat permanent vide (V2).
+    masteryEffects = {
+      computeCombatEffects: jest.fn(() => ({ damagePercent: 0, damageFlat: 0 })),
+      aggregatePermanentModifiers: jest.fn(() => ({ percent: {}, flat: {} })),
+    };
     creatures = {
       applySkillDamage: jest.fn(async () => ({
         success: true,
@@ -324,7 +327,7 @@ describe("SkillCastService", () => {
       masteries.getEnabledMasteryDefinitions.mockResolvedValue([
         { key: "two_handed", enabled: true, effects: {} },
       ]);
-      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10 });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10, damageFlat: 0 });
 
       const r = await cast();
 
@@ -362,7 +365,7 @@ describe("SkillCastService", () => {
     it("skill.weaponType null (sort/magie) → montant inchangé même armé", async () => {
       currentSkill = makeSkill({ weaponType: null });
       currentCharacter = makeCharacter({ equipment: armedWith("two_handed_sword") });
-      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50 });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50, damageFlat: 0 });
 
       const r = await cast();
 
@@ -389,7 +392,7 @@ describe("SkillCastService", () => {
     it("damagePercent 0 (mastery level 1, disabled, effects vides…) → montant inchangé", async () => {
       currentSkill = makeSkill({ weaponType: "two_handed_sword" });
       currentCharacter = makeCharacter({ equipment: armedWith("two_handed_sword") });
-      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 0 });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 0, damageFlat: 0 });
 
       const r = await cast();
 
@@ -411,7 +414,7 @@ describe("SkillCastService", () => {
         mana: 50,
         energy: 0,
       } as Partial<Character>);
-      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10 });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 10, damageFlat: 0 });
 
       const r = await cast();
 
@@ -455,7 +458,7 @@ describe("SkillCastService", () => {
           { slot: EquipmentSlot.RIGHT_HAND, item: { id: "w", type: "weapon", weaponType: "two_handed_sword" } },
         ] as unknown as Character["equipment"],
       }));
-      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50 });
+      masteryEffects.computeCombatEffects.mockReturnValue({ damagePercent: 50, damageFlat: 0 });
 
       const r = await castSelf();
 

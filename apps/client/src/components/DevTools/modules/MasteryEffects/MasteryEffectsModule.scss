@@ -1,0 +1,254 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+// Studio « Maîtrises / Effets » (V1-D-C-B). Aligné sur le style DevTools
+// existant — mêmes variables/mixins que Skills.
+
+$mastery-effects-field-width: 170px;
+
+.mastery-effects-module {
+  @include m.panel-section;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+  font-size: 13px;
+
+  &__header {
+    @include m.panel-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    color: vars.$color-text-primary;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  &__header-title { letter-spacing: 0.3px; }
+  &__header-chevron { color: vars.$color-text-muted; }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap;
+  }
+
+  &__muted {
+    margin: 0;
+    color: vars.$color-text-muted;
+  }
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+  }
+  &__message {
+    margin: 0;
+    color: vars.$color-text-gold;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    &--wide { width: 100%; }
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__input {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+
+    &:disabled { opacity: 0.6; }
+  }
+
+  &__toolbar {
+    display: flex;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 5px 10px;
+    font-size: 12px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+// ── Éditeur d'effet ────────────────────────────────────────────────────────────
+.mastery-effects-editor {
+  @include m.panel-slot;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__title {
+    margin: 0;
+    color: vars.$color-text-gold;
+    font-size: 14px;
+  }
+
+  &__badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: vars.$panel-radius-sm;
+    white-space: nowrap;
+
+    &--on {
+      background: rgba(vars.$btn-success-bg, 0.25);
+      color: vars.$btn-success-hover;
+    }
+    &--off {
+      background: rgba(0, 0, 0, 0.3);
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  &__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: $mastery-effects-field-width;
+
+    &--checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: vars.$dt-gap-xs;
+      width: auto;
+      cursor: pointer;
+
+      // Le reset global (_reset.scss) applique `appearance: none` à tout input :
+      // on restaure le rendu natif de la case pour la rendre visible/cochable.
+      input[type="checkbox"] {
+        -webkit-appearance: checkbox;
+        -moz-appearance: checkbox;
+        appearance: auto;
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: vars.$color-text-gold;
+      }
+    }
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__input {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+
+    &:disabled { opacity: 0.6; }
+  }
+
+  // ── Tableau de modificateurs ────────────────────────────────────────────────
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__row {
+    display: flex;
+    gap: vars.$dt-gap-xs;
+    align-items: center;
+  }
+
+  &__row-stat { flex: 2; }
+  &__row-mode { flex: 1.4; }
+  &__row-value { width: 80px; flex: none; }
+
+  &__row-remove {
+    @include m.btn-base;
+    background: vars.$btn-neutral-bg;
+    padding: 3px 7px;
+    font-size: 11px;
+    flex-shrink: 0;
+    &:hover { background: vars.$btn-danger-bg; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  &__add-row {
+    @include m.btn-base;
+    background: vars.$btn-neutral-bg;
+    align-self: flex-start;
+    padding: 3px 8px;
+    font-size: 11px;
+    &:hover { background: vars.$btn-neutral-hover; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  &__hints {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  &__hint {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: 12px;
+  }
+  &__message {
+    margin: 0;
+    color: vars.$color-text-gold;
+    font-size: 12px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: vars.$dt-gap-sm;
+  }
+
+  // Boutons d'action compacts (alignés sur les boutons de liste du module Skills).
+  &__btn {
+    @include m.btn-base;
+    padding: 4px 9px;
+    font-size: 12px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+    &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}

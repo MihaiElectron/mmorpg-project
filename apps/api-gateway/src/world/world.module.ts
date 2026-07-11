@@ -7,9 +7,10 @@ import { Character } from '../characters/entities/character.entity';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import { CommonModule } from '../common/common.module';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Character, RespawnPoint]), CommonModule, DerivedStatsModule],
+  imports: [TypeOrmModule.forFeature([Character, RespawnPoint]), CommonModule, DerivedStatsModule, MasteriesModule],
   providers: [WorldGateway, WorldService, ResourceRegenerationService],
   exports: [WorldService],
 })

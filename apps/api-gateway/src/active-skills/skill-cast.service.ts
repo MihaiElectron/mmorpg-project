@@ -173,13 +173,13 @@ export class SkillCastService {
     if (!equippedWeaponType || equippedWeaponType !== skill.weaponType) return amount;
 
     const definitions = await this.masteries.getEnabledMasteryDefinitions();
-    const { damagePercent } = this.masteryEffects.computeCombatEffects(
+    const { damagePercent, damageFlat } = this.masteryEffects.computeCombatEffects(
       definitions,
       masteryLevels,
       { weaponType: equippedWeaponType },
     );
-    if (damagePercent <= 0) return amount;
-    return Math.round(amount * (1 + damagePercent / 100));
+    if (damagePercent <= 0 && damageFlat <= 0) return amount;
+    return Math.round(amount * (1 + damagePercent / 100) + damageFlat);
   }
 
   async castCreatureSkill(
@@ -242,11 +242,15 @@ export class SkillCastService {
     }
 
     // ── Calcul serveur du montant (stats déjà calculées) ───────────────────
+    // Mastery Effects V2 : modificateurs permanents appliqués aux dérivées
+    // (définitions du cache + niveaux déjà chargés — aucune lecture en plus).
     const derivedDefinitions = await this.derivedStats.getDefinitions();
+    const masteryDefinitions = await this.masteries.getEnabledMasteryDefinitions();
     const stats = CharacterStatsCalculator.compute(
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
+      this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,
@@ -389,11 +393,15 @@ export class SkillCastService {
     }
 
     // ── Calcul serveur du soin + clamp maxHealth dérivé ────────────────────
+    // Mastery Effects V2 : healingPower/maxHealth incluent les modificateurs
+    // permanents de maîtrise (jamais les bonus contextuels d'arme).
     const derivedDefinitions = await this.derivedStats.getDefinitions();
+    const masteryDefinitions = await this.masteries.getEnabledMasteryDefinitions();
     const stats = CharacterStatsCalculator.compute(
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
+      this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,

@@ -36,9 +36,11 @@ function makeService(opts: {
     getAllConnectedPlayers: jest.fn().mockReturnValue(opts.players ?? []),
   };
 
+  const masteryEffects = { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) };
   const service = new ResourceRegenerationService(
     charRepo as any,
     derivedStats as any,
+    masteryEffects as any,
     worldService as any,
   );
   // Injecte le server SANS démarrer d'interval réel (tests appellent tick()).
@@ -237,6 +239,7 @@ describe("ResourceRegenerationService start/stop", () => {
     const service = new ResourceRegenerationService(
       { find: jest.fn(), update: jest.fn() } as any,
       { getDefinitions: jest.fn() } as any,
+      { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } as any,
       worldService as any,
     );
     const server = { to: jest.fn() } as any;
@@ -253,6 +256,7 @@ describe("ResourceRegenerationService start/stop", () => {
     const service = new ResourceRegenerationService(
       { find: jest.fn(), update: jest.fn() } as any,
       { getDefinitions: jest.fn() } as any,
+      { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } as any,
       { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } as any,
     );
     service.start({ to: jest.fn() } as any);

@@ -378,13 +378,14 @@ export class CreaturesService implements OnModuleInit {
         relations: ['equipment', 'equipment.item'],
       });
       if (char && char.health > 0) {
-        // Défense dérivée serveur (Endurance incluse + bonus d'équipement), jamais
-        // la colonne brute.
+        // Défense dérivée serveur (Endurance incluse + bonus d'équipement et
+        // modificateurs de maîtrise permanents), jamais la colonne brute.
         const derivedStatDefinitions = await this.derivedStats.getDefinitions();
         const charDefense = CharacterStatsCalculator.compute(
           char,
           derivedStatDefinitions,
           aggregateEquipmentBonuses(char.equipment),
+          await this.masteryEffects.getPermanentStatModifiers(char.id),
         ).derived.defense;
         const dmg = Math.max(template.baseAttack - charDefense, 1);
         const newHealth = Math.max(char.health - dmg, 0);
@@ -559,26 +560,25 @@ export class CreaturesService implements OnModuleInit {
     // Progression V1 : le combat lit les stats DÉRIVÉES serveur, jamais les
     // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
     // agilité / dextérité NON branchés en combat V1 (affichage seul).
+    // Mastery Effects V2 : un seul chargement pour les modificateurs permanents
+    // (appliqués aux dérivées) ET le bonus contextuel de l'arme équipée.
+    // weaponType résolu SERVEUR (jamais fourni par le client) ; formules et
+    // clamps vivent dans le calculateur pur — rien de dupliqué ici.
+    const weaponType = resolveEquippedWeaponType(character.equipment);
+    const { statModifiers, combat: masteryCombat } =
+      await this.masteryEffects.getMasteryBonuses(characterId, { weaponType });
     const derivedStatDefinitionsForAttack = await this.derivedStats.getDefinitions();
     const charStats = CharacterStatsCalculator.compute(
       character,
       derivedStatDefinitionsForAttack,
       aggregateEquipmentBonuses(character.equipment),
-    );
-    // Masteries V1-D-B : bonus de dégâts contextuel de l'arme équipée.
-    // weaponType résolu SERVEUR (jamais fourni par le client) ; sans arme ou
-    // sans effet configuré, damagePercent = 0 et l'attaque est inchangée.
-    // Le clamp (max 50 %) et la formule (level − 1) × perLevel vivent dans le
-    // calculateur pur — aucune formule dupliquée ici.
-    const weaponType = resolveEquippedWeaponType(character.equipment);
-    const { damagePercent } = await this.masteryEffects.getCombatMasteryEffects(
-      characterId,
-      { weaponType },
+      statModifiers,
     );
     // Arrondi : les valeurs de combat restent entières (pattern existant —
     // planchers entiers de calculateCombatDamage, Math.round des dérivées).
     const effectiveAttack = Math.round(
-      charStats.derived.physicalAttack * (1 + damagePercent / 100),
+      charStats.derived.physicalAttack * (1 + masteryCombat.damagePercent / 100) +
+        masteryCombat.damageFlat,
     );
 
     const damageResult = calculateCombatDamage({

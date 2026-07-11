@@ -6,6 +6,7 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { sanitizeStatBonuses, recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
@@ -222,6 +223,7 @@ export class ItemService implements OnModuleInit {
     @InjectRepository(Character)
     private readonly characterRepo: Repository<Character>,
     private readonly derivedStats: DerivedStatsService,
+    private readonly masteryEffects: MasteryEffectsService,
   ) {}
 
   async onModuleInit() {
@@ -392,7 +394,12 @@ export class ItemService implements OnModuleInit {
         const definitions = await this.derivedStats.getDefinitions();
         for (const characterId of characterIds) {
           await recalculateEquipmentStats(manager, characterId); // stats plates attack/defense
-          await clampCharacterResourcesToDerivedMax(manager, characterId, definitions);
+          await clampCharacterResourcesToDerivedMax(
+            manager,
+            characterId,
+            definitions,
+            await this.masteryEffects.getPermanentStatModifiers(characterId),
+          );
         }
       }
       return saved;

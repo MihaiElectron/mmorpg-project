@@ -18,6 +18,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { RespawnPoint } from './entities/respawn-point.entity';
 import {
   wuToIsoScreenX,
@@ -184,6 +185,7 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     @InjectRepository(RespawnPoint)
     private readonly respawnPointRepository: Repository<RespawnPoint>,
     private readonly derivedStats: DerivedStatsService,
+    private readonly masteryEffects: MasteryEffectsService,
   ) {}
 
   async onModuleInit() {
@@ -272,6 +274,7 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
       character,
       derivedStatDefinitions,
       aggregateEquipmentBonuses(character.equipment),
+      await this.masteryEffects.getPermanentStatModifiers(character.id),
     ).derived;
     const derivedMaxHealth = derived.maxHealth;
     const newHealth = derivedMaxHealth;
@@ -409,11 +412,13 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     const derivedDefinitions = await this.derivedStats.getDefinitions();
     // Bonus d'équipement inclus : les max dérivés (PV/mana/énergie) doivent être
     // cohérents avec l'équipement porté, sinon le join écrase l'UI avec des max
-    // non équipés (regressions Équipement V1).
+    // non équipés (regressions Équipement V1). Modificateurs de maîtrise
+    // permanents inclus pour la même raison (Mastery Effects V2).
     const stats = CharacterStatsCalculator.compute(
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
+      await this.masteryEffects.getPermanentStatModifiers(character.id),
     );
 
     const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));

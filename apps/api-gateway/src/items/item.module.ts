@@ -15,6 +15,7 @@ import { AuctionListing } from '../auction/entities/auction-listing.entity';
 import { MailMessage } from '../mail/entities/mail-message.entity';
 import { Character } from '../characters/entities/character.entity';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
+import { MasteriesModule } from '../masteries/masteries.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
       Character,
     ]),
     DerivedStatsModule,
+    MasteriesModule,
   ],
   controllers: [ItemController],
   providers: [ItemService],

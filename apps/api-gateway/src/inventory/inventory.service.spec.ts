@@ -15,6 +15,7 @@ import {
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { WorldService } from '../world/world.service';
 import { InventoryProjectionService } from './projection/inventory-projection.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 
@@ -88,6 +89,7 @@ describe('InventoryService — findItemForLoot', () => {
         { provide: WorldService, useValue: { emitAdminCharacterDirty: jest.fn() } },
         { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
         { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: MasteriesService, useValue: makeMasteriesMock() },
       ],
     }).compile();
@@ -206,6 +208,7 @@ function makeEquipService(overrides: {
   const worldService = overrides.worldService ?? { emitAdminCharacterDirty: jest.fn() };
   const inventoryProjection = overrides.inventoryProjection ?? { project: jest.fn().mockResolvedValue([]) };
   const derivedStats = overrides.derivedStats ?? { getDefinitions: jest.fn().mockResolvedValue([]) };
+  const masteryEffects = { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) };
   const masteriesService = overrides.masteriesService ?? makeMasteriesMock();
 
   return new InventoryService(
@@ -219,6 +222,7 @@ function makeEquipService(overrides: {
     worldService as any,
     inventoryProjection as any,
     derivedStats as any,
+    masteryEffects as any,
     masteriesService as any,
   );
 }
