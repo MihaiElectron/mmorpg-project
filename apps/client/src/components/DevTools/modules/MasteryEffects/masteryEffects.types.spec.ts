@@ -5,11 +5,35 @@ import {
   draftFromMasteryEffects,
   emptyCreateMasteryDefinitionDraft,
   hasActiveMasteryEffects,
+  sortTargets,
   validateCreateMasteryDefinitionDraft,
   validateMasteryEffectsDraft,
+  valueBoundsFor,
   type CreateMasteryDefinitionDraft,
   type MasteryEffectsDraft,
+  type MasteryEffectTargetDto,
 } from "./masteryEffects.types";
+
+// Fixture miroir de GET /admin/mastery-effect-targets (source serveur).
+function makeTarget(overrides: Partial<MasteryEffectTargetDto> = {}): MasteryEffectTargetDto {
+  return {
+    key: "maxHealth",
+    label: "Vie max",
+    category: "ressources",
+    allowedModes: ["percentPerLevel", "flatPerLevel"],
+    minValueByMode: { percentPerLevel: 0, flatPerLevel: 0 },
+    maxValueByMode: { percentPerLevel: 5, flatPerLevel: 100 },
+    runtimeStatus: "implemented",
+    description: "test",
+    ...overrides,
+  };
+}
+
+const SERVER_TARGETS: MasteryEffectTargetDto[] = [
+  makeTarget(),
+  makeTarget({ key: "physicalAttack", label: "Attaque physique", category: "combat" }),
+];
+const CONTEXTUAL_STATS = ["physicalAttack"];
 
 // ─── Effets (V2 — modifiers[]) ───────────────────────────────────────────────
 
@@ -136,51 +160,96 @@ describe("hasActiveMasteryEffects", () => {
   });
 });
 
-describe("validateMasteryEffectsDraft", () => {
+describe("validateMasteryEffectsDraft (bornes et règles SERVEUR)", () => {
+  const validate = (draft: MasteryEffectsDraft) =>
+    validateMasteryEffectsDraft(draft, SERVER_TARGETS, CONTEXTUAL_STATS);
   const valid: MasteryEffectsDraft = {
     weaponType: "",
     modifiers: [{ stat: "maxHealth", mode: "percentPerLevel", value: "2" }],
   };
 
   it("accepte un draft vide (désactivation) et un draft complet", () => {
-    expect(validateMasteryEffectsDraft({ weaponType: "", modifiers: [] })).toBeNull();
-    expect(validateMasteryEffectsDraft(valid)).toBeNull();
+    expect(validate({ weaponType: "", modifiers: [] })).toBeNull();
+    expect(validate(valid)).toBeNull();
   });
 
   it("exige une stat et un coefficient numérique par ligne", () => {
     expect(
-      validateMasteryEffectsDraft({
+      validate({
         weaponType: "",
         modifiers: [{ stat: "", mode: "percentPerLevel", value: "2" }],
       }),
     ).toMatch(/stat/i);
     expect(
-      validateMasteryEffectsDraft({
+      validate({
         weaponType: "",
         modifiers: [{ stat: "maxHealth", mode: "percentPerLevel", value: "abc" }],
       }),
     ).toMatch(/coefficient/i);
   });
 
-  it("borne selon le mode : percent 0–5, flat 0–100", () => {
+  it("refuse une stat inconnue du catalogue serveur", () => {
     expect(
-      validateMasteryEffectsDraft({
+      validate({
+        weaponType: "",
+        modifiers: [{ stat: "criticalChance", mode: "percentPerLevel", value: "1" }],
+      }),
+    ).toMatch(/inconnue du serveur/);
+  });
+
+  it("borne selon min/max serveur du mode : percent 0–5, flat 0–100", () => {
+    expect(
+      validate({
         weaponType: "",
         modifiers: [{ stat: "maxHealth", mode: "percentPerLevel", value: "5.5" }],
       }),
     ).toMatch(/entre 0 et 5/);
     expect(
-      validateMasteryEffectsDraft({
+      validate({
         weaponType: "",
         modifiers: [{ stat: "maxHealth", mode: "flatPerLevel", value: "101" }],
       }),
     ).toMatch(/entre 0 et 100/);
     expect(
-      validateMasteryEffectsDraft({
+      validate({
         weaponType: "",
         modifiers: [{ stat: "maxHealth", mode: "flatPerLevel", value: "100" }],
       }),
     ).toBeNull();
+  });
+
+  it("contexte weaponType : refuse une stat non contextuelle (règle serveur)", () => {
+    expect(
+      validate({
+        weaponType: "two_handed_sword",
+        modifiers: [{ stat: "maxHealth", mode: "percentPerLevel", value: "1" }],
+      }),
+    ).toMatch(/physicalAttack/);
+    expect(
+      validate({
+        weaponType: "two_handed_sword",
+        modifiers: [{ stat: "physicalAttack", mode: "percentPerLevel", value: "5" }],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("helpers targets serveur", () => {
+  it("valueBoundsFor dérive min/max/step du target et du mode", () => {
+    const t = makeTarget();
+    expect(valueBoundsFor(t, "percentPerLevel")).toEqual({ min: 0, max: 5, step: 0.25 });
+    expect(valueBoundsFor(t, "flatPerLevel")).toEqual({ min: 0, max: 100, step: 1 });
+    // Target absent (catalogue non chargé) : fallback sûr, la sauvegarde est
+    // de toute façon bloquée par l'UI.
+    expect(valueBoundsFor(undefined, "percentPerLevel").max).toBe(5);
+  });
+
+  it("sortTargets trie par catégorie puis label", () => {
+    const sorted = sortTargets([
+      makeTarget({ key: "b", label: "Zeta", category: "ressources" }),
+      makeTarget({ key: "a", label: "Alpha", category: "combat" }),
+    ]);
+    expect(sorted.map((t) => t.key)).toEqual(["a", "b"]);
   });
 });
 

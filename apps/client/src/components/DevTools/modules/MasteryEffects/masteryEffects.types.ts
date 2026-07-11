@@ -32,31 +32,56 @@ export interface MasteryDefinitionDto {
   effects: MasteryEffects;
 }
 
-// ── Catalogues UI (alignés sur la whitelist serveur — jamais de stat non
-//    branchée gameplay : crit/esquive/block/vitesses volontairement absents) ──
+// ── Catalogue des stats ciblables : SOURCE SERVEUR UNIQUEMENT (V2-E) ─────────
+// GET /admin/mastery-effect-targets — aucune liste de stats codée en dur ici.
+// Si les targets ne chargent pas, l'UI bloque la sauvegarde (pas de fallback).
 
-export const MODIFIER_STAT_OPTIONS = [
-  { key: "physicalAttack", label: "Attaque physique" },
-  { key: "defense", label: "Défense" },
-  { key: "maxHealth", label: "Vie max" },
-  { key: "maxMana", label: "Mana max" },
-  { key: "maxEnergy", label: "Énergie max" },
-  { key: "healthRegen", label: "Régénération vie" },
-  { key: "manaRegen", label: "Régénération mana" },
-  { key: "energyRegen", label: "Régénération énergie" },
-  { key: "healingPower", label: "Puissance de soin" },
-  { key: "magicPower", label: "Puissance magique" },
-] as const;
+export type MasteryEffectRuntimeStatus = "implemented" | "calculatedOnly" | "notHooked";
 
-export const MODIFIER_MODE_OPTIONS = [
-  { key: "percentPerLevel", label: "% par niveau" },
-  { key: "flatPerLevel", label: "valeur fixe par niveau" },
-] as const;
+export interface MasteryEffectTargetDto {
+  key: string;
+  label: string;
+  category: string;
+  allowedModes: MasteryModifierMode[];
+  minValueByMode: Record<MasteryModifierMode, number>;
+  maxValueByMode: Record<MasteryModifierMode, number>;
+  runtimeStatus: MasteryEffectRuntimeStatus;
+  description: string;
+}
 
-// Bornes d'AIDE UX (miroir des bornes serveur par niveau).
-export const PERCENT_PER_LEVEL_MIN = 0;
-export const PERCENT_PER_LEVEL_MAX = 5;
-export const FLAT_PER_LEVEL_MAX = 100;
+export interface MasteryEffectModeDto {
+  key: MasteryModifierMode;
+  label: string;
+  description: string;
+}
+
+export interface MasteryEffectTargetsResponse {
+  targets: MasteryEffectTargetDto[];
+  modes: MasteryEffectModeDto[];
+  /** Stats autorisées avec un contexte weaponType (règle serveur). */
+  contextualStats: string[];
+}
+
+/** Bornes du champ value pour un target/mode serveur (fallback sûr si absent). */
+export function valueBoundsFor(
+  target: MasteryEffectTargetDto | undefined,
+  mode: MasteryModifierMode,
+): { min: number; max: number; step: number } {
+  return {
+    min: target?.minValueByMode?.[mode] ?? 0,
+    max: target?.maxValueByMode?.[mode] ?? (mode === "percentPerLevel" ? 5 : 100),
+    step: mode === "percentPerLevel" ? 0.25 : 1,
+  };
+}
+
+/** Targets triés par catégorie puis label (ordre d'affichage du select). */
+export function sortTargets(targets: MasteryEffectTargetDto[]): MasteryEffectTargetDto[] {
+  return [...targets].sort((a, b) =>
+    a.category !== b.category
+      ? a.category.localeCompare(b.category)
+      : a.label.localeCompare(b.label),
+  );
+}
 
 // ── Brouillon d'édition des effets ──────────────────────────────────────────
 
@@ -113,23 +138,34 @@ export function hasActiveMasteryEffects(
 
 /**
  * Première erreur d'aide frontend, ou null. Un brouillon sans aucune ligne est
- * valide (= désactivation). Le serveur reste le validateur final (whitelist,
- * doublons, stats contextualisables).
+ * valide (= désactivation). Bornes et règle contextuelle proviennent du
+ * SERVEUR (`targets`/`contextualStats`) — le serveur reste le validateur final.
  */
 export function validateMasteryEffectsDraft(
   draft: MasteryEffectsDraft,
+  targets: MasteryEffectTargetDto[],
+  contextualStats: string[],
 ): string | null {
+  const byKey = new Map(targets.map((t) => [t.key, t]));
+  const hasContext = draft.weaponType.trim() !== "";
   for (const [index, row] of draft.modifiers.entries()) {
     if (row.stat.trim() === "") {
       return `Ligne ${index + 1} : choisissez une stat.`;
+    }
+    const target = byKey.get(row.stat);
+    if (!target) {
+      return `Ligne ${index + 1} : stat "${row.stat}" inconnue du serveur.`;
+    }
+    if (hasContext && !contextualStats.includes(row.stat)) {
+      return `Ligne ${index + 1} : seule la stat ${contextualStats.join(", ")} est supportée avec un contexte weaponType pour le moment.`;
     }
     const n = Number(row.value);
     if (row.value.trim() === "" || !Number.isFinite(n)) {
       return `Ligne ${index + 1} : coefficient requis (nombre).`;
     }
-    const max = row.mode === "percentPerLevel" ? PERCENT_PER_LEVEL_MAX : FLAT_PER_LEVEL_MAX;
-    if (n < PERCENT_PER_LEVEL_MIN || n > max) {
-      return `Ligne ${index + 1} : coefficient entre 0 et ${max} (${row.mode}).`;
+    const { min, max } = valueBoundsFor(target, row.mode);
+    if (n < min || n > max) {
+      return `Ligne ${index + 1} : coefficient entre ${min} et ${max} (${row.mode}).`;
     }
   }
   return null;

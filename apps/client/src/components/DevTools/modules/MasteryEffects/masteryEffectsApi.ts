@@ -2,6 +2,7 @@ import type {
   CreateMasteryDefinitionPayload,
   MasteryDefinitionDto,
   MasteryEffects,
+  MasteryEffectTargetsResponse,
 } from "./masteryEffects.types";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -15,6 +16,17 @@ async function parseError(res: Response): Promise<string> {
   if (typeof body.message === "string") return body.message;
   if (Array.isArray(body.message)) return body.message.join(" — ");
   return `Erreur ${res.status}`;
+}
+
+/**
+ * Catalogue serveur des stats ciblables, modes et bornes (V2-E) —
+ * GET /admin/mastery-effect-targets. Source de vérité de l'UI (pas de liste
+ * locale, pas de fallback).
+ */
+export async function fetchMasteryEffectTargets(): Promise<MasteryEffectTargetsResponse> {
+  const res = await fetch(`${API}/admin/mastery-effect-targets`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<MasteryEffectTargetsResponse>;
 }
 
 /** Toutes les définitions de maîtrises (avec leurs `effects`). */

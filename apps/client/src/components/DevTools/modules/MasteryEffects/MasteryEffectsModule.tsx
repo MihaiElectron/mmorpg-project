@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createMasteryDefinition,
   fetchMasteryDefinitions,
+  fetchMasteryEffectTargets,
   updateMasteryEffects,
 } from "./masteryEffectsApi";
 import {
@@ -13,15 +14,13 @@ import {
   hasActiveMasteryEffects,
   validateCreateMasteryDefinitionDraft,
   validateMasteryEffectsDraft,
-  FLAT_PER_LEVEL_MAX,
+  sortTargets,
+  valueBoundsFor,
   MASTERY_CATEGORIES,
-  MODIFIER_MODE_OPTIONS,
-  MODIFIER_STAT_OPTIONS,
-  PERCENT_PER_LEVEL_MAX,
-  PERCENT_PER_LEVEL_MIN,
   type CreateMasteryDefinitionDraft,
   type MasteryDefinitionDto,
   type MasteryEffectsDraft,
+  type MasteryEffectTargetsResponse,
   type ModifierRowDraft,
 } from "./masteryEffects.types";
 import { hasFormChanges } from "../../shared/formDirty";
@@ -48,6 +47,11 @@ export default function MasteryEffectsModule() {
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Catalogue serveur des stats ciblables (V2-E) — pas de liste locale, pas
+  // de fallback : sans lui, la sauvegarde des effets est bloquée.
+  const [targetsData, setTargetsData] = useState<MasteryEffectTargetsResponse | null>(null);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState<CreateMasteryDefinitionDraft>(
@@ -92,6 +96,12 @@ export default function MasteryEffectsModule() {
   useEffect(() => {
     if (!open || status !== "idle") return;
     void reload();
+    void fetchMasteryEffectTargets()
+      .then((data) => {
+        setTargetsData(data);
+        setTargetsError(null);
+      })
+      .catch((err: Error) => setTargetsError(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -105,6 +115,19 @@ export default function MasteryEffectsModule() {
   }, [selectedKey]);
 
   const isDirty = hasFormChanges(initialDraftRef.current, draft);
+
+  const sortedTargets = useMemo(
+    () => sortTargets(targetsData?.targets ?? []),
+    [targetsData],
+  );
+  const targetsByKey = useMemo(
+    () => new Map(sortedTargets.map((t) => [t.key, t])),
+    [sortedTargets],
+  );
+  const targetCategories = useMemo(
+    () => [...new Set(sortedTargets.map((t) => t.category))],
+    [sortedTargets],
+  );
 
   async function patchEffects(key: string, draftToSend: MasteryEffectsDraft, successMsg: string) {
     setBusy(true);
@@ -125,8 +148,12 @@ export default function MasteryEffectsModule() {
   }
 
   function handleSave() {
-    if (!selected) return;
-    const err = validateMasteryEffectsDraft(draft);
+    if (!selected || !targetsData) return;
+    const err = validateMasteryEffectsDraft(
+      draft,
+      targetsData.targets,
+      targetsData.contextualStats,
+    );
     if (err) {
       setLocalError(err);
       return;
@@ -446,6 +473,13 @@ export default function MasteryEffectsModule() {
                     </p>
                   )}
 
+                  {targetsError && (
+                    <p className="mastery-effects-editor__error">
+                      Catalogue des stats indisponible ({targetsError}) — la
+                      sauvegarde des effets est bloquée.
+                    </p>
+                  )}
+
                   {/* ── Tableau des modificateurs ─────────────────────────── */}
                   <div className="mastery-effects-editor__rows">
                     {draft.modifiers.length === 0 && (
@@ -461,10 +495,21 @@ export default function MasteryEffectsModule() {
                           onChange={(e) => patchRow(index, { stat: e.target.value })}
                         >
                           <option value="">— stat —</option>
-                          {MODIFIER_STAT_OPTIONS.map((s) => (
-                            <option key={s.key} value={s.key}>
-                              {s.label} ({s.key})
-                            </option>
+                          {/* Valeur inconnue du catalogue serveur : affichée
+                              telle quelle, la validation la signalera. */}
+                          {row.stat !== "" && !targetsByKey.has(row.stat) && (
+                            <option value={row.stat}>{row.stat}</option>
+                          )}
+                          {targetCategories.map((category) => (
+                            <optgroup key={category} label={category}>
+                              {sortedTargets
+                                .filter((t) => t.category === category)
+                                .map((t) => (
+                                  <option key={t.key} value={t.key}>
+                                    {t.label} ({t.key})
+                                  </option>
+                                ))}
+                            </optgroup>
                           ))}
                         </select>
                         <select
@@ -476,7 +521,7 @@ export default function MasteryEffectsModule() {
                             })
                           }
                         >
-                          {MODIFIER_MODE_OPTIONS.map((m) => (
+                          {(targetsData?.modes ?? []).map((m) => (
                             <option key={m.key} value={m.key}>
                               {m.label}
                             </option>
@@ -485,9 +530,9 @@ export default function MasteryEffectsModule() {
                         <input
                           className="mastery-effects-editor__input mastery-effects-editor__row-value"
                           type="number"
-                          min={PERCENT_PER_LEVEL_MIN}
-                          max={row.mode === "percentPerLevel" ? PERCENT_PER_LEVEL_MAX : FLAT_PER_LEVEL_MAX}
-                          step={0.25}
+                          min={valueBoundsFor(targetsByKey.get(row.stat), row.mode).min}
+                          max={valueBoundsFor(targetsByKey.get(row.stat), row.mode).max}
+                          step={valueBoundsFor(targetsByKey.get(row.stat), row.mode).step}
                           value={row.value}
                           onChange={(e) => patchRow(index, { value: e.target.value })}
                         />
@@ -506,7 +551,7 @@ export default function MasteryEffectsModule() {
                       type="button"
                       className="mastery-effects-editor__add-row"
                       onClick={addRow}
-                      disabled={busy}
+                      disabled={busy || !targetsData}
                     >
                       + Ajouter un modificateur
                     </button>
@@ -552,8 +597,14 @@ export default function MasteryEffectsModule() {
                       type="button"
                       className="mastery-effects-editor__btn mastery-effects-editor__btn--confirm"
                       onClick={handleSave}
-                      disabled={busy || !isDirty}
-                      title={!isDirty ? "Aucune modification à enregistrer" : undefined}
+                      disabled={busy || !isDirty || !targetsData}
+                      title={
+                        !targetsData
+                          ? "Catalogue des stats indisponible"
+                          : !isDirty
+                            ? "Aucune modification à enregistrer"
+                            : undefined
+                      }
                     >
                       {busy ? "…" : "Sauvegarder"}
                     </button>

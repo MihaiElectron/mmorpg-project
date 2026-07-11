@@ -36,32 +36,24 @@
  * Clamps serveur par stat : percent total ≤ 50, flat total ≤ 1000.
  */
 
-/**
- * Whitelist des stats modifiables par une maîtrise — UNIQUEMENT des stats
- * dérivées réellement consommées par un hook serveur aujourd'hui (combat,
- * respawn, coûts/regen ressources, scaling skills). Critique / esquive /
- * parade / block / accuracy / vitesses / résistances : calculées mais non
- * branchées gameplay → volontairement absentes (pas de promesses mortes).
- */
-export const MASTERY_MODIFIER_STATS = [
-  'physicalAttack',
-  'defense',
-  'maxHealth',
-  'maxMana',
-  'maxEnergy',
-  'healthRegen',
-  'manaRegen',
-  'energyRegen',
-  'healingPower',
-  'magicPower',
-] as const;
-export type MasteryModifierStat = (typeof MASTERY_MODIFIER_STATS)[number];
-
 export const MASTERY_MODIFIER_MODES = ['percentPerLevel', 'flatPerLevel'] as const;
 export type MasteryModifierMode = (typeof MASTERY_MODIFIER_MODES)[number];
 
-/** Seule stat autorisée avec un contexte d'arme (hooks combat existants). */
-export const CONTEXTUAL_MODIFIER_STATS: readonly string[] = ['physicalAttack'];
+// Source serveur UNIQUE des stats ciblables, modes autorisés et bornes :
+// `mastery-effect-targets.ts` (V2-E). Importée ici (import de valeurs) tandis
+// que targets n'importe que des TYPES d'ici — aucun cycle runtime.
+import {
+  CONTEXTUAL_MASTERY_EFFECT_STATS,
+  getMasteryEffectTarget,
+  MASTERY_EFFECT_TARGETS,
+} from './mastery-effect-targets';
+
+/** Clés des stats ciblables — dérivées de la source unique (compat tests). */
+export const MASTERY_MODIFIER_STATS: readonly string[] =
+  MASTERY_EFFECT_TARGETS.map((t) => t.key);
+
+/** Stats autorisées avec un contexte d'arme — ré-export de la source unique. */
+export const CONTEXTUAL_MODIFIER_STATS = CONTEXTUAL_MASTERY_EFFECT_STATS;
 
 /** Bornes d'écriture PAR NIVEAU. */
 export const MAX_PERCENT_PER_LEVEL = 5;
@@ -141,10 +133,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function maxPerLevel(mode: MasteryModifierMode): number {
-  return mode === 'percentPerLevel' ? MAX_PERCENT_PER_LEVEL : MAX_FLAT_PER_LEVEL;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ÉCRITURE — validation stricte
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,7 +172,8 @@ function sanitizeModifierEntry(raw: unknown, index: number): MasteryStatModifier
     }
   }
   const { stat, mode, value } = raw;
-  if (typeof stat !== 'string' || !(MASTERY_MODIFIER_STATS as readonly string[]).includes(stat)) {
+  const targetDef = typeof stat === 'string' ? getMasteryEffectTarget(stat) : undefined;
+  if (!targetDef) {
     throw new MasteryEffectsValidationError(
       `effects.modifiers[${index}].stat "${String(stat)}" n'est pas une stat supportée (${MASTERY_MODIFIER_STATS.join(', ')}).`,
     );
@@ -194,18 +183,25 @@ function sanitizeModifierEntry(raw: unknown, index: number): MasteryStatModifier
       `effects.modifiers[${index}].mode "${String(mode)}" n'est pas un mode supporté (${MASTERY_MODIFIER_MODES.join(', ')}).`,
     );
   }
+  const typedMode = mode as MasteryModifierMode;
+  if (!targetDef.allowedModes.includes(typedMode)) {
+    throw new MasteryEffectsValidationError(
+      `effects.modifiers[${index}].mode "${typedMode}" n'est pas autorisé pour la stat "${targetDef.key}".`,
+    );
+  }
   if (!isFiniteNumber(value)) {
     throw new MasteryEffectsValidationError(
       `effects.modifiers[${index}].value doit être un nombre fini.`,
     );
   }
-  const bound = maxPerLevel(mode as MasteryModifierMode);
-  if (value < 0 || value > bound) {
+  const min = targetDef.minValueByMode[typedMode];
+  const max = targetDef.maxValueByMode[typedMode];
+  if (value < min || value > max) {
     throw new MasteryEffectsValidationError(
-      `effects.modifiers[${index}].value doit être entre 0 et ${bound} (${mode}).`,
+      `effects.modifiers[${index}].value doit être entre ${min} et ${max} (${typedMode}).`,
     );
   }
-  return { stat, mode: mode as MasteryModifierMode, value };
+  return { stat: targetDef.key, mode: typedMode, value };
 }
 
 /**
@@ -291,8 +287,7 @@ export function sanitizeMasteryEffects(raw: unknown): MasteryEffects {
     for (const m of modifiers) {
       if (!CONTEXTUAL_MODIFIER_STATS.includes(m.stat)) {
         throw new MasteryEffectsValidationError(
-          `effects.modifiers : la stat "${m.stat}" n'est pas consommée par les hooks weapon-based ` +
-            `(contexte weaponType → ${CONTEXTUAL_MODIFIER_STATS.join(', ')} uniquement).`,
+          `Seule la stat ${CONTEXTUAL_MODIFIER_STATS.join(', ')} est supportée avec un contexte weaponType pour le moment (reçu : "${m.stat}").`,
         );
       }
     }
@@ -318,10 +313,12 @@ function readModifiers(effects: MasteryEffects | null | undefined): MasteryStatM
     for (const entry of effects.modifiers) {
       if (!isPlainObject(entry as unknown as Record<string, unknown>)) continue;
       const { stat, mode, value } = entry as MasteryStatModifier;
-      if (typeof stat !== 'string' || !(MASTERY_MODIFIER_STATS as readonly string[]).includes(stat)) continue;
+      const targetDef = typeof stat === 'string' ? getMasteryEffectTarget(stat) : undefined;
+      if (!targetDef) continue;
       if (mode !== 'percentPerLevel' && mode !== 'flatPerLevel') continue;
+      if (!targetDef.allowedModes.includes(mode)) continue;
       if (!isFiniteNumber(value) || value <= 0) continue;
-      result.push({ stat, mode, value: Math.min(value, maxPerLevel(mode)) });
+      result.push({ stat: targetDef.key, mode, value: Math.min(value, targetDef.maxValueByMode[mode]) });
     }
   }
 

@@ -18,6 +18,11 @@ import { UpdateSkillDefinitionDto } from '../active-skills/dto/update-skill-defi
 import { MasteriesService } from '../masteries/masteries.service';
 import { CreateMasteryDefinitionDto } from '../masteries/dto/create-mastery-definition.dto';
 import { UpdateMasteryDefinitionDto } from '../masteries/dto/update-mastery-definition.dto';
+import {
+  CONTEXTUAL_MASTERY_EFFECT_STATS,
+  MASTERY_EFFECT_MODES,
+  MASTERY_EFFECT_TARGETS,
+} from '../masteries/mastery-effect-targets';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -259,6 +264,20 @@ export class AdminController {
   }
 
   // ── Masteries ────────────────────────────────────────────────────────────────
+
+  /**
+   * Catalogue des stats ciblables par les mastery effects (V2-E) — source
+   * serveur unique (`mastery-effect-targets.ts`, partagée avec sanitize).
+   * Lecture pure de constantes : le Studio ne code aucune liste en dur.
+   */
+  @Get('mastery-effect-targets')
+  getMasteryEffectTargets() {
+    return {
+      targets: MASTERY_EFFECT_TARGETS,
+      modes: MASTERY_EFFECT_MODES,
+      contextualStats: CONTEXTUAL_MASTERY_EFFECT_STATS,
+    };
+  }
 
   @Get('mastery-definitions')
   getMasteryDefinitions() { return this.adminService.getMasteryDefinitions(); }

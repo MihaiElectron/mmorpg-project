@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMasteryDefinition,
   fetchMasteryDefinitions,
+  fetchMasteryEffectTargets,
   updateMasteryEffects,
 } from "./masteryEffectsApi";
 
@@ -35,6 +36,17 @@ afterEach(() => {
 });
 
 describe("masteryEffectsApi", () => {
+  it("liste les targets via GET /admin/mastery-effect-targets", async () => {
+    const body = { targets: [{ key: "physicalAttack" }], modes: [], contextualStats: ["physicalAttack"] };
+    mockFetch.mockResolvedValue(okJson(body));
+
+    await expect(fetchMasteryEffectTargets()).resolves.toEqual(body);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain("/admin/mastery-effect-targets");
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer test-token" });
+  });
+
   it("liste les définitions via GET /admin/mastery-definitions", async () => {
     const rows = [{ key: "two_handed", name: "Two-Handed", effects: {} }];
     mockFetch.mockResolvedValue(okJson(rows));

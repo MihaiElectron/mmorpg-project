@@ -63,6 +63,25 @@ describe('AdminController — movement metrics', () => {
     });
   });
 
+  it('GET mastery-effect-targets expose la source serveur unique (V2-E)', () => {
+    const { controller } = makeController();
+
+    const result = controller.getMasteryEffectTargets();
+
+    expect(result.targets).toHaveLength(10);
+    expect(result.targets.map((t) => t.key)).toContain('physicalAttack');
+    expect(result.modes.map((m) => m.key)).toEqual(['percentPerLevel', 'flatPerLevel']);
+    expect(result.contextualStats).toEqual(['physicalAttack']);
+    const first = result.targets[0];
+    expect(first).toMatchObject({
+      key: expect.any(String),
+      label: expect.any(String),
+      category: expect.any(String),
+      runtimeStatus: 'implemented',
+      description: expect.any(String),
+    });
+  });
+
   it('reste protégé par les guards et le rôle admin', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, AdminController) ?? [];
     const roles = Reflect.getMetadata(ROLES_KEY, AdminController);
