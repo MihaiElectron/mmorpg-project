@@ -143,34 +143,46 @@ liste codée en dur.
 
 Stats actuellement exposées (Implemented) : `physicalAttack`, `defense`,
 `maxHealth`, `maxMana`, `maxEnergy`, `healthRegen`, `manaRegen`,
-`energyRegen`, `healingPower`, `magicPower`, **`defensePenetration`** (V4-A).
+`energyRegen`, `healingPower`, `magicPower`, **`armorPenetrationPercent`** (V4-B0).
+
+> `defensePenetration` (ancien modèle **plat**, V4-A) n'est **plus exposée**
+> comme target : conservée en compatibilité seulement (`masteryEligible=false`,
+> `runtimeStatus=calculatedOnly`, aucun mode) — voir « Résolution serveur ».
 
 Stats futures NON exposées (Not implemented — aucun hook gameplay) : critique,
 dodge, parry, block, accuracy, attackSpeed, movementSpeed, résistances, stun,
-knockback, craft (succès/qualité).
+knockback, curses / `armorReductionPercent` (debuff cible), craft (succès/qualité).
 
-### defensePenetration (V4-A)
+### armorPenetrationPercent (V4-B0)
 
-`defensePenetration` est une stat dérivée **système** offensive, ciblable comme
-**modificateur permanent** (jamais contextualisée `weaponType` — le contexte
-arme reste réservé à `physicalAttack`). Utile en `flatPerLevel` ou
-`percentPerLevel`.
+`armorPenetrationPercent` est une stat dérivée **système** offensive (bornée
+0–100), ciblable comme **modificateur permanent** (jamais contextualisée
+`weaponType` — le contexte arme reste réservé à `physicalAttack`). Elle **ignore
+un pourcentage de l'armure de la cible** pour un hit **physique** ; elle ne
+réduit pas l'armure globale de la cible et ne crée aucun debuff persistant.
+Utile en `flatPerLevel` ou `percentPerLevel`.
 
 ```jsonc
 {
   "effects": {
     "modifiers": [
-      { "stat": "defensePenetration", "mode": "flatPerLevel", "value": 2 }
+      { "stat": "armorPenetrationPercent", "mode": "flatPerLevel", "value": 5 }
     ]
   }
 }
 ```
 
-Progression : maîtrise niveau 3 × 2 = **+6 pénétration**. En combat, la défense
-effective de la cible devient `max(0, defense - defensePenetration)` (jamais
-négative), avant le calcul de dégâts (`calculateCombatDamage`). Consommée par
-l'**auto-attaque** joueur et les **skills damage** (le lanceur passe sa
-pénétration dérivée à `applySkillDamage`).
+Progression : `flatPerLevel` sur cette stat = **points de pourcentage** par
+niveau — maîtrise niveau 3 × 5 = **+15 % de pénétration d'armure**. En combat
+**physique** : `effectiveArmor = round(targetArmor × (1 − armorPenetrationPercent / 100))`
+puis `finalDamage = max(0, rawDamage − effectiveArmor)` (armure effective jamais
+négative). Les **dégâts `raw`** ignorent l'armure **et** la pénétration
+(`finalDamage = rawDamage`). Consommée par l'**auto-attaque** joueur et les
+**skills damage physiques** (le lanceur passe sa pénétration dérivée à
+`applySkillDamage`).
+
+Exemple : `rawDamage 100`, `armor 40`, `armorPenetrationPercent 50` →
+`effectiveArmor 20` → `finalDamage 80`.
 
 ### Résolution serveur
 
@@ -209,9 +221,9 @@ pénétration dérivée à `applySkillDamage`).
 
 - **Permanents** : les stats des targets, appliquées partout où les stats
   dérivées sont consommées (combat, respawn, régénération, coûts/soins de
-  skills, affichage `/characters/me`). Inclut **`defensePenetration`** (V4-A) :
-  réduit la défense effective de la cible (`max(0, defense - pénétration)`) dans
-  `calculateCombatDamage`, sur l'auto-attaque et les skills damage.
+  skills, affichage `/characters/me`). Inclut **`armorPenetrationPercent`** (V4-B0) :
+  ignore un % de l'armure de la cible (`effectiveArmor = round(armor × (1 − pct/100))`)
+  dans `calculateCombatDamage`, sur l'auto-attaque et les skills damage physiques.
 - **Contextuel arme** (`physicalAttack` seul) : auto-attaque
   (`CreaturesService.attack`) et skills offensifs weapon-based
   (`SkillCastService.castCreatureSkill`, effectType `damage`, targetMode
