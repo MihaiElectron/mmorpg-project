@@ -18,6 +18,7 @@ import {
   useDraft,
   usePagination,
   PaginationControls,
+  AdminSectionTitle,
   StatField,
   startDrag,
   GroupedSection,
@@ -944,11 +945,9 @@ function PlayerSection({
   return (
     <section className="admin-panel__section">
       <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
-        <span className="admin-panel__section-toggle">
-          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-          Joueurs
-        </span>
+        <AdminSectionTitle title="Joueurs" icon="👤" />
         {isOpen && <PaginationControls {...pag} />}
+        <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
       </div>
 
       {isOpen && (
@@ -1449,10 +1448,8 @@ export default function AdminPanelWOM() {
       {overview && (
         <section className="admin-panel__section">
           <div className="admin-panel__section-header" onClick={() => setOverviewOpen((o) => !o)}>
-            <span className="admin-panel__section-toggle">
-              <span className="admin-panel__section-chevron">{overviewOpen ? "▼" : "▶"}</span>
-              Vue d&apos;ensemble
-            </span>
+            <AdminSectionTitle title="Vue d'ensemble" icon="📊" />
+            <span className="admin-panel__section-chevron">{overviewOpen ? "▼" : "▶"}</span>
           </div>
           {overviewOpen && (
             <div className="admin-panel__overview">
@@ -1468,10 +1465,8 @@ export default function AdminPanelWOM() {
 
       <section className="admin-panel__section">
         <div className="admin-panel__section-header" onClick={() => setMetricsOpen((o) => !o)}>
-          <span className="admin-panel__section-toggle">
-            <span className="admin-panel__section-chevron">{metricsOpen ? "▼" : "▶"}</span>
-            Movement Metrics
-          </span>
+          <AdminSectionTitle title="Movement Metrics" icon="📈" />
+          <span className="admin-panel__section-chevron">{metricsOpen ? "▼" : "▶"}</span>
         </div>
         {metricsOpen && (
           <>

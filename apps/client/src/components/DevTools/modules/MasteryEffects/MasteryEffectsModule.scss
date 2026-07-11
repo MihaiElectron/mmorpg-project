@@ -80,7 +80,7 @@ $mastery-effects-field-width: 170px;
     padding: 5px 10px;
     font-size: 12px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
 
     &:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -202,13 +202,10 @@ $mastery-effects-field-width: 170px;
   }
 
   &__add-row {
-    @include m.btn-base;
-    background: vars.$btn-neutral-bg;
+    @include m.devtools-create-button;
     align-self: flex-start;
     padding: 3px 8px;
     font-size: 11px;
-    &:hover { background: vars.$btn-neutral-hover; }
-    &:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 
   &__hints {
@@ -245,7 +242,7 @@ $mastery-effects-field-width: 170px;
     padding: 4px 9px;
     font-size: 12px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
     &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
 

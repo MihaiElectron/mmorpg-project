@@ -124,11 +124,14 @@ export default function RuntimeStatsPanel() {
         className="devtools-world__title devtools-world__title--clickable"
         onClick={handleToggle}
       >
-        <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        DEBUG — Player Runtime (lecture seule)
+        <span className="devtools-world__title-label">
+          <span aria-hidden="true">🧪</span>
+          DEBUG — Player Runtime (lecture seule)
+        </span>
         <button className="devtools-world__refresh-btn" onClick={handleRefresh} title="Rafraîchir">
           ↺
         </button>
+        <span className="devtools-world__chevron">{isOpen ? "▾" : "▸"}</span>
       </h3>
 
       {isOpen && (
@@ -170,12 +173,15 @@ export default function RuntimeStatsPanel() {
                 className="devtools-world__title devtools-world__title--clickable devtools-world__title--spaced"
                 onClick={handleTraceToggle}
               >
-                <span className="devtools-world__chevron">
-                  {traceOpen ? "▼" : "▶"}
+                <span className="devtools-world__title-label">
+                  <span aria-hidden="true">🔎</span>
+                  Trace
                 </span>
-                Trace
                 <span className="devtools-world__trace-badge">
                   {snapshot.trace.modifierCount} mod.
+                </span>
+                <span className="devtools-world__chevron">
+                  {traceOpen ? "▾" : "▸"}
                 </span>
               </h3>
 

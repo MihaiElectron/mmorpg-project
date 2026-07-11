@@ -61,23 +61,9 @@
   }
 
   &__save {
+    @include m.devtools-save-button;
     padding: 3px 10px;
-    background: vars.$btn-success-bg;
-    border: none;
-    border-radius: 3px;
-    color: #fff;
     font-size: 0.8rem;
-    cursor: pointer;
-    white-space: nowrap;
-
-    &:hover:not(:disabled) {
-      background: vars.$btn-success-hover;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 
   &__error {

@@ -5,12 +5,7 @@
 // ── Panneau admin principal ───────────────────────────────────────────────────
 
 .admin-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-  width: 100%;
-  overflow-y: auto;
+  display: contents;
   color: vars.$color-text-primary;
 
   // ── Champ de commande ─────────────────────────────────────────────────────
@@ -19,6 +14,7 @@
     align-items: center;
     gap: 8px;
     @include m.panel-header;
+    order: -30;
   }
 
   &__command-prefix {
@@ -47,6 +43,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    order: -29;
   }
 
   &__result {
@@ -73,48 +70,55 @@
     @include m.panel-section;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: vars.$dt-gap;
   }
 
   &__section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    @include m.devtools-module-header;
     cursor: pointer;
-    user-select: none;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
 
     &:hover .admin-panel__section-toggle {
+      color: vars.$color-metal-silver;
+    }
+
+    &:hover .admin-panel__section-chevron {
       color: vars.$color-metal-silver;
     }
   }
 
   &__section-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: vars.$color-text-gold;
-    font-size: 0.85rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    @include m.devtools-module-title;
     transition: color 0.15s;
+  }
+
+  &__section-icon {
+    flex-shrink: 0;
   }
 
   &__section-chevron {
     font-size: 0.65rem;
     color: vars.$color-text-muted;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+
+  &__section-meta {
+    color: vars.$color-text-muted;
+    font-family: vars.$coords-font-family;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  &__section-actions {
+    align-items: center;
+    display: flex;
+    flex-shrink: 0;
+    gap: vars.$dt-gap-sm;
   }
 
   // ── En-tête double (ex. Masteries / Créer Mastery) ─────────────────────────────
   &__dual-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
-    user-select: none;
+    @include m.devtools-module-header;
 
     > .admin-panel__section-toggle {
       cursor: pointer;
@@ -232,13 +236,8 @@
 
   // ── (legacy — gardé pour Vue d'ensemble qui n'est pas une EntitySection) ──
   &__section-title {
-    color: vars.$color-text-gold;
-    font-size: 0.85rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
+    @include m.devtools-module-header;
+    @include m.devtools-module-title;
   }
 
   // ── Vue d'ensemble ────────────────────────────────────────────────────────
@@ -772,38 +771,16 @@
   // ── Bouton Appliquer ──────────────────────────────────────────────────────
   &__apply-btn {
     align-self: flex-end;
-    @include m.btn-success;
-    font-size: 0.78rem;
-    padding: 4px 12px;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
+    @include m.devtools-save-button;
 
     &--danger {
-      background: vars.$btn-danger-bg;
-      border-color: vars.$btn-danger-bg;
-      color: #fff;
-
-      &:hover:not(:disabled) {
-        background: color.adjust(vars.$btn-danger-bg, $lightness: 8%);
-        border-color: color.adjust(vars.$btn-danger-bg, $lightness: 8%);
-      }
+      @include m.devtools-action-button(danger);
     }
 
     // Action secondaire (ex: diagnostic « Valider ») — visuellement discrète
     // pour ne pas concurrencer le bouton « Save » principal.
     &--ghost {
-      background: transparent;
-      border-color: vars.$panel-border;
-      color: vars.$color-text-muted;
-
-      &:hover:not(:disabled) {
-        background: vars.$panel-border-subtle;
-        border-color: vars.$panel-border;
-        color: vars.$color-text-primary;
-      }
+      @include m.devtools-action-button(ghost);
     }
   }
 
@@ -991,6 +968,7 @@
     font-size: 0.85rem;
     text-align: center;
     padding: 8px;
+    order: -28;
   }
 }
 
@@ -1045,7 +1023,11 @@
   justify-content: space-between;
 }
 
-.admin-panel__lootpool-add,
+.admin-panel__lootpool-add {
+  @include m.devtools-create-button;
+  padding: 2px 8px;
+}
+
 .admin-panel__lootpool-remove {
   cursor: pointer;
   border: 1px solid vars.$panel-border;
@@ -1055,9 +1037,7 @@
   font-size: 0.72rem;
   padding: 2px 8px;
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.14);
-  }
+  &:hover { background: rgba(255, 255, 255, 0.14); }
 }
 
 .admin-panel__lootpool-row {
@@ -1085,25 +1065,19 @@
 .admin-panel__lootpool-item {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
 }
 
 .admin-panel__lootpool-num {
-  width: 58px;
+  width: 100%;
   flex: 0 0 auto;
+  min-width: 0;
+  text-align: center;
 }
 
 .admin-panel__create-inline-btn {
-  cursor: pointer;
-  border: 1px solid vars.$panel-border;
-  border-radius: vars.$panel-radius-sm;
-  background: rgba(255, 255, 255, 0.06);
-  color: inherit;
-  font-size: 0.72rem;
+  @include m.devtools-create-button;
   padding: 2px 10px;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.14);
-  }
 }
 
 .admin-panel__group-extra {
@@ -1132,9 +1106,16 @@
   .admin-panel__lootpool-grid {
     // grille 4 colonnes + bouton suppression
     display: grid;
-    grid-template-columns: 1fr 56px 56px 84px 28px;
-    gap: 4px 6px;
+    grid-template-columns: minmax(0, 1fr) 44px 44px 64px 28px;
+    gap: 4px;
     align-items: center;
+  }
+
+  .admin-panel__lootpool-col {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .admin-panel__lootpool-row--grid {
@@ -1184,15 +1165,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  background: vars.$panel-header-bg;
-  border: 1px solid vars.$panel-border-subtle;
-  border-radius: vars.$panel-radius-sm;
-  color: vars.$color-text-gold;
-  cursor: pointer;
-  font-size: 0.72rem;
-  padding: 4px 8px;
-
-  &:hover { border-color: vars.$color-metal-silver; }
+  @include m.devtools-create-button;
 }
 
 // Sélecteur d'item searchable pour le lootPool.

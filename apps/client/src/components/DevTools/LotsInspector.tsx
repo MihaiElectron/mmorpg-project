@@ -53,8 +53,10 @@ export default function LotsInspector() {
         className="devtools-world__title devtools-world__title--clickable"
         onClick={handleToggle}
       >
-        <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        Market Lots (LISTED)
+        <span className="devtools-world__title-label">
+          <span aria-hidden="true">🏷️</span>
+          Market Lots (LISTED)
+        </span>
         {isOpen && (
           <button
             className="devtools-world__refresh-btn"
@@ -65,6 +67,7 @@ export default function LotsInspector() {
             ↺
           </button>
         )}
+        <span className="devtools-world__chevron">{isOpen ? "▾" : "▸"}</span>
       </h3>
 
       {isOpen && (

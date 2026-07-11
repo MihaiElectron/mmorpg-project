@@ -354,8 +354,10 @@ export default function RuntimeInspectorPanel({ target }: { target?: InspectorTa
         className="devtools-world__title devtools-world__title--clickable"
         onClick={handleToggle}
       >
-        <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        DEBUG — Modifiers runtime ({target?.entityKind === "creature" ? "Créature" : "Joueur"})
+        <span className="devtools-world__title-label">
+          <span aria-hidden="true">🧩</span>
+          DEBUG — Modifiers runtime ({target?.entityKind === "creature" ? "Créature" : "Joueur"})
+        </span>
         <button
           className="devtools-world__refresh-btn"
           onClick={handleRefresh}
@@ -364,6 +366,7 @@ export default function RuntimeInspectorPanel({ target }: { target?: InspectorTa
         >
           ↺
         </button>
+        <span className="devtools-world__chevron">{isOpen ? "▾" : "▸"}</span>
       </h3>
 
       {isOpen && (

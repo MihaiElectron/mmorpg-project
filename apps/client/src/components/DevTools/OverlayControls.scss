@@ -5,28 +5,29 @@
   @include m.panel-section;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: vars.$dt-section-gap;
 
   &__title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: vars.$color-text-gold;
-    font-size: 0.85rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
+    @include m.devtools-module-header;
+    @include m.devtools-module-title;
     cursor: pointer;
-    user-select: none;
+    margin: 0;
 
     &:hover { color: vars.$color-metal-silver; }
+  }
+
+  &__title-label {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: vars.$dt-gap-sm;
+    min-width: 0;
   }
 
   &__chevron {
     font-size: 0.65rem;
     color: vars.$color-text-muted;
+    flex-shrink: 0;
   }
 
   &__list {

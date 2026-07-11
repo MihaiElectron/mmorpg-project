@@ -2,57 +2,46 @@
 @use "../../../../styles/abstracts/mixins" as m;
 
 .devtools-world {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @include m.devtools-compact-stack(vars.$dt-section-gap);
   color: vars.$color-text-primary;
 
   &__inspector {
     @include m.panel-section;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    @include m.devtools-compact-stack(vars.$dt-gap);
   }
 
   &__title {
-    color: vars.$color-text-gold;
-    font-size: 0.85rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 1px solid vars.$panel-border;
-    padding-bottom: 6px;
+    @include m.devtools-module-header;
+    @include m.devtools-module-title;
+    margin: 0;
 
     &--clickable {
-      display: flex;
-      align-items: center;
-      gap: 6px;
       cursor: pointer;
-      user-select: none;
 
       &:hover { color: vars.$color-metal-silver; }
     }
   }
 
+  &__title-label {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: vars.$dt-gap-sm;
+    min-width: 0;
+  }
+
   &__chevron {
     font-size: 0.65rem;
     color: vars.$color-text-muted;
+    flex-shrink: 0;
   }
 
   &__coordinate-list {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    @include m.devtools-compact-stack(3px);
   }
 
   &__coordinate-row {
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-primary;
-    font-family: vars.$coords-font-family;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    padding: 3px 8px;
+    @include m.devtools-compact-row;
     word-break: break-word;
   }
 
@@ -226,15 +215,8 @@
   }
 
   &__section-header {
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-muted;
-    font-family: vars.$coords-font-family;
-    font-size: 0.68rem;
-    font-weight: bold;
-    letter-spacing: 0.8px;
-    padding: 3px 8px;
-    text-transform: uppercase;
+    @include m.devtools-compact-row(vars.$dt-compact-font-xs);
+    @include m.devtools-compact-label;
   }
 
   &__section-header--spaced {
@@ -256,38 +238,24 @@
   }
 
   &__error {
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
+    @include m.devtools-compact-row;
     color: #f66;
-    font-family: vars.$coords-font-family;
-    font-size: 0.75rem;
-    padding: 3px 8px;
   }
 
   &__trace-empty {
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
+    @include m.devtools-compact-row(vars.$dt-compact-font-sm);
     color: vars.$color-text-muted;
-    font-family: vars.$coords-font-family;
-    font-size: 0.7rem;
-    padding: 3px 8px;
   }
 
   &__trace-stat {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    @include m.devtools-compact-stack(2px);
   }
 
   &__trace-stat-header {
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-primary;
+    @include m.devtools-compact-row(0.72rem);
     display: flex;
-    font-family: vars.$coords-font-family;
-    font-size: 0.72rem;
     justify-content: space-between;
-    padding: 3px 8px;
+    gap: vars.$dt-gap-sm;
   }
 
   &__trace-stat-name {
@@ -300,24 +268,18 @@
   }
 
   &__trace-modifier {
-    background: vars.$panel-header-bg;
+    @include m.devtools-compact-row(vars.$dt-compact-font-sm, 2px 8px);
     border-left: 2px solid vars.$panel-border;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-primary;
     display: flex;
-    font-family: vars.$coords-font-family;
-    font-size: 0.7rem;
     gap: 6px;
     margin-left: 8px;
-    padding: 2px 8px;
+    min-width: 0;
   }
 
   &__trace-modifier-source {
     color: vars.$color-metal-silver;
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include m.text-ellipsis;
   }
 
   &__trace-modifier-op {
@@ -336,15 +298,12 @@
   }
 
   &__source-row {
-    background: vars.$panel-header-bg;
+    @include m.devtools-compact-row(0.72rem);
     border-left: 2px solid vars.$panel-border;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-primary;
     display: flex;
-    font-family: vars.$coords-font-family;
-    font-size: 0.72rem;
     justify-content: space-between;
-    padding: 3px 8px;
+    gap: vars.$dt-gap-sm;
+    min-width: 0;
   }
 
   &__source-kind {

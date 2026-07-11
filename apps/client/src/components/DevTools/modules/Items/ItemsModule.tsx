@@ -359,12 +359,13 @@ export default function ItemsModule() {
         onClick={() => setOpen((current) => !current)}
       >
         <h3 className="item-editor__title">
-          <span className="item-editor__chevron">{open ? "▼" : "▶"}</span>
+          <span aria-hidden="true">🎒</span>
           Item Editor
         </h3>
         <span className="item-editor__count">
           {items.length} item{items.length > 1 ? "s" : ""}
         </span>
+        <span className="item-editor__chevron">{open ? "▾" : "▸"}</span>
       </div>
 
       {open && (

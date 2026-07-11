@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StatField, kbHandlers, ackPromise, getSocket, type FieldDef } from "./adminPanel.shared";
+import { AdminSectionTitle, StatField, kbHandlers, ackPromise, getSocket, type FieldDef } from "./adminPanel.shared";
 import { estimateCraftMasteryXp } from "../ActionPanel/craftingRuntime";
 import { ItemCatalog, ItemIcon } from "../DevTools/shared/ItemCatalog";
 import {
@@ -627,14 +627,12 @@ export default function RecipesSection({ recipes, masteryDefinitions, items, onR
 
   return (
     <section className="admin-panel__section">
-      <div className="admin-panel__dual-header">
-        <div className="admin-panel__section-toggle" onClick={() => setRecipesOpen((o) => !o)}>
-          <span className="admin-panel__section-chevron">{recipesOpen ? "▼" : "▶"}</span>
-          Recipe Editor
-        </div>
-        <span className="admin-panel__count">
+      <div className="admin-panel__dual-header" onClick={() => setRecipesOpen((o) => !o)}>
+        <AdminSectionTitle title="Recipe Editor" icon="📋" />
+        <span className="admin-panel__section-meta">
           {recipes.length} recette{recipes.length > 1 ? "s" : ""}
         </span>
+        <span className="admin-panel__section-chevron">{recipesOpen ? "▼" : "▶"}</span>
       </div>
       {recipesOpen && (
         <div className="admin-panel__create-head">

@@ -83,7 +83,7 @@ $derived-stats-coef-width: 110px;
     padding: 4px 9px;
     font-size: 12px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
 
     &:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -235,7 +235,7 @@ $derived-stats-coef-width: 110px;
     padding: 4px 9px;
     font-size: 12px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
 
     &:disabled { opacity: 0.5; cursor: not-allowed; }

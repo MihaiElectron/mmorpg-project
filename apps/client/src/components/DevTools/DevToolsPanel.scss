@@ -1,6 +1,13 @@
+@use "../../styles/abstracts/variables" as vars;
+@use "../../styles/abstracts/mixins" as m;
+
+.devtools-panel-stack {
+  @include m.devtools-panel-stack;
+}
+
 .devtools-panel__admin-tabs {
   display: flex;
-  gap: 4px;
+  gap: vars.$dt-gap-xs;
   padding: 6px 8px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: 4px;

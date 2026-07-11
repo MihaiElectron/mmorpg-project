@@ -19,32 +19,21 @@ $derived-list-max-height: 360px;
   color: vars.$color-text-primary;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: vars.$dt-section-gap;
 
   &__header {
-    align-items: center;
-    border-bottom: 1px solid vars.$panel-border;
+    @include m.devtools-module-header;
     cursor: pointer;
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
-    padding-bottom: 6px;
-    user-select: none;
   }
 
   &__title {
-    align-items: center;
-    color: vars.$color-text-gold;
-    display: flex;
-    font-size: 0.85rem;
-    font-weight: bold;
-    gap: 6px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    @include m.devtools-module-title;
+    margin: 0;
   }
 
   &__chevron {
     color: vars.$color-text-muted;
+    flex-shrink: 0;
     font-size: 0.65rem;
     letter-spacing: 0;
   }

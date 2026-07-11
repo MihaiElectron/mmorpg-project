@@ -222,14 +222,13 @@ export default function LootPoolModule() {
         onClick={() => setOpen((current) => !current)}
       >
         <h3 className="loot-pool-editor__title">
-          <span className="loot-pool-editor__chevron">
-            {open ? "▼" : "▶"}
-          </span>
+          <span aria-hidden="true">🎲</span>
           LootPool Editor
         </h3>
         <span className="loot-pool-editor__count">
           {sources.length} source{sources.length > 1 ? "s" : ""}
         </span>
+        <span className="loot-pool-editor__chevron">{open ? "▾" : "▸"}</span>
       </div>
 
       {open && (

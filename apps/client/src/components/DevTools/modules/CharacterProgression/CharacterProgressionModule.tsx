@@ -187,12 +187,11 @@ export default function CharacterProgressionModule() {
         onClick={() => setOpen((v) => !v)}
       >
         <h3 className="character-progression__title">
-          <span className="character-progression__chevron">
-            {open ? "▼" : "▶"}
-          </span>
+          <span aria-hidden="true">🧭</span>
           Character Progression
         </h3>
         <span className="character-progression__count">Règles globales</span>
+        <span className="character-progression__chevron">{open ? "▾" : "▸"}</span>
       </div>
 
       {open && (

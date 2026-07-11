@@ -54,8 +54,11 @@ export default function OverlayControls() {
   return (
     <section className="oc">
       <h3 className="oc__title" onClick={() => setIsOpen((o) => !o)}>
-        <span className="oc__chevron">{isOpen ? "▼" : "▶"}</span>
-        Overlays
+        <span className="oc__title-label">
+          <span aria-hidden="true">👁️</span>
+          Overlays
+        </span>
+        <span className="oc__chevron">{isOpen ? "▾" : "▸"}</span>
       </h3>
       {isOpen && (
         <ul className="oc__list">

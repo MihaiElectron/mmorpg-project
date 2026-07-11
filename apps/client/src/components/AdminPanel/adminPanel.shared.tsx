@@ -77,6 +77,36 @@ export type GroupedSectionConfig = {
 
 export const ITEMS_PER_PAGE = 20;
 
+const ADMIN_SECTION_ICONS: Record<string, string> = {
+  creature: "🧬",
+  resource: "🌲",
+  station: "🏭",
+  building: "🏗️",
+  recipe: "📋",
+  item: "🎒",
+  loot: "🎲",
+  player: "👤",
+  overview: "📊",
+  metrics: "📈",
+};
+
+export function getAdminSectionIcon(title: string): string {
+  const normalized = title.toLowerCase();
+  const match = Object.entries(ADMIN_SECTION_ICONS).find(([key]) => normalized.includes(key));
+  return match?.[1] ?? "🛠️";
+}
+
+export function AdminSectionTitle({ title, icon }: { title: string; icon?: string }) {
+  return (
+    <span className="admin-panel__section-toggle">
+      <span className="admin-panel__section-icon" aria-hidden="true">
+        {icon ?? getAdminSectionIcon(title)}
+      </span>
+      <span>{title}</span>
+    </span>
+  );
+}
+
 function getPhaserKeyboard() {
   return getWorldScene()?.input?.keyboard;
 }
@@ -422,11 +452,9 @@ export function EntitySection({ config, items, onResult, embedded = false }: Ent
   return (
     <section className="admin-panel__section">
       <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
-        <span className="admin-panel__section-toggle">
-          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-          {config.title}
-        </span>
+        <AdminSectionTitle title={config.title} />
         {isOpen && <PaginationControls {...pag} />}
+        <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
       </div>
 
       {isOpen && content}
@@ -584,20 +612,18 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
   return (
     <section className="admin-panel__section">
       {rightHeader ? (
-        <div className="admin-panel__dual-header">
-          <div className="admin-panel__section-toggle" onClick={() => setIsOpen((o) => !o)}>
-            <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-            {config.title}
+        <div className="admin-panel__dual-header" onClick={() => setIsOpen((o) => !o)}>
+          <AdminSectionTitle title={config.title} />
+          <div className="admin-panel__section-actions">
+            {rightHeader}
           </div>
-          {rightHeader}
+          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
         </div>
       ) : (
         <div className="admin-panel__section-header" onClick={() => setIsOpen((o) => !o)}>
-          <span className="admin-panel__section-toggle">
-            <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
-            {config.title}
-          </span>
+          <AdminSectionTitle title={config.title} />
           {isOpen && <PaginationControls {...pag} />}
+          <span className="admin-panel__section-chevron">{isOpen ? "▼" : "▶"}</span>
         </div>
       )}
 

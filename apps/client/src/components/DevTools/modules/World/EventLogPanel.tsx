@@ -120,8 +120,11 @@ export default function EventLogPanel() {
     <section className="devtools-world__event-log" aria-label="Movement event log">
       <div className="devtools-world__event-log-header">
         <h3 className="devtools-world__title devtools-world__title--clickable" onClick={() => setIsOpen((o) => !o)}>
-          <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-          Event Log
+          <span className="devtools-world__title-label">
+            <span aria-hidden="true">📜</span>
+            Event Log
+          </span>
+          <span className="devtools-world__chevron">{isOpen ? "▾" : "▸"}</span>
         </h3>
         {isOpen && <div className="devtools-world__event-log-actions">
           <button

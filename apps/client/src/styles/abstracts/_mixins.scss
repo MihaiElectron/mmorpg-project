@@ -37,12 +37,12 @@
 @mixin panel-section {
   background: vars.$panel-inner-bg;
   border-radius: vars.$panel-radius;
-  padding: 10px;
+  padding: vars.$dt-section-padding;
 }
 
 @mixin panel-header {
   background: vars.$panel-header-bg;
-  padding: 10px;
+  padding: vars.$dt-header-padding;
   border-radius: vars.$panel-radius;
   border: 1px solid vars.$panel-border;
 }
@@ -51,6 +51,92 @@
   background: vars.$panel-inner-bg;
   border: 1px solid vars.$panel-border-subtle;
   border-radius: vars.$panel-radius-sm;
+}
+
+// ── DevTools compacts ────────────────────────────────────────────────────────
+
+@mixin devtools-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-section-gap;
+  min-width: 0;
+
+  > * {
+    margin: 0;
+  }
+}
+
+@mixin devtools-compact-stack($gap: vars.$dt-gap-xs) {
+  display: flex;
+  flex-direction: column;
+  gap: $gap;
+  min-width: 0;
+}
+
+@mixin devtools-compact-row(
+  $font-size: vars.$dt-compact-font,
+  $padding: vars.$dt-compact-row-padding
+) {
+  background: vars.$panel-header-bg;
+  border-radius: vars.$panel-radius-sm;
+  color: vars.$color-text-primary;
+  font-family: vars.$coords-font-family;
+  font-size: $font-size;
+  line-height: 1.4;
+  padding: $padding;
+}
+
+@mixin devtools-compact-label($font-size: vars.$dt-compact-font-xs) {
+  color: vars.$color-text-muted;
+  font-family: vars.$coords-font-family;
+  font-size: $font-size;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+@mixin devtools-module-header {
+  @include panel-header;
+  align-items: center;
+  display: flex;
+  gap: vars.$dt-gap-sm;
+  justify-content: flex-start;
+  min-width: 0;
+  user-select: none;
+}
+
+@mixin devtools-module-title {
+  align-items: center;
+  color: vars.$color-text-primary;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: bold;
+  gap: vars.$dt-gap-sm;
+  letter-spacing: 0;
+  flex: 1;
+  min-width: 0;
+  text-transform: none;
+}
+
+@mixin devtools-compact-control {
+  @include panel-slot;
+  background: rgba(0, 0, 0, 0.4);
+  color: vars.$color-text-primary;
+  font-family: vars.$coords-font-family;
+  font-size: vars.$dt-compact-font;
+  padding: vars.$dt-compact-control-padding;
+
+  &:focus {
+    border-color: vars.$color-magic-amber;
+    outline: none;
+  }
+}
+
+@mixin text-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // ── Boutons ──────────────────────────────────────────────────────────────────
@@ -82,6 +168,81 @@
   @include btn-base;
   background: vars.$btn-neutral-bg;
   &:hover { background: vars.$btn-neutral-hover; }
+}
+
+@mixin devtools-action-button($tone: save) {
+  border: 1px solid transparent;
+  border-radius: vars.$panel-radius-sm;
+  cursor: pointer;
+  font-family: vars.$coords-font-family;
+  font-size: 0.75rem;
+  font-weight: bold;
+  line-height: 1.2;
+  padding: 4px 10px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+
+  @if $tone == create {
+    background: rgba(vars.$color-magic-amber, 0.16);
+    border-color: rgba(vars.$color-magic-amber, 0.38);
+    color: vars.$color-text-gold;
+
+    &:hover:not(:disabled) {
+      background: rgba(vars.$color-magic-amber, 0.26);
+      border-color: rgba(vars.$color-magic-amber, 0.58);
+      color: vars.$color-text-primary;
+    }
+  } @else if $tone == save {
+    background: rgba(vars.$btn-success-bg, 0.25);
+    border-color: rgba(vars.$btn-success-bg, 0.5);
+    color: vars.$btn-success-hover;
+
+    &:hover:not(:disabled) {
+      background: rgba(vars.$btn-success-bg, 0.42);
+      border-color: rgba(vars.$btn-success-hover, 0.65);
+      color: vars.$color-text-primary;
+    }
+  } @else if $tone == neutral {
+    background: rgba(vars.$btn-neutral-bg, 0.55);
+    border-color: vars.$panel-border-subtle;
+    color: vars.$color-text-primary;
+
+    &:hover:not(:disabled) {
+      background: vars.$btn-neutral-hover;
+      border-color: vars.$panel-border;
+    }
+  } @else if $tone == danger {
+    background: rgba(vars.$btn-danger-bg, 0.85);
+    border-color: rgba(vars.$btn-danger-bg, 0.9);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: vars.$btn-danger-hover;
+      border-color: vars.$btn-danger-hover;
+    }
+  } @else if $tone == ghost {
+    background: transparent;
+    border-color: vars.$panel-border;
+    color: vars.$color-text-muted;
+
+    &:hover:not(:disabled) {
+      background: vars.$panel-border-subtle;
+      color: vars.$color-text-primary;
+    }
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+}
+
+@mixin devtools-create-button {
+  @include devtools-action-button(create);
+}
+
+@mixin devtools-save-button {
+  @include devtools-action-button(save);
 }
 
 @mixin btn-tab($active: false) {

@@ -41,8 +41,11 @@ export default function CoordinateInspector() {
   return (
     <section className="devtools-world__inspector" aria-label="Coordinate inspector">
       <h3 className="devtools-world__title devtools-world__title--clickable" onClick={() => setIsOpen((o) => !o)}>
-        <span className="devtools-world__chevron">{isOpen ? "▼" : "▶"}</span>
-        Coordinates
+        <span className="devtools-world__title-label">
+          <span aria-hidden="true">📍</span>
+          Coordinates
+        </span>
+        <span className="devtools-world__chevron">{isOpen ? "▾" : "▸"}</span>
       </h3>
       {isOpen && <div className="devtools-world__coordinate-list">
         <CoordinateRow label="Tool" values={[["active", activeTool]]} />

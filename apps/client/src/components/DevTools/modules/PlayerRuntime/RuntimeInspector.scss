@@ -1,31 +1,23 @@
 // apps/client/src/components/DevTools/modules/PlayerRuntime/RuntimeInspector.scss
 @use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
 
 .rt-inspector {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @include m.devtools-compact-stack;
 
   // ─── Barre de section avec badge et actions ─────────────────────────────────
 
   &__section-bar {
+    @include m.devtools-compact-row(vars.$dt-compact-font-xs);
     align-items: center;
-    background: vars.$panel-header-bg;
-    border-radius: vars.$panel-radius-sm;
     display: flex;
-    gap: 4px;
-    padding: 3px 8px;
+    gap: vars.$dt-gap-xs;
 
     &--spaced { margin-top: 4px; }
   }
 
   &__section-label {
-    color: vars.$color-text-muted;
-    font-family: vars.$coords-font-family;
-    font-size: 0.68rem;
-    font-weight: bold;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
+    @include m.devtools-compact-label;
   }
 
   &__section-badge {
@@ -54,24 +46,19 @@
   // ─── Ligne de modifier (lecture) ────────────────────────────────────────────
 
   &__modifier-row {
+    @include m.devtools-compact-row(vars.$dt-compact-font-sm, 2px 8px);
     align-items: center;
-    background: vars.$panel-header-bg;
-    border-left: 2px solid rgba(160, 100, 220, 0.5);
-    border-radius: vars.$panel-radius-sm;
+    border-left: 2px solid vars.$color-magic-amber;
     display: flex;
-    font-family: vars.$coords-font-family;
-    font-size: 0.7rem;
-    gap: 4px;
+    gap: vars.$dt-gap-xs;
     margin-left: 8px;
-    padding: 2px 8px;
+    min-width: 0;
   }
 
   &__modifier-label {
     color: vars.$color-metal-silver;
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include m.text-ellipsis;
   }
 
   &__modifier-stat {
@@ -95,9 +82,7 @@
   // ─── Formulaire d'ajout ─────────────────────────────────────────────────────
 
   &__form {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    @include m.devtools-compact-stack;
   }
 
   &__field {
@@ -116,18 +101,7 @@
 
   &__select,
   &__input {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid vars.$panel-border;
-    border-radius: vars.$panel-radius-sm;
-    color: vars.$color-text-primary;
-    font-family: vars.$coords-font-family;
-    font-size: 0.75rem;
-    padding: 3px 6px;
-
-    &:focus {
-      border-color: rgba(160, 100, 220, 0.7);
-      outline: none;
-    }
+    @include m.devtools-compact-control;
   }
 
   &__select { flex: 1; }
@@ -155,21 +129,7 @@
   }
 
   &__submit {
-    background: rgba(160, 100, 220, 0.25);
-    border: 1px solid rgba(160, 100, 220, 0.5);
-    border-radius: vars.$panel-radius-sm;
-    color: #d4a6ff;
-    cursor: pointer;
-    font-family: vars.$coords-font-family;
-    font-size: 0.75rem;
+    @include m.devtools-save-button;
     padding: 3px 10px;
-    white-space: nowrap;
-
-    &:hover:not(:disabled) { background: rgba(160, 100, 220, 0.45); }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.4;
-    }
   }
 }

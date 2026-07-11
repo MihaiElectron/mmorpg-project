@@ -139,7 +139,7 @@ $skills-list-max-height: 320px;
     padding: 5px 10px;
     font-size: 12px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
     &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
 
@@ -307,7 +307,7 @@ $skills-list-max-height: 320px;
     padding: 6px 14px;
     font-size: 13px;
 
-    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--confirm { @include m.devtools-save-button; }
     &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
 
     &:disabled { opacity: 0.5; cursor: not-allowed; }

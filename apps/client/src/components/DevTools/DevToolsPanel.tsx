@@ -12,7 +12,7 @@ import "./DevToolsPanel.scss";
 
 export default function DevToolsPanel() {
   return (
-    <>
+    <div className="devtools-panel-stack">
       <WorldModule />
       <ItemsModule />
       <LootPoolModule />
@@ -23,6 +23,6 @@ export default function DevToolsPanel() {
       <LotsInspector />
       <OverlayControls />
       <AdminPanelWOM />
-    </>
+    </div>
   );
 }

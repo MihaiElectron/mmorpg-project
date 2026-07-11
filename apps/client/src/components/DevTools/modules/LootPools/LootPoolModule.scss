@@ -6,32 +6,21 @@
   color: vars.$color-text-primary;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: vars.$dt-section-gap;
 
   &__header {
-    align-items: center;
-    border-bottom: 1px solid vars.$panel-border;
+    @include m.devtools-module-header;
     cursor: pointer;
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
-    padding-bottom: 6px;
-    user-select: none;
   }
 
   &__title {
-    align-items: center;
-    color: vars.$color-text-gold;
-    display: flex;
-    font-size: 0.85rem;
-    font-weight: bold;
-    gap: 6px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    @include m.devtools-module-title;
+    margin: 0;
   }
 
   &__chevron {
     color: vars.$color-text-muted;
+    flex-shrink: 0;
     font-size: 0.65rem;
     letter-spacing: 0;
   }
@@ -291,14 +280,7 @@
   &__remove,
   &__add,
   &__save {
-    cursor: pointer;
     padding: 4px 8px;
-    white-space: nowrap;
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.4;
-    }
   }
 
   &__remove {
@@ -309,9 +291,7 @@
   }
 
   &__add {
-    background: rgba(52, 152, 219, 0.16);
-    border: 1px solid rgba(52, 152, 219, 0.38);
-    color: #8ccfff;
+    @include m.devtools-create-button;
     text-align: center;
   }
 
@@ -333,9 +313,7 @@
   }
 
   &__save {
-    background: rgba(39, 174, 96, 0.22);
-    border: 1px solid rgba(39, 174, 96, 0.45);
-    color: #7dffad;
+    @include m.devtools-save-button;
   }
 
   &__usage {
