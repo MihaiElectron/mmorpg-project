@@ -11,6 +11,7 @@ import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
 import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { UpdateDerivedStatDefinitionDto } from '../derived-stats/dto/update-derived-stat-definition.dto';
+import { CreateDerivedStatDefinitionDto } from '../derived-stats/dto/create-derived-stat-definition.dto';
 import { PreviewDerivedStatsDto } from '../derived-stats/dto/preview-derived-stats.dto';
 import { ActiveSkillsService } from '../active-skills/active-skills.service';
 import { CreateSkillDefinitionDto } from '../active-skills/dto/create-skill-definition.dto';
@@ -169,6 +170,17 @@ export class AdminController {
   @Get('derived-stat-definitions')
   getDerivedStatDefinitions() {
     return this.derivedStatsService.getDefinitions();
+  }
+
+  @Get('derived-stat-definitions/:key')
+  getDerivedStatDefinition(@Param('key') key: string) {
+    return this.derivedStatsService.getDefinition(key);
+  }
+
+  /** Studio « Stats secondaires » (V3-A) — key immuable, pas de DELETE (enabled=false). */
+  @Post('derived-stat-definitions')
+  createDerivedStatDefinition(@Body() dto: CreateDerivedStatDefinitionDto) {
+    return this.derivedStatsService.createDefinition(dto);
   }
 
   @Patch('derived-stat-definitions/:key')

@@ -169,6 +169,65 @@ describe("DerivedStatsService", () => {
     });
   });
 
+  describe("createDefinition (Studio Stats secondaires — V3-A)", () => {
+    const validDto = {
+      key: "luck",
+      label: "Chance",
+      category: "social_threat" as const,
+      baseValue: 1,
+      primaryCoefficients: { charisma: 0.5 },
+    };
+
+    it("crée une dérivée custom et invalide le cache", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await service.getDefinitions(); // amorce le cache
+      const created = await service.createDefinition({ ...validDto });
+
+      expect(repo.save).toHaveBeenCalledTimes(1);
+      expect(created).toMatchObject({ key: "luck", label: "Chance", rawStatSource: null });
+      // cache invalidé → nouveau find
+      await service.getDefinitions();
+      expect(repo.find).toHaveBeenCalledTimes(2);
+    });
+
+    it("refuse une key déjà existante (key immuable)", async () => {
+      repo.findOne.mockResolvedValue(DEFAULT_DERIVED_STAT_DEFINITIONS[0]);
+      await expect(service.createDefinition({ ...validDto, key: "maxHealth" }))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("valide les coefficients (stat primaire inconnue, valeur non numérique)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({ ...validDto, primaryCoefficients: { luck: 1 } }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.createDefinition({
+          ...validDto,
+          primaryCoefficients: { charisma: NaN },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse min > max et NaN/Infinity sur les bornes", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({ ...validDto, minValue: 10, maxValue: 5 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.createDefinition({ ...validDto, baseValue: Infinity }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("getDefinition retourne la dérivée ou NotFound", async () => {
+      repo.findOne.mockResolvedValue(DEFAULT_DERIVED_STAT_DEFINITIONS[0]);
+      await expect(service.getDefinition("maxHealth")).resolves.toBeDefined();
+      repo.findOne.mockResolvedValue(null);
+      await expect(service.getDefinition("ghost")).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe("previewDerivedStats", () => {
     it("calcule avec la config persistée si aucun brouillon fourni", async () => {
       const result = await service.previewDerivedStats({

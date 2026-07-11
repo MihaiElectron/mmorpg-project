@@ -1,0 +1,243 @@
+@use "../../../../styles/abstracts/variables" as vars;
+@use "../../../../styles/abstracts/mixins" as m;
+
+// Studio « Stats secondaires » (V3-A). Aligné sur le style DevTools existant
+// (mêmes variables/mixins que MasteryEffects/Skills).
+
+$derived-stats-field-width: 170px;
+$derived-stats-coef-width: 110px;
+
+.derived-stats-module {
+  @include m.panel-section;
+  color: vars.$color-text-primary;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+  font-size: 13px;
+
+  &__header {
+    @include m.panel-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    color: vars.$color-text-primary;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  &__header-title { letter-spacing: 0.3px; }
+  &__header-chevron { color: vars.$color-text-muted; }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap;
+  }
+
+  &__toolbar {
+    display: flex;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__muted { margin: 0; color: vars.$color-text-muted; }
+  &__error { margin: 0; color: vars.$btn-danger-hover; }
+  &__message { margin: 0; color: vars.$color-text-gold; }
+
+  &__hints {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  &__hint {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    &--wide { width: 100%; }
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__input {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+
+    &:disabled { opacity: 0.6; }
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 4px 9px;
+    font-size: 12px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+// ── Éditeur ────────────────────────────────────────────────────────────────────
+.derived-stats-editor {
+  @include m.panel-slot;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: vars.$dt-gap;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__title {
+    margin: 0;
+    color: vars.$color-text-gold;
+    font-size: 14px;
+    flex: 1;
+  }
+
+  &__badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: vars.$panel-radius-sm;
+    white-space: nowrap;
+
+    &--on {
+      background: rgba(vars.$btn-success-bg, 0.25);
+      color: vars.$btn-success-hover;
+    }
+    &--off {
+      background: rgba(vars.$btn-danger-bg, 0.25);
+      color: vars.$btn-danger-hover;
+    }
+    &--muted {
+      background: rgba(0, 0, 0, 0.3);
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  &__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: $derived-stats-field-width;
+
+    &--wide { width: 100%; }
+    &--checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: vars.$dt-gap-xs;
+      width: auto;
+      cursor: pointer;
+
+      // Le reset global (_reset.scss) applique `appearance: none` à tout input :
+      // on restaure le rendu natif de la case pour la rendre visible/cochable.
+      input[type="checkbox"] {
+        -webkit-appearance: checkbox;
+        -moz-appearance: checkbox;
+        appearance: auto;
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: vars.$color-text-gold;
+      }
+    }
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
+  &__input,
+  &__textarea {
+    @include m.panel-slot;
+    color: vars.$color-text-primary;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+
+    &:disabled { opacity: 0.6; }
+  }
+  &__textarea { resize: vertical; }
+
+  &__group {
+    border: 1px solid vars.$panel-border-subtle;
+    border-radius: vars.$panel-radius-sm;
+    padding: 8px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: vars.$dt-gap-sm;
+  }
+  &__legend {
+    padding: 0 4px;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__coef-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: vars.$dt-gap-sm;
+  }
+  &__coef-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: $derived-stats-coef-width;
+  }
+
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: 12px;
+  }
+  &__message {
+    margin: 0;
+    color: vars.$color-text-gold;
+    font-size: 12px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 4px 9px;
+    font-size: 12px;
+
+    &--confirm { background: vars.$btn-success-bg; &:hover { background: vars.$btn-success-hover; } }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}

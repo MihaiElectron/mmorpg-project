@@ -10,6 +10,7 @@ import {
   CRITICAL_DERIVED_STAT_KEYS,
 } from './derived-stats.constants';
 import { UpdateDerivedStatDefinitionDto } from './dto/update-derived-stat-definition.dto';
+import { CreateDerivedStatDefinitionDto } from './dto/create-derived-stat-definition.dto';
 import { PreviewDerivedStatsDto } from './dto/preview-derived-stats.dto';
 import { computeDerivedFromDefinitions, PrimaryStats, DerivedStats } from '../characters/character-stats-calculator';
 
@@ -71,6 +72,66 @@ export class DerivedStatsService implements OnModuleInit {
     this.cache = null;
   }
 
+  /** Une définition par sa key. NotFoundException si absente. */
+  async getDefinition(key: string): Promise<DerivedStatDefinition> {
+    const found = await this.repo.findOne({ where: { key } });
+    if (!found) throw new NotFoundException(`Dérivée "${key}" introuvable.`);
+    return found;
+  }
+
+  /**
+   * Crée une DerivedStatDefinition (Studio « Stats secondaires », V3-A).
+   * La key est IMMUABLE après création (PK + nom du champ dans
+   * `stats.derived`). Une stat créée ici est CALCULÉE (baseValue +
+   * coefficients, clamp min/max) et exposée — mais pas forcément consommée
+   * par un hook gameplay (`runtimeStatus` est informatif).
+   */
+  async createDefinition(dto: CreateDerivedStatDefinitionDto): Promise<DerivedStatDefinition> {
+    const existing = await this.repo.findOne({ where: { key: dto.key } });
+    if (existing) {
+      throw new BadRequestException(`Dérivée "${dto.key}" existe déjà (key immuable).`);
+    }
+    if (dto.primaryCoefficients !== undefined) {
+      this.validatePrimaryCoefficients(dto.primaryCoefficients);
+    }
+    this.validateMinMax(dto.minValue, dto.maxValue);
+    this.validateFiniteNumbers(dto);
+
+    const entity = this.repo.create({
+      rawStatSource: null, // réservé aux dérivées combat historiques
+      ...dto,
+    });
+    const saved = await this.repo.save(entity);
+    this.invalidateCache();
+    return saved;
+  }
+
+  private validateMinMax(
+    minValue: number | null | undefined,
+    maxValue: number | null | undefined,
+  ): void {
+    if (minValue != null && maxValue != null && minValue > maxValue) {
+      throw new BadRequestException('minValue ne peut pas dépasser maxValue.');
+    }
+  }
+
+  /** Refuse NaN/Infinity sur les champs numériques (défense en profondeur). */
+  private validateFiniteNumbers(dto: {
+    baseValue?: number;
+    minValue?: number | null;
+    maxValue?: number | null;
+  }): void {
+    for (const [field, value] of Object.entries({
+      baseValue: dto.baseValue,
+      minValue: dto.minValue,
+      maxValue: dto.maxValue,
+    })) {
+      if (value != null && !Number.isFinite(value)) {
+        throw new BadRequestException(`${field} doit être un nombre fini.`);
+      }
+    }
+  }
+
   /**
    * Applique un patch sur UNE définition existante (jamais de création — la
    * liste des 24 clés est fixée par le code, cf. DerivedStats). Valide les
@@ -102,13 +163,12 @@ export class DerivedStatsService implements OnModuleInit {
       this.validatePrimaryCoefficients(patch.primaryCoefficients);
     }
 
-    if (
-      patch.minValue != null &&
-      patch.maxValue != null &&
-      patch.minValue > patch.maxValue
-    ) {
-      throw new BadRequestException('minValue ne peut pas dépasser maxValue.');
-    }
+    // min/max cohérents en tenant compte des valeurs existantes non patchées.
+    this.validateMinMax(
+      patch.minValue !== undefined ? patch.minValue : existing.minValue,
+      patch.maxValue !== undefined ? patch.maxValue : existing.maxValue,
+    );
+    this.validateFiniteNumbers(patch);
 
     const merged = this.repo.merge(existing, patch);
     const saved = await this.repo.save(merged);

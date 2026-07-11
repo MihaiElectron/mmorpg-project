@@ -4,6 +4,14 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
  * Catégories d'affichage/regroupement DevTools (Character Progression).
  * Purement organisationnelles — n'influencent aucun calcul.
  */
+/** Statut runtime d'une dérivée (Studio « Stats secondaires », V3-A). */
+export const DERIVED_STAT_RUNTIME_STATUSES = ['implemented', 'calculatedOnly', 'notHooked'] as const;
+export type DerivedStatRuntimeStatus = (typeof DERIVED_STAT_RUNTIME_STATUSES)[number];
+
+/** Modes de modificateurs de maîtrise autorisés sur une dérivée (préparation V3-B). */
+export const DERIVED_STAT_MODIFIER_MODES = ['percentPerLevel', 'flatPerLevel'] as const;
+export type DerivedStatModifierMode = (typeof DERIVED_STAT_MODIFIER_MODES)[number];
+
 export type DerivedStatCategory =
   | 'resources'
   | 'offensive'
@@ -73,4 +81,30 @@ export class DerivedStatDefinition {
    */
   @Column({ default: true })
   enabled: boolean;
+
+  // ── Métadonnées Studio « Stats secondaires » (V3-A) ──────────────────────────
+
+  /**
+   * true = la stat peut être ciblée par les Mastery Effects (préparation
+   * V3-B : GET /admin/mastery-effect-targets sera alimenté par ces flags).
+   * Aucun effet gameplay en V3-A.
+   */
+  @Column({ default: false })
+  masteryEligible: boolean;
+
+  /** Modes de modificateurs autorisés si masteryEligible (percent/flat). */
+  @Column('jsonb', { default: [] })
+  allowedModifierModes: DerivedStatModifierMode[];
+
+  /**
+   * implemented = calculée ET consommée par au moins un hook runtime ;
+   * calculatedOnly = calculée/affichée mais pas forcément utilisée en jeu ;
+   * notHooked = définie sans aucun effet gameplay. Purement informatif —
+   * n'influence pas le calcul (seul `enabled` le fait).
+   */
+  @Column({ type: 'varchar', length: 32, default: 'calculatedOnly' })
+  runtimeStatus: DerivedStatRuntimeStatus;
+
+  @Column({ type: 'text', nullable: true, default: null })
+  description: string | null;
 }

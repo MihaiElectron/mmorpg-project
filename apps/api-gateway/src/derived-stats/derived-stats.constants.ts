@@ -169,5 +169,11 @@ function def(
     maxValue: opts.maxValue ?? null,
     displayOrder,
     enabled: true,
+    // Métadonnées Studio (V3-A) — defaults sûrs pour le fallback mémoire ;
+    // les vraies valeurs vivent en DB (éditables depuis le Studio).
+    masteryEligible: false,
+    allowedModifierModes: [],
+    runtimeStatus: 'calculatedOnly',
+    description: null,
   } as DerivedStatDefinition;
 }
