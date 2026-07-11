@@ -147,7 +147,6 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [x] Skill Editor — `skill.weaponType` éditable (select, « Aucun » = null) (2026-07-11)
 - [x] Module « Maîtrises / Effets » — création de maîtrise + édition des `effects` en tableau stat/mode/value, catalogue chargé depuis `GET /admin/mastery-effect-targets` (2026-07-11)
 - [x] Module « Stats secondaires » — création/édition des `DerivedStatDefinition` (label, category, enabled, baseValue, min/max, coefficients, `masteryEligible`, `allowedModifierModes`, `runtimeStatus`, description ; key immuable) + maintenance sûre (suppression, rapport de références, retrait de référence de maîtrise, duplication de key) + panneau joueur alimenté par `GET /characters/stat-definitions` (2026-07-11)
-- [x] Outil admin « Infliger des dégâts » créature — modes Directs (ignore la défense) et Combat simulé (applique la défense via `calculateCombatDamage`), pénétration admin optionnelle (2026-07-11)
 - [ ] Visualisation des sources de modificateurs par stat dérivée (au-delà du rapport de références actuel)
 
 Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.

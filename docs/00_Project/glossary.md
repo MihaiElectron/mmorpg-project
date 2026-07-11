@@ -295,8 +295,6 @@ All coordinates in this section are defined by ADR-0001 (Accepted — 2026-06-22
 - **Template key**: the unique string identifier for a `CreatureTemplate` or `ResourceTemplate` (e.g., `"turkey"`, `"dead_tree"`). Used in admin commands and spawn events.
 - **Spawn key**: the unique string identifier for a `CreatureSpawn` record. Admin-generated in the format `admin_<timestamp>` for admin-spawned creatures.
 - **Delete action**: admin socket action for creatures or resources that permanently removes the entity from the database and emits a dead/deleted update event.
-- **Admin direct damage**: creature-damage admin mode (`admin:damage_creature`, mode `direct`) that removes raw HP and **ignores defense** — maintenance/debug of a creature's health. Historical behaviour, preserved. Implemented (V4).
-- **Admin simulated combat damage**: creature-damage admin mode (`admin:damage_creature`, mode `combat`) that **applies the target's defense** through `calculateCombatDamage` (`effectiveDefense = max(0, defense - penetration)`), with an optional admin defense penetration. Used to test creature armor and `defensePenetration` without touching real player combat; server remains authoritative. Implemented (V4).
 
 ---
 

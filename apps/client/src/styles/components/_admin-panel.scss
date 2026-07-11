@@ -1017,24 +1017,6 @@
   border-radius: vars.$panel-radius-sm;
 }
 
-// Outil admin "infliger des dégâts" (direct vs combat simulé) — V4-A+.
-.admin-panel__creature-damage {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 6px;
-  border: 1px solid vars.$panel-border;
-  border-radius: vars.$panel-radius-sm;
-}
-
-.admin-panel__creature-damage-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 6px;
-}
-
 .admin-panel__lootpool-head {
   display: flex;
   align-items: center;

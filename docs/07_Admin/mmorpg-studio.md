@@ -144,19 +144,6 @@ Spécification complète : `docs/07_Admin/devtools-architecture.md`.
   rechargé en live après toute mutation (événement `devtools:derived-stats-changed`),
   aucun calcul client.
 
-État actuel — Dégâts admin sur créature (2026-07-11, V4) :
-
-- outil **« Infliger des dégâts »** dans le panneau créatures (socket
-  `admin:damage_creature`), distinguant deux modes clairs :
-  - **Directs** : retire les PV bruts, **ignore la défense** — maintenance /
-    debug HP (comportement historique conservé) ;
-  - **Combat simulé** : **applique la défense** de la cible via
-    `calculateCombatDamage` (aucune formule parallèle), avec une **pénétration
-    de défense admin optionnelle** ;
-- utile pour tester l'armure des créatures et `defensePenetration` **sans
-  toucher au combat joueur réel** ; le serveur reste autoritaire (aucun calcul
-  de dégâts côté client).
-
 ### 3.2 LiveOps
 
 Les outils d'opération en production. Sécurisés, limités et audités.

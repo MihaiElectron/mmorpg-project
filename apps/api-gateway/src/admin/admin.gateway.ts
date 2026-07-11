@@ -288,49 +288,6 @@ export class AdminGateway implements OnGatewayConnection {
     };
   }
 
-  @SubscribeMessage('admin:damage_creature')
-  async onDamageCreature(
-    @ConnectedSocket() client: WorldSocket,
-    @MessageBody()
-    payload: {
-      creatureId?: string;
-      amount?: number;
-      mode?: 'direct' | 'combat';
-      attackerDefensePenetration?: number;
-    },
-  ): Promise<CmdResult> {
-    if (client.data.role !== 'admin') {
-      return { success: false, message: 'Non autorisé.' };
-    }
-
-    const { creatureId, amount, mode = 'direct', attackerDefensePenetration } = payload ?? {};
-    if (!creatureId || typeof amount !== 'number' || isNaN(amount) || amount < 0) {
-      return { success: false, message: 'Payload invalide : creatureId et amount (>= 0) requis.' };
-    }
-    if (mode !== 'direct' && mode !== 'combat') {
-      return { success: false, message: `Mode invalide : "${mode}". Valeurs : direct, combat.` };
-    }
-    const pen =
-      typeof attackerDefensePenetration === 'number' && attackerDefensePenetration >= 0
-        ? attackerDefensePenetration
-        : 0;
-
-    const result = await this.creaturesService.adminDamageCreature(creatureId, amount, mode, pen);
-    if (!result) {
-      return { success: false, message: `Creature "${creatureId}" introuvable ou mort.` };
-    }
-
-    const detail =
-      result.mode === 'combat'
-        ? `combat simulé : ${result.damage} dégât(s) après défense ${result.targetDefense}${pen > 0 ? ` (pénétration ${pen})` : ''}`
-        : `directs : ${result.damage} dégât(s) (défense ignorée)`;
-    return {
-      success: true,
-      message: `"${result.dto.name}" (${result.dto.id}) — ${detail} → ${result.dto.health} PV.`,
-      data: result.dto,
-    };
-  }
-
   @SubscribeMessage('admin:respawn_all')
   async onRespawnAll(
     @ConnectedSocket() client: WorldSocket,
