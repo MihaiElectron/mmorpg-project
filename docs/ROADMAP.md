@@ -128,6 +128,9 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] Combat (système complet)
 - [x] Masteries V1-D — effets contextuels serveur (auto-attaque + skills weapon-based) — **ADR-0020 Accepted** (2026-07-11)
 - [x] Mastery Effects V2 — modificateurs génériques `effects.modifiers[]` (percent/flat, 10 stats via pipeline de stats + `physicalAttack` contextuel arme), maîtrises niveau 0 (`bonus = level × coefficient`), source serveur `GET /admin/mastery-effect-targets` — **ADR-0020 amendé** (2026-07-11)
+- [x] Stats secondaires V3 — Studio de création/édition des `DerivedStatDefinition` + connexion Mastery Effect Targets construits depuis ces définitions (2026-07-11)
+- [x] Maintenance sûre des stats secondaires — stat système non supprimable, stat custom supprimable sans référence, rapport de références, retrait de modifier de maîtrise, duplication avec nouvelle key (2026-07-11)
+- [x] `defensePenetration` V4-A — stat dérivée système offensive, ciblable en Mastery Effect permanent, réduit la défense effective (`max(0, defense - pénétration)`) sur auto-attaque + skills damage (2026-07-11)
 - [ ] Effets de maîtrise futurs — critique, dodge/parry/block, accuracy, vitesses, résistances, stun/knockback, succès/qualité craft — ajout aux `mastery-effect-targets` au rythme des hooks serveur combat/craft (ADR-0020)
 
 ---
@@ -143,7 +146,9 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] Validation monde (Validation)
 - [x] Skill Editor — `skill.weaponType` éditable (select, « Aucun » = null) (2026-07-11)
 - [x] Module « Maîtrises / Effets » — création de maîtrise + édition des `effects` en tableau stat/mode/value, catalogue chargé depuis `GET /admin/mastery-effect-targets` (2026-07-11)
-- [ ] Module « Stats / Dérivées » — édition des formules `DerivedStatDefinition` et visualisation des sources de modificateurs
+- [x] Module « Stats secondaires » — création/édition des `DerivedStatDefinition` (label, category, enabled, baseValue, min/max, coefficients, `masteryEligible`, `allowedModifierModes`, `runtimeStatus`, description ; key immuable) + maintenance sûre (suppression, rapport de références, retrait de référence de maîtrise, duplication de key) + panneau joueur alimenté par `GET /characters/stat-definitions` (2026-07-11)
+- [x] Outil admin « Infliger des dégâts » créature — modes Directs (ignore la défense) et Combat simulé (applique la défense via `calculateCombatDamage`), pénétration admin optionnelle (2026-07-11)
+- [ ] Visualisation des sources de modificateurs par stat dérivée (au-delà du rapport de références actuel)
 
 Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.
 

@@ -118,6 +118,45 @@ Spécification complète : `docs/07_Admin/devtools-architecture.md`.
   (`MasteryEffectsService`) et validation finale serveur (targets, bornes,
   clamps — ADR-0020 amendé V2).
 
+État actuel — Stats secondaires (2026-07-11, V3) :
+
+- le module **« Stats secondaires » est Implemented** : création et édition des
+  `DerivedStatDefinition` (label, category, enabled, baseValue, min/max,
+  coefficients primaires, `masteryEligible`, `allowedModifierModes`,
+  `runtimeStatus`, description). La `key` est **immuable** après création ;
+- les **Mastery Effect Targets sont alimentés depuis ces définitions** : une
+  stat devient ciblable dès qu'elle est `enabled` + `masteryEligible` +
+  `runtimeStatus: implemented` + au moins un mode. Le module « Maîtrises /
+  Effets » consomme ce catalogue serveur (aucune liste en dur) ;
+- **maintenance sûre** :
+  - une **stat système** (seedée par le code) n'est **jamais supprimable** ;
+  - une **stat custom** n'est supprimable **que si aucune référence** ne la
+    cible ;
+  - **rapport de références** (`GET /admin/derived-stat-definitions/:key/references`)
+    listant les modificateurs de maîtrise qui pointent la stat ;
+  - **retrait ciblé** d'une référence de Mastery Effect
+    (`POST …/:key/remove-mastery-reference`) ;
+  - **duplication avec nouvelle key** pour corriger une key mal saisie sans
+    rename (les références de maîtrise ne sont pas copiées) ;
+  - suppression protégée par une confirmation UI stylée (jamais `window.confirm`) ;
+- le **panneau personnage joueur** affiche les stats dérivées via le catalogue
+  serveur (`GET /characters/stat-definitions`) — labels et valeurs serveur,
+  rechargé en live après toute mutation (événement `devtools:derived-stats-changed`),
+  aucun calcul client.
+
+État actuel — Dégâts admin sur créature (2026-07-11, V4) :
+
+- outil **« Infliger des dégâts »** dans le panneau créatures (socket
+  `admin:damage_creature`), distinguant deux modes clairs :
+  - **Directs** : retire les PV bruts, **ignore la défense** — maintenance /
+    debug HP (comportement historique conservé) ;
+  - **Combat simulé** : **applique la défense** de la cible via
+    `calculateCombatDamage` (aucune formule parallèle), avec une **pénétration
+    de défense admin optionnelle** ;
+- utile pour tester l'armure des créatures et `defensePenetration` **sans
+  toucher au combat joueur réel** ; le serveur reste autoritaire (aucun calcul
+  de dégâts côté client).
+
 ### 3.2 LiveOps
 
 Les outils d'opération en production. Sécurisés, limités et audités.

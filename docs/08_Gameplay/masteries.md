@@ -122,19 +122,55 @@ Désactivation :
 { "effects": {} }
 ```
 
-### Stats ciblables — source serveur unique
+### Stats ciblables — construites depuis les DerivedStatDefinition (V3-B)
 
-Le catalogue des stats, modes et bornes est exposé par
-**`GET /admin/mastery-effect-targets`** (source unique
-`mastery-effect-targets.ts`, partagée avec la validation d'écriture).
+Le catalogue des targets n'est **plus une liste statique** : il est **construit
+à partir des `DerivedStatDefinition`** (source de vérité éditable dans le Studio
+« Stats secondaires »), exposé par **`GET /admin/mastery-effect-targets`**
+(builder pur `mastery-effect-targets.ts`, partagé avec la validation d'écriture).
+
+Une stat dérivée est **ciblable** si et seulement si :
+
+- `enabled` ;
+- `masteryEligible` ;
+- `runtimeStatus === 'implemented'` ;
+- `allowedModifierModes` non vide.
+
+Toute stat `disabled` / `calculatedOnly` / `notHooked` / sans mode n'est jamais
+exposée (ni ciblable par sanitize, ni visible dans le Studio). Le **client et le
+Studio ne calculent rien** : le Studio lit ce catalogue serveur, sans aucune
+liste codée en dur.
 
 Stats actuellement exposées (Implemented) : `physicalAttack`, `defense`,
 `maxHealth`, `maxMana`, `maxEnergy`, `healthRegen`, `manaRegen`,
-`energyRegen`, `healingPower`, `magicPower`.
+`energyRegen`, `healingPower`, `magicPower`, **`defensePenetration`** (V4-A).
 
 Stats futures NON exposées (Not implemented — aucun hook gameplay) : critique,
 dodge, parry, block, accuracy, attackSpeed, movementSpeed, résistances, stun,
 knockback, craft (succès/qualité).
+
+### defensePenetration (V4-A)
+
+`defensePenetration` est une stat dérivée **système** offensive, ciblable comme
+**modificateur permanent** (jamais contextualisée `weaponType` — le contexte
+arme reste réservé à `physicalAttack`). Utile en `flatPerLevel` ou
+`percentPerLevel`.
+
+```jsonc
+{
+  "effects": {
+    "modifiers": [
+      { "stat": "defensePenetration", "mode": "flatPerLevel", "value": 2 }
+    ]
+  }
+}
+```
+
+Progression : maîtrise niveau 3 × 2 = **+6 pénétration**. En combat, la défense
+effective de la cible devient `max(0, defense - defensePenetration)` (jamais
+négative), avant le calcul de dégâts (`calculateCombatDamage`). Consommée par
+l'**auto-attaque** joueur et les **skills damage** (le lanceur passe sa
+pénétration dérivée à `applySkillDamage`).
 
 ### Résolution serveur
 
@@ -171,9 +207,11 @@ knockback, craft (succès/qualité).
 
 ### Implemented (V2)
 
-- **Permanents** : les 10 stats des targets, appliquées partout où les stats
+- **Permanents** : les stats des targets, appliquées partout où les stats
   dérivées sont consommées (combat, respawn, régénération, coûts/soins de
-  skills, affichage `/characters/me`).
+  skills, affichage `/characters/me`). Inclut **`defensePenetration`** (V4-A) :
+  réduit la défense effective de la cible (`max(0, defense - pénétration)`) dans
+  `calculateCombatDamage`, sur l'auto-attaque et les skills damage.
 - **Contextuel arme** (`physicalAttack` seul) : auto-attaque
   (`CreaturesService.attack`) et skills offensifs weapon-based
   (`SkillCastService.castCreatureSkill`, effectType `damage`, targetMode
