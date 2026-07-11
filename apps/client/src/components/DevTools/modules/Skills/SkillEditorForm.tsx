@@ -8,6 +8,7 @@ import {
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
   PRIMARY_STAT_KEYS,
+  WEAPON_TYPE_SUGGESTIONS,
   type SkillDefinitionDto,
   type SkillEffectType,
   type SkillKind,
@@ -40,6 +41,7 @@ interface Draft {
   skillKind: SkillKind;
   autoUnlock: boolean;
   requiredClass: string;
+  weaponType: string;
   resourceType: "" | SkillResourceType;
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
@@ -65,6 +67,7 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     skillKind: skill?.skillKind ?? "active",
     autoUnlock: skill?.autoUnlock ?? true,
     requiredClass: skill?.requiredClass ?? "",
+    weaponType: skill?.weaponType ?? "",
     resourceType: skill?.resourceType ?? "",
     targetMode: skill?.targetMode ?? "creature",
     effectType: skill?.effectType ?? "damage",
@@ -202,6 +205,8 @@ export default function SkillEditorForm({
       requiredLevel: Number(draft.requiredLevel),
       requiredClass: draft.requiredClass.trim() === "" ? null : draft.requiredClass.trim(),
       requiredMasteries,
+      // Jamais de "" : champ vide → null (skill non lié à une arme).
+      weaponType: draft.weaponType.trim() === "" ? null : draft.weaponType.trim(),
       resourceType: draft.resourceType === "" ? null : draft.resourceType,
       resourceCost: Number(draft.resourceCost),
       cooldownMs: Number(draft.cooldownMs),
@@ -427,6 +432,33 @@ export default function SkillEditorForm({
               ))}
             </select>
           </label>
+          <label className="skills-editor__field">
+            <span className="skills-editor__label">weaponType</span>
+            <select
+              className="skills-editor__input"
+              value={draft.weaponType}
+              onChange={(e) => setField("weaponType", e.target.value)}
+            >
+              <option value="">Aucun</option>
+              {/* Valeur hors liste (posée via API, ex: "dagger") : affichée
+                  telle quelle pour ne pas l'écraser silencieusement. */}
+              {draft.weaponType !== "" &&
+                !WEAPON_TYPE_SUGGESTIONS.includes(
+                  draft.weaponType as (typeof WEAPON_TYPE_SUGGESTIONS)[number],
+                ) && <option value={draft.weaponType}>{draft.weaponType}</option>}
+              {WEAPON_TYPE_SUGGESTIONS.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="skills-editor__hint">
+            Null / Aucun = aucun bonus de maîtrise d'arme. Ce champ n'impose pas
+            l'arme pour lancer le skill.
+            {!(draft.effectType === "damage" && draft.targetMode === "creature") &&
+              " Ignoré ici : seuls les skills damage/creature consomment ce champ."}
+          </p>
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
               type="checkbox"

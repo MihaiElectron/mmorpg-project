@@ -219,6 +219,14 @@ $skills-list-max-height: 320px;
     font-size: 11px;
   }
 
+  // Texte d'aide sous un champ (occupe toute la largeur de la grille flex).
+  &__hint {
+    margin: 0;
+    width: 100%;
+    color: vars.$color-text-muted;
+    font-size: 11px;
+  }
+
   &__input,
   &__textarea {
     @include m.panel-slot;

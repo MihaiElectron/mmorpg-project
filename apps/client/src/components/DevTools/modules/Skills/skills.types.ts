@@ -38,6 +38,17 @@ export interface SkillScaling {
   masteryCoefficients?: Record<string, number>;
 }
 
+// Suggestions de weaponType pour l'éditeur (datalist, saisie libre acceptée —
+// le serveur valide le format [a-z0-9_]). Même liste que WEAPON_TYPES du
+// module Items. TODO : partager cette liste (DevTools/shared) quand un
+// troisième usage apparaîtra, et l'alimenter depuis les items existants.
+export const WEAPON_TYPE_SUGGESTIONS = [
+  "two_handed_sword",
+  "two_handed_axe",
+  "bow",
+  "crossbow",
+] as const;
+
 export interface SkillDefinitionDto {
   id: string;
   key: string;
@@ -50,6 +61,11 @@ export interface SkillDefinitionDto {
   requiredLevel: number;
   requiredClass: string | null;
   requiredMasteries: Record<string, number>;
+  /**
+   * Lien explicite skill → arme (Masteries V1-D-Skills). null = skill non lié
+   * à une arme : aucun bonus de maîtrise d'arme. N'impose pas l'arme au cast.
+   */
+  weaponType: string | null;
   resourceType: SkillResourceType | null;
   resourceCost: number;
   cooldownMs: number;
@@ -75,6 +91,7 @@ export interface CreateSkillDefinitionPayload {
   requiredLevel?: number;
   requiredClass?: string | null;
   requiredMasteries?: Record<string, number>;
+  weaponType?: string | null;
   resourceType?: SkillResourceType | null;
   resourceCost?: number;
   cooldownMs?: number;
