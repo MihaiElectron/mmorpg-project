@@ -99,20 +99,24 @@ Profils : Developer, Lead.
 
 Spécification complète : `docs/07_Admin/devtools-architecture.md`.
 
-État actuel — configuration gameplay (2026-07-11) :
+État actuel — configuration gameplay (2026-07-11, Mastery Effects V2) :
 
 - le **Skill Editor** expose `skill.weaponType` (select, « Aucun » = null) —
   Implemented. Ce champ déclare la compatibilité d'un skill avec un type
   d'arme pour les bonus de maîtrise ; il n'impose pas l'arme au cast ;
-- `mastery_definition.effects` (bonus contextuels, ADR-0020) s'édite
-  uniquement via `PATCH /admin/mastery-definitions/:key` — le chemin socket
-  admin rejette `effects` volontairement. Un module Studio dédié
-  **« Maîtrises / Effets »**, orienté progression/gameplay, est Planned : ni
-  un CRUD générique de définitions, ni une édition durable dans SkillsModule ;
+- le module **« Maîtrises / Effets » est Implemented** : création de
+  maîtrise (key/name/category/XP config), édition des
+  `mastery_definition.effects` en **tableau stat / mode / value**
+  (`percentPerLevel`, `flatPerLevel`), contexte weaponType optionnel. Le
+  catalogue des stats ciblables, modes et bornes est **chargé depuis le
+  serveur** (`GET /admin/mastery-effect-targets`) — aucune liste codée en dur
+  côté frontend, sauvegarde bloquée si le catalogue ne charge pas. Le chemin
+  socket admin rejette `effects` volontairement (édition via PATCH HTTP
+  validé) ;
 - règle constante : le Studio **édite la configuration mais ne calcule aucun
   bonus** ni aucune éligibilité — résolution serveur
-  (`MasteryEffectsService`) et validation finale serveur (whitelist, bornes,
-  clamp — ADR-0020).
+  (`MasteryEffectsService`) et validation finale serveur (targets, bornes,
+  clamps — ADR-0020 amendé V2).
 
 ### 3.2 LiveOps
 

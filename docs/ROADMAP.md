@@ -126,8 +126,9 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [x] Aggro creature (détection, poursuite, fuite, auto-attaque, riposte)
 - [ ] Creatures (système complet)
 - [ ] Combat (système complet)
-- [x] Masteries V1-D — effets contextuels serveur (`mastery_definition.effects`, `MasteryEffectsService`, `damagePercentPerLevel` sur auto-attaque + skills weapon-based) — **ADR-0020 Accepted** (2026-07-11)
-- [ ] Effets de maîtrise futurs — critique, pénétration, stun/knockback, block, mitigation armure, succès/qualité craft — au rythme des hooks serveur combat/craft (ADR-0020)
+- [x] Masteries V1-D — effets contextuels serveur (auto-attaque + skills weapon-based) — **ADR-0020 Accepted** (2026-07-11)
+- [x] Mastery Effects V2 — modificateurs génériques `effects.modifiers[]` (percent/flat, 10 stats via pipeline de stats + `physicalAttack` contextuel arme), maîtrises niveau 0 (`bonus = level × coefficient`), source serveur `GET /admin/mastery-effect-targets` — **ADR-0020 amendé** (2026-07-11)
+- [ ] Effets de maîtrise futurs — critique, dodge/parry/block, accuracy, vitesses, résistances, stun/knockback, succès/qualité craft — ajout aux `mastery-effect-targets` au rythme des hooks serveur combat/craft (ADR-0020)
 
 ---
 
@@ -141,7 +142,8 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [ ] LiveOps : audit log, rate limiting, auth WebSocket indépendante
 - [ ] Validation monde (Validation)
 - [x] Skill Editor — `skill.weaponType` éditable (select, « Aucun » = null) (2026-07-11)
-- [ ] Module « Maîtrises / Effets » — édition de `mastery_definition.effects` orientée progression/gameplay (pas un CRUD générique de définitions — ADR-0020)
+- [x] Module « Maîtrises / Effets » — création de maîtrise + édition des `effects` en tableau stat/mode/value, catalogue chargé depuis `GET /admin/mastery-effect-targets` (2026-07-11)
+- [ ] Module « Stats / Dérivées » — édition des formules `DerivedStatDefinition` et visualisation des sources de modificateurs
 
 Voir `docs/07_Admin/mmorpg-studio.md` pour la vision complète.
 

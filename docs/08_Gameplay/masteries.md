@@ -4,15 +4,15 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-07-11
+- Last updated: 2026-07-11 (amendé Mastery Effects V2)
 - Depends on: docs/01_Architecture/adr/ADR-0020-mastery-contextual-effects.md, docs/01_Architecture/adr/ADR-0018-class-mastery-progression.md, docs/01_Architecture/adr/ADR-0016-skills-rewards-runtime.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
 ## Scope
 
 Ce document décrit l'état réel du système de maîtrises : progression,
-prérequis (`requiredMasteries`) et bonus contextuels (`effects`, Masteries
-V1-D).
+prérequis (`requiredMasteries`) et modificateurs de stats (`effects`,
+Mastery Effects V2).
 
 Il ne décrit pas les skills actifs en détail (ADR-0019), ni les classes et
 talents (ADR-0018, non implémentés), ni l'XP personnage.
@@ -25,8 +25,9 @@ talents (ADR-0018, non implémentés), ni l'XP personnage.
   `key` immuable, `name`, `category`, `maxLevel`, `baseXpPerLevel`,
   `xpCurveExponent`, `enabled`, `effects`.
 - **PlayerMastery** : progression d'un personnage sur une maîtrise (`level`,
-  `xp`). Démarre à level 1. Une maîtrise jamais pratiquée est présentée
-  level 1 / xp 0 sans ligne en base.
+  `xp`). **Démarre au niveau 0** : le niveau affiché = nombre réel de
+  coefficients d'effet appliqués, aucun niveau gratuit. Une maîtrise jamais
+  pratiquée est présentée level 0 / xp 0 sans ligne en base.
 - **requiredMasteries** : prérequis / verrouillage — `{ masteryKey: levelMin }`
   sur les items, skills et recettes.
 - **effects** : bonus progressifs contextuels portés par la définition de
@@ -45,53 +46,112 @@ Les deux mécanismes sont distincts et ne doivent jamais être confondus :
 Utiliser `requiredMasteries` comme proxy de bonus est une alternative
 explicitement rejetée par ADR-0020.
 
-## Bonus contextuels (effects) — Implemented
+## Modificateurs de stats (effects) — Implemented (V2)
 
 ### Formule
 
 ```
-bonus = (level − 1) × percentPerLevel
+bonus = level × coefficient
 ```
 
-- Level 1 (maîtrise jamais pratiquée) → **0 %**.
-- Le `damagePercent` total est **clampé à 50 %** côté serveur, quelle que
-  soit la configuration ou le nombre de maîtrises matchées.
-- Seul **`combat.damagePercentPerLevel`** (borné 0–5 à l'écriture) est
-  implémenté aujourd'hui.
+- **Level 0** (maîtrise jamais pratiquée) → **aucun bonus**.
+- Level 1 → 1 coefficient ; level 3 → 3 coefficients.
+- Exemple : level 3, value 5 en percent → **bonus = 3 × 5 = 15 %**.
+- Clamps serveur par stat : **percent total ≤ 50 %**, **flat total ≤ 1000**,
+  quelle que soit la configuration ou le nombre de maîtrises matchées.
+- Coût d'XP : `baseXpPerLevel × (level + 1)^xpCurveExponent` (passer 0 → 1
+  coûte `baseXpPerLevel`).
+
+### Modèle `modifiers[]`
+
+Chaque effet est une liste de modificateurs `{ stat, mode, value }` :
+
+- `stat` : stat dérivée ciblable, whitelistée par la source serveur unique
+  (`mastery-effect-targets`) ;
+- `mode` : `percentPerLevel` (0–5 par niveau) ou `flatPerLevel` (0–100 par
+  niveau) ;
+- `value` : coefficient par niveau, borné par stat et par mode ;
+- `context.weaponType` optionnel : présent → effet CONTEXTUEL consommé par
+  les hooks weapon-based (stat `physicalAttack` seule autorisée) ; absent →
+  effet PERMANENT appliqué au pipeline de stats du personnage.
+
+Le format legacy V1 `combat.damagePercentPerLevel` est lu défensivement
+(interprété comme `physicalAttack / percentPerLevel`) mais n'est plus jamais
+généré à l'écriture.
 
 ### Stockage
 
 - `mastery_definition.effects` — JSONB, `NOT NULL DEFAULT '{}'`.
 - `{}` = aucun effet (valeur des maîtrises existantes et par défaut).
-- **Écriture stricte** : clés whitelistées, types et bornes validés, rejet 400
-  de tout effet non supporté (`sanitizeMasteryEffects`). Aucun effet non
-  supporté n'est persisté.
+- **Écriture stricte** : stat/mode/value/bornes/doublons validés contre les
+  targets serveur, rejet 400 de tout effet non supporté
+  (`sanitizeMasteryEffects`). Aucun effet non supporté n'est persisté.
 - **Lecture défensive** : une valeur corrompue en base est ignorée ou clampée,
   jamais levée — un catalogue sale ne casse pas un hit.
 
-### Exemple de configuration
+### Exemples de configuration
+
+Effet permanent (sans contexte — appliqué aux stats du personnage) :
 
 ```json
 {
-  "context": { "weaponType": "two_handed_sword" },
-  "combat": { "damagePercentPerLevel": 5 }
+  "effects": {
+    "modifiers": [
+      { "stat": "maxHealth", "mode": "percentPerLevel", "value": 2 }
+    ]
+  }
 }
 ```
 
-Application : maîtrise level 3, `damagePercentPerLevel` 5 →
-`bonus = (3 − 1) × 5 = 10 %`.
+Effet contextuel arme (hooks weapon-based, `physicalAttack` uniquement) :
+
+```json
+{
+  "effects": {
+    "context": { "weaponType": "two_handed_sword" },
+    "modifiers": [
+      { "stat": "physicalAttack", "mode": "percentPerLevel", "value": 5 }
+    ]
+  }
+}
+```
+
+Désactivation :
+
+```json
+{ "effects": {} }
+```
+
+### Stats ciblables — source serveur unique
+
+Le catalogue des stats, modes et bornes est exposé par
+**`GET /admin/mastery-effect-targets`** (source unique
+`mastery-effect-targets.ts`, partagée avec la validation d'écriture).
+
+Stats actuellement exposées (Implemented) : `physicalAttack`, `defense`,
+`maxHealth`, `maxMana`, `maxEnergy`, `healthRegen`, `manaRegen`,
+`energyRegen`, `healingPower`, `magicPower`.
+
+Stats futures NON exposées (Not implemented — aucun hook gameplay) : critique,
+dodge, parry, block, accuracy, attackSpeed, movementSpeed, résistances, stun,
+knockback, craft (succès/qualité).
 
 ### Résolution serveur
 
 - **`MasteryEffectsService`** est le point serveur unique de résolution ;
-  le calcul est une fonction pure (`computeCombatMasteryEffects`).
+  les calculs sont des fonctions pures (`computeCombatMasteryEffects` pour le
+  contextuel, `aggregateMasteryStatModifiers` pour le permanent).
+- Les modificateurs **permanents** sont appliqués aux stats dérivées via
+  `CharacterStatsCalculator.compute` sur tous les chemins : getMe, combat,
+  skills damage/heal, respawn, join, tick de régénération, clamp de
+  ressources à l'équipement.
 - Le **client et le Studio ne calculent jamais** un bonus ni une éligibilité :
-  le Studio édite la configuration via l'API admin HTTP, le serveur résout le
-  contexte réel (arme équipée via `resolveEquippedWeaponType`, jamais fournie
-  par le client).
+  le Studio édite la configuration via l'API admin HTTP, le serveur valide
+  stat/mode/bornes/contexte et résout le contexte réel (arme équipée via
+  `resolveEquippedWeaponType`, jamais fournie par le client).
 - Les définitions `enabled` sont servies par un cache mémoire invalidé à
   chaque mutation du catalogue (CRUD HTTP et chemin socket admin).
-- Maîtrise `enabled: false`, contexte non matché, effects vide → 0 %.
+- Maîtrise `enabled: false`, contexte non matché, effects vide, level 0 → 0.
 
 ## Contexte actuel : weaponType (combat à l'arme)
 
@@ -109,23 +169,30 @@ Application : maîtrise level 3, `damagePercentPerLevel` 5 →
 
 ## Surfaces consommatrices
 
-### Implemented
+### Implemented (V2)
 
-- Auto-attaque (`CreaturesService.attack`).
-- Skills offensifs weapon-based (`SkillCastService.castCreatureSkill`,
-  effectType `damage`, targetMode `creature`, `weaponType` non null).
+- **Permanents** : les 10 stats des targets, appliquées partout où les stats
+  dérivées sont consommées (combat, respawn, régénération, coûts/soins de
+  skills, affichage `/characters/me`).
+- **Contextuel arme** (`physicalAttack` seul) : auto-attaque
+  (`CreaturesService.attack`) et skills offensifs weapon-based
+  (`SkillCastService.castCreatureSkill`, effectType `damage`, targetMode
+  `creature`, `weaponType` non null = arme équipée).
 
-Validation runtime (2026-07-11) : auto-attaque 16 → 18 avec effects
-`two_handed_sword` (level 3, 5 %/niveau), 16 en mismatch `bow` ; skill
-`test_strike` 52 → 57 en matching, 52 avec weaponType seul ou en mismatch.
+Validation runtime V1 (2026-07-11, formule et niveaux d'alors) : auto-attaque
+16 → 18 avec effects `two_handed_sword`, 16 en mismatch `bow` ; skill
+`test_strike` 52 → 57 en matching, 52 en mismatch. V2 validée manuellement
+(valeur fixe prise en compte, aucun bonus sans épée équipée).
 
 ### Not implemented (futur)
 
-Critique, pénétration, stun, knockback, block, mitigation d'armure, bouclier,
-succès de craft, qualité de craft, récolte. Ces clés sont volontairement
-**absentes de la whitelist serveur** : elles seront ajoutées quand leur hook
-gameplay existera (ADR-0020). Les heals et les skills self ne consomment
-jamais les effets d'arme.
+Critique, dodge, parry, block, accuracy, attackSpeed, movementSpeed,
+résistances, stun, knockback, succès/qualité de craft, récolte. Ces stats sont
+volontairement **absentes des targets serveur** (refusées par sanitize,
+invisibles dans le Studio) : elles seront ajoutées quand leur hook gameplay
+existera (ADR-0020). Les heals et les skills self ne consomment jamais les
+effets contextuels d'arme (ils bénéficient en revanche des permanents
+`healingPower`/`maxHealth`).
 
 ## Limites connues
 
@@ -136,11 +203,13 @@ jamais les effets d'arme.
   l'XP de combat) est encore hardcodé dans `CreaturesService` — la relation
   weaponType ↔ mastery est encodée à deux endroits.
 - Migrations versionnées (`AddEffectsToMasteryDefinition`,
-  `AddWeaponTypeToSkillDefinition`) mais aucun runner prod ne les exécute —
-  `synchronize: true` crée les colonnes en dev uniquement.
-- Le module Studio « Maîtrises / Effets » n'est pas encore implémenté —
-  `effects` s'édite via `PATCH /admin/mastery-definitions/:key` ; le Skill
-  Editor expose `skill.weaponType`.
+  `AddWeaponTypeToSkillDefinition`, `StartPlayerMasteryAtLevelZero`) mais
+  aucun runner prod ne les exécute — `synchronize: true` crée/ajuste les
+  colonnes en dev uniquement (l'UPDATE level 1/xp 0 → 0 est manuel).
+- Le module Studio « Maîtrises / Effets » est **livré** : création de
+  maîtrise, édition des effets en tableau stat/mode/value, catalogue chargé
+  depuis `GET /admin/mastery-effect-targets` (aucune liste frontend en dur) ;
+  le Skill Editor expose `skill.weaponType`.
 - `effects` n'est pas modifiable via le socket admin — volontaire (validation
   DTO HTTP).
 
@@ -151,6 +220,7 @@ jamais les effets d'arme.
   (skills actifs V1).
 - STATUS.md — bloc « Masteries V1-D ».
 - Code principal :
+  - `apps/api-gateway/src/masteries/mastery-effect-targets.ts`
   - `apps/api-gateway/src/masteries/mastery-effects.calculator.ts`
   - `apps/api-gateway/src/masteries/mastery-effects.service.ts`
   - `apps/api-gateway/src/masteries/masteries.service.ts`
