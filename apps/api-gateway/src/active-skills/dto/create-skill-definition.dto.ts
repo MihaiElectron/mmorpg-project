@@ -79,6 +79,16 @@ export class CreateSkillDefinitionDto {
   @IsObject()
   requiredMasteries?: Record<string, number>;
 
+  /**
+   * Lien explicite skill → arme (V1-D-Skills-A). String libre comme
+   * `item.weaponType` ; null/vide = skill non lié à une arme. Normalisé
+   * (trim, '' → null) et validé ([a-z0-9_]) par le service.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  weaponType?: string | null;
+
   @IsOptional()
   @IsIn(SKILL_RESOURCE_TYPES)
   resourceType?: SkillResourceType | null;

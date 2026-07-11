@@ -9,6 +9,7 @@ import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
+import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { calculateCombatDamage } from './combat-damage.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
@@ -569,7 +570,7 @@ export class CreaturesService implements OnModuleInit {
     // sans effet configuré, damagePercent = 0 et l'attaque est inchangée.
     // Le clamp (max 50 %) et la formule (level − 1) × perLevel vivent dans le
     // calculateur pur — aucune formule dupliquée ici.
-    const weaponType = this.resolveEquippedWeaponType(character);
+    const weaponType = resolveEquippedWeaponType(character.equipment);
     const { damagePercent } = await this.masteryEffects.getCombatMasteryEffects(
       characterId,
       { weaponType },
@@ -769,30 +770,10 @@ export class CreaturesService implements OnModuleInit {
     return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, loot, characterXpUpdate };
   }
 
-  /**
-   * WeaponType de l'arme équipée (priorité distance > mêlée, comme la portée).
-   * Source serveur unique — réutilisée par l'XP mastery (via
-   * `resolveCombatMasteryKey`) et par les effets de maîtrise (V1-D-B).
-   * null = pas d'arme ou arme sans weaponType configuré.
-   */
-  private resolveEquippedWeaponType(character: Character): string | null {
-    const equipment = character.equipment ?? [];
-    const ranged = equipment.find(
-      (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
-    );
-    if (ranged?.item?.weaponType) return ranged.item.weaponType;
-    const melee = equipment.find(
-      (eq) =>
-        ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
-          (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
-        eq.item?.type === 'weapon',
-    );
-    if (melee?.item?.weaponType) return melee.item.weaponType;
-    return null;
-  }
-
   private resolveCombatMasteryKey(character: Character): string | null {
-    const weaponType = this.resolveEquippedWeaponType(character);
+    // WeaponType résolu par le helper partagé (characters/equipped-weapon.helper)
+    // — même source que les effets de maîtrise V1-D-B et le futur cast de skill.
+    const weaponType = resolveEquippedWeaponType(character.equipment);
     if (!weaponType) return null;
     return COMBAT_WEAPON_MASTERY_MAP[weaponType] ?? null;
   }

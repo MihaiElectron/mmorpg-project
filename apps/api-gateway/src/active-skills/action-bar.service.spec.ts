@@ -21,6 +21,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     requiredLevel: 1,
     requiredClass: null,
     requiredMasteries: {},
+    weaponType: null,
     resourceType: null,
     resourceCost: 0,
     cooldownMs: 1000,

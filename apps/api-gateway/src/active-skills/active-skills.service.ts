@@ -325,7 +325,10 @@ export class ActiveSkillsService {
       this.validateScaling(dto.scaling);
     }
 
-    const entity = this.repo.create(dto as Partial<SkillDefinition>);
+    const entity = this.repo.create({
+      ...dto,
+      ...this.normalizedWeaponTypePatch(dto.weaponType),
+    } as Partial<SkillDefinition>);
     const saved = await this.repo.save(entity);
     this.invalidateCache();
     return saved;
@@ -347,10 +350,32 @@ export class ActiveSkillsService {
       this.validateScaling(dto.scaling);
     }
 
-    const merged = this.repo.merge(existing, dto as Partial<SkillDefinition>);
+    const merged = this.repo.merge(existing, {
+      ...dto,
+      ...this.normalizedWeaponTypePatch(dto.weaponType),
+    } as Partial<SkillDefinition>);
     const saved = await this.repo.save(merged);
     this.invalidateCache();
     return saved;
+  }
+
+  /**
+   * Normalise `weaponType` (V1-D-Skills-A) : `undefined` → patch vide (champ
+   * non touché), trim, chaîne vide / null → null (skill non lié à une arme),
+   * sinon format [a-z0-9_] obligatoire (même contrat que `item.weaponType`).
+   */
+  private normalizedWeaponTypePatch(
+    raw: string | null | undefined,
+  ): { weaponType?: string | null } {
+    if (raw === undefined) return {};
+    const trimmed = typeof raw === 'string' ? raw.trim() : raw;
+    if (trimmed === null || trimmed === '') return { weaponType: null };
+    if (!/^[a-z0-9_]+$/.test(trimmed)) {
+      throw new BadRequestException(
+        'weaponType doit être en minuscules, chiffres ou underscore ([a-z0-9_]).',
+      );
+    }
+    return { weaponType: trimmed };
   }
 
   /**

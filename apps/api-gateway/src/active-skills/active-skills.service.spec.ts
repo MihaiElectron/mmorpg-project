@@ -22,6 +22,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     requiredLevel: 1,
     requiredClass: null,
     requiredMasteries: {},
+    weaponType: null,
     resourceType: null,
     resourceCost: 0,
     cooldownMs: 1000,
@@ -182,6 +183,42 @@ describe("ActiveSkillsService", () => {
         }),
       ).resolves.toBeDefined();
     });
+
+    // ── weaponType (V1-D-Skills-A) ──────────────────────────────────────────
+    it("create sans weaponType → champ non touché (défaut colonne null)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await service.createDefinition({ key: "k", name: "N" });
+      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      expect(created).not.toHaveProperty("weaponType");
+    });
+
+    it("create avec weaponType valide → persisté trimé", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await service.createDefinition({
+        key: "cleave",
+        name: "Cleave",
+        weaponType: " two_handed_sword ",
+      });
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ weaponType: "two_handed_sword" }),
+      );
+    });
+
+    it("create avec weaponType vide → null (skill non lié à une arme)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await service.createDefinition({ key: "fireball", name: "Fireball", weaponType: "" });
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ weaponType: null }),
+      );
+    });
+
+    it("create avec weaponType invalide → BadRequest, rien de sauvegardé", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({ key: "k", name: "N", weaponType: "Two-Handed!" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
   });
 
   describe("updateDefinition", () => {
@@ -197,6 +234,39 @@ describe("ActiveSkillsService", () => {
       await expect(
         service.updateDefinition("nope", { name: "X" }),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    // ── weaponType (V1-D-Skills-A) ──────────────────────────────────────────
+    it("update weaponType valide → persisté", async () => {
+      repo.findOne.mockResolvedValue(makeSkill());
+      const updated = await service.updateDefinition("power_strike", {
+        weaponType: "two_handed_sword",
+      });
+      expect(updated.weaponType).toBe("two_handed_sword");
+    });
+
+    it("update weaponType null ou vide → null", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ weaponType: "two_handed_sword" }));
+      const cleared = await service.updateDefinition("power_strike", { weaponType: null });
+      expect(cleared.weaponType).toBeNull();
+
+      repo.findOne.mockResolvedValue(makeSkill({ weaponType: "two_handed_sword" }));
+      const emptied = await service.updateDefinition("power_strike", { weaponType: "  " });
+      expect(emptied.weaponType).toBeNull();
+    });
+
+    it("update sans weaponType conserve la valeur existante", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ weaponType: "bow" }));
+      const updated = await service.updateDefinition("power_strike", { name: "Renamed" });
+      expect(updated.weaponType).toBe("bow");
+    });
+
+    it("update weaponType invalide → BadRequest", async () => {
+      repo.findOne.mockResolvedValue(makeSkill());
+      await expect(
+        service.updateDefinition("power_strike", { weaponType: "épée" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.save).not.toHaveBeenCalled();
     });
   });
 

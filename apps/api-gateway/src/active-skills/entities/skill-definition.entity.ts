@@ -78,6 +78,17 @@ export class SkillDefinition {
   @Column({ type: 'jsonb', default: {} })
   requiredMasteries: Record<string, number>;
 
+  /**
+   * Type d'arme auquel le skill est explicitement lié (V1-D-Skills-A).
+   * Même contrat string libre que `item.weaponType` (`two_handed_sword`,
+   * `bow`…). null = skill non lié à une arme (sort, soin, utilitaire) :
+   * il ne recevra JAMAIS de bonus de maîtrise d'arme. Déclaratif seulement
+   * en V1-D-Skills-A — n'impose pas l'arme pour caster, n'applique aucun
+   * bonus (branchement prévu en V1-D-Skills-B).
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true, default: null })
+  weaponType: string | null;
+
   // ── Coût (préparé) ───────────────────────────────────────────────────────────
 
   /** health | mana | energy — null = aucun coût. mana/energy non exécutables V1. */
