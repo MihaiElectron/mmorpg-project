@@ -4,7 +4,7 @@
 
 - Status: Draft
 - Owner: Project
-- Last updated: 2026-06-26
+- Last updated: 2026-07-11
 - Depends on: docs/README.md, docs/ROADMAP.md, docs/10_AI/project-philosophy.md, docs/00_Project/glossary.md
 - Used by: Project owner, developers, Claude Code, Claude, ChatGPT, Codex, tout agent IA travaillant sur ce projet
 
@@ -237,8 +237,10 @@ dans le monde.
 | Respawn creature | **Implémenté** |
 | Loot ressource | **Implémenté** (partiel — table hardcodée) |
 | Loot creature | **Futur** |
-| Progression (exp, niveaux) | **Implémenté** pour masteries de craft |
-| Métiers / masteries | **Implémenté** pour MasteryDefinition + PlayerMastery XP/niveaux |
+| Progression (exp, niveaux) | **Implémenté** — XP/level personnage (ADR-0016, points de stats au level-up) + XP masteries (combat, craft, récolte) |
+| Métiers / masteries | **Implémenté** — MasteryDefinition + PlayerMastery XP/niveaux, `requiredMasteries` (prérequis centralisés) et `mastery_definition.effects` (bonus contextuels, ADR-0020) |
+| Effets de maîtrise | **Implémenté** (partiel) — `MasteryEffectsService`, `damagePercentPerLevel` consommé par l'auto-attaque et les skills weapon-based ; critique/pénétration/stun/block/craft/armure **Futur** |
+| Skills actifs | **Implémenté** (V1 bornée, ADR-0019) — catalogue `skill_definition`, cast serveur damage/heal, coûts/cooldowns, action bar, `weaponType` |
 | Crafting | **Implémenté** pour recettes, stations, ActionPanel runtime et validation serveur WU |
 | Stations de craft | **Implémenté** — templates, instances WU, AdminPanel/WOM, rendu debug |
 | Settlement / Economy | **Futur** — documentation Draft + ADR candidats Proposed, aucune implémentation |
