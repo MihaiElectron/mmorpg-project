@@ -62,7 +62,24 @@ export class DerivedStatsService implements OnModuleInit {
       await this.repo.save(rows);
       return;
     }
+    await this.seedMissingDefaults();
     await this.reconcileImplementedMasteryTargets();
+  }
+
+  /**
+   * Insère les DerivedStatDefinition système ABSENTES (V4-A). Non destructif :
+   * n'insère que les clés par défaut manquantes, n'écrase JAMAIS une ligne
+   * existante (système ou custom Studio). Nécessaire pour les bases déjà
+   * seedées avant l'ajout d'une nouvelle stat système (ex: defensePenetration) :
+   * `synchronize` crée les colonnes mais ne réinsère aucune ligne. Idempotent.
+   */
+  private async seedMissingDefaults(): Promise<void> {
+    const existing = await this.repo.find({ select: { key: true } });
+    const existingKeys = new Set(existing.map((r) => r.key));
+    const missing = DEFAULT_DERIVED_STAT_DEFINITIONS.filter((d) => !existingKeys.has(d.key));
+    if (missing.length === 0) return;
+    await this.repo.save(missing.map((d) => this.repo.create(d)));
+    this.invalidateCache();
   }
 
   /**

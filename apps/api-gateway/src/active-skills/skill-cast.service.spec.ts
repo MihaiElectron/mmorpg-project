@@ -274,6 +274,7 @@ describe("SkillCastService", () => {
       POSITION,
       20,
       5,
+      0, // V4-A : defensePenetration (0 par défaut)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -339,6 +340,7 @@ describe("SkillCastService", () => {
         POSITION,
         22,
         currentSkill.rangeWU,
+        0, // V4-A : defensePenetration (0 par défaut)
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -357,7 +359,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -371,7 +373,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -384,7 +386,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -398,7 +400,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
       );
     });
 

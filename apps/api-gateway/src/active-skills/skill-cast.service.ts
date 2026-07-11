@@ -277,6 +277,9 @@ export class SkillCastService {
       attackerPosition,
       boostedAmount,
       skill.rangeWU,
+      // V4-A : pénétration de défense du lanceur (dérivée serveur, inclut les
+      // modificateurs de maîtrise permanents déjà agrégés ci-dessus).
+      stats.derived.defensePenetration ?? 0,
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

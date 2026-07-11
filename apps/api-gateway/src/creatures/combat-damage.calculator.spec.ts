@@ -91,4 +91,82 @@ describe('calculateCombatDamage', () => {
     expect(r.finalDamage).toBe(1);
     expect(r.hpAfter).toBe(99);
   });
+
+  // ── V4-A : pénétration de défense ─────────────────────────────────────────
+  describe('defensePenetration (V4-A)', () => {
+    it('pénétration 0 → défense effective et dégâts inchangés', () => {
+      const withZero = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+        attackerDefensePenetration: 0,
+      });
+      const withoutField = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+      });
+      expect(withZero.effectiveDefense).toBe(20);
+      expect(withZero.finalDamage).toBe(30);
+      expect(withZero.finalDamage).toBe(withoutField.finalDamage);
+    });
+
+    it('exemple de référence : 50 atq / 20 déf / 5 pén → déf effective 15, dégâts 35', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+        attackerDefensePenetration: 5,
+      });
+      expect(r.effectiveDefense).toBe(15);
+      expect(r.finalDamage).toBe(35);
+    });
+
+    it('pénétration supérieure à la défense → défense effective plancher 0 (jamais négative)', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+        attackerDefensePenetration: 999,
+      });
+      expect(r.effectiveDefense).toBe(0);
+      expect(r.finalDamage).toBe(50);
+    });
+
+    it('pénétration négative ignorée (retombe sur 0, pas d\'augmentation de défense)', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+        attackerDefensePenetration: -10,
+      });
+      expect(r.effectiveDefense).toBe(20);
+      expect(r.finalDamage).toBe(30);
+    });
+
+    it('valeur non finie (NaN) ignorée → aucun NaN/Infinity propagé', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 50,
+        targetDefense: 20,
+        minimumAttack: 5,
+        minimumDamage: 1,
+        hpBefore: 100,
+        attackerDefensePenetration: Number.NaN,
+      });
+      expect(Number.isFinite(r.effectiveDefense)).toBe(true);
+      expect(Number.isFinite(r.finalDamage)).toBe(true);
+      expect(r.effectiveDefense).toBe(20);
+      expect(r.finalDamage).toBe(30);
+    });
+  });
 });

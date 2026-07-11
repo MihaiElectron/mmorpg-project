@@ -390,6 +390,28 @@ describe('CreaturesService', () => {
         }
         expect(creature.health).toBe(22);
       });
+
+      // ── V4-A : defensePenetration réduit la défense effective de la cible ───
+      it("pénétration de défense (mastery flat) augmente les dégâts en baissant la défense effective", async () => {
+        // Baseline sans pénétration : defenseTotal créature = 2 → dégâts 8.
+        // Une maîtrise ajoute defensePenetration flat = 6 (statModifiers) → la
+        // défense effective tombe à max(0, 2 - 6) = 0 → dégâts = 10.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { defensePenetration: 6 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.damage).toBe(10); // 8 → 10 grâce à la pénétration
+          expect(result.dto.health).toBe(20);
+        }
+      });
     });
 
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────

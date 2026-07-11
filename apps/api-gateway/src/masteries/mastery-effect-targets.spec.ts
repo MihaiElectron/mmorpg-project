@@ -5,6 +5,7 @@ import {
   MASTERY_EFFECT_MODES,
   MasteryTargetSourceDefinition,
 } from './mastery-effect-targets';
+import { DEFAULT_DERIVED_STAT_DEFINITIONS } from '../derived-stats/derived-stats.constants';
 
 // Fixture : source DerivedStatDefinition minimale pour les tests.
 function source(
@@ -106,5 +107,20 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       'flatPerLevel',
     ]);
     expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
+  });
+
+  // ── V4-A : defensePenetration exposée comme target permanent ──────────────
+  describe('defensePenetration (V4-A)', () => {
+    it('est exposée comme target depuis les defaults système (2 modes)', () => {
+      const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+      const target = targets.find((t) => t.key === 'defensePenetration');
+      expect(target).toBeDefined();
+      expect(target!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+      expect(target!.runtimeStatus).toBe('implemented');
+    });
+
+    it("n'est PAS contextuelle weaponType (contexte réservé à physicalAttack)", () => {
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('defensePenetration');
+    });
   });
 });

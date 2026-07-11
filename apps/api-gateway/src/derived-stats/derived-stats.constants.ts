@@ -63,6 +63,8 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   'energyRegen',
   'healingPower',
   'magicPower',
+  // V4-A : premier hook offensif — réduit la défense effective de la cible.
+  'defensePenetration',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [
@@ -118,6 +120,15 @@ export const DEFAULT_DERIVED_STAT_DEFINITIONS: DerivedStatDefinition[] = [
   }),
   def('accuracy', 'Précision', 'offensive', 10, {
     primaryCoefficients: { dexterity: 0.5 },
+  }),
+  // V4-A : pénétration de défense (stat système offensive, hook combat).
+  // baseValue 0 + aucun coefficient primaire → neutre tant qu'aucune maîtrise
+  // ne l'augmente (flatPerLevel). minValue 0 : jamais négative.
+  def('defensePenetration', 'Pénétration de défense', 'offensive', 25, {
+    minValue: 0,
+    primaryCoefficients: {},
+    description:
+      'Réduit la défense effective de la cible lors des dégâts physiques.',
   }),
   def('criticalChance', 'Chance critique', 'offensive', 11, {
     primaryCoefficients: { dexterity: 0.3, agility: 0.2 },
@@ -191,6 +202,7 @@ function def(
     primaryCoefficients: Partial<Record<PrimaryStatKey, number>>;
     minValue?: number;
     maxValue?: number;
+    description?: string;
   },
 ): DerivedStatDefinition {
   const masteryImplemented = (MASTERY_IMPLEMENTED_DERIVED_KEYS as readonly string[]).includes(key);
@@ -211,7 +223,7 @@ function def(
     masteryEligible: masteryImplemented,
     allowedModifierModes: masteryImplemented ? ['percentPerLevel', 'flatPerLevel'] : [],
     runtimeStatus: masteryImplemented ? 'implemented' : 'calculatedOnly',
-    description: null,
+    description: opts.description ?? null,
   } as DerivedStatDefinition;
 }
 

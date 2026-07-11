@@ -584,6 +584,9 @@ export class CreaturesService implements OnModuleInit {
     const damageResult = calculateCombatDamage({
       attackerValue: effectiveAttack,
       targetDefense: derived.defenseTotal,
+      // V4-A : pénétration de défense de l'attaquant (stat dérivée serveur,
+      // inclut les modificateurs de maîtrise permanents). 0 → inchangé.
+      attackerDefensePenetration: charStats.derived.defensePenetration ?? 0,
       minimumAttack: 5,
       minimumDamage: 1,
       hpBefore: creature.health,
@@ -697,6 +700,9 @@ export class CreaturesService implements OnModuleInit {
     attackerPosition: { worldX: number; worldY: number; mapId: number },
     rawAmount: number,
     rangeWU: number,
+    // V4-A : pénétration de défense de l'attaquant (déjà calculée serveur par
+    // l'appelant depuis `stats.derived`). Défaut 0 → comportement inchangé.
+    attackerDefensePenetration = 0,
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -728,6 +734,7 @@ export class CreaturesService implements OnModuleInit {
     const damageResult = calculateCombatDamage({
       attackerValue: Math.max(0, rawAmount),
       targetDefense: derived.defenseTotal,
+      attackerDefensePenetration,
       minimumAttack: 0,
       minimumDamage: 1,
       hpBefore: creature.health,

@@ -7,7 +7,7 @@ import { DEFAULT_DERIVED_STAT_DEFINITIONS } from "./derived-stats.constants";
 
 function makeRepo() {
   return {
-    count: jest.fn().mockResolvedValue(24),
+    count: jest.fn().mockResolvedValue(DEFAULT_DERIVED_STAT_DEFINITIONS.length),
     find: jest.fn().mockResolvedValue(DEFAULT_DERIVED_STAT_DEFINITIONS),
     findOne: jest.fn(),
     create: jest.fn().mockImplementation((d) => d),
@@ -15,6 +15,23 @@ function makeRepo() {
     merge: jest.fn().mockImplementation((existing, patch) => ({ ...existing, ...patch })),
     remove: jest.fn().mockResolvedValue(undefined),
   };
+}
+
+/**
+ * Catalogue complet (shape minimal) depuis les defaults — évite que
+ * `seedMissingDefaults` (insertion des defaults absents, V4-A) ne se déclenche
+ * dans les tests de réconciliation. `overrides` remplace des lignes ciblées.
+ */
+function fullCatalogRows(
+  overrides: Record<string, Partial<DerivedStatDefinition>> = {},
+): Array<Partial<DerivedStatDefinition>> {
+  return DEFAULT_DERIVED_STAT_DEFINITIONS.map((d) => ({
+    key: d.key,
+    masteryEligible: d.masteryEligible,
+    runtimeStatus: d.runtimeStatus,
+    allowedModifierModes: d.allowedModifierModes,
+    ...(overrides[d.key] ?? {}),
+  }));
 }
 
 describe("DerivedStatsService", () => {
@@ -33,7 +50,7 @@ describe("DerivedStatsService", () => {
   });
 
   describe("onModuleInit — seed", () => {
-    it("seed les 24 defaults si la table est vide", async () => {
+    it("seed tous les defaults si la table est vide", async () => {
       repo.count.mockResolvedValue(0);
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledTimes(1);
@@ -50,10 +67,15 @@ describe("DerivedStatsService", () => {
 
   describe("réconciliation V3-B — targets mastery (non destructif)", () => {
     it("promeut une dérivée implémentée encore à l'état par défaut V3-A", async () => {
-      repo.count.mockResolvedValue(24);
-      repo.find.mockResolvedValue([
-        { key: "physicalAttack", masteryEligible: false, runtimeStatus: "calculatedOnly", allowedModifierModes: [] },
-      ]);
+      repo.find.mockResolvedValue(
+        fullCatalogRows({
+          physicalAttack: {
+            masteryEligible: false,
+            runtimeStatus: "calculatedOnly",
+            allowedModifierModes: [],
+          },
+        }),
+      );
       await service.onModuleInit();
       expect(repo.save).toHaveBeenCalledWith([
         expect.objectContaining({
@@ -66,22 +88,77 @@ describe("DerivedStatsService", () => {
     });
 
     it("n'écrase JAMAIS une dérivée déjà éditée (masteryEligible/runtimeStatus différents)", async () => {
-      repo.count.mockResolvedValue(24);
-      repo.find.mockResolvedValue([
-        { key: "physicalAttack", masteryEligible: true, runtimeStatus: "implemented", allowedModifierModes: ["percentPerLevel"] },
-        { key: "maxHealth", masteryEligible: false, runtimeStatus: "notHooked", allowedModifierModes: [] },
-      ]);
+      repo.find.mockResolvedValue(
+        fullCatalogRows({
+          maxHealth: {
+            masteryEligible: false,
+            runtimeStatus: "notHooked",
+            allowedModifierModes: [],
+          },
+        }),
+      );
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
     });
 
     it("ignore une clé hors des 10 implémentées (garde défensif)", async () => {
-      repo.count.mockResolvedValue(24);
-      repo.find.mockResolvedValue([
-        { key: "criticalChance", masteryEligible: false, runtimeStatus: "calculatedOnly", allowedModifierModes: [] },
-      ]);
+      repo.find.mockResolvedValue(
+        fullCatalogRows({
+          criticalChance: {
+            masteryEligible: false,
+            runtimeStatus: "calculatedOnly",
+            allowedModifierModes: [],
+          },
+        }),
+      );
       await service.onModuleInit();
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("seedMissingDefaults (V4-A) — insertion non destructive", () => {
+    it("insère un default système absent (defensePenetration) sans écraser l'existant", async () => {
+      // Base pré-V4-A : catalogue complet SAUF defensePenetration.
+      repo.find.mockResolvedValue(
+        fullCatalogRows().filter((r) => r.key !== "defensePenetration"),
+      );
+      await service.onModuleInit();
+      const seededBatch = repo.save.mock.calls
+        .map((c) => c[0])
+        .find(
+          (b) =>
+            Array.isArray(b) &&
+            b.some((r: Partial<DerivedStatDefinition>) => r.key === "defensePenetration"),
+        );
+      expect(seededBatch).toBeDefined();
+      expect(seededBatch).toHaveLength(1);
+    });
+
+    it("n'insère rien si tous les defaults sont présents", async () => {
+      repo.find.mockResolvedValue(fullCatalogRows());
+      await service.onModuleInit();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("defensePenetration — stat système V4-A", () => {
+    const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "defensePenetration");
+
+    it("existe dans les defaults : implemented + masteryEligible + 2 modes", () => {
+      expect(def).toBeDefined();
+      expect(def!.runtimeStatus).toBe("implemented");
+      expect(def!.masteryEligible).toBe(true);
+      expect(def!.allowedModifierModes).toEqual(["percentPerLevel", "flatPerLevel"]);
+      expect(def!.baseValue).toBe(0);
+      expect(def!.minValue).toBe(0);
+    });
+
+    it("est une stat système donc non supprimable", async () => {
+      expect(service.isSystemStat("defensePenetration")).toBe(true);
+      repo.findOne.mockResolvedValue({ key: "defensePenetration" });
+      await expect(service.deleteDefinition("defensePenetration")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
   });
 
