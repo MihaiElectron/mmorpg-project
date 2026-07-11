@@ -368,6 +368,69 @@ describe('ItemService', () => {
       expect(repo.save).toHaveBeenCalledTimes(1);
     });
 
+    it("seed NON destructif : n'écrase JAMAIS attack/defense/slot/weaponType édités depuis le Studio", async () => {
+      // Épée basique éditée dans l'Item Editor : attack 20 / defense 5 —
+      // différents des valeurs du seed (5 / 0). Un reboot ne doit rien écraser.
+      for (const seed of LOOT_ITEM_SEEDS) {
+        if (seed.category === 'basic_sword') {
+          repo.findOne.mockResolvedValueOnce(
+            makeItem({
+              image: '/assets/images/items/sword.png',
+              objectMode: ObjectMode.INSTANCE,
+              slot: 'right-hand' as any,
+              attack: 20,
+              defense: 5,
+              weaponType: 'two_handed_sword',
+            }),
+          );
+        } else {
+          repo.findOne.mockResolvedValueOnce(
+            makeItem({
+              image: seed.image ?? '/x.png',
+              objectMode: seed.objectMode,
+              slot: seed.slot ?? null,
+              attack: seed.attack ?? null,
+              defense: seed.defense ?? null,
+              weaponType: seed.weaponType ?? null,
+            }),
+          );
+        }
+      }
+      await service.onModuleInit();
+      // Aucun save : les valeurs éditées (20/5) sont conservées telles quelles.
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('seed complète uniquement les valeurs ABSENTES (attack/defense null)', async () => {
+      for (const seed of LOOT_ITEM_SEEDS) {
+        if (seed.category === 'basic_sword') {
+          repo.findOne.mockResolvedValueOnce(
+            makeItem({
+              image: '/x.png',
+              objectMode: ObjectMode.INSTANCE,
+              slot: null,
+              attack: null,
+              defense: null,
+              weaponType: null,
+            }),
+          );
+        } else {
+          repo.findOne.mockResolvedValueOnce(
+            makeItem({ image: seed.image ?? '/x.png', objectMode: seed.objectMode }),
+          );
+        }
+      }
+      await service.onModuleInit();
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attack: 5,
+          defense: 0,
+          slot: 'right-hand',
+          weaponType: 'two_handed_sword',
+        }),
+      );
+    });
+
     it('vérifie par (category, type) — un earring wooden_stick ne bloque pas le seed', async () => {
       // Un item non-material avec category='wooden_stick' ne doit pas bloquer la seed
       // La seed cherche { category, type: 'material' } — ici findOne retourne null → insert OK

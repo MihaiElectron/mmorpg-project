@@ -240,13 +240,16 @@ export class ItemService implements OnModuleInit {
       if (!exists) {
         await this.repo.save(this.repo.create(seed));
       } else {
+        // Seed NON DESTRUCTIF : la base (éditée depuis le Studio) est la
+        // vérité. On ne fait que COMPLÉTER les valeurs ABSENTES (null/vide) —
+        // jamais d'écrasement d'attack/defense/slot/weaponType/objectMode
+        // existants, sinon chaque reboot annule les éditions de l'Item Editor.
         let dirty = false;
         if (!exists.image && seed.image) { exists.image = seed.image; dirty = true; }
-        if (exists.objectMode !== seed.objectMode) { exists.objectMode = seed.objectMode; dirty = true; }
-        if (seed.slot !== undefined && exists.slot !== seed.slot) { exists.slot = seed.slot; dirty = true; }
-        if (seed.attack !== undefined && exists.attack !== seed.attack) { exists.attack = seed.attack; dirty = true; }
-        if (seed.defense !== undefined && exists.defense !== seed.defense) { exists.defense = seed.defense; dirty = true; }
-        if (seed.weaponType !== undefined && exists.weaponType !== seed.weaponType) { exists.weaponType = seed.weaponType; dirty = true; }
+        if (exists.slot == null && seed.slot !== undefined) { exists.slot = seed.slot; dirty = true; }
+        if (exists.attack == null && seed.attack !== undefined) { exists.attack = seed.attack; dirty = true; }
+        if (exists.defense == null && seed.defense !== undefined) { exists.defense = seed.defense; dirty = true; }
+        if (exists.weaponType == null && seed.weaponType !== undefined) { exists.weaponType = seed.weaponType; dirty = true; }
         if (dirty) await this.repo.save(exists);
       }
     }
