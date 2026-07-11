@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -51,4 +52,13 @@ export class UpdateMasteryDefinitionDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  /**
+   * Effets contextuels V1-D-A. Structure interne validée par le service via
+   * `sanitizeMasteryEffects` (rejet 400 si non supportée). Remplacement
+   * complet du JSONB — pas de merge profond.
+   */
+  @IsOptional()
+  @IsObject()
+  effects?: Record<string, unknown>;
 }

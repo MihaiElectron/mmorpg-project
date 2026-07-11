@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -66,4 +67,13 @@ export class CreateMasteryDefinitionDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  /**
+   * Effets contextuels V1-D-A. Le DTO valide seulement "objet" ; la structure
+   * interne (clés whitelistées, bornes) est validée par le service via
+   * `sanitizeMasteryEffects` — une structure non supportée est rejetée en 400.
+   */
+  @IsOptional()
+  @IsObject()
+  effects?: Record<string, unknown>;
 }

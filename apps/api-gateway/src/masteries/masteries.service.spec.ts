@@ -453,6 +453,93 @@ describe('MasteriesService', () => {
     });
   });
 
+  // ─── effects (Masteries V1-D-A) — sanitization au CRUD ────────────────────
+  describe('effects sanitization (V1-D-A)', () => {
+    const validEffects = {
+      context: { weaponType: 'dagger' },
+      combat: { damagePercentPerLevel: 0.5 },
+    };
+
+    it("create sans effects ne touche pas le champ (défaut entity '{}')", async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+
+      await service.createMasteryDefinition({ key: 'dagger', name: 'Dagger' });
+
+      const created = masteryDefRepo.create.mock.calls[0][0] as Record<string, unknown>;
+      expect(created).not.toHaveProperty('effects');
+    });
+
+    it('create avec effects valide → persisté proprement', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.createMasteryDefinition({
+        key: 'dagger',
+        name: 'Dagger',
+        effects: { ...validEffects },
+      });
+
+      expect(masteryDefRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ effects: validEffects }),
+      );
+      expect(result).toMatchObject({ effects: validEffects });
+    });
+
+    it('create avec effet non whitelisté → BadRequestException, rien de sauvegardé', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.createMasteryDefinition({
+          key: 'dagger',
+          name: 'Dagger',
+          effects: { combat: { stunChancePercentPerLevel: 1 } },
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(masteryDefRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('update avec effects valide → persisté proprement', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'dagger' }));
+
+      const result = await service.updateMasteryDefinition('dagger', {
+        effects: { ...validEffects },
+      });
+
+      expect(result).toMatchObject({ key: 'dagger', effects: validEffects });
+    });
+
+    it('update avec perLevel hors borne → BadRequestException', async () => {
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'dagger' }));
+
+      await expect(
+        service.updateMasteryDefinition('dagger', {
+          effects: {
+            context: { weaponType: 'dagger' },
+            combat: { damagePercentPerLevel: 99 },
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(masteryDefRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('update sans effects conserve les effects existants', async () => {
+      const existing = makeMasteryDef({ key: 'dagger', effects: { ...validEffects } });
+      masteryDefRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.updateMasteryDefinition('dagger', { name: 'Dague' });
+
+      expect(result).toMatchObject({ name: 'Dague', effects: validEffects });
+    });
+
+    it('update effects: {} → efface les effets (remplacement complet)', async () => {
+      const existing = makeMasteryDef({ key: 'dagger', effects: { ...validEffects } });
+      masteryDefRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.updateMasteryDefinition('dagger', { effects: {} });
+
+      expect(result.effects).toEqual({});
+    });
+  });
+
   // ─── evaluateRequiredMasteries (pur, statique) ────────────────────────────
   describe('evaluateRequiredMasteries', () => {
     it("retourne ok pour des requirements vides / null / undefined", () => {

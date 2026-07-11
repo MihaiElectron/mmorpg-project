@@ -12,6 +12,11 @@ import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { PlayerMastery } from './entities/player-mastery.entity';
 import { CreateMasteryDefinitionDto } from './dto/create-mastery-definition.dto';
 import { UpdateMasteryDefinitionDto } from './dto/update-mastery-definition.dto';
+import {
+  MasteryEffects,
+  MasteryEffectsValidationError,
+  sanitizeMasteryEffects,
+} from './mastery-effects.calculator';
 
 export interface MasteryUpdatePayload {
   masteryDefinitionKey: string;
@@ -115,7 +120,10 @@ export class MasteriesService implements OnModuleInit {
     if (existing) {
       throw new ConflictException(`Mastery "${dto.key}" existe déjà.`);
     }
-    const entity = this.masteryDefinitionRepo.create(dto);
+    const entity = this.masteryDefinitionRepo.create({
+      ...dto,
+      ...this.sanitizedEffectsPatch(dto.effects),
+    });
     return this.masteryDefinitionRepo.save(entity);
   }
 
@@ -131,8 +139,30 @@ export class MasteriesService implements OnModuleInit {
   ): Promise<MasteryDefinition> {
     const existing = await this.masteryDefinitionRepo.findOne({ where: { key } });
     if (!existing) throw new NotFoundException(`Mastery "${key}" introuvable.`);
-    const merged = this.masteryDefinitionRepo.merge(existing, dto);
+    const merged = this.masteryDefinitionRepo.merge(existing, {
+      ...dto,
+      ...this.sanitizedEffectsPatch(dto.effects),
+    });
     return this.masteryDefinitionRepo.save(merged);
+  }
+
+  /**
+   * Sanitize `effects` avant persistance (V1-D-A). `undefined` → patch vide
+   * (le champ n'est pas touché : défaut entity `{}` en création, valeur
+   * existante conservée en update). Structure non supportée → 400.
+   */
+  private sanitizedEffectsPatch(
+    rawEffects: Record<string, unknown> | undefined,
+  ): { effects?: MasteryEffects } {
+    if (rawEffects === undefined) return {};
+    try {
+      return { effects: sanitizeMasteryEffects(rawEffects) };
+    } catch (error) {
+      if (error instanceof MasteryEffectsValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   // ---------------------------------------------------------------------------

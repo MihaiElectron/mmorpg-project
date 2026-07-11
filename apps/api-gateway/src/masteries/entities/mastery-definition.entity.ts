@@ -5,6 +5,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { MasteryEffects } from '../mastery-effects.calculator';
 
 @Entity('mastery_definition')
 export class MasteryDefinition {
@@ -34,6 +35,16 @@ export class MasteryDefinition {
 
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
+
+  /**
+   * Effets contextuels en pourcentage (Masteries V1-D-A). `{}` = aucun effet.
+   * Structure validée par `sanitizeMasteryEffects` (seul `combat.
+   * damagePercentPerLevel` + `context.weaponType` acceptés en V1). Le calcul
+   * (`computeCombatMasteryEffects`) est serveur, jamais client. Non branché
+   * au combat en V1-D-A.
+   */
+  @Column({ type: 'jsonb', default: {} })
+  effects: MasteryEffects;
 
   @CreateDateColumn()
   createdAt: Date;
