@@ -63,6 +63,7 @@ export class DerivedStatsService implements OnModuleInit {
       return;
     }
     await this.seedMissingDefaults();
+    await this.demoteLegacyDefensePenetration();
     await this.reconcileImplementedMasteryTargets();
   }
 
@@ -70,7 +71,7 @@ export class DerivedStatsService implements OnModuleInit {
    * Insère les DerivedStatDefinition système ABSENTES (V4-A). Non destructif :
    * n'insère que les clés par défaut manquantes, n'écrase JAMAIS une ligne
    * existante (système ou custom Studio). Nécessaire pour les bases déjà
-   * seedées avant l'ajout d'une nouvelle stat système (ex: defensePenetration) :
+   * seedées avant l'ajout d'une nouvelle stat système (ex: armorPenetrationPercent) :
    * `synchronize` crée les colonnes mais ne réinsère aucune ligne. Idempotent.
    */
   private async seedMissingDefaults(): Promise<void> {
@@ -79,6 +80,30 @@ export class DerivedStatsService implements OnModuleInit {
     const missing = DEFAULT_DERIVED_STAT_DEFINITIONS.filter((d) => !existingKeys.has(d.key));
     if (missing.length === 0) return;
     await this.repo.save(missing.map((d) => this.repo.create(d)));
+    this.invalidateCache();
+  }
+
+  /**
+   * V4-A : `defensePenetration` (pénétration PLATE, obsolète) est remplacée par
+   * `armorPenetrationPercent` (pénétration en %). Sur les bases déjà seedées où
+   * la ligne `defensePenetration` existe encore, on la RETIRE des cibles de
+   * maîtrise (masteryEligible=false, runtimeStatus='calculatedOnly', aucun mode)
+   * pour ne jamais exposer les deux stats en même temps. Non destructif : la
+   * ligne est conservée (pas de suppression brutale), simplement dégradée.
+   * Idempotent.
+   */
+  private async demoteLegacyDefensePenetration(): Promise<void> {
+    const legacy = await this.repo.findOne({ where: { key: 'defensePenetration' } });
+    if (!legacy) return;
+    const alreadyDemoted =
+      legacy.masteryEligible === false &&
+      legacy.runtimeStatus === 'calculatedOnly' &&
+      (legacy.allowedModifierModes ?? []).length === 0;
+    if (alreadyDemoted) return;
+    legacy.masteryEligible = false;
+    legacy.runtimeStatus = 'calculatedOnly';
+    legacy.allowedModifierModes = [];
+    await this.repo.save(legacy);
     this.invalidateCache();
   }
 

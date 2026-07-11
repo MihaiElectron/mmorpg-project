@@ -10,7 +10,7 @@ import { CharacterStatsCalculator } from '../characters/character-stats-calculat
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
 import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
-import { calculateCombatDamage } from './combat-damage.calculator';
+import { calculateCombatDamage, DamageType } from './combat-damage.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -584,9 +584,10 @@ export class CreaturesService implements OnModuleInit {
     const damageResult = calculateCombatDamage({
       attackerValue: effectiveAttack,
       targetDefense: derived.defenseTotal,
-      // V4-A : pénétration de défense de l'attaquant (stat dérivée serveur,
+      // V4-A : pénétration d'armure en % de l'attaquant (stat dérivée serveur,
       // inclut les modificateurs de maîtrise permanents). 0 → inchangé.
-      attackerDefensePenetration: charStats.derived.defensePenetration ?? 0,
+      armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+      damageType: 'physical',
       minimumAttack: 5,
       minimumDamage: 1,
       hpBefore: creature.health,
@@ -700,9 +701,13 @@ export class CreaturesService implements OnModuleInit {
     attackerPosition: { worldX: number; worldY: number; mapId: number },
     rawAmount: number,
     rangeWU: number,
-    // V4-A : pénétration de défense de l'attaquant (déjà calculée serveur par
+    // V4-A : pénétration d'armure en % de l'attaquant (déjà calculée serveur par
     // l'appelant depuis `stats.derived`). Défaut 0 → comportement inchangé.
-    attackerDefensePenetration = 0,
+    armorPenetrationPercent = 0,
+    // Type de dégâts du skill. `physical` (défaut) applique l'armure ; `raw`
+    // l'ignore. Le modèle SkillDefinition ne porte pas encore ce champ →
+    // toujours `physical` aujourd'hui ; plomberie prête pour `raw`.
+    damageType: DamageType = 'physical',
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -734,7 +739,8 @@ export class CreaturesService implements OnModuleInit {
     const damageResult = calculateCombatDamage({
       attackerValue: Math.max(0, rawAmount),
       targetDefense: derived.defenseTotal,
-      attackerDefensePenetration,
+      armorPenetrationPercent,
+      damageType,
       minimumAttack: 0,
       minimumDamage: 1,
       hpBefore: creature.health,

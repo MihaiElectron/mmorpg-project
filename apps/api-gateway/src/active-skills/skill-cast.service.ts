@@ -277,9 +277,11 @@ export class SkillCastService {
       attackerPosition,
       boostedAmount,
       skill.rangeWU,
-      // V4-A : pénétration de défense du lanceur (dérivée serveur, inclut les
-      // modificateurs de maîtrise permanents déjà agrégés ci-dessus).
-      stats.derived.defensePenetration ?? 0,
+      // V4-A : pénétration d'armure en % du lanceur (dérivée serveur, inclut les
+      // modificateurs de maîtrise permanents déjà agrégés ci-dessus). Dégâts de
+      // skill = physiques par défaut (le modèle SkillDefinition ne porte pas
+      // encore de damageType).
+      stats.derived.armorPenetrationPercent ?? 0,
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

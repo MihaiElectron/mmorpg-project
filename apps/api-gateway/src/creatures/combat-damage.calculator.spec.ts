@@ -92,81 +92,114 @@ describe('calculateCombatDamage', () => {
     expect(r.hpAfter).toBe(99);
   });
 
-  // ── V4-A : pénétration de défense ─────────────────────────────────────────
-  describe('defensePenetration (V4-A)', () => {
-    it('pénétration 0 → défense effective et dégâts inchangés', () => {
-      const withZero = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-        attackerDefensePenetration: 0,
+  // ── V4-A : pénétration d'armure en pourcentage ─────────────────────────────
+  describe('armorPenetrationPercent (V4-A)', () => {
+    // Base commune : rawDamage (attaque) 100, armure 40, minimumDamage 0.
+    function physical(pct?: number, extra: Partial<Parameters<typeof calculateCombatDamage>[0]> = {}) {
+      return calculateCombatDamage({
+        attackerValue: 100,
+        targetDefense: 40,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+        armorPenetrationPercent: pct,
+        ...extra,
       });
-      const withoutField = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-      });
-      expect(withZero.effectiveDefense).toBe(20);
-      expect(withZero.finalDamage).toBe(30);
-      expect(withZero.finalDamage).toBe(withoutField.finalDamage);
+    }
+
+    it('sans pénétration (0 %) → armure pleine (100 − 40 = 60)', () => {
+      const r = physical(0);
+      expect(r.effectiveArmor).toBe(40);
+      expect(r.finalDamage).toBe(60);
+      // champ omis → identique à 0 %
+      expect(physical(undefined).finalDamage).toBe(60);
     });
 
-    it('exemple de référence : 50 atq / 20 déf / 5 pén → déf effective 15, dégâts 35', () => {
-      const r = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-        attackerDefensePenetration: 5,
-      });
-      expect(r.effectiveDefense).toBe(15);
-      expect(r.finalDamage).toBe(35);
+    it('50 % → armure effective 20, dégâts 80', () => {
+      const r = physical(50);
+      expect(r.effectiveArmor).toBe(20);
+      expect(r.finalDamage).toBe(80);
     });
 
-    it('pénétration supérieure à la défense → défense effective plancher 0 (jamais négative)', () => {
-      const r = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-        attackerDefensePenetration: 999,
-      });
-      expect(r.effectiveDefense).toBe(0);
-      expect(r.finalDamage).toBe(50);
+    it('100 % → armure ignorée, dégâts 100', () => {
+      const r = physical(100);
+      expect(r.effectiveArmor).toBe(0);
+      expect(r.finalDamage).toBe(100);
     });
 
-    it('pénétration négative ignorée (retombe sur 0, pas d\'augmentation de défense)', () => {
-      const r = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-        attackerDefensePenetration: -10,
-      });
-      expect(r.effectiveDefense).toBe(20);
-      expect(r.finalDamage).toBe(30);
+    it('pénétration > 100 clampée à 100 (armure 0)', () => {
+      const r = physical(150);
+      expect(r.armorPenetrationPercent).toBe(100);
+      expect(r.effectiveArmor).toBe(0);
+      expect(r.finalDamage).toBe(100);
     });
 
-    it('valeur non finie (NaN) ignorée → aucun NaN/Infinity propagé', () => {
-      const r = calculateCombatDamage({
-        attackerValue: 50,
-        targetDefense: 20,
-        minimumAttack: 5,
-        minimumDamage: 1,
-        hpBefore: 100,
-        attackerDefensePenetration: Number.NaN,
-      });
-      expect(Number.isFinite(r.effectiveDefense)).toBe(true);
+    it('pénétration négative ramenée à 0 (armure pleine)', () => {
+      const r = physical(-30);
+      expect(r.armorPenetrationPercent).toBe(0);
+      expect(r.effectiveArmor).toBe(40);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('NaN ignoré → 0 %, aucun NaN/Infinity propagé', () => {
+      const r = physical(Number.NaN);
+      expect(r.armorPenetrationPercent).toBe(0);
+      expect(Number.isFinite(r.effectiveArmor)).toBe(true);
       expect(Number.isFinite(r.finalDamage)).toBe(true);
-      expect(r.effectiveDefense).toBe(20);
-      expect(r.finalDamage).toBe(30);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('armure supérieure aux dégâts → 0 dégât (minimumDamage 0), jamais négatif', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 30,
+        targetDefense: 100,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+        armorPenetrationPercent: 50, // armure effective 50 > 30
+      });
+      expect(r.effectiveArmor).toBe(50);
+      expect(r.finalDamage).toBe(0);
+    });
+
+    it('arrondi : armure 100, 33 % → armure effective 67 (round)', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 100,
+        targetDefense: 100,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+        armorPenetrationPercent: 33,
+      });
+      expect(r.effectiveArmor).toBe(67); // round(100 × 0.67)
+      expect(r.finalDamage).toBe(33);
+    });
+
+    it('raw : ignore armure ET pénétration', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 100,
+        targetDefense: 40,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+        armorPenetrationPercent: 25,
+        damageType: 'raw',
+      });
+      expect(r.damageType).toBe('raw');
+      expect(r.effectiveArmor).toBe(0);
+      expect(r.finalDamage).toBe(100);
+    });
+
+    it('physical est le défaut (armure appliquée)', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 100,
+        targetDefense: 40,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+      });
+      expect(r.damageType).toBe('physical');
+      expect(r.effectiveArmor).toBe(40);
     });
   });
 });

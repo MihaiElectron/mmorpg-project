@@ -117,10 +117,10 @@ describe("DerivedStatsService", () => {
   });
 
   describe("seedMissingDefaults (V4-A) — insertion non destructive", () => {
-    it("insère un default système absent (defensePenetration) sans écraser l'existant", async () => {
-      // Base pré-V4-A : catalogue complet SAUF defensePenetration.
+    it("insère un default système absent (armorPenetrationPercent) sans écraser l'existant", async () => {
+      // Base pré-V4-A : catalogue complet SAUF armorPenetrationPercent.
       repo.find.mockResolvedValue(
-        fullCatalogRows().filter((r) => r.key !== "defensePenetration"),
+        fullCatalogRows().filter((r) => r.key !== "armorPenetrationPercent"),
       );
       await service.onModuleInit();
       const seededBatch = repo.save.mock.calls
@@ -128,7 +128,7 @@ describe("DerivedStatsService", () => {
         .find(
           (b) =>
             Array.isArray(b) &&
-            b.some((r: Partial<DerivedStatDefinition>) => r.key === "defensePenetration"),
+            b.some((r: Partial<DerivedStatDefinition>) => r.key === "armorPenetrationPercent"),
         );
       expect(seededBatch).toBeDefined();
       expect(seededBatch).toHaveLength(1);
@@ -141,24 +141,60 @@ describe("DerivedStatsService", () => {
     });
   });
 
-  describe("defensePenetration — stat système V4-A", () => {
-    const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "defensePenetration");
+  describe("demoteLegacyDefensePenetration (V4-A) — non destructif", () => {
+    it("retire l'ancienne defensePenetration des cibles de maîtrise si présente", async () => {
+      repo.find.mockResolvedValue(fullCatalogRows()); // seed/reconcile no-op
+      repo.findOne.mockResolvedValue({
+        key: "defensePenetration",
+        masteryEligible: true,
+        runtimeStatus: "implemented",
+        allowedModifierModes: ["percentPerLevel", "flatPerLevel"],
+      });
+      await service.onModuleInit();
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: "defensePenetration",
+          masteryEligible: false,
+          runtimeStatus: "calculatedOnly",
+          allowedModifierModes: [],
+        }),
+      );
+    });
 
-    it("existe dans les defaults : implemented + masteryEligible + 2 modes", () => {
+    it("ne fait rien si defensePenetration absente", async () => {
+      repo.find.mockResolvedValue(fullCatalogRows());
+      repo.findOne.mockResolvedValue(null);
+      await service.onModuleInit();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("armorPenetrationPercent — stat système V4-A", () => {
+    const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "armorPenetrationPercent");
+
+    it("existe dans les defaults : implemented + masteryEligible + 2 modes + borné 0–100", () => {
       expect(def).toBeDefined();
       expect(def!.runtimeStatus).toBe("implemented");
       expect(def!.masteryEligible).toBe(true);
       expect(def!.allowedModifierModes).toEqual(["percentPerLevel", "flatPerLevel"]);
       expect(def!.baseValue).toBe(0);
       expect(def!.minValue).toBe(0);
+      expect(def!.maxValue).toBe(100);
     });
 
     it("est une stat système donc non supprimable", async () => {
-      expect(service.isSystemStat("defensePenetration")).toBe(true);
-      repo.findOne.mockResolvedValue({ key: "defensePenetration" });
-      await expect(service.deleteDefinition("defensePenetration")).rejects.toBeInstanceOf(
+      expect(service.isSystemStat("armorPenetrationPercent")).toBe(true);
+      repo.findOne.mockResolvedValue({ key: "armorPenetrationPercent" });
+      await expect(service.deleteDefinition("armorPenetrationPercent")).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+
+    it("defensePenetration n'est plus une stat système (retirée des defaults)", () => {
+      expect(service.isSystemStat("defensePenetration")).toBe(false);
+      expect(
+        DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "defensePenetration"),
+      ).toBeUndefined();
     });
   });
 

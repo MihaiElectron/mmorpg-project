@@ -109,18 +109,23 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
     expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
   });
 
-  // ── V4-A : defensePenetration exposée comme target permanent ──────────────
-  describe('defensePenetration (V4-A)', () => {
+  // ── V4-A : armorPenetrationPercent exposée comme target permanent ──────────
+  describe('armorPenetrationPercent (V4-A)', () => {
     it('est exposée comme target depuis les defaults système (2 modes)', () => {
       const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
-      const target = targets.find((t) => t.key === 'defensePenetration');
+      const target = targets.find((t) => t.key === 'armorPenetrationPercent');
       expect(target).toBeDefined();
       expect(target!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
       expect(target!.runtimeStatus).toBe('implemented');
     });
 
     it("n'est PAS contextuelle weaponType (contexte réservé à physicalAttack)", () => {
-      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('defensePenetration');
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('armorPenetrationPercent');
+    });
+
+    it("l'ancienne defensePenetration n'est plus une cible (retirée des defaults)", () => {
+      const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+      expect(targets.find((t) => t.key === 'defensePenetration')).toBeUndefined();
     });
   });
 });

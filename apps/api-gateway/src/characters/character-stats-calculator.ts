@@ -77,7 +77,7 @@ export interface DerivedStats {
   physicalAttack: number;
   magicPower: number;
   healingPower: number;
-  defensePenetration: number;
+  armorPenetrationPercent: number;
   defense: number;
   magicalResistanceFire: number;
   magicalResistanceWater: number;

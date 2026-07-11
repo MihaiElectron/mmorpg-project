@@ -63,8 +63,8 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   'energyRegen',
   'healingPower',
   'magicPower',
-  // V4-A : premier hook offensif — réduit la défense effective de la cible.
-  'defensePenetration',
+  // V4-A : premier hook offensif — ignore un % de l'armure de la cible.
+  'armorPenetrationPercent',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [
@@ -121,14 +121,15 @@ export const DEFAULT_DERIVED_STAT_DEFINITIONS: DerivedStatDefinition[] = [
   def('accuracy', 'Précision', 'offensive', 10, {
     primaryCoefficients: { dexterity: 0.5 },
   }),
-  // V4-A : pénétration de défense (stat système offensive, hook combat).
-  // baseValue 0 + aucun coefficient primaire → neutre tant qu'aucune maîtrise
-  // ne l'augmente (flatPerLevel). minValue 0 : jamais négative.
-  def('defensePenetration', 'Pénétration de défense', 'offensive', 25, {
+  // V4-A : pénétration d'armure en POURCENTAGE (stat système offensive, hook
+  // combat). Ignore un % de l'armure de la cible pour les dégâts physiques.
+  // baseValue 0, borné 0–100. flatPerLevel = +X points de % par niveau.
+  def('armorPenetrationPercent', "Pénétration d'armure", 'offensive', 25, {
     minValue: 0,
+    maxValue: 100,
     primaryCoefficients: {},
     description:
-      'Réduit la défense effective de la cible lors des dégâts physiques.',
+      "Ignore un pourcentage de l'armure de la cible lors des dégâts physiques.",
   }),
   def('criticalChance', 'Chance critique', 'offensive', 11, {
     primaryCoefficients: { dexterity: 0.3, agility: 0.2 },

@@ -391,13 +391,13 @@ describe('CreaturesService', () => {
         expect(creature.health).toBe(22);
       });
 
-      // ── V4-A : defensePenetration réduit la défense effective de la cible ───
-      it("pénétration de défense (mastery flat) augmente les dégâts en baissant la défense effective", async () => {
+      // ── V4-A : armorPenetrationPercent réduit l'armure effective de la cible ─
+      it("pénétration d'armure (mastery flat) augmente les dégâts en ignorant l'armure", async () => {
         // Baseline sans pénétration : defenseTotal créature = 2 → dégâts 8.
-        // Une maîtrise ajoute defensePenetration flat = 6 (statModifiers) → la
-        // défense effective tombe à max(0, 2 - 6) = 0 → dégâts = 10.
+        // Une maîtrise ajoute armorPenetrationPercent flat = 100 (statModifiers)
+        // → armure effective round(2 × 0) = 0 → dégâts = 10.
         masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
-          statModifiers: { percent: {}, flat: { defensePenetration: 6 } },
+          statModifiers: { percent: {}, flat: { armorPenetrationPercent: 100 } },
           combat: { damagePercent: 0, damageFlat: 0 },
         });
         const creature = armCreature({ health: 30 });
