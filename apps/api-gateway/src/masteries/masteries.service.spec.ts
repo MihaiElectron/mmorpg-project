@@ -540,6 +540,44 @@ describe('MasteriesService', () => {
     });
   });
 
+  // ─── getEnabledMasteryDefinitions — cache (V1-D-B) ────────────────────────
+  describe('getEnabledMasteryDefinitions (cache)', () => {
+    it("ne lit la DB qu'une seule fois pour des lectures répétées", async () => {
+      const defs = [makeMasteryDef({ key: 'dagger' })];
+      masteryDefRepo.find.mockResolvedValue(defs);
+
+      const first = await service.getEnabledMasteryDefinitions();
+      const second = await service.getEnabledMasteryDefinitions();
+
+      expect(first).toBe(defs);
+      expect(second).toBe(defs);
+      expect(masteryDefRepo.find).toHaveBeenCalledTimes(1);
+      expect(masteryDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
+    });
+
+    it('est invalidé par updateMasteryDefinition (relit la DB)', async () => {
+      masteryDefRepo.find.mockResolvedValue([makeMasteryDef({ key: 'dagger' })]);
+      await service.getEnabledMasteryDefinitions();
+
+      masteryDefRepo.findOne.mockResolvedValue(makeMasteryDef({ key: 'dagger' }));
+      await service.updateMasteryDefinition('dagger', { enabled: false });
+
+      await service.getEnabledMasteryDefinitions();
+      expect(masteryDefRepo.find).toHaveBeenCalledTimes(2);
+    });
+
+    it('est invalidé par createMasteryDefinition (relit la DB)', async () => {
+      masteryDefRepo.find.mockResolvedValue([]);
+      await service.getEnabledMasteryDefinitions();
+
+      masteryDefRepo.findOne.mockResolvedValue(null);
+      await service.createMasteryDefinition({ key: 'dagger', name: 'Dagger' });
+
+      await service.getEnabledMasteryDefinitions();
+      expect(masteryDefRepo.find).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // ─── evaluateRequiredMasteries (pur, statique) ────────────────────────────
   describe('evaluateRequiredMasteries', () => {
     it("retourne ok pour des requirements vides / null / undefined", () => {

@@ -1,7 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { MasteryDefinition } from './entities/mastery-definition.entity';
 import { MasteriesService } from './masteries.service';
 import {
   CombatMasteryContext,
@@ -11,26 +8,19 @@ import {
 } from './mastery-effects.calculator';
 
 /**
- * MasteryEffectsService (Masteries V1-D-A) — point d'entrée serveur UNIQUE
+ * MasteryEffectsService (Masteries V1-D) — point d'entrée serveur UNIQUE
  * pour les effets contextuels de maîtrises. Le calcul lui-même est délégué au
  * calculateur pur `computeCombatMasteryEffects` ; ce service ne fait que
  * charger les données.
  *
- * NON BRANCHÉ au gameplay en V1-D-A : l'API est prête pour le branchement
- * combat (V1-D-B) mais aucun chemin ne l'appelle encore.
- *
- * Pas de cache des définitions dans cette phase : aucun appelant n'existe,
- * donc aucune pression de lecture. Quand V1-D-B branchera l'auto-attaque
- * (1 appel par hit), ajouter un cache mémoire invalidé sur CRUD, sur le
- * modèle exact de `DerivedStatsService.getDefinitions()`/`invalidateCache()`.
+ * Branché en V1-D-B sur l'auto-attaque (`CreaturesService.attack()`), qui
+ * l'appelle à chaque hit : les définitions viennent du cache mémoire de
+ * `MasteriesService.getEnabledMasteryDefinitions()` (invalidé sur CRUD),
+ * seuls les niveaux du personnage sont lus en DB.
  */
 @Injectable()
 export class MasteryEffectsService {
-  constructor(
-    @InjectRepository(MasteryDefinition)
-    private readonly masteryDefinitionRepo: Repository<MasteryDefinition>,
-    private readonly masteriesService: MasteriesService,
-  ) {}
+  constructor(private readonly masteriesService: MasteriesService) {}
 
   /**
    * Bonus combat du personnage pour le contexte donné (arme équipée résolue
@@ -44,7 +34,7 @@ export class MasteryEffectsService {
     if (!context?.weaponType) return { damagePercent: 0 };
 
     const [definitions, masteryRows] = await Promise.all([
-      this.masteryDefinitionRepo.find({ where: { enabled: true } }),
+      this.masteriesService.getEnabledMasteryDefinitions(),
       this.masteriesService.getCharacterMasteries(characterId),
     ]);
 

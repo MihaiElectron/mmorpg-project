@@ -17,6 +17,7 @@ import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
 import { MasteriesService, MasteryUpdatePayload } from '../masteries/masteries.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { calculateMasteryXp } from '../mastery-xp-calculator/mastery-xp-calculator';
 import { MasteryDomain, MasteryXpContext } from '../mastery-xp-calculator/mastery-xp-context';
 import { isoScreenToWorldWU, chebyshevDistanceWU, DEFAULT_MAP_ID } from '../common/world-coordinates';
@@ -122,6 +123,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly worldService: WorldService,
     private readonly progression: ProgressionService,
     private readonly masteriesService: MasteriesService,
+    private readonly masteryEffects: MasteryEffectsService,
     private readonly dataSource: DataSource,
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
@@ -562,8 +564,24 @@ export class CreaturesService implements OnModuleInit {
       derivedStatDefinitionsForAttack,
       aggregateEquipmentBonuses(character.equipment),
     );
+    // Masteries V1-D-B : bonus de dégâts contextuel de l'arme équipée.
+    // weaponType résolu SERVEUR (jamais fourni par le client) ; sans arme ou
+    // sans effet configuré, damagePercent = 0 et l'attaque est inchangée.
+    // Le clamp (max 50 %) et la formule (level − 1) × perLevel vivent dans le
+    // calculateur pur — aucune formule dupliquée ici.
+    const weaponType = this.resolveEquippedWeaponType(character);
+    const { damagePercent } = await this.masteryEffects.getCombatMasteryEffects(
+      characterId,
+      { weaponType },
+    );
+    // Arrondi : les valeurs de combat restent entières (pattern existant —
+    // planchers entiers de calculateCombatDamage, Math.round des dérivées).
+    const effectiveAttack = Math.round(
+      charStats.derived.physicalAttack * (1 + damagePercent / 100),
+    );
+
     const damageResult = calculateCombatDamage({
-      attackerValue: charStats.derived.physicalAttack,
+      attackerValue: effectiveAttack,
       targetDefense: derived.defenseTotal,
       minimumAttack: 5,
       minimumDamage: 1,
@@ -751,20 +769,32 @@ export class CreaturesService implements OnModuleInit {
     return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, loot, characterXpUpdate };
   }
 
-  private resolveCombatMasteryKey(character: Character): string | null {
+  /**
+   * WeaponType de l'arme équipée (priorité distance > mêlée, comme la portée).
+   * Source serveur unique — réutilisée par l'XP mastery (via
+   * `resolveCombatMasteryKey`) et par les effets de maîtrise (V1-D-B).
+   * null = pas d'arme ou arme sans weaponType configuré.
+   */
+  private resolveEquippedWeaponType(character: Character): string | null {
     const equipment = character.equipment ?? [];
     const ranged = equipment.find(
       (eq) => (eq.slot as EquipmentSlot) === EquipmentSlot.RANGED_WEAPON && eq.item,
     );
-    if (ranged?.item?.weaponType) return COMBAT_WEAPON_MASTERY_MAP[ranged.item.weaponType] ?? null;
+    if (ranged?.item?.weaponType) return ranged.item.weaponType;
     const melee = equipment.find(
       (eq) =>
         ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
           (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
         eq.item?.type === 'weapon',
     );
-    if (melee?.item?.weaponType) return COMBAT_WEAPON_MASTERY_MAP[melee.item.weaponType] ?? null;
+    if (melee?.item?.weaponType) return melee.item.weaponType;
     return null;
+  }
+
+  private resolveCombatMasteryKey(character: Character): string | null {
+    const weaponType = this.resolveEquippedWeaponType(character);
+    if (!weaponType) return null;
+    return COMBAT_WEAPON_MASTERY_MAP[weaponType] ?? null;
   }
 
   private buildCombatMasteryXpContext(

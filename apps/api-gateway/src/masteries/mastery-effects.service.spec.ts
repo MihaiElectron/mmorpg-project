@@ -1,22 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { MasteryEffectsService } from './mastery-effects.service';
 import { MasteriesService } from './masteries.service';
-import { MasteryDefinition } from './entities/mastery-definition.entity';
 
 describe('MasteryEffectsService', () => {
   let service: MasteryEffectsService;
-  let masteryDefRepo: { find: jest.Mock };
-  let masteriesService: { getCharacterMasteries: jest.Mock };
+  let masteriesService: {
+    getEnabledMasteryDefinitions: jest.Mock;
+    getCharacterMasteries: jest.Mock;
+  };
 
   beforeEach(async () => {
-    masteryDefRepo = { find: jest.fn() };
-    masteriesService = { getCharacterMasteries: jest.fn() };
+    masteriesService = {
+      getEnabledMasteryDefinitions: jest.fn(),
+      getCharacterMasteries: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MasteryEffectsService,
-        { provide: getRepositoryToken(MasteryDefinition), useValue: masteryDefRepo },
         { provide: MasteriesService, useValue: masteriesService },
       ],
     }).compile();
@@ -24,16 +25,16 @@ describe('MasteryEffectsService', () => {
     service = module.get<MasteryEffectsService>(MasteryEffectsService);
   });
 
-  it('court-circuite sans weaponType : 0 % et AUCUNE lecture DB', async () => {
+  it('court-circuite sans weaponType : 0 % et AUCUNE lecture', async () => {
     const result = await service.getCombatMasteryEffects('char-1', {});
 
     expect(result).toEqual({ damagePercent: 0 });
-    expect(masteryDefRepo.find).not.toHaveBeenCalled();
+    expect(masteriesService.getEnabledMasteryDefinitions).not.toHaveBeenCalled();
     expect(masteriesService.getCharacterMasteries).not.toHaveBeenCalled();
   });
 
-  it('charge les définitions enabled + niveaux joueur et calcule le bonus', async () => {
-    masteryDefRepo.find.mockResolvedValue([
+  it('charge les définitions (cache MasteriesService) + niveaux joueur et calcule le bonus', async () => {
+    masteriesService.getEnabledMasteryDefinitions.mockResolvedValue([
       {
         key: 'dagger',
         enabled: true,
@@ -54,12 +55,12 @@ describe('MasteryEffectsService', () => {
 
     // (5 − 1) × 0.5 = 2 %.
     expect(result).toEqual({ damagePercent: 2 });
-    expect(masteryDefRepo.find).toHaveBeenCalledWith({ where: { enabled: true } });
+    expect(masteriesService.getEnabledMasteryDefinitions).toHaveBeenCalledTimes(1);
     expect(masteriesService.getCharacterMasteries).toHaveBeenCalledWith('char-1');
   });
 
   it('retourne 0 quand aucune définition ne matche le contexte', async () => {
-    masteryDefRepo.find.mockResolvedValue([
+    masteriesService.getEnabledMasteryDefinitions.mockResolvedValue([
       {
         key: 'bow',
         enabled: true,

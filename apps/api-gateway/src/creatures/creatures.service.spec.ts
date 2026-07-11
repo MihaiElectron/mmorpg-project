@@ -8,6 +8,7 @@ import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { ProgressionService } from '../progression/progression.service';
 import { MasteriesService } from '../masteries/masteries.service';
+import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { WorldService } from '../world/world.service';
 import { LootService } from '../world/loot.service';
 import { DEFAULT_MAP_ID } from '../common/world-coordinates';
@@ -90,6 +91,7 @@ describe('CreaturesService', () => {
   let spawnRepository: Record<string, jest.Mock>;
   let progressionService: Record<string, jest.Mock>;
   let masteriesService: Record<string, jest.Mock>;
+  let masteryEffectsService: Record<string, jest.Mock>;
   let mockDataSource: { transaction: jest.Mock };
 
   beforeEach(async () => {
@@ -127,6 +129,11 @@ describe('CreaturesService', () => {
     masteriesService = {
       applyMasteryXpInTx: jest.fn().mockResolvedValue({ masteryDefinitionKey: "bow", key: "bow", name: "Bow", category: "combat", enabled: true, level: 1, xp: 5, nextLevelXp: 100, leveledUp: false }),
     };
+    // Par défaut : aucun effet de maîtrise (dégâts inchangés) — les tests
+    // V1-D-B surchargent ce mock.
+    masteryEffectsService = {
+      getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }),
+    };
     mockDataSource = {
       transaction: jest.fn().mockImplementation(async (fn: (manager: any) => any) => fn({})),
     };
@@ -142,6 +149,7 @@ describe('CreaturesService', () => {
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: progressionService },
         { provide: MasteriesService, useValue: masteriesService },
+        { provide: MasteryEffectsService, useValue: masteryEffectsService },
         { provide: DataSource, useValue: mockDataSource },
         RuntimeDebugRegistry,
         LootService,
@@ -446,6 +454,118 @@ describe('CreaturesService', () => {
           mapId: 1,
         });
         expect(result.success).toBe(true);
+      });
+    });
+
+    // ── Effets de maîtrise (Masteries V1-D-B) : damagePercent sur l'auto-attaque ─
+    describe('effets de maîtrise (V1-D-B)', () => {
+      const CREATURE_WU = { worldX: 6080, worldY: 12480, mapId: 1 };
+
+      function armedCharacter(weaponType: string | null, attack = 100) {
+        const equipment = weaponType
+          ? [{ slot: EquipmentSlot.RIGHT_HAND, item: { id: 'w', type: 'weapon', weaponType, range: null } }]
+          : [];
+        return makeCharacter({ attack, defense: 3, equipment: equipment as any });
+      }
+
+      it('sans arme → contexte weaponType null et dégâts inchangés', async () => {
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter(null));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(masteryEffectsService.getCombatMasteryEffects).toHaveBeenCalledWith(
+          'char-1',
+          { weaponType: null },
+        );
+        // physicalAttack 100, défense créature 2 → 98 (aucun bonus).
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.damage).toBe(98);
+      });
+
+      it("transmet le weaponType de l'arme équipée au service d'effets", async () => {
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
+
+        await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(masteryEffectsService.getCombatMasteryEffects).toHaveBeenCalledWith(
+          'char-1',
+          { weaponType: 'dagger' },
+        );
+      });
+
+      it('damagePercent 0 (mastery level 1, sans effects, mismatch…) → dégâts inchangés', async () => {
+        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 0 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.damage).toBe(98);
+      });
+
+      it('damagePercent 2 (dagger level 5 × 0.5) → attaque effective 102, dégâts 100', async () => {
+        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 2 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        // 100 × 1.02 = 102 → calculateCombatDamage : 102 − 2 = 100.
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.damage).toBe(100);
+        expect(creature.health).toBe(200);
+      });
+
+      it('bonus clampé (50 %) → attaque effective 150, dégâts 148', async () => {
+        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 50 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter('dagger'));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.damage).toBe(148);
+      });
+
+      it("arrondit l'attaque effective (10 × 1.02 = 10.2 → 10, dégâts entiers inchangés)", async () => {
+        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 2 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(armedCharacter('dagger', 10));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        // round(10.2) = 10 → max(10, 5) − 2 = 8 : identique au chemin sans bonus.
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.damage).toBe(8);
+      });
+
+      it("n'empêche pas l'XP mastery existante (bow → applyMasteryXpInTx)", async () => {
+        masteryEffectsService.getCombatMasteryEffects.mockResolvedValue({ damagePercent: 0 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 300 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        const equipment = [{ slot: EquipmentSlot.RANGED_WEAPON, item: { id: 'b', type: 'weapon', weaponType: 'bow', range: null } }];
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({ attack: 100, defense: 3, equipment: equipment as any }),
+        );
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(result.success).toBe(true);
+        expect(masteriesService.applyMasteryXpInTx).toHaveBeenCalledWith(
+          'char-1',
+          'bow',
+          expect.any(Number),
+          expect.anything(),
+        );
       });
     });
 
@@ -1218,6 +1338,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
+        { provide: MasteryEffectsService, useValue: { getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,
@@ -1368,6 +1489,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
+        { provide: MasteryEffectsService, useValue: { getCombatMasteryEffects: jest.fn().mockResolvedValue({ damagePercent: 0 }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         RuntimeDebugRegistry,
         LootService,

@@ -67,6 +67,14 @@ const DEFAULT_MASTERIES: Pick<
 export class MasteriesService implements OnModuleInit {
   private readonly logger = new Logger(MasteriesService.name);
 
+  /**
+   * Cache mémoire des définitions `enabled` (même pattern que
+   * `DerivedStatsService`) : lu à chaque hit d'auto-attaque par
+   * `MasteryEffectsService` (V1-D-B), invalidé à chaque mutation du catalogue
+   * (create/update/seed). null = cache froid.
+   */
+  private enabledDefinitionsCache: MasteryDefinition[] | null = null;
+
   constructor(
     @InjectRepository(MasteryDefinition)
     private readonly masteryDefinitionRepo: Repository<MasteryDefinition>,
@@ -91,7 +99,26 @@ export class MasteriesService implements OnModuleInit {
         this.masteryDefinitionRepo.create(def),
       );
       this.logger.log(`Mastery seeded: ${def.key}`);
+      this.invalidateDefinitionsCache();
     }
+  }
+
+  /**
+   * Définitions `enabled`, servies depuis le cache mémoire (V1-D-B).
+   * À utiliser par les chemins chauds (auto-attaque) ; les lectures admin
+   * continuent d'interroger la DB directement.
+   */
+  async getEnabledMasteryDefinitions(): Promise<MasteryDefinition[]> {
+    if (this.enabledDefinitionsCache) return this.enabledDefinitionsCache;
+    this.enabledDefinitionsCache = await this.masteryDefinitionRepo.find({
+      where: { enabled: true },
+    });
+    return this.enabledDefinitionsCache;
+  }
+
+  /** Invalide le cache des définitions — appelé après toute mutation du catalogue. */
+  invalidateDefinitionsCache(): void {
+    this.enabledDefinitionsCache = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -124,7 +151,9 @@ export class MasteriesService implements OnModuleInit {
       ...dto,
       ...this.sanitizedEffectsPatch(dto.effects),
     });
-    return this.masteryDefinitionRepo.save(entity);
+    const saved = await this.masteryDefinitionRepo.save(entity);
+    this.invalidateDefinitionsCache();
+    return saved;
   }
 
   /**
@@ -143,7 +172,9 @@ export class MasteriesService implements OnModuleInit {
       ...dto,
       ...this.sanitizedEffectsPatch(dto.effects),
     });
-    return this.masteryDefinitionRepo.save(merged);
+    const saved = await this.masteryDefinitionRepo.save(merged);
+    this.invalidateDefinitionsCache();
+    return saved;
   }
 
   /**
