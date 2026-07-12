@@ -62,6 +62,18 @@ export class AdminController {
   @Get('creatures/world-objects')
   getCreatureWorldObjects() { return this.adminService.getCreatureWorldObjects(); }
 
+  /**
+   * Inspection combat runtime d'une créature vivante (Studio DevTools).
+   * Lecture seule, données live (état, cible, cooldown, portée). 404 si l'id
+   * n'est pas une créature vivante connue.
+   */
+  @Get('creatures/:id/runtime-combat')
+  getCreatureRuntimeCombat(@Param('id') id: string) {
+    const info = this.creaturesService.getRuntimeCombatInfo(id);
+    if (!info) throw new NotFoundException(`Créature vivante "${id}" introuvable.`);
+    return info;
+  }
+
   // ── Créatures ─────────────────────────────────────────────────────────────
 
   @Get('templates')

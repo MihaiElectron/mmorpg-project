@@ -95,3 +95,21 @@
     white-space: nowrap;
   }
 }
+
+.woi__runtime-combat {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid vars.$panel-border;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.woi__subtitle {
+  color: vars.$color-text-gold;
+  font-size: 0.72rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+}

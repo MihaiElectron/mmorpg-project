@@ -1,4 +1,5 @@
 import { useDevToolsStore } from "../../store/devtools.store";
+import CreatureRuntimeInspector from "./CreatureRuntimeInspector";
 import "./WorldObjectInspector.scss";
 
 function shortId(id: string): string {
@@ -174,6 +175,9 @@ export default function WorldObjectInspector() {
             </ul>
           </dd>
         </dl>
+      )}
+      {obj && obj.category === "creature" && (
+        <CreatureRuntimeInspector creatureId={obj.id} />
       )}
     </section>
   );

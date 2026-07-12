@@ -18,7 +18,7 @@ import { calculateCombatDamage, DamageType } from './combat-damage.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
-import { CreatureDto, CreatureRuntimeStats } from './dto/creature.dto';
+import { CreatureDto, CreatureRuntimeStats, CreatureRuntimeCombatDto } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
 import { MasteriesService, MasteryUpdatePayload } from '../masteries/masteries.service';
@@ -260,6 +260,67 @@ export class CreaturesService implements OnModuleInit {
 
   findAll(): CreatureDto[] {
     return Array.from(this.liveCreatures.values()).map((c) => this.toDto(c));
+  }
+
+  /**
+   * Inspection combat runtime d'une créature vivante (Studio DevTools, lecture
+   * seule). Lit l'état live en mémoire (`liveCreatures`, `patrolStates`,
+   * `lastCreatureAutoAttackAt`) + le template. Retourne null si l'id n'est pas
+   * une créature vivante connue. Aucune mutation, aucun recalcul délégué au client.
+   */
+  getRuntimeCombatInfo(id: string): CreatureRuntimeCombatDto | null {
+    const creature = this.liveCreatures.get(id);
+    if (!creature) return null;
+    const t = creature.spawn?.template;
+    if (!t) return null;
+
+    // Stats effectives (mêmes formules que toDto/combat) — pas de recalcul client.
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, t);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+
+    const lastAtk = this.lastCreatureAutoAttackAt.get(id) ?? null;
+    const lootPool = t.lootPool as unknown;
+    const lootPoolSize = Array.isArray(lootPool)
+      ? lootPool.length
+      : lootPool && typeof lootPool === 'object'
+        ? Object.keys(lootPool as Record<string, unknown>).length
+        : 0;
+
+    return {
+      id: creature.id,
+      templateKey: t.key,
+      name: t.name,
+      state: creature.state,
+      currentTargetId: this.patrolStates.get(id)?.targetCharacterId ?? null,
+      worldX: creature.worldX ?? null,
+      worldY: creature.worldY ?? null,
+      mapId: creature.mapId ?? null,
+      currentHealth: creature.health,
+      maxHealth: t.baseHealth,
+      defenseTotal: derived.defenseTotal,
+      baseArmor: t.baseArmor,
+      alive: creature.state !== 'dead',
+      respawnAt: creature.respawnAt ?? null,
+      baseAttack: t.baseAttack,
+      attackPower: derived.attackPower,
+      // Portée réellement utilisée par la créature en combat (auto-attaque/riposte).
+      attackRangeWU: MELEE_RANGE_WU,
+      autoAttackCooldownMs: AUTO_ATTACK_COOLDOWN_MS,
+      lastAutoAttackAt: lastAtk,
+      nextAutoAttackAt: lastAtk != null ? lastAtk + AUTO_ATTACK_COOLDOWN_MS : null,
+      // Les créatures n'ont pas encore de stats défensives dédiées (runtime).
+      canDodge: false,
+      canBlock: false,
+      canParry: false,
+      killCharacterXpReward: t.killCharacterXpReward,
+      hasLootPool: lootPoolSize > 0,
+      lootPoolSize,
+    };
   }
 
   startPatrol(server: Server) {
