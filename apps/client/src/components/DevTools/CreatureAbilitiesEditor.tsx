@@ -132,76 +132,93 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
   const available = catalog.filter((c) => !abilities.some((a) => a.skillKey === c.key));
 
   return (
-    <div className="admin-panel__template-stats" aria-label="Creature abilities editor">
-      <span className="admin-panel__template-stat-label">Capacités du template « {templateKey} »</span>
-      <p className="admin-panel__info-line">
+    <div className="creature-abilities" aria-label="Creature abilities editor">
+      <p className="creature-abilities__title">Capacités — {templateKey}</p>
+      <p className="creature-abilities__note">
         Config uniquement — non déclenchées en combat (V5-A). Affecte toutes les instances.
       </p>
 
-      {status === "loading" && <p className="admin-panel__info-line">Chargement…</p>}
+      {status === "loading" && <p className="creature-abilities__muted">Chargement…</p>}
       {status === "error" && (
-        <p className="admin-panel__info-line">Erreur (chargement ou sauvegarde).</p>
+        <p className="creature-abilities__error">Erreur (chargement ou sauvegarde).</p>
       )}
 
       {status === "loaded" && (
         <>
           {abilities.length === 0 ? (
-            <p className="admin-panel__info-line">Aucune capacité configurée.</p>
+            <p className="creature-abilities__muted">Aucune capacité configurée.</p>
           ) : (
-            abilities.map((a) => (
-              <label key={a.skillKey} className="admin-panel__template-stat">
-                <span className="admin-panel__template-stat-label">
-                  <input
-                    type="checkbox"
-                    checked={a.enabled}
-                    onChange={() => toggleEnabled(a.skillKey)}
-                    aria-label={`Activer ${a.skillKey}`}
-                  />{" "}
-                  {a.skillName ?? a.skillKey}
-                  {a.skillKind ? ` · ${a.skillKind}` : ""}
-                  {a.missing ? " ⚠ orpheline" : ""}
-                </span>
-                <button
-                  type="button"
-                  className="admin-panel__del-toggle"
-                  onClick={() => removeSkill(a.skillKey)}
-                  title={`Retirer ${a.skillKey}`}
-                  aria-label={`Retirer ${a.skillKey}`}
+            <ul className="creature-abilities__list">
+              {abilities.map((a) => (
+                <li
+                  key={a.skillKey}
+                  className={`creature-abilities__item${a.enabled ? " creature-abilities__item--active" : ""}`}
                 >
-                  ✕
-                </button>
-              </label>
-            ))
+                  <div className="creature-abilities__item-main">
+                    <span className="creature-abilities__item-name">{a.skillName ?? a.skillKey}</span>
+                    <span className="creature-abilities__item-key">{a.skillKey}</span>
+                    <span className="creature-abilities__item-tags">
+                      {a.skillKind ?? "—"}
+                      {a.missing ? " · ⚠ orpheline" : ""}
+                    </span>
+                  </div>
+                  <div className="creature-abilities__item-actions">
+                    <span
+                      className={`creature-abilities__badge creature-abilities__badge--${a.enabled ? "on" : "off"}`}
+                    >
+                      {a.enabled ? "activé" : "désactivé"}
+                    </span>
+                    <button
+                      type="button"
+                      className="creature-abilities__btn creature-abilities__btn--neutral"
+                      onClick={() => toggleEnabled(a.skillKey)}
+                    >
+                      {a.enabled ? "Désactiver" : "Activer"}
+                    </button>
+                    <button
+                      type="button"
+                      className="creature-abilities__btn creature-abilities__btn--danger"
+                      onClick={() => removeSkill(a.skillKey)}
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
 
-          <label className="admin-panel__template-stat">
-            <span className="admin-panel__template-stat-label">Ajouter un skill</span>
+          <div className="creature-abilities__toolbar">
             <select
-              className="admin-panel__template-stat-select"
+              className="creature-abilities__select"
               value={pick}
               onChange={(e) => setPick(e.target.value)}
               aria-label="Choisir un skill à ajouter"
             >
-              <option value="">—</option>
+              <option value="">— Ajouter un skill —</option>
               {available.map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.name} ({c.key})
                 </option>
               ))}
             </select>
-          </label>
-
-          <button type="button" className="admin-panel__apply-btn" onClick={addSkill} disabled={!pick}>
-            Ajouter
-          </button>
-          <button
-            type="button"
-            className="admin-panel__apply-btn"
-            onClick={save}
-            disabled={!dirty || saving}
-          >
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </button>
+            <button
+              type="button"
+              className="creature-abilities__btn creature-abilities__btn--neutral"
+              onClick={addSkill}
+              disabled={!pick}
+            >
+              Ajouter
+            </button>
+            <button
+              type="button"
+              className="creature-abilities__btn creature-abilities__btn--confirm"
+              onClick={save}
+              disabled={!dirty || saving}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </div>
         </>
       )}
     </div>

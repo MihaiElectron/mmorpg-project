@@ -1,0 +1,188 @@
+// ============================================================================
+// Fichier : _creature-editor.scss
+// Description : Sections runtime/capacités du Creature Editor (DevTools).
+//   Style COMPACT aligné sur les autres sections DevTools (Skills / Maîtrises),
+//   via les variables et mixins partagés. Agrégé par components/_index.scss →
+//   main.scss (aucun @import côté composant).
+// ============================================================================
+
+@use "../abstracts/variables" as vars;
+@use "../abstracts/mixins" as m;
+
+// ── Runtime intégré à la carte instance existante (pas un panneau séparé) ────
+// Rendu comme une continuation compacte de la carte : léger séparateur en haut,
+// aucun fond/bordure de bloc, pas de grand titre.
+.creature-runtime {
+  @include m.devtools-compact-stack;
+  color: vars.$color-text-primary;
+  font-size: vars.$dt-compact-font;
+  margin-top: vars.$dt-gap-xs;
+  padding-top: vars.$dt-gap-xs;
+  border-top: 1px solid vars.$panel-border-subtle;
+
+  &__title {
+    @include m.devtools-compact-label;
+    margin: 0;
+    color: vars.$color-text-muted;
+  }
+
+  &__muted {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: vars.$dt-compact-font-sm;
+  }
+
+  &__grid {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px vars.$dt-gap-sm;
+    align-items: baseline;
+  }
+
+  &__label {
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__value {
+    margin: 0;
+    color: vars.$color-text-primary;
+    word-break: break-word;
+  }
+  &__hint {
+    color: vars.$color-text-muted;
+  }
+
+  // Capacités runtime (lecture seule : nom + portée/cd + statut)
+  &__abilities {
+    @include m.devtools-compact-stack;
+    margin-top: vars.$dt-gap-xs;
+  }
+  &__ability {
+    @include m.devtools-compact-row;
+    display: flex;
+    justify-content: space-between;
+    gap: vars.$dt-gap-sm;
+  }
+  &__ability-name {
+    color: vars.$color-text-primary;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__ability-key {
+    color: vars.$color-magic-glow;
+  }
+  &__ability-status {
+    color: vars.$color-text-muted;
+    white-space: nowrap;
+
+    &--ready { color: vars.$btn-success-hover; }
+  }
+}
+
+// ── Éditeur de capacités (cartes, calqué sur .skills-module) ─────────────────
+.creature-abilities {
+  @include m.devtools-compact-stack(vars.$dt-gap-sm);
+  color: vars.$color-text-primary;
+  font-size: vars.$dt-compact-font;
+
+  &__title {
+    @include m.devtools-compact-label;
+    margin: 0;
+    color: vars.$color-text-gold;
+  }
+  &__note,
+  &__muted {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: vars.$dt-compact-font-sm;
+  }
+
+  &__list {
+    @include m.devtools-compact-stack;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__item {
+    @include m.panel-slot;
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+    padding: vars.$dt-compact-row-padding;
+
+    &--active { border-color: vars.$color-text-gold; }
+  }
+  &__item-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  &__item-name { font-weight: bold; }
+  &__item-key {
+    color: vars.$color-magic-glow;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__item-tags {
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__item-actions {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-xs;
+  }
+
+  &__badge {
+    font-size: vars.$dt-compact-font-sm;
+    padding: 2px 6px;
+    border-radius: vars.$panel-radius-sm;
+    white-space: nowrap;
+
+    &--on {
+      background: rgba(vars.$btn-success-bg, 0.25);
+      color: vars.$btn-success-hover;
+    }
+    &--off {
+      background: rgba(0, 0, 0, 0.3);
+      color: vars.$color-text-disabled;
+    }
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+  }
+  &__select {
+    @include m.devtools-compact-control;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 4px 10px;
+    font-size: vars.$dt-compact-font;
+
+    &--confirm { @include m.devtools-save-button; }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+    &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
