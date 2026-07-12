@@ -43,6 +43,8 @@ export interface SkillCastSuccess {
   isCritical: boolean;
   /** V4-E : true si le hit de skill a tué la créature. */
   killed: boolean;
+  /** V4-F : true si la créature a esquivé (toujours false — pas de dodge créature). */
+  isDodged: boolean;
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -338,6 +340,7 @@ export class SkillCastService {
       attackerId: result.attackerId,
       isCritical: result.isCritical,
       killed: result.killed,
+      isDodged: result.isDodged,
       cooldownMs: skill.cooldownMs,
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,

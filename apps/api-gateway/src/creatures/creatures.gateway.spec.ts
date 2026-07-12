@@ -57,6 +57,7 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       attackerId: 'char-1',
       isCritical: false,
       killed: false,
+      isDodged: false,
     });
     const client = makeClient();
 
@@ -105,6 +106,7 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       attackerId: 'char-1',
       isCritical: false,
       killed: true,
+      isDodged: false,
     });
     const client = makeClient();
 
@@ -131,7 +133,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       attackerId: 'char-1',
       isCritical: false,
       killed: false,
-      riposte: { damage: 3, characterHealth: 97 },
+      isDodged: false,
+      riposte: { damage: 3, characterHealth: 97, isDodged: false },
     });
     const client = makeClient();
 

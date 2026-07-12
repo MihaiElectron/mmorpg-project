@@ -81,7 +81,12 @@ export type AttackSuccess = {
   isCritical: boolean;
   /** V4-E : true si ce hit a tué la créature (PV tombés à 0). */
   killed: boolean;
-  riposte?: { damage: number; characterHealth: number };
+  /**
+   * V4-F : true si la créature a esquivé le hit joueur. Toujours false
+   * aujourd'hui (les créatures n'ont pas de `dodgeChance`) — plomberie prête.
+   */
+  isDodged: boolean;
+  riposte?: { damage: number; characterHealth: number; isDodged: boolean };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
   masteryUpdate?: MasteryUpdatePayload;
@@ -661,12 +666,15 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    let riposte: { damage: number; characterHealth: number } | undefined;
+    let riposte: { damage: number; characterHealth: number; isDodged: boolean } | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       // Riposte : aucun plancher d'attaque (minimumAttack = 0), plancher dégâts 1.
+      // V4-F : le joueur est le DÉFENSEUR → sa `dodgeChance` peut esquiver la
+      // riposte (0 dégât, pas de mort). Roll serveur (Math.random).
       const riposteResult = calculateCombatDamage({
         attackerValue: derived.attackPower,
         targetDefense: charStats.derived.defense,
+        defenderDodgeChancePercent: charStats.derived.dodgeChance ?? 0,
         minimumAttack: 0,
         minimumDamage: 1,
         hpBefore: character.health,
@@ -674,13 +682,13 @@ export class CreaturesService implements OnModuleInit {
       const riposteDamage = riposteResult.finalDamage;
       const characterHealth = riposteResult.hpAfter;
       await this.characterRepository.update(characterId, { health: characterHealth });
-      riposte = { damage: riposteDamage, characterHealth };
+      riposte = { damage: riposteDamage, characterHealth, isDodged: riposteResult.isDodged };
       if (characterHealth === 0 && this.server) {
         await this.worldService.respawnCharacter(characterId, this.server);
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, riposte, loot, characterXpUpdate, masteryUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, riposte, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**
@@ -793,7 +801,7 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, loot, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, loot, characterXpUpdate };
   }
 
   private resolveCombatMasteryKey(character: Character): string | null {

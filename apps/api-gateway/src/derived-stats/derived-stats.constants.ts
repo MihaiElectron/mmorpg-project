@@ -69,6 +69,8 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   // chance, criticalDamage = multiplicateur total en % (150 = ×1.5).
   'criticalChance',
   'criticalDamage',
+  // V4-F : esquive du défenseur (hit avoidance, avant le bloc attaque).
+  'dodgeChance',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [

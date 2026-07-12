@@ -297,4 +297,86 @@ describe('calculateCombatDamage', () => {
       ).toBe(false);
     });
   });
+
+  // ── V4-F : esquive (hit avoidance, avant le bloc attaque) ──────────────────
+  describe('esquive (V4-F)', () => {
+    const base = {
+      attackerValue: 100,
+      targetDefense: 40,
+      minimumAttack: 0,
+      minimumDamage: 0,
+      hpBefore: 1000,
+    };
+
+    it('dodgeChance 0 (défaut) → jamais d\'esquive, comportement inchangé', () => {
+      const r = calculateCombatDamage({ ...base, rng: () => 0 });
+      expect(r.isDodged).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('esquive forcée → 0 dégât, pas de critique, pas d\'armure, PV inchangés', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 25,
+        armorPenetrationPercent: 50,
+        criticalChancePercent: 100, // ne doit PAS s'appliquer (esquive avant critique)
+        criticalDamagePercent: 150,
+        rng: () => 0, // 0 < 0.25 → esquive
+      });
+      expect(r.isDodged).toBe(true);
+      expect(r.isCritical).toBe(false);
+      expect(r.finalDamage).toBe(0);
+      expect(r.effectiveArmor).toBe(0);
+      expect(r.attackPowerFinal).toBe(0);
+      expect(r.hpAfter).toBe(1000);
+    });
+
+    it('roll au-dessus du seuil → pas d\'esquive, pipeline normal', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 25,
+        rng: () => 0.5, // 0.5 >= 0.25 → pas d'esquive
+      });
+      expect(r.isDodged).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('esquive précède le critique : un hit esquivé n\'est jamais critique', () => {
+      // rng constant 0 : sans esquive, chance 100 critiquerait. Avec esquive 100,
+      // l'esquive court-circuite → pas de critique.
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 100,
+        criticalChancePercent: 100,
+        criticalDamagePercent: 200,
+        rng: () => 0,
+      });
+      expect(r.isDodged).toBe(true);
+      expect(r.isCritical).toBe(false);
+      expect(r.finalDamage).toBe(0);
+    });
+
+    it('dodge > 100 clampé à 100, négatif/NaN → 0', () => {
+      expect(
+        calculateCombatDamage({ ...base, defenderDodgeChancePercent: 150, rng: () => 0.99 }).isDodged,
+      ).toBe(true); // clamp 100 → toujours esquivé
+      expect(
+        calculateCombatDamage({ ...base, defenderDodgeChancePercent: -10, rng: () => 0 }).isDodged,
+      ).toBe(false);
+      expect(
+        calculateCombatDamage({ ...base, defenderDodgeChancePercent: Number.NaN, rng: () => 0 }).isDodged,
+      ).toBe(false);
+    });
+
+    it('raw peut aussi être esquivé → 0 dégât', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        damageType: 'raw',
+        defenderDodgeChancePercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isDodged).toBe(true);
+      expect(r.finalDamage).toBe(0);
+    });
+  });
 });

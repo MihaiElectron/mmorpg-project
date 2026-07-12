@@ -2,9 +2,13 @@
  * CombatDamageCalculator — calcul de dégâts PUR (Combat V1).
  * ---------------------------------------------------------------------------
  * Aucun accès DB, aucun socket, aucun effet de bord. Contrat de résolution
- * (docs/08_Gameplay/combat-resolution.md) — deux blocs séparés :
+ * (docs/08_Gameplay/combat-resolution.md) — évitement puis deux blocs séparés :
  *
- *   BLOC ATTAQUE (offensif, critique inclus) :
+ *   HIT AVOIDANCE (esquive du DÉFENSEUR, avant tout le reste) :
+ *     isDodged = defenderDodgeChancePercent > 0 && rng() < defenderDodgeChancePercent / 100
+ *     → si esquivé : dégâts 0, pas de critique, pas d'armure, pas de pénétration.
+ *
+ *   BLOC ATTAQUE (offensif, critique inclus — seulement si non esquivé) :
  *     effectiveAttack  = max(attackerValue, minimumAttack)
  *     isCritical       = criticalChancePercent > 0 && rng() < criticalChancePercent / 100
  *     attackPowerFinal = isCritical ? round(effectiveAttack × criticalDamagePercent / 100)
@@ -66,8 +70,16 @@ export interface CombatDamageInput {
    */
   criticalDamagePercent?: number;
   /**
+   * Chance d'esquive du DÉFENSEUR en POURCENTAGE (stat dérivée `dodgeChance`,
+   * ex. 25 = 25 %). Clampée 0–100, NaN → 0. Défaut 0 → jamais d'esquive
+   * (comportement historique). Évaluée AVANT le bloc attaque : un hit esquivé
+   * n'est ni critique ni mitigé par l'armure et inflige 0 dégât.
+   */
+  defenderDodgeChancePercent?: number;
+  /**
    * Générateur aléatoire injectable renvoyant [0, 1). Défaut `Math.random`.
-   * Fourni par les tests pour un roll critique déterministe. Serveur uniquement.
+   * Fourni par les tests pour un roll déterministe (esquive puis critique).
+   * Serveur uniquement.
    */
   rng?: () => number;
 }
@@ -79,6 +91,9 @@ export interface CombatDamageResult {
   damageType: DamageType;
   armorPenetrationPercent: number;
   effectiveArmor: number;
+  /** V4-F : true si le défenseur a esquivé (aucun dégât, pas de critique). */
+  isDodged: boolean;
+  defenderDodgeChancePercent: number;
   /** true si le hit est critique (roll < criticalChancePercent / 100). */
   isCritical: boolean;
   criticalChancePercent: number;
@@ -94,8 +109,8 @@ export interface CombatDamageResult {
 export function calculateCombatDamage(input: CombatDamageInput): CombatDamageResult {
   const { attackerValue, targetDefense, minimumAttack, minimumDamage, hpBefore } = input;
   const damageType: DamageType = input.damageType === 'raw' ? 'raw' : 'physical';
+  const rng = input.rng ?? Math.random;
 
-  // ── Bloc attaque (offensif) : plancher d'attaque puis critique éventuel ────
   const effectiveAttack = Math.max(attackerValue, minimumAttack);
 
   const rawChance = input.criticalChancePercent;
@@ -108,7 +123,38 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     typeof rawCritDamage === 'number' && Number.isFinite(rawCritDamage)
       ? Math.max(0, rawCritDamage)
       : 100;
-  const rng = input.rng ?? Math.random;
+
+  // ── Hit avoidance : esquive du défenseur (AVANT tout le reste) ─────────────
+  // Défensif : NaN/négatif → 0, borné 100. Le roll d'esquive précède le critique
+  // (un hit esquivé ne peut pas être critique). Court-circuit : 0 dégât.
+  const rawDodge = input.defenderDodgeChancePercent;
+  const defenderDodgeChancePercent =
+    typeof rawDodge === 'number' && Number.isFinite(rawDodge)
+      ? Math.min(100, Math.max(0, rawDodge))
+      : 0;
+  const isDodged = defenderDodgeChancePercent > 0 && rng() < defenderDodgeChancePercent / 100;
+  if (isDodged) {
+    return {
+      attackerValue,
+      effectiveAttack,
+      targetDefense,
+      damageType,
+      armorPenetrationPercent: 0,
+      effectiveArmor: 0,
+      isDodged: true,
+      defenderDodgeChancePercent,
+      isCritical: false,
+      criticalChancePercent,
+      criticalDamagePercent,
+      attackPowerFinal: 0,
+      rawDamage: 0,
+      finalDamage: 0,
+      hpBefore,
+      hpAfter: hpBefore,
+    };
+  }
+
+  // ── Bloc attaque (offensif) : critique éventuel (si non esquivé) ───────────
   const isCritical = criticalChancePercent > 0 && rng() < criticalChancePercent / 100;
   const attackPowerFinal = isCritical
     ? Math.round(effectiveAttack * (criticalDamagePercent / 100))
@@ -138,6 +184,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     damageType,
     armorPenetrationPercent,
     effectiveArmor,
+    isDodged: false,
+    defenderDodgeChancePercent,
     isCritical,
     criticalChancePercent,
     criticalDamagePercent,

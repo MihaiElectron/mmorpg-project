@@ -151,4 +151,20 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
     });
   });
+
+  // ── V4-F : esquive exposée comme target permanent ─────────────────────────
+  describe('esquive (V4-F)', () => {
+    const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+
+    it('dodgeChance est exposée comme target (2 modes, implemented)', () => {
+      const t = targets.find((x) => x.key === 'dodgeChance');
+      expect(t).toBeDefined();
+      expect(t!.runtimeStatus).toBe('implemented');
+      expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+    });
+
+    it("dodgeChance n'est PAS contextuelle weaponType", () => {
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('dodgeChance');
+    });
+  });
 });

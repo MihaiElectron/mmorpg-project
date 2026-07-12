@@ -434,6 +434,31 @@ describe('CreaturesService', () => {
           expect(result.dto.health).toBe(17);
         }
       });
+
+      // ── V4-F : le joueur défenseur peut esquiver la riposte ─────────────────
+      it("riposte esquivée (dodgeChance joueur 100) → 0 dégât, PV joueur inchangés", async () => {
+        // dodgeChance dérivée poussée > 100 par mastery flat → clamp 100 dans le
+        // calculateur → esquive systématique (roll Math.random < 1). La créature
+        // survit au hit joueur (8 dégâts sur 30 PV) donc riposte, mais esquivée.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { dodgeChance: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte).toBeDefined();
+          expect(result.riposte?.isDodged).toBe(true);
+          expect(result.riposte?.damage).toBe(0);
+          // PV joueur inchangés (makeCharacter health 100).
+          expect(result.riposte?.characterHealth).toBe(100);
+        }
+      });
     });
 
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────

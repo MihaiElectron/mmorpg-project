@@ -30,6 +30,8 @@ export interface CombatEvent {
   targetName?: string;
   /** V4-E : true si ce hit a tué la cible (message de mort lié au dernier hit). */
   targetDied?: boolean;
+  /** V4-F : true si le défenseur a esquivé le hit (0 dégât). */
+  isDodged?: boolean;
   createdAt: number;
 }
 
@@ -47,6 +49,7 @@ export interface CombatEventInput {
   isCritical?: boolean;
   targetName?: string;
   targetDied?: boolean;
+  isDodged?: boolean;
 }
 
 /** Construit un CombatEvent en remplissant `id` (unique) et `createdAt`. */

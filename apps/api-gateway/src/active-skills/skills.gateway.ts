@@ -136,6 +136,7 @@ export class SkillsGateway implements OnGatewayConnection {
         isCritical: result.isCritical,
         targetName: result.dto.name,
         targetDied: result.killed,
+        isDodged: result.isDodged,
       }),
     );
     if (result.killed) {
