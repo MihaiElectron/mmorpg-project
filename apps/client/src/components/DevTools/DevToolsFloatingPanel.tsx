@@ -86,7 +86,8 @@ export default function DevToolsFloatingPanel() {
           minWidth: 280,
           minHeight: 160,
           maxWidth: Math.max(280, window.innerWidth - 32),
-          maxHeight: Math.max(160, window.innerHeight - 132),
+          // Hauteur libre : plus de plafond viewport, l'utilisateur redimensionne à sa guise.
+          maxHeight: Number.MAX_SAFE_INTEGER,
         }, { horizontal: "right", vertical: "top" });
         setPanelPosition(next.position);
         setPanelSize(next.size);

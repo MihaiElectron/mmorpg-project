@@ -59,7 +59,7 @@
   height: auto;
   min-width: 280px;
   min-height: 0;
-  max-height: min(var(--devtools-panel-height), calc(100vh - 132px));
+  max-height: var(--devtools-panel-height);
   max-width: calc(100vw - 32px);
   transform: translate(var(--devtools-panel-x), var(--devtools-panel-y));
   display: flex;
@@ -186,7 +186,7 @@
   &__body {
     flex: 0 1 auto;
     min-height: 0;
-    max-height: calc(min(var(--devtools-panel-height), calc(100vh - 132px)) - 56px);
+    max-height: calc(var(--devtools-panel-height) - 56px);
     overflow-y: auto;
     overflow-x: hidden;
   }
