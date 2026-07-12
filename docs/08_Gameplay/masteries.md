@@ -143,13 +143,14 @@ liste codée en dur.
 
 Stats actuellement exposées (Implemented) : `physicalAttack`, `defense`,
 `maxHealth`, `maxMana`, `maxEnergy`, `healthRegen`, `manaRegen`,
-`energyRegen`, `healingPower`, `magicPower`, **`armorPenetrationPercent`** (V4-B0).
+`energyRegen`, `healingPower`, `magicPower`, **`armorPenetrationPercent`** (V4-B0),
+**`criticalChance`** et **`criticalDamage`** (V4-D).
 
 > `defensePenetration` (ancien modèle **plat**, V4-A) n'est **plus exposée**
 > comme target : conservée en compatibilité seulement (`masteryEligible=false`,
 > `runtimeStatus=calculatedOnly`, aucun mode) — voir « Résolution serveur ».
 
-Stats futures NON exposées (Not implemented — aucun hook gameplay) : critique,
+Stats futures NON exposées (Not implemented — aucun hook gameplay) :
 dodge, parry, block, accuracy, attackSpeed, movementSpeed, résistances, stun,
 knockback, curses / `armorReductionPercent` (debuff cible), craft (succès/qualité).
 
@@ -245,7 +246,7 @@ Validation runtime V1 (2026-07-11, formule et niveaux d'alors) : auto-attaque
 
 ### Not implemented (futur)
 
-Critique, dodge, parry, block, accuracy, attackSpeed, movementSpeed,
+dodge, parry, block, accuracy, attackSpeed, movementSpeed,
 résistances, stun, knockback, succès/qualité de craft, récolte. Ces stats sont
 volontairement **absentes des targets serveur** (refusées par sanitize,
 invisibles dans le Studio) : elles seront ajoutées quand leur hook gameplay

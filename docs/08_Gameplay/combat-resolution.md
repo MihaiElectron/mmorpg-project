@@ -11,10 +11,12 @@
 ## Scope
 
 Ce document fige **l'ordre de résolution** d'un hit de combat, AVANT d'ajouter
-critique, block, esquive, résistances ou curses. Il décrit un contrat cible :
-seule une partie est **implémentée** aujourd'hui (armure, `armorPenetrationPercent`,
-`damageType` physical/raw) ; le reste est **Planned** et documenté ici pour que
-les ajouts futurs se branchent au bon endroit sans casser l'existant.
+block, esquive, résistances ou curses. Il décrit un contrat cible : une partie
+est **implémentée** aujourd'hui (stats finales serveur, armure +
+`armorPenetrationPercent`, `damageType` physical/raw, **critique**) ; le reste
+(flat/percent damage, curses, block/esquive/résistances) est **Planned** et
+documenté ici pour que les ajouts futurs se branchent au bon endroit sans
+casser l'existant.
 
 Règle transverse : **le serveur est autoritaire**. Le client et le Studio ne
 calculent jamais les dégâts finaux — ils configurent et affichent.
@@ -46,25 +48,44 @@ Le client et le Studio **ne calculent jamais** les dégâts finaux ni une
 
 ## 2. Bloc attaque — puissance offensive du hit
 
-Ordre **cible** (seul `baseDamage` est actif aujourd'hui ; le reste est Planned) :
+Ordre **cible** (le **critique est actif** ; flat/percent restent Planned) :
 
 ```
 baseDamage
   + flatDamageModifiers        (futur)
   × percentDamageModifiers      (futur)
-  × criticalMultiplier          (futur, si le hit critique)
+  × criticalMultiplier          (Implemented — si le hit critique)
 = attackPowerFinal
 ```
 
 Règles :
 
-- Le **critique appartient au bloc attaque**, jamais au bloc défense.
-- `criticalChancePercent` détermine SI le hit critique ; `criticalDamagePercent`
-  détermine le multiplicateur (ex. `criticalDamagePercent = 50` → dégâts × 1.5).
-- Tout bonus de dégâts futur (flat/percent) s'applique **ici**, pas dans la défense.
+- Le **critique appartient au bloc attaque**, jamais au bloc défense, et
+  s'applique **avant** la soustraction d'armure.
+- `criticalChance` (stat dérivée, %) détermine SI le hit critique : roll serveur
+  `[0, 1)`, critique si `roll < criticalChance / 100` (ex. `25` = 25 %).
+- `criticalDamage` (stat dérivée, multiplicateur total en %) détermine le
+  multiplicateur (ex. `150` → dégâts × 1.5).
+- Tout bonus de dégâts futur (flat/percent) s'appliquera **ici**, pas dans la défense.
 
-État actuel : `attackPowerFinal` = attaque physique dérivée (auto-attaque) ou
-montant de skill calculé serveur. Aucun critique/flat/percent branché encore.
+Formule (Implemented) :
+
+```
+isCritical       = criticalChance > 0 && roll < criticalChance / 100
+attackPowerFinal = isCritical ? round(baseDamage × criticalDamage / 100) : baseDamage
+```
+
+Exemple :
+
+```
+baseDamage = 100 ; criticalDamage = 150 ; hit critique = oui
+attackPowerFinal = round(100 × 1.5) = 150
+```
+
+RNG **serveur uniquement** (`Math.random` en runtime, injectable pour des tests
+déterministes) — le client et le Studio ne décident jamais du critique.
+`criticalChance = 0` → jamais de critique (`attackPowerFinal = baseDamage`).
+Auto-attaque et skills damage passent tous par ce bloc.
 
 ## 3. Bloc défense — armure effective de la cible
 
@@ -118,14 +139,17 @@ Compatibilité bloc attaque : **par défaut, `raw` ignore le bloc défense mais
 reste compatible avec les modificateurs du bloc attaque** (critique / bonus de
 dégâts futurs), sauf règle contraire décidée plus tard.
 
-## 6. Stats critiques (Planned — non implémenté)
+## 6. Stats critiques (Implemented)
 
-- **`criticalChancePercent`** : chance de critique, clamp 0–100 ; sources
-  possibles = stats primaires, équipement, maîtrises, buffs futurs.
-- **`criticalDamagePercent`** : bonus de dégâts critiques (ex. `50` → × 1.5) ;
-  mêmes sources.
+- **`criticalChance`** : chance de critique en pourcentage (ex. `25` = 25 %),
+  clamp 0–100. Stat dérivée système `implemented` + `masteryEligible`, exposée
+  comme Mastery Effect **target permanente** (jamais contextuelle `weaponType`).
+- **`criticalDamage`** : multiplicateur critique total en pourcentage (ex. `150`
+  → × 1.5), baseValue 150. Même statut (target permanente).
 
-Se branchera dans le **bloc attaque** (étape 2), jamais dans la défense.
+Sources : stats primaires (coefficients), équipement, maîtrises, buffs futurs.
+Branchées dans le **bloc attaque** (étape 2), jamais dans la défense.
+`contextualStats` reste exactement `['physicalAttack']`.
 
 ## 7. Curses / réductions d'armure (Planned — futur séparé)
 
@@ -143,7 +167,8 @@ Se branchera dans le **bloc attaque** (étape 2), jamais dans la défense.
 | Stats finales serveur (attaque/défense/dérivées/maîtrises/équipement) | Implemented |
 | Bloc défense : armure de base + `armorPenetrationPercent` (en dernier) | Implemented |
 | `damageType` physical/raw (auto-attaque + skills) | Implemented |
-| Bloc attaque : critique, flat/percent damage | Planned |
+| Bloc attaque : critique (`criticalChance`/`criticalDamage`, auto-attaque + skills) | Implemented |
+| Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
 | Résistances, block, esquive, dégâts magical/elemental/poison | Planned |
 
