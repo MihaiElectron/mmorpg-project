@@ -24,6 +24,11 @@ export type CreatureAbilityDto = {
   skillKind: string | null;
   /** true si le skill est activé au catalogue (skill_definition.enabled). */
   skillEnabled: boolean | null;
+  /** V5-C3-A : métadonnées lecture seule du SkillDefinition lié (null si orphelin). */
+  effectType: string | null;
+  damageType: string | null;
+  rangeWU: number | null;
+  cooldownMs: number | null;
   /** true si `skillKey` est absent du catalogue (référence orpheline). */
   missing: boolean;
 };

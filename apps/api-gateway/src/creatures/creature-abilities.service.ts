@@ -52,6 +52,11 @@ export class CreatureAbilitiesService {
         skillName: skill?.name ?? null,
         skillKind: skill?.skillKind ?? null,
         skillEnabled: skill?.enabled ?? null,
+        // V5-C3-A : métadonnées read-only issues du SkillDefinition (jamais mutées ici).
+        effectType: skill?.effectType ?? null,
+        damageType: skill?.damageType ?? null,
+        rangeWU: skill?.rangeWU ?? null,
+        cooldownMs: skill?.cooldownMs ?? null,
         missing: !skill,
       };
     });
