@@ -5,6 +5,9 @@ import { CreaturesService } from './creatures.service';
 import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
+import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
+import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
+import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { Character } from '../characters/entities/character.entity';
 import { ProgressionService } from '../progression/progression.service';
 import { MasteriesService } from '../masteries/masteries.service';
@@ -146,6 +149,8 @@ describe('CreaturesService', () => {
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepository },
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
+        { provide: getRepositoryToken(CreatureTemplateSkill), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(SkillDefinition), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: characterRepository },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: progressionService },
@@ -1640,6 +1645,8 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepository },
         { provide: getRepositoryToken(CreatureSpawn), useValue: spawnRepository },
+        { provide: getRepositoryToken(CreatureTemplateSkill), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(SkillDefinition), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
@@ -1791,6 +1798,8 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: getRepositoryToken(Creature), useValue: creatureRepository },
         { provide: getRepositoryToken(CreatureTemplate), useValue: { findOne: jest.fn().mockResolvedValue(null), upsert: jest.fn() } },
         { provide: getRepositoryToken(CreatureSpawn), useValue: { findOne: jest.fn().mockResolvedValue(null), find: jest.fn().mockResolvedValue([]), save: jest.fn(), update: jest.fn(), create: jest.fn().mockImplementation((a) => a) } },
+        { provide: getRepositoryToken(CreatureTemplateSkill), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(SkillDefinition), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Character), useValue: { findOne: jest.fn().mockResolvedValue(null), update: jest.fn() } },
         { provide: WorldService, useValue: { getAllConnectedPlayers: jest.fn().mockReturnValue([]) } },
         { provide: ProgressionService, useValue: { applyCharacterXpInTx: jest.fn() } },
@@ -1952,5 +1961,256 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(state.targetCharacterId).toBeUndefined();
     });
 
+  });
+
+  // ─── V5-B : cast d'une capacité damage configurée (via resolveCombatHit) ────
+  describe("doFighting — capacités damage créature (V5-B)", () => {
+    function makePlayer(worldX: number, worldY: number): any {
+      return { characterId: "char-1", socketId: "sock-1", worldX, worldY, mapId: 1, name: "Test" };
+    }
+    function fightingState() {
+      return { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: "char-1" };
+    }
+    const ABILITY = {
+      skillKey: "fireball",
+      skillName: "Boule de feu",
+      displayOrder: 0,
+      rangeWU: 5000,
+      cooldownMs: 3000,
+      damageType: "physical" as const,
+      scaling: { derivedCoefficients: { physicalAttack: 2 } },
+    };
+    const combatOf = (emits: any[]) =>
+      emits.find((e) => e.event === "combat:event" && e.payload.type === "damage");
+
+    // Force les stats dérivées serveur du joueur défenseur (esquive/blocage/défense).
+    function mockDefenderDerived(derived: Record<string, number>) {
+      jest
+        .spyOn(CharacterStatsCalculator, "compute")
+        .mockReturnValue({ derived: { defense: 0, dodgeChance: 0, blockChance: 0, blockReductionPercent: 0, ...derived } } as any);
+    }
+    function captureServer(emits: { event: string; payload: any }[]) {
+      return { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+    }
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it("capacité en portée (au-delà de la mêlée) → cast via resolver, combat:event skillName", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      const player = makePlayer(6080 + 2000, 12480); // dist 2000 > MELEE, <= rangeWU
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const emits: { event: string; payload: any }[] = [];
+      const server = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), server);
+
+      const ev = combatOf(emits).payload;
+      expect(ev).toMatchObject({ sourceType: "creature", targetType: "player", skillName: "Boule de feu", amount: 10 });
+      expect(emits.some((e) => e.event === "character_damaged")).toBe(true);
+    });
+
+    it("hors portée du skill mais cible en mêlée → fallback auto-attaque (aucun skillName)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
+      const player = makePlayer(6080 + 800, 12480); // 800 > skill range 500, <= MELEE
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const emits: { event: string; payload: any }[] = [];
+      const server = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), server);
+
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined();
+      expect(ev.amount).toBe(5); // auto-attaque : baseAttack 5 − defense 0
+    });
+
+    it("skill créature passe par le contrat défensif joueur (esquive via resolver)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      const player = makePlayer(6080 + 1000, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      // Esquive forcée : dodgeChance 100 dans les dérivées calculées.
+      (service as any).derivedStats = {
+        getDefinitions: jest.fn().mockResolvedValue([]),
+      };
+      jest
+        .spyOn(CharacterStatsCalculator, "compute")
+        .mockReturnValue({ derived: { defense: 0, dodgeChance: 100, blockChance: 0, blockReductionPercent: 0 } } as any);
+      const emits: { event: string; payload: any }[] = [];
+      const server = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), server);
+
+      const ev = combatOf(emits).payload;
+      expect(ev.isDodged).toBe(true);
+      expect(ev.amount).toBe(0);
+      (CharacterStatsCalculator.compute as jest.Mock).mockRestore();
+    });
+
+    it("pickCreatureDamageAbility respecte portée et cooldown skill", () => {
+      const now = 100000;
+      expect((service as any).pickCreatureDamageAbility("c1", [ABILITY], 9999, now)).toBeNull();
+      expect((service as any).pickCreatureDamageAbility("c1", [ABILITY], 1000, now)?.skillKey).toBe("fireball");
+      (service as any).creatureSkillCooldowns.set("c1", new Map([["fireball", now - 1000]]));
+      expect((service as any).pickCreatureDamageAbility("c1", [ABILITY], 1000, now)).toBeNull();
+      (service as any).creatureSkillCooldowns.set("c1", new Map([["fireball", now - 4000]]));
+      expect((service as any).pickCreatureDamageAbility("c1", [ABILITY], 1000, now)?.skillKey).toBe("fireball");
+    });
+
+    it("getDamageAbilities filtre heal/désactivé, fallback range, cache + invalidation", async () => {
+      const abilityRepo = {
+        find: jest.fn().mockResolvedValue([
+          { skillKey: "heal", enabled: true, displayOrder: 0 },
+          { skillKey: "off", enabled: true, displayOrder: 1 },
+          { skillKey: "fireball", enabled: true, displayOrder: 2 },
+        ]),
+      };
+      const skillRepo = {
+        find: jest.fn().mockResolvedValue([
+          { key: "heal", name: "Soin", enabled: true, effectType: "heal", rangeWU: 100, cooldownMs: 1000, damageType: "physical", scaling: {} },
+          { key: "off", name: "Off", enabled: false, effectType: "damage", rangeWU: 100, cooldownMs: 1000, damageType: "physical", scaling: {} },
+          { key: "fireball", name: "Boule de feu", enabled: true, effectType: "damage", rangeWU: 0, cooldownMs: 3000, damageType: "raw", scaling: {} },
+        ]),
+      };
+      (service as any).creatureTemplateSkillRepository = abilityRepo;
+      (service as any).skillDefinitionRepository = skillRepo;
+
+      const out = await (service as any).getDamageAbilities(1, "goblin");
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({ skillKey: "fireball", damageType: "raw", rangeWU: 1280 });
+
+      await (service as any).getDamageAbilities(1, "goblin");
+      expect(abilityRepo.find).toHaveBeenCalledTimes(1); // cache
+
+      service.invalidateAbilitiesCache("goblin");
+      await (service as any).getDamageAbilities(1, "goblin");
+      expect(abilityRepo.find).toHaveBeenCalledTimes(2); // reload
+    });
+
+    // Helper : lance un cast de skill (créature en portée) et renvoie l'event dmg.
+    async function castSkillAndCapture(ability: any, derived: Record<string, number>) {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [ability]);
+      const player = makePlayer(6080 + 1000, 12480); // en portée skill, > pas requis
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived(derived);
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      return { emits, ev: combatOf(emits)?.payload };
+    }
+
+    // 1. Skill physical bloqué par le joueur (via resolver).
+    it("skill physical → BLOQUÉ par le joueur (isBlocked + blockedDamage), pas de fallback", async () => {
+      const { ev } = await castSkillAndCapture(ABILITY, { defense: 0, blockChance: 100, blockReductionPercent: 50 });
+      // amount skill = attackPower 5 × coef 2 = 10 ; block 50 % → round(10×0.5)=5.
+      expect(ev.skillName).toBe("Boule de feu");
+      expect(ev.isBlocked).toBe(true);
+      expect(ev.blockedDamage).toBe(5);
+      expect(ev.amount).toBe(5);
+    });
+
+    // 2. Skill raw ignore blocage ET armure.
+    it("skill raw → ignore blocage + armure", async () => {
+      const rawAbility = { ...ABILITY, damageType: "raw" as const };
+      const { ev } = await castSkillAndCapture(rawAbility, { defense: 100, blockChance: 100, blockReductionPercent: 50 });
+      expect(ev.skillName).toBe("Boule de feu");
+      expect(ev.isBlocked).toBe(false);
+      expect(ev.blockedDamage).toBe(0);
+      expect(ev.amount).toBe(10); // 10 brut, ni armure (100) ni blocage
+    });
+
+    // 3. Skill créature ne déclenche JAMAIS la parade (canParry false forcé).
+    it("skill créature → parade JAMAIS déclenchée, aucune contre-attaque", async () => {
+      const { ev } = await castSkillAndCapture(ABILITY, { defense: 0, parryChance: 100 });
+      expect(ev.skillName).toBe("Boule de feu");
+      expect(ev.isParried).toBeUndefined(); // le hit skill ne porte pas isParried
+      expect(ev.amount).toBe(10); // hit appliqué normalement (pas annulé)
+      expect(ev.targetDied).toBeUndefined();
+    });
+
+    // 7. Payload de l'event de cast skill.
+    it("event payload skill : creature→player, skillName, flags défensifs propagés", async () => {
+      const { ev } = await castSkillAndCapture(ABILITY, { defense: 0, dodgeChance: 100 });
+      expect(ev.sourceType).toBe("creature");
+      expect(ev.targetType).toBe("player");
+      expect(ev.skillName).toBe("Boule de feu");
+      expect(ev.isDodged).toBe(true); // esquive du joueur via resolver
+      expect(ev.amount).toBe(0);
+      // skillKey non porté par l'event (format actuel = skillName uniquement).
+      expect(ev.skillKey).toBeUndefined();
+    });
+
+    // 4/5/6. Fallback : capacité inutilisable → AUTO-ATTAQUE existante (V1, legacy).
+    // NOTE : l'auto-attaque créature n'applique PAS esquive/blocage/parade
+    // (chemin legacy `max(baseAttack−défense,1)`, inchangé V5-B) — seuls la
+    // riposte (V4-I) et les skills (V5-B, resolver) portent le contrat défensif.
+    it("fallback HORS PORTÉE → auto-attaque legacy (pas de skillName, pas d'esquive)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
+      const player = makePlayer(6080 + 800, 12480); // 800 > skill 500, <= MELEE
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0, dodgeChance: 100 }); // ignorée par l'auto-attaque
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined();
+      expect(ev.isDodged).toBeUndefined(); // auto-attaque legacy : pas d'esquive
+      expect(ev.amount).toBe(5); // baseAttack 5 − défense 0
+    });
+
+    it("fallback COOLDOWN → auto-attaque legacy (pas de skillName)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      const now = Date.now();
+      (service as any).creatureSkillCooldowns.set(creature.id, new Map([["fireball", now]])); // vient de caster
+      const player = makePlayer(6080 + 800, 12480); // en portée MELEE
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0, blockChance: 100, blockReductionPercent: 50 }); // ignorée
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], now, captureServer(emits));
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined();
+      expect(ev.isBlocked).toBeUndefined(); // auto-attaque legacy : pas de blocage
+      expect(ev.amount).toBe(5);
+    });
+
+    it("fallback SANS capacité → auto-attaque legacy (pas de skillName)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).damageAbilityCache.set("turkey", []); // aucune capacité
+      const player = makePlayer(6080 + 800, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0 });
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined();
+      expect(ev.amount).toBe(5);
+    });
   });
 });

@@ -88,11 +88,14 @@ export class AdminController {
   }
 
   @Put('templates/:key/abilities')
-  replaceTemplateAbilities(
+  async replaceTemplateAbilities(
     @Param('key') key: string,
     @Body() body: ReplaceCreatureAbilitiesDto,
   ) {
-    return this.creatureAbilitiesService.replaceForTemplate(key, body.abilities);
+    const result = await this.creatureAbilitiesService.replaceForTemplate(key, body.abilities);
+    // V5-B : le combat lit un cache de capacités par templateKey — invalider après édition.
+    this.creaturesService.invalidateAbilitiesCache(key);
+    return result;
   }
 
   // ── Créatures ─────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
@@ -16,6 +16,9 @@ import {
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { DamageType } from './combat-damage.calculator';
 import { resolveCombatHit } from './combat-hit.resolver';
+import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
+import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
+import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -67,6 +70,20 @@ function findNearestPlayer(
   return nearest ? { player: nearest, dist: minDist } : null;
 }
 
+
+/**
+ * Capacité damage d'une créature résolue (V5-B) : association + skill enabled,
+ * `effectType: 'damage'`, prête à être castée via le resolver commun.
+ */
+type ResolvedCreatureDamageAbility = {
+  skillKey: string;
+  skillName: string;
+  displayOrder: number;
+  rangeWU: number;
+  cooldownMs: number;
+  damageType: DamageType;
+  scaling: Record<string, unknown>;
+};
 
 type PatrolState = {
   dirX: number;
@@ -152,6 +169,12 @@ export class CreaturesService implements OnModuleInit {
   private readonly patrolStates = new Map<string, PatrolState>();
   private server: Server | null = null;
 
+  // V5-B : cooldown de capacité par créature puis par skillKey (epoch ms du dernier cast).
+  private readonly creatureSkillCooldowns = new Map<string, Map<string, number>>();
+  // V5-B : cache des capacités damage résolues par templateKey (config, pas d'état live),
+  // invalidé après édition Studio (admin PUT → invalidateAbilitiesCache).
+  private readonly damageAbilityCache = new Map<string, ResolvedCreatureDamageAbility[]>();
+
   constructor(
     @InjectRepository(Creature)
     private readonly creatureRepository: Repository<Creature>,
@@ -159,6 +182,10 @@ export class CreaturesService implements OnModuleInit {
     private readonly templateRepository: Repository<CreatureTemplate>,
     @InjectRepository(CreatureSpawn)
     private readonly spawnRepository: Repository<CreatureSpawn>,
+    @InjectRepository(CreatureTemplateSkill)
+    private readonly creatureTemplateSkillRepository: Repository<CreatureTemplateSkill>,
+    @InjectRepository(SkillDefinition)
+    private readonly skillDefinitionRepository: Repository<SkillDefinition>,
     @InjectRepository(Character)
     private readonly characterRepository: Repository<Character>,
     private readonly worldService: WorldService,
@@ -324,6 +351,112 @@ export class CreaturesService implements OnModuleInit {
     };
   }
 
+  /**
+   * V5-B : invalide le cache des capacités damage d'un template (ou tout) après
+   * une édition Studio. Lecture seule côté combat : force juste un reload.
+   */
+  invalidateAbilitiesCache(templateKey?: string): void {
+    if (templateKey) this.damageAbilityCache.delete(templateKey);
+    else this.damageAbilityCache.clear();
+  }
+
+  /**
+   * V5-B : capacités damage utilisables d'un template (association enabled ET
+   * skill enabled, `effectType: 'damage'`), triées par displayOrder puis skillKey.
+   * Résultat caché par templateKey (config, pas d'état live). Ne caste rien.
+   */
+  private async getDamageAbilities(
+    templateId: number,
+    templateKey: string,
+  ): Promise<ResolvedCreatureDamageAbility[]> {
+    const cached = this.damageAbilityCache.get(templateKey);
+    if (cached) return cached;
+
+    const links = await this.creatureTemplateSkillRepository.find({
+      where: { creatureTemplateId: templateId, enabled: true },
+      order: { displayOrder: 'ASC', skillKey: 'ASC' },
+    });
+    let resolved: ResolvedCreatureDamageAbility[] = [];
+    if (links.length > 0) {
+      const skills = await this.skillDefinitionRepository.find({
+        where: { key: In(links.map((l) => l.skillKey)) },
+      });
+      const byKey = new Map(skills.map((s) => [s.key, s]));
+      resolved = links
+        .map((link) => {
+          const skill = byKey.get(link.skillKey);
+          if (!skill || !skill.enabled || skill.effectType !== 'damage') return null;
+          return {
+            skillKey: skill.key,
+            skillName: skill.name,
+            displayOrder: link.displayOrder,
+            rangeWU: skill.rangeWU > 0 ? skill.rangeWU : MELEE_RANGE_WU,
+            cooldownMs: skill.cooldownMs,
+            damageType: skill.damageType === 'raw' ? 'raw' : 'physical',
+            scaling: (skill.scaling ?? {}) as Record<string, unknown>,
+          } as ResolvedCreatureDamageAbility;
+        })
+        .filter((a): a is ResolvedCreatureDamageAbility => a !== null);
+    }
+    this.damageAbilityCache.set(templateKey, resolved);
+    return resolved;
+  }
+
+  /**
+   * V5-B : première capacité damage utilisable (portée couverte + cooldown skill
+   * expiré), dans l'ordre déjà trié. null si aucune.
+   */
+  private pickCreatureDamageAbility(
+    creatureId: string,
+    abilities: ResolvedCreatureDamageAbility[],
+    distWU: number,
+    now: number,
+  ): ResolvedCreatureDamageAbility | null {
+    if (abilities.length === 0) return null;
+    const cd = this.creatureSkillCooldowns.get(creatureId);
+    for (const ability of abilities) {
+      if (distWU > ability.rangeWU) continue; // hors portée
+      const lastCast = cd?.get(ability.skillKey) ?? 0;
+      if (now - lastCast < ability.cooldownMs) continue; // cooldown non expiré
+      return ability;
+    }
+    return null;
+  }
+
+  /**
+   * V5-B : montant brut d'une capacité damage castée par une créature. Réutilise
+   * le calculateur pur `calculateSkillEffect` avec les stats DÉRIVÉES de la
+   * créature (`attackPower` exposé aussi sous `physicalAttack`). Pas de primaires
+   * ni de maîtrises créature. Aucun effet de bord.
+   */
+  private computeCreatureSkillAmount(
+    creature: Creature,
+    template: CreatureTemplate,
+    ability: ResolvedCreatureDamageAbility,
+  ): number {
+    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const debugMods = this.debugRegistry.getModifiers(creature.id);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugMods,
+    );
+    return calculateSkillEffect(
+      { effectType: 'damage', scaling: ability.scaling },
+      {
+        primary: {},
+        derived: {
+          attackPower: derived.attackPower,
+          physicalAttack: derived.attackPower,
+          defenseTotal: derived.defenseTotal,
+          maxHp: derived.maxHp,
+        },
+        masteryLevels: {},
+      },
+      { minimum: 0 },
+    ).amount;
+  }
+
   startPatrol(server: Server) {
     this.server = server;
     setInterval(() => this.tickPatrol(server).catch(console.error), PATROL_TICK_MS);
@@ -470,8 +603,20 @@ export class CreaturesService implements OnModuleInit {
       creature.mapId = creature.mapId ?? DEFAULT_MAP_ID;
     }
 
-    // Auto-attaque
+    // V5-B : dans la fenêtre d'action, une capacité damage configurée (en portée
+    // + hors cooldown skill) est PRIORITAIRE et castée via le resolver commun.
+    // Sinon, on retombe EXACTEMENT sur l'auto-attaque existante (ci-dessous).
     const lastAtk = this.lastCreatureAutoAttackAt.get(creature.id) ?? 0;
+    if (now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
+      const abilities = await this.getDamageAbilities(template.id, template.key);
+      const chosen = this.pickCreatureDamageAbility(creature.id, abilities, dist, now);
+      if (chosen) {
+        await this.castCreatureDamageSkill(creature, template, chosen, target, server, state, now);
+        return;
+      }
+    }
+
+    // Auto-attaque (fallback existant — comportement inchangé)
     if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       this.lastCreatureAutoAttackAt.set(creature.id, now);
       const char = await this.characterRepository.findOne({
@@ -518,6 +663,92 @@ export class CreaturesService implements OnModuleInit {
           state.targetCharacterId = undefined;
         }
       }
+    }
+  }
+
+  /**
+   * V5-B : cast d'une capacité damage créature → joueur, OBLIGATOIREMENT via le
+   * resolver commun (`resolveCombatHit`) — aucun chemin de dégâts spécial. Le
+   * joueur défenseur applique son contrat défensif V4 (esquive + blocage) ;
+   * parade JAMAIS sur un hit créature (nature mêlée/distance non fiable). Pas de
+   * critique/pénétration créature (aucune stat dédiée). Mort/respawn identiques
+   * à l'auto-attaque.
+   */
+  private async castCreatureDamageSkill(
+    creature: Creature,
+    template: CreatureTemplate,
+    ability: ResolvedCreatureDamageAbility,
+    target: ConnectedPlayer,
+    server: Server,
+    state: PatrolState,
+    now: number,
+  ): Promise<void> {
+    // Consomme la fenêtre d'action + enregistre le cooldown du skill.
+    this.lastCreatureAutoAttackAt.set(creature.id, now);
+    let cd = this.creatureSkillCooldowns.get(creature.id);
+    if (!cd) {
+      cd = new Map();
+      this.creatureSkillCooldowns.set(creature.id, cd);
+    }
+    cd.set(ability.skillKey, now);
+
+    const char = await this.characterRepository.findOne({
+      where: { id: target.characterId },
+      relations: ['equipment', 'equipment.item'],
+    });
+    if (!char || char.health <= 0) return;
+
+    const derivedStatDefinitions = await this.derivedStats.getDefinitions();
+    const charDerived = CharacterStatsCalculator.compute(
+      char,
+      derivedStatDefinitions,
+      aggregateEquipmentBonuses(char.equipment),
+      await this.masteryEffects.getPermanentStatModifiers(char.id),
+    ).derived;
+
+    const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
+    const result = resolveCombatHit({
+      attacker: { attackPower: rawAmount, minimumAttack: 0 },
+      defender: {
+        defense: charDerived.defense,
+        dodgeChancePercent: charDerived.dodgeChance ?? 0,
+        blockChancePercent: charDerived.blockChance ?? 0,
+        blockReductionPercent: charDerived.blockReductionPercent ?? 0,
+        canParry: false,
+        parryChancePercent: 0,
+      },
+      damageType: ability.damageType,
+      minimumDamage: 1,
+      hpBefore: char.health,
+    });
+    const dmg = result.finalDamage;
+    const newHealth = result.hpAfter;
+    await this.characterRepository.update(char.id, { health: newHealth });
+    server.to(target.socketId).emit('character_damaged', {
+      characterId: char.id,
+      damage: dmg,
+      health: newHealth,
+    });
+    const targetMapId = target.mapId ?? char.mapId ?? DEFAULT_MAP_ID;
+    server.to(getMapRoomId(targetMapId)).emit(COMBAT_EVENT, makeCombatEvent({
+      type: 'damage',
+      amount: dmg,
+      sourceType: 'creature',
+      sourceId: creature.id,
+      targetType: 'player',
+      targetId: char.id,
+      worldX: target.worldX ?? char.worldX ?? 0,
+      worldY: target.worldY ?? char.worldY ?? 0,
+      text: `-${dmg}`,
+      skillName: ability.skillName,
+      isDodged: result.isDodged,
+      isBlocked: result.isBlocked,
+      blockedDamage: result.blockedDamage,
+    }));
+    if (newHealth === 0) {
+      await this.worldService.respawnCharacter(char.id, server);
+      await this.changeCreatureState(creature, 'alive');
+      state.targetCharacterId = undefined;
     }
   }
 
@@ -1272,6 +1503,7 @@ export class CreaturesService implements OnModuleInit {
 
       this.patrolStates.delete(creature.id);
       this.lastCreatureAutoAttackAt.delete(creature.id);
+      this.creatureSkillCooldowns.delete(creature.id);
 
       await this.creatureRepository.update(creature.id, {
         state: 'alive',
