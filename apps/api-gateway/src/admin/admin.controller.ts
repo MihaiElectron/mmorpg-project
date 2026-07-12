@@ -1,6 +1,8 @@
 import { BadRequestException, Controller, Delete, Get, Patch, Post, Put, Param, Body, Query, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreaturesService } from '../creatures/creatures.service';
+import { CreatureAbilitiesService } from '../creatures/creature-abilities.service';
+import { ReplaceCreatureAbilitiesDto } from '../creatures/dto/creature-ability.dto';
 import { ResourcesService } from '../resources/resources.service';
 import { BuildingsService } from '../buildings/buildings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -32,6 +34,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly creaturesService: CreaturesService,
+    private readonly creatureAbilitiesService: CreatureAbilitiesService,
     private readonly resourcesService: ResourcesService,
     private readonly buildingsService: BuildingsService,
     private readonly derivedStatsService: DerivedStatsService,
@@ -72,6 +75,24 @@ export class AdminController {
     const info = this.creaturesService.getRuntimeCombatInfo(id);
     if (!info) throw new NotFoundException(`Créature vivante "${id}" introuvable.`);
     return info;
+  }
+
+  /**
+   * Capacités configurables d'un CreatureTemplate (V5-A) — association de skills
+   * existants au template. Lecture + remplacement de liste. Aucun déclenchement
+   * combat : config uniquement. 404 si le template n'existe pas.
+   */
+  @Get('templates/:key/abilities')
+  getTemplateAbilities(@Param('key') key: string) {
+    return this.creatureAbilitiesService.listForTemplate(key);
+  }
+
+  @Put('templates/:key/abilities')
+  replaceTemplateAbilities(
+    @Param('key') key: string,
+    @Body() body: ReplaceCreatureAbilitiesDto,
+  ) {
+    return this.creatureAbilitiesService.replaceForTemplate(key, body.abilities);
   }
 
   // ── Créatures ─────────────────────────────────────────────────────────────

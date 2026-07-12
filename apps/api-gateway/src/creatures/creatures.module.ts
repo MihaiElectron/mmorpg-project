@@ -3,8 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
+import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
+import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { CreaturesGateway } from './creatures.gateway';
 import { CreaturesService } from './creatures.service';
+import { CreatureAbilitiesService } from './creature-abilities.service';
 import { Character } from '../characters/entities/character.entity';
 import { CommonModule } from '../common/common.module';
 import { WorldModule } from '../world/world.module';
@@ -18,7 +21,14 @@ import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Creature, CreatureTemplate, CreatureSpawn, Character]),
+    TypeOrmModule.forFeature([
+      Creature,
+      CreatureTemplate,
+      CreatureSpawn,
+      CreatureTemplateSkill,
+      SkillDefinition,
+      Character,
+    ]),
     CommonModule,
     WorldModule,
     ProgressionModule,
@@ -28,7 +38,7 @@ import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
     ItemMaterializationModule,
     DerivedStatsModule,
   ],
-  providers: [CreaturesGateway, CreaturesService, LootService],
-  exports: [CreaturesService],
+  providers: [CreaturesGateway, CreaturesService, CreatureAbilitiesService, LootService],
+  exports: [CreaturesService, CreatureAbilitiesService],
 })
 export class CreaturesModule {}

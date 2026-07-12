@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDevToolsStore } from "../../store/devtools.store";
+import CreatureAbilitiesEditor from "./CreatureAbilitiesEditor";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -175,6 +176,10 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             {data.hasLootPool ? `${data.lootPoolSize} entrée(s)` : "aucune"}
           </Row>
         </dl>
+      )}
+
+      {status === "loaded" && data && (
+        <CreatureAbilitiesEditor templateKey={data.templateKey} />
       )}
     </section>
   );

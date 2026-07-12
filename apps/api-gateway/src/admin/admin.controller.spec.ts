@@ -32,11 +32,12 @@ describe('AdminController — movement metrics', () => {
       },
       controller: new AdminController(
         adminService as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
+        {} as any, // creaturesService
+        {} as any, // creatureAbilitiesService (V5-A)
+        {} as any, // resourcesService
+        {} as any, // buildingsService
+        {} as any, // derivedStatsService
+        {} as any, // activeSkillsService
         { getMasteryEffectTargets: jest.fn().mockResolvedValue(STANDARD_TARGETS) } as any,
       ),
     };
