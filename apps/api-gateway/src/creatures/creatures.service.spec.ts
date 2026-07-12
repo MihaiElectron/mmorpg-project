@@ -2251,5 +2251,100 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(ev.skillName).toBeUndefined();
       expect(ev.amount).toBe(5);
     });
+
+    // ─── Cycle de cooldown (temps contrôlé via le param `now` de doFighting) ───
+    const SHORT = {
+      skillKey: "fireball",
+      skillName: "Boule de feu",
+      displayOrder: 0,
+      rangeWU: 5000,
+      cooldownMs: 1000,
+      damageType: "physical" as const,
+      scaling: { derivedCoefficients: { physicalAttack: 2 } },
+    };
+    function combatSetup() {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      const player = makePlayer(6080 + 1000, 12480); // en portée skill
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100000, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0 });
+      return creature;
+    }
+    const skillEvents = (emits: any[]) =>
+      emits.filter((e) => e.event === "combat:event" && e.payload.type === "damage" && e.payload.skillName);
+
+    // Cas A/D : le skill est relancé après expiration du cooldown (pas 1 seule fois).
+    it("Cas A/D : recast après expiration du cooldown sur plusieurs fenêtres d'action", async () => {
+      const creature = combatSetup();
+      (service as any).damageAbilityCache.set("turkey", [SHORT]);
+      const emits: { event: string; payload: any }[] = [];
+      const server = captureServer(emits);
+      const T = 1_000_000;
+
+      // T : 1er cast (cd vide → dispo, fenêtre d'action ouverte).
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(7080, 12480)], T, server);
+      // T+500 : fenêtre d'action fermée (< 1500) → aucun nouveau cast.
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(7080, 12480)], T + 500, server);
+      // T+1500 : fenêtre ouverte ET cooldown expiré (1500 ≥ 1000) → recast.
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(7080, 12480)], T + 1500, server);
+      // T+3000 : encore un recast (combat long).
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(7080, 12480)], T + 3000, server);
+
+      const casts = skillEvents(emits);
+      expect(casts.length).toBe(3); // 3 casts, PAS un seul
+      expect(casts.every((e) => e.payload.skillName === "Boule de feu")).toBe(true);
+    });
+
+    // Cas A : entre deux casts, le skill est bien ignoré tant qu'il est en cooldown.
+    it("Cas A : skill sauté pendant le cooldown (fenêtre ouverte mais cd non expiré)", async () => {
+      const creature = combatSetup();
+      // cd long (5000) → à la 2e fenêtre (1500) le skill est encore en cooldown.
+      (service as any).damageAbilityCache.set("turkey", [{ ...SHORT, cooldownMs: 5000 }]);
+      const emits: { event: string; payload: any }[] = [];
+      const server = captureServer(emits);
+      const T = 2_000_000;
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6580, 12480)], T, server); // cast
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6580, 12480)], T + 1500, server); // cd non expiré → fallback
+      const casts = skillEvents(emits);
+      expect(casts.length).toBe(1); // toujours en cooldown à T+1500
+      // à T+5000 : cd expiré → recast
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6580, 12480)], T + 5000, server);
+      expect(skillEvents(emits).length).toBe(2);
+    });
+
+    // Cas C : capacité A en cooldown → capacité B disponible est choisie.
+    it("Cas C : A en cooldown → B disponible choisie (ordre respecté)", () => {
+      const A = { ...SHORT, skillKey: "a", displayOrder: 0, cooldownMs: 5000 };
+      const B = { ...SHORT, skillKey: "b", displayOrder: 1, cooldownMs: 1000 };
+      const now = 3_000_000;
+      (service as any).creatureSkillCooldowns.set("c1", new Map([["a", now]])); // A vient d'être castée
+      const chosen = (service as any).pickCreatureDamageAbility("c1", [A, B], 1000, now + 1500);
+      expect(chosen?.skillKey).toBe("b"); // A sautée (cd), B choisie
+    });
+
+    // Cas B : getRuntimeCombatInfo — cooldownRemainingMs diminue puis s'annule.
+    it("Cas B : cooldownRemainingMs décrémente et onCooldown repasse à false", async () => {
+      const creature = makeCreature({ state: "fighting", health: 20 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).damageAbilityCache.set("turkey", [SHORT]); // cooldownMs 1000
+
+      // Vient de caster (lastCast = maintenant) → onCooldown true, remaining ~1000.
+      (service as any).creatureSkillCooldowns.set(creature.id, new Map([["fireball", Date.now()]]));
+      const t0 = await service.getRuntimeCombatInfo(creature.id);
+      const a0 = t0!.abilities!.find((a) => a.skillKey === "fireball")!;
+      expect(a0.onCooldown).toBe(true);
+      expect(a0.cooldownRemainingMs).toBeGreaterThan(0);
+      expect(a0.cooldownRemainingMs).toBeLessThanOrEqual(1000);
+
+      // Cast il y a > cooldownMs → expiré : remaining 0, onCooldown false.
+      (service as any).creatureSkillCooldowns.set(creature.id, new Map([["fireball", Date.now() - 1500]]));
+      const t1 = await service.getRuntimeCombatInfo(creature.id);
+      const a1 = t1!.abilities!.find((a) => a.skillKey === "fireball")!;
+      expect(a1.onCooldown).toBe(false);
+      expect(a1.cooldownRemainingMs).toBe(0);
+    });
   });
 });
