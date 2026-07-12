@@ -45,6 +45,10 @@ export interface SkillCastSuccess {
   killed: boolean;
   /** V4-F : true si la créature a esquivé (toujours false — pas de dodge créature). */
   isDodged: boolean;
+  /** V4-H : true si la créature a bloqué (toujours false — pas de block créature). */
+  isBlocked: boolean;
+  /** V4-H : dégâts absorbés par le blocage (0 si non bloqué). */
+  blockedDamage: number;
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -343,6 +347,8 @@ export class SkillCastService {
       isCritical: result.isCritical,
       killed: result.killed,
       isDodged: result.isDodged,
+      isBlocked: result.isBlocked,
+      blockedDamage: result.blockedDamage,
       cooldownMs: skill.cooldownMs,
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,

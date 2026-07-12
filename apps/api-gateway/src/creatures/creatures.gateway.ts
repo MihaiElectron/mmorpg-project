@@ -96,6 +96,8 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
       targetName: result.dto.name,
       targetDied: result.killed,
       isDodged: result.isDodged,
+      isBlocked: result.isBlocked,
+      blockedDamage: result.blockedDamage,
     }));
     if (result.killed) {
       this.server.to(creatureRoom).emit(COMBAT_EVENT, makeCombatEvent({
@@ -138,6 +140,8 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
         worldY: player.worldY ?? 0,
         text: `-${result.riposte.damage}`,
         isDodged: result.riposte.isDodged,
+        isBlocked: result.riposte.isBlocked,
+        blockedDamage: result.riposte.blockedDamage,
       }));
     }
 

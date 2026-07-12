@@ -184,4 +184,31 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
     });
   });
+
+  // ── V4-H : blocage exposé comme target permanent ──────────────────────────
+  describe('blocage (V4-H)', () => {
+    const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+
+    it('blockChance et blockReductionPercent sont exposées comme targets (2 modes)', () => {
+      for (const key of ['blockChance', 'blockReductionPercent']) {
+        const t = targets.find((x) => x.key === key);
+        expect(t).toBeDefined();
+        expect(t!.runtimeStatus).toBe('implemented');
+        expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+      }
+    });
+
+    it("parryChance reste NON exposée (hors scope V4-H)", () => {
+      expect(targets.find((x) => x.key === 'parryChance')).toBeUndefined();
+    });
+
+    it("blockReductionPercent a une baseValue de 25 % (un blocage absorbe 25 % par défaut)", () => {
+      const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === 'blockReductionPercent');
+      expect(def).toBeDefined();
+      expect(def!.baseValue).toBe(25);
+      expect(def!.minValue).toBe(0);
+      expect(def!.maxValue).toBe(100);
+      expect(def!.category).toBe('defensive');
+    });
+  });
 });

@@ -58,6 +58,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isCritical: false,
       killed: false,
       isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
     });
     const client = makeClient();
 
@@ -83,6 +85,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       worldX: 6080,
       worldY: 12480,
       text: '-8',
+      isBlocked: false,
+      blockedDamage: 0,
     });
     expect(typeof dmgEvents[0].payload.id).toBe('string');
     expect(typeof dmgEvents[0].payload.createdAt).toBe('number');
@@ -107,6 +111,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isCritical: false,
       killed: true,
       isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
     });
     const client = makeClient();
 
@@ -134,7 +140,9 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isCritical: false,
       killed: false,
       isDodged: false,
-      riposte: { damage: 3, characterHealth: 97, isDodged: false },
+      isBlocked: false,
+      blockedDamage: 0,
+      riposte: { damage: 3, characterHealth: 97, isDodged: false, isBlocked: false, blockedDamage: 0 },
     });
     const client = makeClient();
 
@@ -159,6 +167,39 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       worldX: 100,
       worldY: 200,
       text: '-3',
+      isBlocked: false,
+      blockedDamage: 0,
+    });
+  });
+
+  it('propage isBlocked/blockedDamage dans le combat:event de riposte quand le joueur bloque', async () => {
+    const { gw, roomEmits } = makeGateway({
+      success: true,
+      dto: { ...CREATURE_DTO },
+      damage: 8,
+      attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      riposte: { damage: 2, characterHealth: 98, isDodged: false, isBlocked: true, blockedDamage: 2 },
+    });
+    const client = makeClient();
+
+    await (gw as any).onAttackCreature(client, { targetId: 'creature-1' });
+
+    const playerHit = roomEmits.filter(
+      (e) => e.event === COMBAT_EVENT && e.payload.type === 'damage' && e.payload.targetType === 'player',
+    );
+    expect(playerHit).toHaveLength(1);
+    expect(playerHit[0].payload).toMatchObject({
+      targetType: 'player',
+      targetId: 'char-1',
+      amount: 2,
+      isDodged: false,
+      isBlocked: true,
+      blockedDamage: 2,
     });
   });
 });

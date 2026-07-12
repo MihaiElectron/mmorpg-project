@@ -469,4 +469,126 @@ describe('calculateCombatDamage', () => {
       expect(r.finalDamage).toBe(130);
     });
   });
+
+  // ── V4-H : blocage (après esquive/critique/armure, physical) ───────────────
+  describe('blocage (V4-H)', () => {
+    const base = {
+      attackerValue: 100,
+      targetDefense: 40,
+      minimumAttack: 0,
+      minimumDamage: 0,
+      hpBefore: 1000,
+    };
+
+    it('blockChance 0 (défaut) → jamais de blocage, dégâts inchangés', () => {
+      const r = calculateCombatDamage({ ...base, rng: () => 0 });
+      expect(r.isBlocked).toBe(false);
+      expect(r.blockedDamage).toBe(0);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('blocage réussi → réduction appliquée sur les dégâts après armure', () => {
+      // damageAfterArmor = 100 − 40 = 60 ; blocage 50 % → 30, absorbé 30.
+      const r = calculateCombatDamage({
+        ...base,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 50,
+        rng: () => 0, // pas d'esquive (0), pas de crit (0), blocage (100 %)
+      });
+      expect(r.isBlocked).toBe(true);
+      expect(r.finalDamage).toBe(30);
+      expect(r.blockedDamage).toBe(30);
+    });
+
+    it('roll au-dessus du seuil → pas de blocage', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderBlockChancePercent: 25,
+        defenderBlockReductionPercent: 50,
+        rng: () => 0.5, // 0.5 >= 0.25
+      });
+      expect(r.isBlocked).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it("blocage APRÈS armure : réduit les dégâts déjà mitigés par l'armure", () => {
+      // armure effective 20 (pen 50) → damageAfterArmor 80 ; blocage 25 % → 60.
+      const r = calculateCombatDamage({
+        ...base,
+        armorPenetrationPercent: 50,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 25,
+        rng: () => 0,
+      });
+      expect(r.effectiveArmor).toBe(20);
+      expect(r.isBlocked).toBe(true);
+      expect(r.finalDamage).toBe(60); // round(80 × 0.75)
+      expect(r.blockedDamage).toBe(20);
+    });
+
+    it('ne bloque pas les dégâts déjà à 0 (armure ≥ attaque, minimumDamage 0)', () => {
+      const r = calculateCombatDamage({
+        attackerValue: 30,
+        targetDefense: 100,
+        minimumAttack: 0,
+        minimumDamage: 0,
+        hpBefore: 1000,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 50,
+        rng: () => 0,
+      });
+      expect(r.finalDamage).toBe(0);
+      expect(r.isBlocked).toBe(false);
+      expect(r.blockedDamage).toBe(0);
+    });
+
+    it('raw ignore le blocage', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        damageType: 'raw',
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 50,
+        rng: () => 0,
+      });
+      expect(r.isBlocked).toBe(false);
+      expect(r.finalDamage).toBe(100); // raw ignore armure ET blocage
+    });
+
+    it('un hit esquivé ne peut pas être bloqué (0 dégât, isBlocked false)', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 100,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 50,
+        rng: () => 0, // esquive court-circuite avant le blocage
+      });
+      expect(r.isDodged).toBe(true);
+      expect(r.isBlocked).toBe(false);
+      expect(r.finalDamage).toBe(0);
+    });
+
+    it('blockReduction 100 % → dégâts entièrement absorbés', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isBlocked).toBe(true);
+      expect(r.finalDamage).toBe(0);
+      expect(r.blockedDamage).toBe(60);
+    });
+
+    it('blockReduction négatif / NaN → 0 (blocage sans effet)', () => {
+      const neg = calculateCombatDamage({
+        ...base,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: -50,
+        rng: () => 0,
+      });
+      expect(neg.isBlocked).toBe(true);
+      expect(neg.finalDamage).toBe(60); // réduction 0
+      expect(neg.blockedDamage).toBe(0);
+    });
+  });
 });

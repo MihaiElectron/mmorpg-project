@@ -21,9 +21,13 @@
  *     effectiveArmor = physical ? max(0, round(targetDefense × (1 − ratio))) : 0
  *
  *   RÉSOLUTION :
- *     rawDamage   = attackPowerFinal − effectiveArmor
- *     finalDamage = max(rawDamage, minimumDamage)
- *     hpAfter     = max(hpBefore − finalDamage, 0)
+ *     rawDamage       = attackPowerFinal − effectiveArmor
+ *     damageAfterArmor = max(rawDamage, minimumDamage)
+ *     BLOCAGE (V4-H, physical, dégâts > 0, après armure) :
+ *       si blocage : finalDamage = round(damageAfterArmor × (1 − blockReduction/100))
+ *                    blockedDamage = damageAfterArmor − finalDamage
+ *       sinon      : finalDamage = damageAfterArmor
+ *     hpAfter = max(hpBefore − finalDamage, 0)
  *
  * `armorPenetrationPercent` défaut 0 et `damageType` défaut `physical` → à 0 %,
  * `effectiveArmor = targetDefense` (comportement historique). `criticalChancePercent`
@@ -87,8 +91,21 @@ export interface CombatDamageInput {
    */
   attackerAccuracyPercent?: number;
   /**
+   * Chance de blocage du DÉFENSEUR en POURCENTAGE (V4-H, stat dérivée
+   * `blockChance`). Évaluée APRÈS esquive, critique et armure, sur les dégâts
+   * physiques restants (> 0). Clampée 0–100, NaN → 0. Défaut 0. Ignorée si raw
+   * ou si les dégâts après armure sont déjà 0.
+   */
+  defenderBlockChancePercent?: number;
+  /**
+   * Pourcentage de réduction appliqué QUAND un blocage réussit (V4-H, stat
+   * dérivée `blockReductionPercent`). `finalDamage = round(dmg × (1 − r/100))`.
+   * Clampée 0–100, NaN → 0. Défaut 0 (blocage sans effet).
+   */
+  defenderBlockReductionPercent?: number;
+  /**
    * Générateur aléatoire injectable renvoyant [0, 1). Défaut `Math.random`.
-   * Fourni par les tests pour un roll déterministe (esquive puis critique).
+   * Fourni par les tests pour un roll déterministe (esquive → critique → blocage).
    * Serveur uniquement.
    */
   rng?: () => number;
@@ -115,6 +132,12 @@ export interface CombatDamageResult {
   /** Valeur d'attaque après bloc attaque (critique inclus), avant armure. */
   attackPowerFinal: number;
   rawDamage: number;
+  /** V4-H : true si le défenseur a bloqué (dégâts réduits). */
+  isBlocked: boolean;
+  defenderBlockChancePercent: number;
+  defenderBlockReductionPercent: number;
+  /** V4-H : montant absorbé par le blocage (0 si non bloqué). */
+  blockedDamage: number;
   finalDamage: number;
   hpBefore: number;
   hpAfter: number;
@@ -157,6 +180,20 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     100,
     Math.max(0, defenderDodgeChancePercent - attackerAccuracyPercent),
   );
+
+  // Stats de blocage du défenseur (V4-H) — sanitizées ici, appliquées après
+  // l'armure. NaN/Infinity/négatif → 0, bornées 0–100.
+  const rawBlockChance = input.defenderBlockChancePercent;
+  const defenderBlockChancePercent =
+    typeof rawBlockChance === 'number' && Number.isFinite(rawBlockChance)
+      ? Math.min(100, Math.max(0, rawBlockChance))
+      : 0;
+  const rawBlockReduction = input.defenderBlockReductionPercent;
+  const defenderBlockReductionPercent =
+    typeof rawBlockReduction === 'number' && Number.isFinite(rawBlockReduction)
+      ? Math.min(100, Math.max(0, rawBlockReduction))
+      : 0;
+
   const isDodged =
     effectiveDodgeChancePercent > 0 && rng() < effectiveDodgeChancePercent / 100;
   if (isDodged) {
@@ -176,6 +213,10 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       criticalDamagePercent,
       attackPowerFinal: 0,
       rawDamage: 0,
+      isBlocked: false,
+      defenderBlockChancePercent,
+      defenderBlockReductionPercent,
+      blockedDamage: 0,
       finalDamage: 0,
       hpBefore,
       hpAfter: hpBefore,
@@ -202,7 +243,24 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
 
   // ── Résolution ─────────────────────────────────────────────────────────────
   const rawDamage = attackPowerFinal - effectiveArmor;
-  const finalDamage = Math.max(rawDamage, minimumDamage);
+  const damageAfterArmor = Math.max(rawDamage, minimumDamage);
+
+  // ── Blocage (V4-H) : après esquive + critique + armure, sur les dégâts
+  // physiques restants (> 0). raw ignore le blocage. Le roll suit le critique.
+  let isBlocked = false;
+  let finalDamage = damageAfterArmor;
+  let blockedDamage = 0;
+  if (
+    damageType === 'physical' &&
+    damageAfterArmor > 0 &&
+    defenderBlockChancePercent > 0 &&
+    rng() < defenderBlockChancePercent / 100
+  ) {
+    isBlocked = true;
+    finalDamage = Math.round(damageAfterArmor * (1 - defenderBlockReductionPercent / 100));
+    blockedDamage = damageAfterArmor - finalDamage;
+  }
+
   const hpAfter = Math.max(hpBefore - finalDamage, 0);
 
   return {
@@ -221,6 +279,10 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     criticalDamagePercent,
     attackPowerFinal,
     rawDamage,
+    isBlocked,
+    defenderBlockChancePercent,
+    defenderBlockReductionPercent,
+    blockedDamage,
     finalDamage,
     hpBefore,
     hpAfter,

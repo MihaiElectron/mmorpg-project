@@ -86,7 +86,20 @@ export type AttackSuccess = {
    * aujourd'hui (les créatures n'ont pas de `dodgeChance`) — plomberie prête.
    */
   isDodged: boolean;
-  riposte?: { damage: number; characterHealth: number; isDodged: boolean };
+  /**
+   * V4-H : true si le défenseur a bloqué le hit. Toujours false pour un hit
+   * joueur → créature (les créatures n'ont pas de `blockChance`) — plomberie prête.
+   */
+  isBlocked: boolean;
+  /** V4-H : dégâts absorbés par le blocage (0 si non bloqué). */
+  blockedDamage: number;
+  riposte?: {
+    damage: number;
+    characterHealth: number;
+    isDodged: boolean;
+    isBlocked: boolean;
+    blockedDamage: number;
+  };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
   masteryUpdate?: MasteryUpdatePayload;
@@ -670,7 +683,15 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    let riposte: { damage: number; characterHealth: number; isDodged: boolean } | undefined;
+    let riposte:
+      | {
+          damage: number;
+          characterHealth: number;
+          isDodged: boolean;
+          isBlocked: boolean;
+          blockedDamage: number;
+        }
+      | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       // Riposte : aucun plancher d'attaque (minimumAttack = 0), plancher dégâts 1.
       // V4-F : le joueur est le DÉFENSEUR → sa `dodgeChance` peut esquiver la
@@ -682,6 +703,9 @@ export class CreaturesService implements OnModuleInit {
         // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
         // Le joueur défenseur esquive comme en V4-F (comportement identique).
         attackerAccuracyPercent: 0,
+        // V4-H : le joueur défenseur peut BLOQUER la riposte (réduction des dégâts).
+        defenderBlockChancePercent: charStats.derived.blockChance ?? 0,
+        defenderBlockReductionPercent: charStats.derived.blockReductionPercent ?? 0,
         minimumAttack: 0,
         minimumDamage: 1,
         hpBefore: character.health,
@@ -689,13 +713,19 @@ export class CreaturesService implements OnModuleInit {
       const riposteDamage = riposteResult.finalDamage;
       const characterHealth = riposteResult.hpAfter;
       await this.characterRepository.update(characterId, { health: characterHealth });
-      riposte = { damage: riposteDamage, characterHealth, isDodged: riposteResult.isDodged };
+      riposte = {
+        damage: riposteDamage,
+        characterHealth,
+        isDodged: riposteResult.isDodged,
+        isBlocked: riposteResult.isBlocked,
+        blockedDamage: riposteResult.blockedDamage,
+      };
       if (characterHealth === 0 && this.server) {
         await this.worldService.respawnCharacter(characterId, this.server);
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, riposte, loot, characterXpUpdate, masteryUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, riposte, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**
@@ -813,7 +843,7 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, loot, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, loot, characterXpUpdate };
   }
 
   private resolveCombatMasteryKey(character: Character): string | null {

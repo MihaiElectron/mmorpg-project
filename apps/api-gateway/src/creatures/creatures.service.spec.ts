@@ -459,6 +459,35 @@ describe('CreaturesService', () => {
           expect(result.riposte?.characterHealth).toBe(100);
         }
       });
+
+      // ── V4-H : le joueur défenseur peut BLOQUER la riposte ──────────────────
+      it("riposte bloquée (blockChance 100, réduction 50 %) → dégâts riposte réduits de moitié", async () => {
+        // Riposte non esquivée : attackPower créature 5 − défense joueur 3 = 2
+        // (plancher 1 → 2). blockChance 100 → bloqué. Réduction = baseValue 25 %
+        // (défaut de blockReductionPercent) + mastery flat 25 % = 50 % →
+        // round(2 × 0.5) = 1, blockedDamage = 2 − 1 = 1.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: {
+            percent: {},
+            flat: { blockChance: 100, blockReductionPercent: 25 },
+          },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isDodged).toBe(false);
+          expect(result.riposte?.isBlocked).toBe(true);
+          expect(result.riposte?.damage).toBe(1); // 2 → round(2 × 0.5) = 1
+          expect(result.riposte?.blockedDamage).toBe(1);
+          expect(result.riposte?.characterHealth).toBe(99);
+        }
+      });
     });
 
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────

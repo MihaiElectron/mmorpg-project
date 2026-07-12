@@ -89,6 +89,7 @@ export interface DerivedStats {
   dodgeChance: number;
   parryChance: number;
   blockChance: number;
+  blockReductionPercent: number;
   attackSpeed: number;
   movementSpeed: number;
   controlResistance: number;

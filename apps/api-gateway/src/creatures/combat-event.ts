@@ -32,6 +32,10 @@ export interface CombatEvent {
   targetDied?: boolean;
   /** V4-F : true si le défenseur a esquivé le hit (0 dégât). */
   isDodged?: boolean;
+  /** V4-H : true si le défenseur a bloqué le hit (dégâts réduits, physique). */
+  isBlocked?: boolean;
+  /** V4-H : montant absorbé par le blocage (0 si non bloqué). */
+  blockedDamage?: number;
   createdAt: number;
 }
 
@@ -50,6 +54,8 @@ export interface CombatEventInput {
   targetName?: string;
   targetDied?: boolean;
   isDodged?: boolean;
+  isBlocked?: boolean;
+  blockedDamage?: number;
 }
 
 /** Construit un CombatEvent en remplissant `id` (unique) et `createdAt`. */

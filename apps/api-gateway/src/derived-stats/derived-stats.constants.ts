@@ -73,6 +73,9 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   'dodgeChance',
   // V4-G : précision de l'attaquant — réduit l'esquive effective du défenseur.
   'accuracy',
+  // V4-H : blocage du défenseur (après esquive/critique/armure, physical seul).
+  'blockChance',
+  'blockReductionPercent',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [
@@ -164,6 +167,17 @@ export const DEFAULT_DERIVED_STAT_DEFINITIONS: DerivedStatDefinition[] = [
   def('blockChance', 'Blocage', 'defensive', 16, {
     primaryCoefficients: { endurance: 0.2, strength: 0.1 },
     maxValue: 40,
+  }),
+  // V4-H : pourcentage des dégâts (post-armure) réduits QUAND un blocage réussit.
+  // baseValue 25 → un blocage réussi absorbe 25 % par défaut. Borné 0–100, sans
+  // coefficient primaire (vient de l'équipement/maîtrises).
+  def('blockReductionPercent', 'Réduction de blocage', 'defensive', 26, {
+    baseValue: 25,
+    minValue: 0,
+    maxValue: 100,
+    primaryCoefficients: {},
+    description:
+      'Pourcentage des dégâts restants absorbés lorsqu\'un blocage réussit (physique).',
   }),
 
   // ── Résistances élémentaires ────────────────────────────────────────────
