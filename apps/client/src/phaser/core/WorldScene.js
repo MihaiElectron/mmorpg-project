@@ -24,6 +24,7 @@ import { getAutoAttackRangeDecision } from "../combat/autoAttackDecision";
 import {
   formatFloatingCombatText,
   resolveFloatingColor,
+  resolveFloatingFontStyle,
   showFloatingCombatText,
 } from "../combat/floatingText";
 import {
@@ -1254,6 +1255,7 @@ export default class WorldScene extends Phaser.Scene {
         fallbackY: fallback.y,
         offsetY: -40, // au-dessus de l'entité
         color: resolveFloatingColor(event),
+        fontStyle: resolveFloatingFontStyle(event), // V4-E : crit → italique
       });
     });
 

@@ -24,6 +24,12 @@ export interface CombatEvent {
   text?: string;
   /** Nom du skill à l'origine des dégâts (absent pour une auto-attaque). */
   skillName?: string;
+  /** V4-E : true si le hit est un coup critique (info serveur, feedback client). */
+  isCritical?: boolean;
+  /** V4-E : nom lisible de la cible (ex. "Turkey") pour le message de combat. */
+  targetName?: string;
+  /** V4-E : true si ce hit a tué la cible (message de mort lié au dernier hit). */
+  targetDied?: boolean;
   createdAt: number;
 }
 
@@ -38,6 +44,9 @@ export interface CombatEventInput {
   worldY: number;
   text?: string;
   skillName?: string;
+  isCritical?: boolean;
+  targetName?: string;
+  targetDied?: boolean;
 }
 
 /** Construit un CombatEvent en remplissant `id` (unique) et `createdAt`. */

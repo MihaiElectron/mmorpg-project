@@ -21,6 +21,22 @@ describe("formatCombatLogMessage", () => {
     expect(msg).toBe("Vous infligez 8 dégâts à turkey");
   });
 
+  it("V4-E : coup critique du joueur local sur une créature", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 86, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isCritical: true },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez un coup critique à turkey : 86 dégâts");
+  });
+
+  it("V4-E : coup critique avec skill (suffixe conservé)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 90, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isCritical: true, skillName: "strike" },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez un coup critique à turkey avec strike : 90 dégâts");
+  });
+
   it("créature nommée inflige des dégâts au joueur local", () => {
     const msg = formatCombatLogMessage(
       { type: "damage", amount: 3, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },
@@ -45,12 +61,28 @@ describe("formatCombatLogMessage", () => {
     expect(msg).toBe("Vous infligez 8 dégâts à turkey");
   });
 
-  it("mort d'une créature nommée", () => {
+  it("mort d'une créature nommée (sans montant) → succombe", () => {
     const msg = formatCombatLogMessage(
       { type: "death", sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
       opts,
     );
-    expect(msg).toBe("turkey est mort");
+    expect(msg).toBe("turkey succombe");
+  });
+
+  it("V4-E : mort liée au dernier hit (montant fourni)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "death", sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", amount: 86 },
+      opts,
+    );
+    expect(msg).toBe("turkey succombe après avoir subi 86 dégâts");
+  });
+
+  it("V4-E : mort après un coup critique", () => {
+    const msg = formatCombatLogMessage(
+      { type: "death", sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", amount: 86, isCritical: true },
+      opts,
+    );
+    expect(msg).toBe("turkey succombe après avoir subi un coup critique de 86 dégâts");
   });
 
   it("mort du joueur local", () => {

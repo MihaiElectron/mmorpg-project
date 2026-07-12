@@ -39,6 +39,10 @@ export interface SkillCastSuccess {
   dto: CreatureDto;
   damage: number;
   attackerId: string;
+  /** V4-E : true si le hit de skill est un coup critique (info serveur). */
+  isCritical: boolean;
+  /** V4-E : true si le hit de skill a tué la créature. */
+  killed: boolean;
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -332,6 +336,8 @@ export class SkillCastService {
       dto: result.dto,
       damage: result.damage,
       attackerId: result.attackerId,
+      isCritical: result.isCritical,
+      killed: result.killed,
       cooldownMs: skill.cooldownMs,
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,

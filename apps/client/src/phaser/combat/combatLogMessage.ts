@@ -46,11 +46,18 @@ export function formatCombatLogMessage(
   if (!event || typeof event !== "object") return null;
 
   if (event.type === "death") {
-    const target = actorLabel(event.targetType, event.targetId, opts, { subject: true });
     if (isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId)) {
       return "Vous êtes mort";
     }
-    return `${target} est mort`;
+    const target = actorLabel(event.targetType, event.targetId, opts, { subject: true });
+    // V4-E : mort liée au dernier hit (montant + éventuel critique) si fournis.
+    const hasAmount =
+      typeof event.amount === "number" && Number.isFinite(event.amount) && event.amount > 0;
+    if (hasAmount) {
+      const critPart = event.isCritical ? "un coup critique de " : "";
+      return `${target} succombe après avoir subi ${critPart}${event.amount} dégâts`;
+    }
+    return `${target} succombe`;
   }
 
   if (event.type === "damage") {
@@ -63,21 +70,28 @@ export function formatCombatLogMessage(
       typeof event.skillName === "string" && event.skillName.length > 0
         ? ` avec ${event.skillName}`
         : "";
+    const crit = event.isCritical === true; // V4-E : info serveur fiable
 
     const sourceLocal = isLocalPlayer(event.sourceType, event.sourceId, opts.localCharacterId);
     const targetLocal = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId);
 
     if (sourceLocal) {
       const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
-      return `Vous infligez ${amount} dégâts à ${target}${withSkill}`;
+      return crit
+        ? `Vous infligez un coup critique à ${target}${withSkill} : ${amount} dégâts`
+        : `Vous infligez ${amount} dégâts à ${target}${withSkill}`;
     }
     if (targetLocal) {
       const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
-      return `${source} vous inflige ${amount} dégâts${withSkill}`;
+      return crit
+        ? `${source} vous inflige un coup critique${withSkill} : ${amount} dégâts`
+        : `${source} vous inflige ${amount} dégâts${withSkill}`;
     }
     const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
     const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
-    return `${source} inflige ${amount} dégâts à ${target}${withSkill}`;
+    return crit
+      ? `${source} inflige un coup critique à ${target}${withSkill} : ${amount} dégâts`
+      : `${source} inflige ${amount} dégâts à ${target}${withSkill}`;
   }
 
   return null;

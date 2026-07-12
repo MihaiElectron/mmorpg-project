@@ -21,6 +21,12 @@ export interface CombatEventPayload {
   text?: string;
   /** Nom du skill à l'origine des dégâts (absent pour une auto-attaque). */
   skillName?: string;
+  /** V4-E : true si le hit est un coup critique (info serveur). */
+  isCritical?: boolean;
+  /** V4-E : nom lisible de la cible. */
+  targetName?: string;
+  /** V4-E : true si ce hit a tué la cible. */
+  targetDied?: boolean;
   createdAt?: number;
 }
 
@@ -28,6 +34,7 @@ export interface CombatEventPayload {
 export const FLOATING_COLORS = {
   damageToPlayer: "#ff5b5b", // le joueur encaisse : rouge vif
   damageToCreature: "#ffe066", // le joueur inflige : jaune
+  critical: "#ff3b3b", // coup critique : rouge (distinct du jaune normal)
   death: "#c0c0c0", // mort : gris
 } as const;
 
@@ -55,11 +62,17 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
   return null;
 }
 
-/** Couleur du texte selon type/cible. */
+/** Couleur du texte selon type/cible. Un coup critique (dégâts) passe en rouge. */
 export function resolveFloatingColor(event: CombatEventPayload): string {
   if (event.type === "death") return FLOATING_COLORS.death;
   if (event.targetType === "player") return FLOATING_COLORS.damageToPlayer;
+  if (event.isCritical) return FLOATING_COLORS.critical; // V4-E : crit → rouge
   return FLOATING_COLORS.damageToCreature;
+}
+
+/** Style de police : italique pour un coup critique, gras sinon (V4-E). */
+export function resolveFloatingFontStyle(event: CombatEventPayload): string {
+  return event.type === "damage" && event.isCritical ? "bold italic" : "bold";
 }
 
 // Cap anti-spam très léger : nb max de textes simultanés par scène.
@@ -116,6 +129,7 @@ export function showFloatingCombatText(
     anchor?: FloatingAnchor | null;
     offsetY?: number;
     color?: string;
+    fontStyle?: string;
   },
 ): void {
   if (!scene || !options?.text) return;
@@ -135,7 +149,7 @@ export function showFloatingCombatText(
       color: options.color ?? FLOATING_COLORS.damageToCreature,
       stroke: "#000000",
       strokeThickness: 3,
-      fontStyle: "bold",
+      fontStyle: options.fontStyle ?? "bold",
     })
     .setOrigin(0.5)
     .setDepth(FLOATING_DEPTH);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatFloatingCombatText,
   resolveFloatingColor,
+  resolveFloatingFontStyle,
   resolveAnchorPosition,
   FLOATING_COLORS,
   FLOATING_TEXT_DURATION_MS,
@@ -90,5 +91,26 @@ describe("resolveFloatingColor", () => {
     expect(resolveFloatingColor({ type: "death", targetType: "creature" })).toBe(
       FLOATING_COLORS.death,
     );
+  });
+
+  it("V4-E : coup critique sur créature → rouge (distinct du jaune normal)", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "creature", isCritical: true }),
+    ).toBe(FLOATING_COLORS.critical);
+  });
+});
+
+describe("resolveFloatingFontStyle (V4-E)", () => {
+  it("coup critique (damage) → bold italic", () => {
+    expect(resolveFloatingFontStyle({ type: "damage", isCritical: true })).toBe("bold italic");
+  });
+
+  it("hit normal → bold", () => {
+    expect(resolveFloatingFontStyle({ type: "damage", isCritical: false })).toBe("bold");
+    expect(resolveFloatingFontStyle({ type: "damage" })).toBe("bold");
+  });
+
+  it("death (même critique) → bold (pas d'italique)", () => {
+    expect(resolveFloatingFontStyle({ type: "death", isCritical: true })).toBe("bold");
   });
 });

@@ -40,6 +40,7 @@ function makeClient(): WorldSocket & { emit: jest.Mock } {
 
 const CREATURE_DTO = {
   id: 'creature-1',
+  name: 'Turkey',
   worldX: 6080,
   worldY: 12480,
   mapId: 1,
@@ -54,6 +55,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       dto: { ...CREATURE_DTO },
       damage: 8,
       attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
     });
     const client = makeClient();
 
@@ -100,6 +103,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       dto: { ...CREATURE_DTO, state: 'dead', health: 0 },
       damage: 30,
       attackerId: 'char-1',
+      isCritical: false,
+      killed: true,
     });
     const client = makeClient();
 
@@ -112,7 +117,9 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       sourceType: 'player',
       targetType: 'creature',
       targetId: 'creature-1',
-      text: 'Mort',
+      amount: 30,
+      targetName: 'Turkey',
+      targetDied: true,
     });
   });
 
@@ -122,6 +129,8 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       dto: { ...CREATURE_DTO },
       damage: 8,
       attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
       riposte: { damage: 3, characterHealth: 97 },
     });
     const client = makeClient();

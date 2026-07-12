@@ -133,20 +133,27 @@ export class SkillsGateway implements OnGatewayConnection {
         worldY: result.dto.worldY ?? 0,
         text: `-${result.damage}`,
         skillName: result.skillName,
+        isCritical: result.isCritical,
+        targetName: result.dto.name,
+        targetDied: result.killed,
       }),
     );
-    if (result.dto.state === 'dead') {
+    if (result.killed) {
       this.server.to(room).emit(
         COMBAT_EVENT,
         makeCombatEvent({
           type: 'death',
+          amount: result.damage,
           sourceType: 'player',
           sourceId: result.attackerId,
           targetType: 'creature',
           targetId: result.dto.id,
           worldX: result.dto.worldX ?? 0,
           worldY: result.dto.worldY ?? 0,
-          text: 'Mort',
+          skillName: result.skillName,
+          isCritical: result.isCritical,
+          targetName: result.dto.name,
+          targetDied: true,
         }),
       );
     }

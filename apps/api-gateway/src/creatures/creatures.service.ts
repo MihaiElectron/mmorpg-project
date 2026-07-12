@@ -77,6 +77,10 @@ export type AttackSuccess = {
   dto: CreatureDto;
   damage: number;
   attackerId: string;
+  /** V4-E : true si ce hit est un coup critique (info serveur fiable). */
+  isCritical: boolean;
+  /** V4-E : true si ce hit a tué la créature (PV tombés à 0). */
+  killed: boolean;
   riposte?: { damage: number; characterHealth: number };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -676,7 +680,7 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, riposte, loot, characterXpUpdate, masteryUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, riposte, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**
@@ -789,7 +793,7 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, loot, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, loot, characterXpUpdate };
   }
 
   private resolveCombatMasteryKey(character: Character): string | null {
