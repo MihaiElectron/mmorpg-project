@@ -10,6 +10,11 @@ interface Ability {
   skillName: string | null;
   skillKind: string | null;
   skillEnabled: boolean | null;
+  // V5-C3 : métadonnées catalogue read-only (jamais renvoyées au PUT).
+  effectType: string | null;
+  damageType: string | null;
+  rangeWU: number | null;
+  cooldownMs: number | null;
   missing: boolean;
 }
 
@@ -24,6 +29,33 @@ type Status = "loading" | "loaded" | "error";
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem("token") ?? "";
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+/** Affiche une valeur read-only du catalogue, "—" si absente. Aucun calcul métier. */
+function val(v: string | number | null | undefined): string {
+  return v === null || v === undefined || v === "" ? "—" : String(v);
+}
+
+/** Ligne compacte de métadonnées catalogue (read-only serveur). */
+function metaLine(a: Ability): string {
+  return [
+    `Priorité ${a.displayOrder}`,
+    val(a.effectType),
+    val(a.damageType),
+    `portée ${a.rangeWU != null ? `${a.rangeWU} WU` : "—"}`,
+    `CD ${a.cooldownMs != null ? `${a.cooldownMs} ms` : "—"}`,
+  ].join(" · ");
+}
+
+/** Ligne d'état association + catalogue. */
+function stateLine(a: Ability): string {
+  const assoc = a.enabled ? "Association active" : "Association inactive";
+  const cat = a.missing
+    ? "Skill introuvable dans le catalogue"
+    : a.skillEnabled === false
+      ? "Skill désactivé dans le catalogue"
+      : "Skill catalogue actif";
+  return `${assoc} · ${cat}`;
 }
 
 /**
@@ -84,6 +116,11 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
         skillName: entry?.name ?? null,
         skillKind: entry?.skillKind ?? null,
         skillEnabled: true,
+        // Métadonnées catalogue renseignées par le serveur au prochain reload.
+        effectType: null,
+        damageType: null,
+        rangeWU: null,
+        cooldownMs: null,
         missing: !entry,
       },
     ]);
@@ -157,9 +194,11 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
                   <div className="creature-abilities__item-main">
                     <span className="creature-abilities__item-name">{a.skillName ?? a.skillKey}</span>
                     <span className="creature-abilities__item-key">{a.skillKey}</span>
-                    <span className="creature-abilities__item-tags">
-                      {a.skillKind ?? "—"}
-                      {a.missing ? " · ⚠ orpheline" : ""}
+                    <span className="creature-abilities__item-tags">{metaLine(a)}</span>
+                    <span
+                      className={`creature-abilities__item-state${a.missing || a.skillEnabled === false ? " creature-abilities__item-state--warn" : ""}`}
+                    >
+                      {stateLine(a)}
                     </span>
                   </div>
                   <div className="creature-abilities__item-actions">

@@ -141,6 +141,12 @@
     color: vars.$color-text-muted;
     font-size: vars.$dt-compact-font-sm;
   }
+  &__item-state {
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+
+    &--warn { color: vars.$color-text-gold; }
+  }
   &__item-actions {
     display: flex;
     align-items: center;
