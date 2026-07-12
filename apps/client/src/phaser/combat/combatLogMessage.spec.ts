@@ -37,6 +37,34 @@ describe("formatCombatLogMessage", () => {
     expect(msg).toBe("Vous infligez un coup critique à turkey avec strike : 90 dégâts");
   });
 
+  it("V4-F : la créature esquive l'attaque du joueur local", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 0, isDodged: true, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("turkey esquive votre attaque");
+    expect(msg).not.toContain("dégâts");
+    expect(msg).not.toContain("critique");
+  });
+
+  it("V4-F : le joueur local esquive l'attaque d'une créature (riposte)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 0, isDodged: true, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },
+      opts,
+    );
+    expect(msg).toBe("Vous esquivez l'attaque de turkey");
+    expect(msg).not.toContain("dégâts");
+  });
+
+  it("V4-F : une esquive (isCritical fourni par erreur) n'affiche jamais 'coup critique'", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 0, isDodged: true, isCritical: true, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("turkey esquive votre attaque");
+    expect(msg).not.toContain("critique");
+  });
+
   it("créature nommée inflige des dégâts au joueur local", () => {
     const msg = formatCombatLogMessage(
       { type: "damage", amount: 3, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },

@@ -27,6 +27,8 @@ export interface CombatEventPayload {
   targetName?: string;
   /** V4-E : true si ce hit a tué la cible. */
   targetDied?: boolean;
+  /** V4-F : true si le défenseur a esquivé le hit (0 dégât). */
+  isDodged?: boolean;
   createdAt?: number;
 }
 
@@ -35,6 +37,7 @@ export const FLOATING_COLORS = {
   damageToPlayer: "#ff5b5b", // le joueur encaisse : rouge vif
   damageToCreature: "#ffe066", // le joueur inflige : jaune
   critical: "#ff3b3b", // coup critique : rouge (distinct du jaune normal)
+  dodge: "#8fd3ff", // esquive : bleu clair sobre (V4-F)
   death: "#c0c0c0", // mort : gris
 } as const;
 
@@ -52,6 +55,8 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
   }
 
   if (event.type === "damage") {
+    // V4-F : esquive → "Esquive" (jamais "-0"), avant le test de montant.
+    if (event.isDodged) return "Esquive";
     const hasAmount = typeof event.amount === "number" && Number.isFinite(event.amount);
     if (hasAmount && (event.amount as number) <= 0) return null; // anti-spam : ignore <= 0
     if (typeof event.text === "string" && event.text.length > 0) return event.text;
@@ -62,9 +67,13 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
   return null;
 }
 
-/** Couleur du texte selon type/cible. Un coup critique (dégâts) passe en rouge. */
+/**
+ * Couleur du texte selon type/cible. Esquive → bleu clair (V4-F, avant tout) ;
+ * un coup critique (dégâts) passe en rouge (V4-E).
+ */
 export function resolveFloatingColor(event: CombatEventPayload): string {
   if (event.type === "death") return FLOATING_COLORS.death;
+  if (event.type === "damage" && event.isDodged) return FLOATING_COLORS.dodge;
   if (event.targetType === "player") return FLOATING_COLORS.damageToPlayer;
   if (event.isCritical) return FLOATING_COLORS.critical; // V4-E : crit → rouge
   return FLOATING_COLORS.damageToCreature;

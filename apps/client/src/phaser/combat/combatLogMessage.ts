@@ -61,6 +61,22 @@ export function formatCombatLogMessage(
   }
 
   if (event.type === "damage") {
+    // V4-F : esquive (info serveur `isDodged`, jamais devinée depuis amount 0).
+    // Le DÉFENSEUR (cible) esquive → aucun montant, aucun critique.
+    if (event.isDodged) {
+      const targetLocalDodge = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId);
+      if (targetLocalDodge) {
+        const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: false });
+        return `Vous esquivez l'attaque de ${source}`;
+      }
+      const target = actorLabel(event.targetType, event.targetId, opts, { subject: true });
+      if (isLocalPlayer(event.sourceType, event.sourceId, opts.localCharacterId)) {
+        return `${target} esquive votre attaque`;
+      }
+      const src = actorLabel(event.sourceType, event.sourceId, opts, { subject: false });
+      return `${target} esquive l'attaque de ${src}`;
+    }
+
     const hasAmount = typeof event.amount === "number" && Number.isFinite(event.amount) && event.amount > 0;
     if (!hasAmount) return null;
     const amount = event.amount as number;

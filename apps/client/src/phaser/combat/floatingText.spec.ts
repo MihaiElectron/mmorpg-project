@@ -72,6 +72,11 @@ describe("formatFloatingCombatText", () => {
     expect(formatFloatingCombatText({})).toBeNull();
     expect(formatFloatingCombatText({ type: "heal", amount: 5 })).toBeNull();
   });
+
+  it("V4-F : esquive → 'Esquive' (jamais '-0'), même avec amount 0", () => {
+    expect(formatFloatingCombatText({ type: "damage", isDodged: true, amount: 0 })).toBe("Esquive");
+    expect(formatFloatingCombatText({ type: "damage", isDodged: true })).toBe("Esquive");
+  });
 });
 
 describe("resolveFloatingColor", () => {
@@ -97,6 +102,15 @@ describe("resolveFloatingColor", () => {
     expect(
       resolveFloatingColor({ type: "damage", targetType: "creature", isCritical: true }),
     ).toBe(FLOATING_COLORS.critical);
+  });
+
+  it("V4-F : esquive → bleu clair, jamais la couleur crit/joueur", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "player", isDodged: true }),
+    ).toBe(FLOATING_COLORS.dodge);
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "creature", isDodged: true, isCritical: false }),
+    ).toBe(FLOATING_COLORS.dodge);
   });
 });
 
