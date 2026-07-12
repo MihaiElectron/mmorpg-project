@@ -3,6 +3,10 @@ import { useDevToolsStore } from "../../store/devtools.store";
 
 const API = import.meta.env.VITE_API_URL as string;
 
+// Rafraîchissement auto du runtime de l'instance sélectionnée (V5-C4). 1 s : assez
+// réactif pour voir les cooldowns décroître sans spammer l'API admin.
+const POLL_INTERVAL_MS = 1000;
+
 /** Miroir de `CreatureRuntimeAbilityDto` (serveur, V5-C1) — cooldowns déjà calculés serveur. */
 interface CreatureRuntimeAbility {
   skillKey: string;
@@ -83,48 +87,62 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
   const [status, setStatus] = useState<Status>("loading");
 
   useEffect(() => {
-    // Garde anti-stale : une sélection rapide d'une autre créature invalide
-    // la réponse en vol (ignore + abort).
+    // Garde anti-stale : une sélection rapide d'une autre créature (ou un unmount)
+    // invalide toute réponse en vol (ignore via `active` + abort). Le polling est
+    // strictement lié à CETTE créature sélectionnée ; il s'arrête au cleanup.
     let active = true;
-    const controller = new AbortController();
-    setStatus("loading");
-    setData(null);
 
-    const token = localStorage.getItem("token") ?? "";
-    fetch(`${API}/admin/creatures/${creatureId}/runtime-combat`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: controller.signal,
-    })
-      .then((r) => {
-        if (!active) return null;
-        if (r.status === 404) {
-          setStatus("absent");
-          return null;
-        }
-        if (!r.ok) {
+    // `initial` = 1er chargement (affiche "Chargement…") ; les ticks de polling
+    // mettent à jour silencieusement (pas de flicker, pas de reset des données).
+    const load = (initial: boolean) => {
+      if (initial) {
+        setStatus("loading");
+        setData(null);
+      }
+      const controller = new AbortController();
+      const token = localStorage.getItem("token") ?? "";
+      fetch(`${API}/admin/creatures/${creatureId}/runtime-combat`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      })
+        .then((r) => {
+          if (!active) return null;
+          if (r.status === 404) {
+            // Créature non live (respawn possible) : on garde le polling actif.
+            setStatus("absent");
+            return null;
+          }
+          if (!r.ok) {
+            setStatus("error");
+            return null;
+          }
+          return r.json() as Promise<CreatureRuntimeCombat>;
+        })
+        .then((json) => {
+          if (!active || !json) return;
+          setData(json);
+          setStatus("loaded");
+        })
+        .catch((e) => {
+          if (!active || e?.name === "AbortError") return;
           setStatus("error");
-          return null;
-        }
-        return r.json() as Promise<CreatureRuntimeCombat>;
-      })
-      .then((json) => {
-        if (!active || !json) return;
-        setData(json);
-        setStatus("loaded");
-      })
-      .catch((e) => {
-        if (!active || e?.name === "AbortError") return;
-        setStatus("error");
-      });
+        });
+    };
+
+    load(true);
+    // Polling léger 1 s, uniquement pour l'instance sélectionnée.
+    const timer = window.setInterval(() => load(false), POLL_INTERVAL_MS);
 
     return () => {
       active = false;
-      controller.abort();
+      window.clearInterval(timer);
     };
   }, [creatureId, refreshKey]);
 
   return (
     <div className="creature-runtime" aria-label="Creature runtime combat">
+      <span className="creature-runtime__hint">Auto-refresh 1s</span>
+
       {status === "loading" && <p className="creature-runtime__muted">Chargement…</p>}
       {status === "error" && <p className="creature-runtime__error">Erreur de chargement.</p>}
       {status === "absent" && (
