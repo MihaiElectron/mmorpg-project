@@ -101,10 +101,11 @@ describe("DerivedStatsService", () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
-    it("ignore une clé hors des 10 implémentées (garde défensif)", async () => {
+    it("ignore une clé hors des implémentées (garde défensif)", async () => {
+      // `accuracy` reste calculatedOnly (non branchée combat) → jamais promue.
       repo.find.mockResolvedValue(
         fullCatalogRows({
-          criticalChance: {
+          accuracy: {
             masteryEligible: false,
             runtimeStatus: "calculatedOnly",
             allowedModifierModes: [],

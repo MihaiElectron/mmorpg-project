@@ -128,4 +128,27 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       expect(targets.find((t) => t.key === 'defensePenetration')).toBeUndefined();
     });
   });
+
+  // ── V4-D : critique exposé comme target permanent ─────────────────────────
+  describe('critique (V4-D)', () => {
+    const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+
+    it('criticalChance est exposée comme target (2 modes, implemented)', () => {
+      const t = targets.find((x) => x.key === 'criticalChance');
+      expect(t).toBeDefined();
+      expect(t!.runtimeStatus).toBe('implemented');
+      expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+    });
+
+    it('criticalDamage est exposée comme target (2 modes, implemented)', () => {
+      const t = targets.find((x) => x.key === 'criticalDamage');
+      expect(t).toBeDefined();
+      expect(t!.runtimeStatus).toBe('implemented');
+      expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+    });
+
+    it("critique n'est PAS contextuel weaponType : contextualStats reste [physicalAttack]", () => {
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
+    });
+  });
 });

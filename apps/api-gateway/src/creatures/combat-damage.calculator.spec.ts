@@ -202,4 +202,99 @@ describe('calculateCombatDamage', () => {
       expect(r.effectiveArmor).toBe(40);
     });
   });
+
+  // ── V4-D : critique (bloc attaque) ─────────────────────────────────────────
+  describe('critique (V4-D)', () => {
+    const base = {
+      attackerValue: 100,
+      targetDefense: 40,
+      minimumAttack: 0,
+      minimumDamage: 0,
+      hpBefore: 1000,
+    };
+
+    it('criticalChance 0 → jamais de critique (attackPowerFinal = attaque)', () => {
+      const r = calculateCombatDamage({ ...base, criticalChancePercent: 0, rng: () => 0 });
+      expect(r.isCritical).toBe(false);
+      expect(r.attackPowerFinal).toBe(100);
+      expect(r.finalDamage).toBe(60); // 100 − 40
+    });
+
+    it('critique forcé (roll contrôlé) → multiplicateur criticalDamage', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        criticalChancePercent: 25,
+        criticalDamagePercent: 150,
+        rng: () => 0, // 0 < 0.25 → critique
+      });
+      expect(r.isCritical).toBe(true);
+      expect(r.attackPowerFinal).toBe(150); // round(100 × 1.5)
+    });
+
+    it('roll au-dessus du seuil → pas de critique', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        criticalChancePercent: 25,
+        criticalDamagePercent: 150,
+        rng: () => 0.5, // 0.5 >= 0.25 → pas de critique
+      });
+      expect(r.isCritical).toBe(false);
+      expect(r.attackPowerFinal).toBe(100);
+    });
+
+    it('physical critique : base 100, armure 40, criticalDamage 150 → 110', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        criticalChancePercent: 100,
+        criticalDamagePercent: 150,
+        rng: () => 0,
+      });
+      expect(r.isCritical).toBe(true);
+      expect(r.finalDamage).toBe(110); // 150 − 40
+    });
+
+    it('physical critique + armorPenetration 50 : base 100, armure 40 → 130', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        armorPenetrationPercent: 50,
+        criticalChancePercent: 100,
+        criticalDamagePercent: 150,
+        rng: () => 0,
+      });
+      // attaque 150 ; armure effective round(40 × 0.5) = 20 ; 150 − 20 = 130.
+      expect(r.finalDamage).toBe(130);
+    });
+
+    it('raw critique : base 100, criticalDamage 150 → 150 (ignore armure)', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        damageType: 'raw',
+        criticalChancePercent: 100,
+        criticalDamagePercent: 150,
+        rng: () => 0,
+      });
+      expect(r.isCritical).toBe(true);
+      expect(r.finalDamage).toBe(150);
+    });
+
+    it('raw sans critique → 100', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        damageType: 'raw',
+        criticalChancePercent: 0,
+        rng: () => 0,
+      });
+      expect(r.isCritical).toBe(false);
+      expect(r.finalDamage).toBe(100);
+    });
+
+    it('criticalChance négative/NaN → 0 (pas de critique)', () => {
+      expect(
+        calculateCombatDamage({ ...base, criticalChancePercent: -10, rng: () => 0 }).isCritical,
+      ).toBe(false);
+      expect(
+        calculateCombatDamage({ ...base, criticalChancePercent: Number.NaN, rng: () => 0 }).isCritical,
+      ).toBe(false);
+    });
+  });
 });

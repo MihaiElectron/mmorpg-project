@@ -65,6 +65,10 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   'magicPower',
   // V4-A : premier hook offensif — ignore un % de l'armure de la cible.
   'armorPenetrationPercent',
+  // V4-D : critique branché au combat (bloc attaque). criticalChance = % de
+  // chance, criticalDamage = multiplicateur total en % (150 = ×1.5).
+  'criticalChance',
+  'criticalDamage',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [

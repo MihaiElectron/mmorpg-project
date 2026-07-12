@@ -412,6 +412,28 @@ describe('CreaturesService', () => {
           expect(result.dto.health).toBe(20);
         }
       });
+
+      // ── V4-D : l'auto-attaque transmet criticalChance/criticalDamage ────────
+      it("auto-attaque : critique forcé (criticalChance 100) applique criticalDamage 150", async () => {
+        // Baseline : physicalAttack 10, armure créature 2 → 8 dégâts.
+        // criticalChance 100 (mastery flat) → toujours critique ; criticalDamage
+        // 150 (défaut dérivé) → attaque round(10 × 1.5) = 15 → 15 − 2 = 13.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { criticalChance: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.damage).toBe(13); // critique ×1.5 puis − armure 2
+          expect(result.dto.health).toBe(17);
+        }
+      });
     });
 
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────
@@ -646,17 +668,18 @@ describe('CreaturesService', () => {
       expect(withEndurance.success && withEndurance.riposte?.damage).toBe(1);
     });
 
-    it('Critique / Agilité / Dextérité ne sont pas branchés au combat V1', async () => {
+    it('Agilité / Dextérité ne modifient pas physicalAttack (elles alimentent criticalChance, V4-D)', async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30 });
       (service as any).liveCreatures.set(creature.id, creature);
-      // Ces stats ne doivent pas modifier les dégâts (même valeur que sans elles).
+      // agility/dexterity 0 → criticalChance dérivée 0 → jamais de critique
+      // (déterministe). Elles n'entrent pas dans physicalAttack (strength seul).
+      // physicalAttack = attack (10), armure créature 2 → 8 dégâts.
       characterRepository.findOne.mockResolvedValue(
-        makeCharacter({ attack: 10, defense: 3, baseCritical: 50, baseAgility: 50, baseDexterity: 50 }),
+        makeCharacter({ attack: 10, defense: 3, baseAgility: 0, baseDexterity: 0 }),
       );
 
       const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
 
-      // damage identique au test de base (physicalAttack = attack seul = 10 → 8)
       expect(result.success && result.damage).toBe(8);
     });
 
@@ -1358,6 +1381,21 @@ describe('CreaturesService', () => {
       const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999);
       expect(r.success).toBe(true);
       if (r.success) expect(r.damage).toBe(60);
+    });
+
+    it('V4-D physical critique (chance 100, criticalDamage 150) : 100/armure 40 → 110', async () => {
+      armSkillCreature(40);
+      // armorPen 0, physical, criticalChance 100, criticalDamage 150.
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999, 0, 'physical', 100, 150);
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(110); // round(100 × 1.5) − 40
+    });
+
+    it('V4-D raw critique (chance 100, criticalDamage 150) → 150 (ignore armure)', async () => {
+      armSkillCreature(40);
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999, 0, 'raw', 100, 150);
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(150);
     });
   });
 });

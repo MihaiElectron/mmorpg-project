@@ -588,6 +588,10 @@ export class CreaturesService implements OnModuleInit {
       // inclut les modificateurs de maîtrise permanents). 0 → inchangé.
       armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
       damageType: 'physical',
+      // V4-D : critique (bloc attaque) — stats dérivées serveur. Roll serveur
+      // par défaut (Math.random). 0 % → jamais de critique, historique inchangé.
+      criticalChancePercent: charStats.derived.criticalChance ?? 0,
+      criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
       minimumAttack: 5,
       minimumDamage: 1,
       hpBefore: creature.health,
@@ -704,10 +708,13 @@ export class CreaturesService implements OnModuleInit {
     // V4-A : pénétration d'armure en % de l'attaquant (déjà calculée serveur par
     // l'appelant depuis `stats.derived`). Défaut 0 → comportement inchangé.
     armorPenetrationPercent = 0,
-    // Type de dégâts du skill. `physical` (défaut) applique l'armure ; `raw`
-    // l'ignore. Le modèle SkillDefinition ne porte pas encore ce champ →
-    // toujours `physical` aujourd'hui ; plomberie prête pour `raw`.
+    // V4-C : type de dégâts du skill (`physical` par défaut applique l'armure ;
+    // `raw` l'ignore). Fourni par l'appelant depuis `skill.damageType`.
     damageType: DamageType = 'physical',
+    // V4-D : critique (bloc attaque) — stats dérivées serveur du lanceur.
+    // 0 % → jamais de critique. Roll serveur par défaut (Math.random).
+    criticalChancePercent = 0,
+    criticalDamagePercent = 100,
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -741,6 +748,8 @@ export class CreaturesService implements OnModuleInit {
       targetDefense: derived.defenseTotal,
       armorPenetrationPercent,
       damageType,
+      criticalChancePercent,
+      criticalDamagePercent,
       minimumAttack: 0,
       minimumDamage: 1,
       hpBefore: creature.health,

@@ -59,6 +59,8 @@ function resolve(opts: {
   masteryLevels?: Record<string, number>;
   damageType?: DamageType;
   minimumDamage?: number;
+  /** rng injecté → roll critique déterministe (défaut : jamais de critique). */
+  rng?: () => number;
 }) {
   const modifiers = aggregateMasteryStatModifiers(
     opts.masteryDefs ?? [],
@@ -76,6 +78,10 @@ function resolve(opts: {
     targetDefense: opts.targetArmor,
     armorPenetrationPercent: stats.derived.armorPenetrationPercent,
     damageType: opts.damageType ?? 'physical',
+    // V4-D : critique alimenté par les stats dérivées serveur (bloc attaque).
+    criticalChancePercent: stats.derived.criticalChance,
+    criticalDamagePercent: stats.derived.criticalDamage,
+    rng: opts.rng ?? (() => 0.999999), // par défaut : pas de critique
     minimumAttack: 0,
     minimumDamage: opts.minimumDamage ?? 0,
     hpBefore: 1000,
@@ -203,6 +209,52 @@ describe('Combat pipeline (integration) — physical / armorPenetrationPercent /
     // physical : armure 40 × (1 − 0.25) = 30 → 70 ; raw : 100.
     expect(physical.result.finalDamage).toBe(70);
     expect(raw.result.finalDamage).toBe(100);
+  });
+
+  // ── Critique (bloc attaque) via stats dérivées ────────────────────────────
+  describe('critique (V4-D)', () => {
+    // Maîtrise portant criticalChance à 100 % (roll forcé) ; criticalDamage
+    // reste à son défaut dérivé 150 → ×1.5.
+    const critMastery = [masteryWith('criticalChance', 'flatPerLevel', 100)];
+    const levels = { test_mastery: 1 };
+
+    it('criticalChance dérivée = 100 après mastery flat, criticalDamage 150 par défaut', () => {
+      const { stats } = resolve({ attack: 100, targetArmor: 40, masteryDefs: critMastery, masteryLevels: levels });
+      expect(stats.derived.criticalChance).toBe(100);
+      expect(stats.derived.criticalDamage).toBe(150);
+    });
+
+    it('physical critique : 100 attaque, armure 40 → 110', () => {
+      const { result } = resolve({
+        attack: 100,
+        targetArmor: 40,
+        masteryDefs: critMastery,
+        masteryLevels: levels,
+        rng: () => 0, // roll < 1 → critique
+      });
+      expect(result.isCritical).toBe(true);
+      expect(result.finalDamage).toBe(110); // round(100 × 1.5) − 40
+    });
+
+    it('raw critique : 100 attaque → 150 (ignore armure)', () => {
+      const { result } = resolve({
+        attack: 100,
+        targetArmor: 40,
+        masteryDefs: critMastery,
+        masteryLevels: levels,
+        damageType: 'raw',
+        rng: () => 0,
+      });
+      expect(result.isCritical).toBe(true);
+      expect(result.finalDamage).toBe(150);
+    });
+
+    it('sans maîtrise critique → criticalChance 0, jamais de critique', () => {
+      const { stats, result } = resolve({ attack: 100, targetArmor: 40, rng: () => 0 });
+      expect(stats.derived.criticalChance).toBe(0);
+      expect(result.isCritical).toBe(false);
+      expect(result.finalDamage).toBe(60);
+    });
   });
 
   // ── Pourcentage vs plat : faible armure vs tank ───────────────────────────

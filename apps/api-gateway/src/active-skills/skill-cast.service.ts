@@ -282,6 +282,9 @@ export class SkillCastService {
       stats.derived.armorPenetrationPercent ?? 0,
       // V4-B : type de dégâts configuré sur le skill (physical par défaut).
       skill.damageType ?? 'physical',
+      // V4-D : critique (bloc attaque) — stats dérivées serveur du lanceur.
+      stats.derived.criticalChance ?? 0,
+      stats.derived.criticalDamage ?? 100,
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

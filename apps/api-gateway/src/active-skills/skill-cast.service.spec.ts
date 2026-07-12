@@ -277,6 +277,8 @@ describe("SkillCastService", () => {
       5,
       0, // V4-B0 : armorPenetrationPercent (0 par défaut)
       "physical", // V4-B : damageType du skill (défaut)
+      0, // V4-D : criticalChance (0 par défaut)
+      150, // V4-D : criticalDamage (défaut 150)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -303,6 +305,8 @@ describe("SkillCastService", () => {
       5,
       50, // armorPenetrationPercent dérivé (0 + flat 50)
       "physical", // V4-B : damageType du skill (défaut)
+      0, // criticalChance
+      150, // criticalDamage
     );
   });
 
@@ -320,6 +324,31 @@ describe("SkillCastService", () => {
       5,
       0,
       "raw",
+      0, // criticalChance
+      150, // criticalDamage
+    );
+  });
+
+  it("transmet criticalChance/criticalDamage dérivés au hook applySkillDamage (V4-D)", async () => {
+    // Une maîtrise permanente porte la chance critique à 100 % : les deux stats
+    // dérivées critiques doivent être transmises telles quelles au hook skill.
+    // Échoue si le critique n'est pas branché sur les skills damage.
+    masteryEffects.aggregatePermanentModifiers.mockResolvedValue({
+      percent: {},
+      flat: { criticalChance: 100 },
+    });
+    const r = await cast();
+    expect(r.success).toBe(true);
+    expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+      TARGET_ID,
+      "c1",
+      POSITION,
+      20,
+      5,
+      0, // armorPenetrationPercent
+      "physical",
+      100, // criticalChance dérivé (0 + flat 100)
+      150, // criticalDamage (défaut)
     );
   });
 
@@ -382,6 +411,8 @@ describe("SkillCastService", () => {
         currentSkill.rangeWU,
         0, // V4-B0 : armorPenetrationPercent (0 par défaut)
         "physical", // V4-B : damageType du skill (défaut)
+        0, // criticalChance
+        150, // criticalDamage
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -400,7 +431,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -414,7 +445,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -427,7 +458,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -441,7 +472,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150,
       );
     });
 

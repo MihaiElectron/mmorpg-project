@@ -1,25 +1,34 @@
 /**
  * CombatDamageCalculator — calcul de dégâts PUR (Combat V1).
  * ---------------------------------------------------------------------------
- * Aucun accès DB, aucun socket, aucun effet de bord. Modèle (V4-A, pénétration
- * d'armure en POURCENTAGE) :
- *   effectiveAttack = max(attackerValue, minimumAttack)
- *   ratio           = clamp(armorPenetrationPercent, 0, 100) / 100
- *   effectiveArmor  = physical ? max(0, round(targetDefense × (1 − ratio))) : 0
- *   rawDamage       = effectiveAttack − effectiveArmor
- *   finalDamage     = max(rawDamage, minimumDamage)
- *   hpAfter         = max(hpBefore − finalDamage, 0)
+ * Aucun accès DB, aucun socket, aucun effet de bord. Contrat de résolution
+ * (docs/08_Gameplay/combat-resolution.md) — deux blocs séparés :
  *
- * `armorPenetrationPercent` par défaut 0 et `damageType` par défaut `physical`
- * → à 0 %, `effectiveArmor = targetDefense` : comportement STRICTEMENT identique
- * à l'historique (dégâts − armure pleine). `damageType: 'raw'` ignore totalement
- * l'armure ET la pénétration (dégâts bruts). Arrondi : `effectiveArmor` arrondi
- * à l'entier le plus proche (les PV et dégâts restent entiers). Les appelants
- * garantissent des nombres finis pour attackerValue/targetDefense.
+ *   BLOC ATTAQUE (offensif, critique inclus) :
+ *     effectiveAttack  = max(attackerValue, minimumAttack)
+ *     isCritical       = criticalChancePercent > 0 && rng() < criticalChancePercent / 100
+ *     attackPowerFinal = isCritical ? round(effectiveAttack × criticalDamagePercent / 100)
+ *                                   : effectiveAttack
+ *
+ *   BLOC DÉFENSE (défensif, pénétration EN DERNIER) :
+ *     ratio          = clamp(armorPenetrationPercent, 0, 100) / 100
+ *     effectiveArmor = physical ? max(0, round(targetDefense × (1 − ratio))) : 0
+ *
+ *   RÉSOLUTION :
+ *     rawDamage   = attackPowerFinal − effectiveArmor
+ *     finalDamage = max(rawDamage, minimumDamage)
+ *     hpAfter     = max(hpBefore − finalDamage, 0)
+ *
+ * `armorPenetrationPercent` défaut 0 et `damageType` défaut `physical` → à 0 %,
+ * `effectiveArmor = targetDefense` (comportement historique). `criticalChancePercent`
+ * défaut 0 → jamais de critique (`attackPowerFinal = effectiveAttack`, historique
+ * inchangé). `damageType: 'raw'` ignore armure + pénétration mais reste soumis au
+ * bloc attaque (donc au critique). `rng` injectable (défaut `Math.random`) pour
+ * des tests déterministes. Le critique appartient au BLOC ATTAQUE et s'applique
+ * AVANT la soustraction d'armure.
  *
  * Note : `armorPenetrationPercent` est une propriété de l'ATTAQUANT / du hit.
- * Un futur `armorReductionPercent` (debuff sur la CIBLE) est hors scope et ne
- * doit pas être confondu avec cette pénétration.
+ * Un futur `armorReductionPercent` (debuff sur la CIBLE) est hors scope.
  */
 
 export type DamageType = 'physical' | 'raw';
@@ -46,6 +55,21 @@ export interface CombatDamageInput {
    * `raw` ignore totalement armure et pénétration.
    */
   damageType?: DamageType;
+  /**
+   * Chance de critique en POURCENTAGE (stat dérivée `criticalChance`, ex. 25 =
+   * 25 %). Clampée 0–100, NaN → 0. Défaut 0 → jamais de critique. Bloc attaque.
+   */
+  criticalChancePercent?: number;
+  /**
+   * Multiplicateur critique TOTAL en pourcentage (stat dérivée `criticalDamage`,
+   * ex. 150 = ×1.5). Appliqué uniquement si le hit est critique. Défaut 100 (×1).
+   */
+  criticalDamagePercent?: number;
+  /**
+   * Générateur aléatoire injectable renvoyant [0, 1). Défaut `Math.random`.
+   * Fourni par les tests pour un roll critique déterministe. Serveur uniquement.
+   */
+  rng?: () => number;
 }
 
 export interface CombatDamageResult {
@@ -55,6 +79,12 @@ export interface CombatDamageResult {
   damageType: DamageType;
   armorPenetrationPercent: number;
   effectiveArmor: number;
+  /** true si le hit est critique (roll < criticalChancePercent / 100). */
+  isCritical: boolean;
+  criticalChancePercent: number;
+  criticalDamagePercent: number;
+  /** Valeur d'attaque après bloc attaque (critique inclus), avant armure. */
+  attackPowerFinal: number;
   rawDamage: number;
   finalDamage: number;
   hpBefore: number;
@@ -65,23 +95,39 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
   const { attackerValue, targetDefense, minimumAttack, minimumDamage, hpBefore } = input;
   const damageType: DamageType = input.damageType === 'raw' ? 'raw' : 'physical';
 
-  // Défensif : NaN/Infinity/négatif → 0, borné à 100 (pas de pénétration
-  // négative qui augmenterait l'armure, ni > 100 qui la rendrait négative).
+  // ── Bloc attaque (offensif) : plancher d'attaque puis critique éventuel ────
+  const effectiveAttack = Math.max(attackerValue, minimumAttack);
+
+  const rawChance = input.criticalChancePercent;
+  const criticalChancePercent =
+    typeof rawChance === 'number' && Number.isFinite(rawChance)
+      ? Math.min(100, Math.max(0, rawChance))
+      : 0;
+  const rawCritDamage = input.criticalDamagePercent;
+  const criticalDamagePercent =
+    typeof rawCritDamage === 'number' && Number.isFinite(rawCritDamage)
+      ? Math.max(0, rawCritDamage)
+      : 100;
+  const rng = input.rng ?? Math.random;
+  const isCritical = criticalChancePercent > 0 && rng() < criticalChancePercent / 100;
+  const attackPowerFinal = isCritical
+    ? Math.round(effectiveAttack * (criticalDamagePercent / 100))
+    : effectiveAttack;
+
+  // ── Bloc défense : pénétration d'armure appliquée EN DERNIER ───────────────
+  // Défensif : NaN/Infinity/négatif → 0, borné à 100.
   const rawPct = input.armorPenetrationPercent;
   const armorPenetrationPercent =
     typeof rawPct === 'number' && Number.isFinite(rawPct)
       ? Math.min(100, Math.max(0, rawPct))
       : 0;
-
-  const effectiveAttack = Math.max(attackerValue, minimumAttack);
-
-  // Dégâts bruts : ignorent totalement l'armure ET la pénétration.
-  // Physiques : armure réduite du % de pénétration, jamais négative.
   const ratio = armorPenetrationPercent / 100;
+  // Dégâts bruts : ignorent totalement l'armure ET la pénétration.
   const effectiveArmor =
     damageType === 'raw' ? 0 : Math.max(0, Math.round(targetDefense * (1 - ratio)));
 
-  const rawDamage = effectiveAttack - effectiveArmor;
+  // ── Résolution ─────────────────────────────────────────────────────────────
+  const rawDamage = attackPowerFinal - effectiveArmor;
   const finalDamage = Math.max(rawDamage, minimumDamage);
   const hpAfter = Math.max(hpBefore - finalDamage, 0);
 
@@ -92,6 +138,10 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     damageType,
     armorPenetrationPercent,
     effectiveArmor,
+    isCritical,
+    criticalChancePercent,
+    criticalDamagePercent,
+    attackPowerFinal,
     rawDamage,
     finalDamage,
     hpBefore,
