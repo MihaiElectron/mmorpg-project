@@ -3,6 +3,18 @@ import { useDevToolsStore } from "../../store/devtools.store";
 
 const API = import.meta.env.VITE_API_URL as string;
 
+/** Miroir de `CreatureRuntimeAbilityDto` (serveur, V5-C1) — cooldowns déjà calculés serveur. */
+interface CreatureRuntimeAbility {
+  skillKey: string;
+  skillName: string;
+  rangeWU: number;
+  cooldownMs: number;
+  lastCastAt: number | null;
+  nextCastAt: number | null;
+  cooldownRemainingMs: number;
+  onCooldown: boolean;
+}
+
 /** Miroir du DTO serveur `CreatureRuntimeCombatDto` — lecture seule, aucun calcul client. */
 interface CreatureRuntimeCombat {
   id: string;
@@ -31,12 +43,23 @@ interface CreatureRuntimeCombat {
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
+  abilities?: CreatureRuntimeAbility[];
 }
 
 type Status = "loading" | "loaded" | "absent" | "error";
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) + "…" : id;
+}
+
+/**
+ * Statut d'une capacité — valeurs serveur (V5-C1), le client ne fait QUE formater
+ * les ms en s pour lisibilité (aucun calcul de cooldown côté client).
+ */
+function abilityStatus(a: CreatureRuntimeAbility): string {
+  if (!a.onCooldown) return "Disponible";
+  const ms = a.cooldownRemainingMs;
+  return ms >= 1000 ? `Cooldown : ${(ms / 1000).toFixed(1)} s` : `Cooldown : ${ms} ms`;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -174,6 +197,25 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           <Row label="lootPool">
             {data.hasLootPool ? `${data.lootPoolSize} entrée(s)` : "aucune"}
           </Row>
+
+          {/* F. Capacités runtime + cooldowns live (V5-C1) — lecture seule serveur. */}
+          <div className="admin-panel__template-stat">
+            <span className="admin-panel__template-stat-label">Capacités runtime</span>
+          </div>
+          {!data.abilities || data.abilities.length === 0 ? (
+            <p className="admin-panel__info-line">Aucune capacité damage configurée.</p>
+          ) : (
+            data.abilities.map((a) => (
+              <div key={a.skillKey} className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">
+                  {a.skillName} ({a.skillKey})
+                </span>
+                <span>
+                  portée {a.rangeWU} WU · CD {a.cooldownMs} ms · {abilityStatus(a)}
+                </span>
+              </div>
+            ))
+          )}
         </>
       )}
     </div>
