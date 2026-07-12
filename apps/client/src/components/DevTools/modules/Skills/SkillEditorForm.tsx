@@ -3,12 +3,14 @@ import AssetPicker from "../../AssetPicker";
 import KeyValueRowsEditor from "./KeyValueRowsEditor";
 import { hasFormChanges } from "../../shared/formDirty";
 import {
+  SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
   PRIMARY_STAT_KEYS,
   WEAPON_TYPE_SUGGESTIONS,
+  type SkillDamageType,
   type SkillDefinitionDto,
   type SkillEffectType,
   type SkillKind,
@@ -45,6 +47,7 @@ interface Draft {
   resourceType: "" | SkillResourceType;
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
+  damageType: SkillDamageType;
   requiredLevel: string;
   resourceCost: string;
   cooldownMs: string;
@@ -71,6 +74,7 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     resourceType: skill?.resourceType ?? "",
     targetMode: skill?.targetMode ?? "creature",
     effectType: skill?.effectType ?? "damage",
+    damageType: skill?.damageType ?? "physical",
     requiredLevel: String(skill?.requiredLevel ?? 1),
     resourceCost: String(skill?.resourceCost ?? 0),
     cooldownMs: String(skill?.cooldownMs ?? 1000),
@@ -215,6 +219,7 @@ export default function SkillEditorForm({
       radiusWU: Number(draft.radiusWU),
       targetMode: draft.targetMode,
       effectType: draft.effectType,
+      damageType: draft.damageType,
       scaling: buildScaling(),
     };
     const key = mode === "create" ? payload.key : (skill?.key ?? "");
@@ -412,6 +417,22 @@ export default function SkillEditorForm({
               onChange={(e) => setField("effectType", e.target.value as SkillEffectType)}
             >
               {SKILL_EFFECT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="skills-editor__field">
+            <span className="skills-editor__label">damageType (dégâts)</span>
+            <select
+              className="skills-editor__input"
+              value={draft.damageType}
+              onChange={(e) => setField("damageType", e.target.value as SkillDamageType)}
+              disabled={draft.effectType !== "damage"}
+              title="physical : armure + pénétration appliquées. raw : ignore les deux. Ignoré pour un soin."
+            >
+              {SKILL_DAMAGE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>

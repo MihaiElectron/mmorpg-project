@@ -34,6 +34,15 @@ export const SKILL_EFFECT_TYPES = ['damage', 'heal'] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
 /**
+ * Type de dégâts d'un skill (V4-B). Miroir de `DamageType`
+ * (`combat-damage.calculator`) : `physical` applique armure +
+ * `armorPenetrationPercent`, `raw` ignore les deux. Défaut `physical`.
+ * Pertinent seulement pour `effectType: 'damage'`. Pas d'autre type en V4.
+ */
+export const SKILL_DAMAGE_TYPES = ['physical', 'raw'] as const;
+export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
+
+/**
  * Nature du skill (V1-H). Le modèle de déverrouillage est kind-agnostique, mais
  * seuls les `active` sont lançables (`skill:cast`, /active-skills) :
  *   - active  : déclenché volontairement par le joueur ;

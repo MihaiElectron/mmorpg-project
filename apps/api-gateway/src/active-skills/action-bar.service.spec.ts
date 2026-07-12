@@ -30,6 +30,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     radiusWU: 0,
     targetMode: "creature",
     effectType: "damage",
+    damageType: "physical",
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -11,6 +11,11 @@ export type SkillTargetMode = (typeof SKILL_TARGET_MODES)[number];
 export const SKILL_EFFECT_TYPES = ["damage", "heal"] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
+// Type de dégâts (V4-B) : physical applique armure + armorPenetrationPercent ;
+// raw ignore les deux. Pertinent seulement pour effectType "damage".
+export const SKILL_DAMAGE_TYPES = ["physical", "raw"] as const;
+export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
+
 // Nature du skill (V1-H) : seuls les `active` sont lançables ; passive/aura sont
 // configurables/déverrouillables mais non implémentés en runtime.
 export const SKILL_KINDS = ["active", "passive", "aura"] as const;
@@ -67,6 +72,8 @@ export interface SkillDefinitionDto {
   radiusWU: number;
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
+  /** Type de dégâts (V4-B). physical par défaut ; raw ignore armure + pénétration. */
+  damageType: SkillDamageType;
   scaling: SkillScaling;
   createdAt: string;
   updatedAt: string;
@@ -93,6 +100,7 @@ export interface CreateSkillDefinitionPayload {
   radiusWU?: number;
   targetMode?: SkillTargetMode;
   effectType?: SkillEffectType;
+  damageType?: SkillDamageType;
   scaling?: SkillScaling;
 }
 

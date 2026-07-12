@@ -31,6 +31,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     radiusWU: 0,
     targetMode: "creature",
     effectType: "damage",
+    damageType: "physical",
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -267,6 +268,30 @@ describe("ActiveSkillsService", () => {
         service.updateDefinition("power_strike", { weaponType: "épée" }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("damageType (V4-B)", () => {
+    it("création sans damageType → physical par défaut", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({ key: "k", name: "N" });
+      expect(created.damageType).toBe("physical");
+    });
+
+    it("création avec damageType raw persiste raw", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "k",
+        name: "N",
+        damageType: "raw",
+      });
+      expect(created.damageType).toBe("raw");
+    });
+
+    it("update peut basculer un skill en raw", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ damageType: "physical" }));
+      const updated = await service.updateDefinition("power_strike", { damageType: "raw" });
+      expect(updated.damageType).toBe("raw");
     });
   });
 

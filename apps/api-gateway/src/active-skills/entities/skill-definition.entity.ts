@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import {
+  SkillDamageType,
   SkillEffectType,
   SkillKind,
   SkillResourceType,
@@ -122,6 +123,14 @@ export class SkillDefinition {
 
   @Column({ type: 'varchar', length: 16, default: 'damage' })
   effectType: SkillEffectType;
+
+  /**
+   * Type de dégâts (V4-B) : `physical` (armure + `armorPenetrationPercent`
+   * appliquées) ou `raw` (ignore armure et pénétration). Défaut `physical`.
+   * Pertinent uniquement pour `effectType: 'damage'` — ignoré pour un soin.
+   */
+  @Column({ type: 'varchar', length: 16, default: 'physical' })
+  damageType: SkillDamageType;
 
   /**
    * Coefficients de scaling serveur, ex :

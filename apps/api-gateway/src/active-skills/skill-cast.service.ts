@@ -278,10 +278,10 @@ export class SkillCastService {
       boostedAmount,
       skill.rangeWU,
       // V4-A : pénétration d'armure en % du lanceur (dérivée serveur, inclut les
-      // modificateurs de maîtrise permanents déjà agrégés ci-dessus). Dégâts de
-      // skill = physiques par défaut (le modèle SkillDefinition ne porte pas
-      // encore de damageType).
+      // modificateurs de maîtrise permanents déjà agrégés ci-dessus).
       stats.derived.armorPenetrationPercent ?? 0,
+      // V4-B : type de dégâts configuré sur le skill (physical par défaut).
+      skill.damageType ?? 'physical',
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

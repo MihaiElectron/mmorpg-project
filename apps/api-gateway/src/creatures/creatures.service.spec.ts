@@ -1311,6 +1311,55 @@ describe('CreaturesService', () => {
       expect(state.speed).toBe(0); // rand(0, 0) = 0
     });
   });
+
+  // ── V4-B : applySkillDamage — damageType physical/raw + pénétration ────────
+  describe('applySkillDamage — damageType (V4-B)', () => {
+    const POS = { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID };
+
+    function armSkillCreature(baseArmor: number, health = 1000) {
+      const template = makeTemplate({ baseArmor, baseHealth: 1000 });
+      const spawn = makeSpawn(template);
+      const creature = {
+        id: 'sk-1',
+        spawn,
+        health,
+        state: 'alive',
+        worldX: 6080,
+        worldY: 12480,
+        mapId: DEFAULT_MAP_ID,
+      } as Creature;
+      (service as any).liveCreatures.set(creature.id, creature);
+      return creature;
+    }
+
+    it('physical applique l’armure de la créature (100 − 40 = 60)', async () => {
+      armSkillCreature(40);
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999, 0, 'physical');
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(60);
+    });
+
+    it('raw ignore l’armure (dégâts = 100)', async () => {
+      armSkillCreature(40);
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999, 0, 'raw');
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(100);
+    });
+
+    it('physical + armorPenetrationPercent 50 → armure effective 20, dégâts 80', async () => {
+      armSkillCreature(40);
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999, 50, 'physical');
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(80);
+    });
+
+    it('défaut physical si damageType non fourni', async () => {
+      armSkillCreature(40);
+      const r = await service.applySkillDamage('sk-1', 'char-1', POS, 100, 9999);
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.damage).toBe(60);
+    });
+  });
 });
 
 // ─── P7-A — Garanties WU à la création ───────────────────────────────────────

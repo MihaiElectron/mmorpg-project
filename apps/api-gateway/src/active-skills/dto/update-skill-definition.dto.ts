@@ -9,10 +9,12 @@ import {
   Min,
 } from 'class-validator';
 import {
+  SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
+  SkillDamageType,
   SkillEffectType,
   SkillKind,
   SkillResourceType,
@@ -114,6 +116,11 @@ export class UpdateSkillDefinitionDto {
   @IsOptional()
   @IsIn(SKILL_EFFECT_TYPES)
   effectType?: SkillEffectType;
+
+  /** Type de dégâts (V4-B) : `physical` (défaut) ou `raw`. Ignoré pour un soin. */
+  @IsOptional()
+  @IsIn(SKILL_DAMAGE_TYPES)
+  damageType?: SkillDamageType;
 
   @IsOptional()
   @IsObject()

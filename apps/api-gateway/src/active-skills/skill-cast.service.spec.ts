@@ -35,6 +35,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     radiusWU: 0,
     targetMode: "creature",
     effectType: "damage",
+    damageType: "physical",
     scaling: { primaryCoefficients: { strength: 2 } },
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -275,6 +276,7 @@ describe("SkillCastService", () => {
       20,
       5,
       0, // V4-B0 : armorPenetrationPercent (0 par défaut)
+      "physical", // V4-B : damageType du skill (défaut)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -300,6 +302,24 @@ describe("SkillCastService", () => {
       20,
       5,
       50, // armorPenetrationPercent dérivé (0 + flat 50)
+      "physical", // V4-B : damageType du skill (défaut)
+    );
+  });
+
+  it("transmet le damageType 'raw' du skill au hook applySkillDamage (V4-B)", async () => {
+    // Un skill configuré en dégâts bruts doit propager 'raw' au hook créature.
+    currentSkill = makeSkill({ damageType: "raw" });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    const r = await cast();
+    expect(r.success).toBe(true);
+    expect(creatures.applySkillDamage).toHaveBeenCalledWith(
+      TARGET_ID,
+      "c1",
+      POSITION,
+      20,
+      5,
+      0,
+      "raw",
     );
   });
 
@@ -360,7 +380,8 @@ describe("SkillCastService", () => {
         POSITION,
         22,
         currentSkill.rangeWU,
-        0, // V4-A : defensePenetration (0 par défaut)
+        0, // V4-B0 : armorPenetrationPercent (0 par défaut)
+        "physical", // V4-B : damageType du skill (défaut)
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -379,7 +400,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -393,7 +414,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -406,7 +427,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -420,7 +441,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical",
       );
     });
 
