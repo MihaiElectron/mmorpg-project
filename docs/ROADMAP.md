@@ -132,7 +132,10 @@ Ces décisions sont officiellement actées. Elles ne peuvent pas être remises e
 - [x] Maintenance sûre des stats secondaires — stat système non supprimable, stat custom supprimable sans référence, rapport de références, retrait de modifier de maîtrise, duplication avec nouvelle key (2026-07-11)
 - [x] `armorPenetrationPercent` V4-B0 — stat dérivée système offensive, ciblable en Mastery Effect permanent, ignore un % de l'armure de la cible (`effectiveArmor = round(armor × (1 − pct/100))`) sur auto-attaque + skills damage physiques ; `DamageType` physical/raw dans le calculateur pur (raw ignore armure + pénétration) ; ancienne `defensePenetration` plate dégradée en compatibilité, non exposée comme target (2026-07-12)
 - [x] `SkillDefinition.damageType` V4-C — type de dégâts configurable par skill (`physical` défaut / `raw`), branché dans le cast (`raw` ignore armure + `armorPenetrationPercent`), migration backfill + CHECK, Studio Skill Editor (2026-07-12)
+- [x] Contrat de résolution des dégâts combat posé (doc V4-D0) — phases attaque/défense séparées, `armorPenetrationPercent` appliqué en dernier, points d'insertion critique/curses/résistances fixés (`docs/08_Gameplay/combat-resolution.md`) (2026-07-12)
 - [ ] Types de dégâts futurs — magical, elemental, poison (aucun aujourd'hui : seuls `physical`/`raw`)
+- [ ] Critique combat — `criticalChancePercent` / `criticalDamagePercent` dans le bloc attaque (contrat V4-D0)
+- [ ] Curses / `armorReduction` (flat/percent) — debuff cible dans le bloc défense, avant pénétration (contrat V4-D0)
 - [ ] Effets de maîtrise futurs — critique, dodge/parry/block, accuracy, vitesses, résistances, stun/knockback, curses / `armorReductionPercent` (debuff cible), succès/qualité craft — ajout aux `mastery-effect-targets` au rythme des hooks serveur combat/craft (ADR-0020)
 
 ---

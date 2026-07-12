@@ -189,6 +189,9 @@ Exemple : `rawDamage 100`, `armor 40`, `armorPenetrationPercent 50` →
 > skill **`raw`** ignore armure et pénétration. La règle des Mastery Effects
 > contextuels arme est inchangée : `contextualStats` reste `physicalAttack`
 > uniquement.
+>
+> Ordre de résolution complet (bloc attaque / bloc défense, pénétration appliquée
+> **en dernier**) : voir `docs/08_Gameplay/combat-resolution.md` (contrat V4-D0).
 
 ### Résolution serveur
 
