@@ -184,6 +184,12 @@ négative). Les **dégâts `raw`** ignorent l'armure **et** la pénétration
 Exemple : `rawDamage 100`, `armor 40`, `armorPenetrationPercent 50` →
 `effectiveArmor 20` → `finalDamage 80`.
 
+> V4-C : chaque skill damage porte un `damageType` (`physical` par défaut, ou
+> `raw`). `armorPenetrationPercent` n'affecte que les skills **`physical`** ; un
+> skill **`raw`** ignore armure et pénétration. La règle des Mastery Effects
+> contextuels arme est inchangée : `contextualStats` reste `physicalAttack`
+> uniquement.
+
 ### Résolution serveur
 
 - **`MasteryEffectsService`** est le point serveur unique de résolution ;

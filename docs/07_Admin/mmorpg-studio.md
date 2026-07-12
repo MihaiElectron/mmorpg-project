@@ -104,6 +104,10 @@ Spécification complète : `docs/07_Admin/devtools-architecture.md`.
 - le **Skill Editor** expose `skill.weaponType` (select, « Aucun » = null) —
   Implemented. Ce champ déclare la compatibilité d'un skill avec un type
   d'arme pour les bonus de maîtrise ; il n'impose pas l'arme au cast ;
+- le **Skill Editor** expose aussi le **Type de dégâts** (`damageType`, V4-C) —
+  Implemented. Concerne les skills damage : **Physique** (`physical`, défaut —
+  réduit par l'armure, utilise `armorPenetrationPercent`) ou **Brut** (`raw` —
+  ignore armure et pénétration). Le select est désactivé pour un soin ;
 - le module **« Maîtrises / Effets » est Implemented** : création de
   maîtrise (key/name/category/XP config), édition des
   `mastery_definition.effects` en **tableau stat / mode / value**
