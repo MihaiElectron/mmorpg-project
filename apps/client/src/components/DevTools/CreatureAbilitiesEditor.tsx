@@ -132,74 +132,71 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
   const available = catalog.filter((c) => !abilities.some((a) => a.skillKey === c.key));
 
   return (
-    <section className="woi__abilities" aria-label="Creature abilities editor">
-      <h4 className="woi__subtitle">Capacités du template « {templateKey} »</h4>
-      <p className="woi__abilities-note">
+    <div className="admin-panel__template-stats" aria-label="Creature abilities editor">
+      <span className="admin-panel__template-stat-label">Capacités du template « {templateKey} »</span>
+      <p className="admin-panel__info-line">
         Config uniquement — non déclenchées en combat (V5-A). Affecte toutes les instances.
       </p>
 
-      {status === "loading" && <p className="woi__empty">Chargement…</p>}
-      {status === "error" && <p className="woi__empty">Erreur (chargement ou sauvegarde).</p>}
+      {status === "loading" && <p className="admin-panel__info-line">Chargement…</p>}
+      {status === "error" && (
+        <p className="admin-panel__info-line">Erreur (chargement ou sauvegarde).</p>
+      )}
 
       {status === "loaded" && (
         <>
           {abilities.length === 0 ? (
-            <p className="woi__empty">Aucune capacité configurée.</p>
+            <p className="admin-panel__info-line">Aucune capacité configurée.</p>
           ) : (
-            <ul className="woi__abilities-list">
-              {abilities.map((a) => (
-                <li key={a.skillKey} className="woi__ability-row">
-                  <label className="woi__ability-main">
-                    <input
-                      type="checkbox"
-                      checked={a.enabled}
-                      onChange={() => toggleEnabled(a.skillKey)}
-                      aria-label={`Activer ${a.skillKey}`}
-                    />
-                    <span className="woi__ability-name">
-                      {a.skillName ?? a.skillKey}
-                      {a.skillKind && <span className="woi__value--muted"> · {a.skillKind}</span>}
-                    </span>
-                  </label>
-                  {a.missing && (
-                    <span className="woi__ability-warn" title="Clé absente du catalogue skill">
-                      ⚠ orpheline
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="woi__ability-remove"
-                    onClick={() => removeSkill(a.skillKey)}
-                    aria-label={`Retirer ${a.skillKey}`}
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
+            abilities.map((a) => (
+              <label key={a.skillKey} className="admin-panel__template-stat">
+                <span className="admin-panel__template-stat-label">
+                  <input
+                    type="checkbox"
+                    checked={a.enabled}
+                    onChange={() => toggleEnabled(a.skillKey)}
+                    aria-label={`Activer ${a.skillKey}`}
+                  />{" "}
+                  {a.skillName ?? a.skillKey}
+                  {a.skillKind ? ` · ${a.skillKind}` : ""}
+                  {a.missing ? " ⚠ orpheline" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="admin-panel__del-toggle"
+                  onClick={() => removeSkill(a.skillKey)}
+                  title={`Retirer ${a.skillKey}`}
+                  aria-label={`Retirer ${a.skillKey}`}
+                >
+                  ✕
+                </button>
+              </label>
+            ))
           )}
 
-          <div className="woi__abilities-add">
+          <label className="admin-panel__template-stat">
+            <span className="admin-panel__template-stat-label">Ajouter un skill</span>
             <select
+              className="admin-panel__template-stat-select"
               value={pick}
               onChange={(e) => setPick(e.target.value)}
               aria-label="Choisir un skill à ajouter"
             >
-              <option value="">— Ajouter un skill —</option>
+              <option value="">—</option>
               {available.map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.name} ({c.key})
                 </option>
               ))}
             </select>
-            <button type="button" onClick={addSkill} disabled={!pick}>
-              Ajouter
-            </button>
-          </div>
+          </label>
 
+          <button type="button" className="admin-panel__apply-btn" onClick={addSkill} disabled={!pick}>
+            Ajouter
+          </button>
           <button
             type="button"
-            className="woi__abilities-save"
+            className="admin-panel__apply-btn"
             onClick={save}
             disabled={!dirty || saving}
           >
@@ -207,6 +204,6 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
           </button>
         </>
       )}
-    </section>
+    </div>
   );
 }

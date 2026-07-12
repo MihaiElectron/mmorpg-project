@@ -477,6 +477,8 @@ type GroupedSectionProps = {
   topContent?: React.ReactNode;
   /** Contenu additionnel rendu dans chaque groupe déplié (ex: éditeur lootPool). */
   renderGroupExtra?: (group: any) => React.ReactNode;
+  /** Contenu additionnel rendu sous chaque instance dépliée (ex: runtime combat créature). */
+  renderInstanceExtra?: (instance: any) => React.ReactNode;
 };
 
 function InstanceActionButton({ action, inst, onResult }: { action: InstanceAction; inst: any; onResult: (text: string, ok: boolean) => void }) {
@@ -502,7 +504,7 @@ function InstanceActionButton({ action, inst, onResult }: { action: InstanceActi
   );
 }
 
-export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId, rightHeader, rightContent, topContent, renderGroupExtra }: GroupedSectionProps) {
+export function GroupedSection({ config, groups, instances, onResult, onInstanceDeleted, highlightId, rightHeader, rightContent, topContent, renderGroupExtra, renderInstanceExtra }: GroupedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -753,6 +755,9 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
                                 />
                               ))}
                             </div>
+                            {renderInstanceExtra && (
+                              <div className="admin-panel__instance-extra">{renderInstanceExtra(inst)}</div>
+                            )}
                           </div>
                         );
                       })}

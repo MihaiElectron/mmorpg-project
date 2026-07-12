@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useDevToolsStore } from "../../store/devtools.store";
-import CreatureAbilitiesEditor from "./CreatureAbilitiesEditor";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -42,16 +41,16 @@ function shortId(id: string): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <>
-      <dt className="woi__label">{label}</dt>
-      <dd className="woi__value">{children}</dd>
-    </>
+    <div className="admin-panel__template-stat">
+      <span className="admin-panel__template-stat-label">{label}</span>
+      <span>{children}</span>
+    </div>
   );
 }
 
 /** Étiquette explicite pour une capacité défensive non supportée côté créature. */
 function Unsupported() {
-  return <span className="woi__value--muted">Non supporté runtime</span>;
+  return <span>Non supporté runtime</span>;
 }
 
 export default function CreatureRuntimeInspector({ creatureId }: { creatureId: string }) {
@@ -102,26 +101,26 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
   }, [creatureId, refreshKey]);
 
   return (
-    <section className="woi__runtime-combat" aria-label="Creature runtime combat">
-      <h4 className="woi__subtitle">Combat runtime</h4>
+    <div className="admin-panel__template-stats" aria-label="Creature runtime combat">
+      <span className="admin-panel__template-stat-label">Combat runtime</span>
 
-      {status === "loading" && <p className="woi__empty">Chargement…</p>}
-      {status === "error" && <p className="woi__empty">Erreur de chargement.</p>}
+      {status === "loading" && <p className="admin-panel__info-line">Chargement…</p>}
+      {status === "error" && <p className="admin-panel__info-line">Erreur de chargement.</p>}
       {status === "absent" && (
-        <p className="woi__empty">Créature non vivante en mémoire (aucune donnée runtime).</p>
+        <p className="admin-panel__info-line">Runtime indisponible (créature non vivante en mémoire).</p>
       )}
 
       {status === "loaded" && data && (
-        <dl className="woi__grid">
+        <>
           {/* A. Identité / état */}
           <Row label="état">{data.state}</Row>
           <Row label="cible actuelle">
             {data.currentTargetId ? (
-              <span className="woi__value--muted" title={data.currentTargetId}>
+              <span title={data.currentTargetId}>
                 {shortId(data.currentTargetId)}
               </span>
             ) : (
-              <span className="woi__value--muted">aucune</span>
+              <span>aucune</span>
             )}
           </Row>
           <Row label="position (WU)">
@@ -136,7 +135,7 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           </Row>
           <Row label="défense (runtime)">
             {data.defenseTotal}
-            <span className="woi__value--muted"> (base {data.baseArmor})</span>
+            <span> (base {data.baseArmor})</span>
           </Row>
           <Row label="vivant">{data.alive ? "oui" : "non"}</Row>
           {data.respawnAt && <Row label="respawnAt">{String(data.respawnAt)}</Row>}
@@ -144,24 +143,24 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           {/* C. Combat offensif */}
           <Row label="attaque (runtime)">
             {data.attackPower}
-            <span className="woi__value--muted"> (base {data.baseAttack})</span>
+            <span> (base {data.baseAttack})</span>
           </Row>
           <Row label="portée">
-            {data.attackRangeWU} WU <span className="woi__value--muted">(MELEE_RANGE_WU)</span>
+            {data.attackRangeWU} WU <span>(MELEE_RANGE_WU)</span>
           </Row>
           <Row label="cooldown auto-attaque">{data.autoAttackCooldownMs} ms</Row>
           <Row label="dernière attaque">
             {data.lastAutoAttackAt != null ? (
               new Date(data.lastAutoAttackAt).toLocaleTimeString()
             ) : (
-              <span className="woi__value--muted">jamais</span>
+              <span>jamais</span>
             )}
           </Row>
           <Row label="prochain hit">
             {data.nextAutoAttackAt != null ? (
               new Date(data.nextAutoAttackAt).toLocaleTimeString()
             ) : (
-              <span className="woi__value--muted">—</span>
+              <span>—</span>
             )}
           </Row>
 
@@ -175,12 +174,8 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           <Row label="lootPool">
             {data.hasLootPool ? `${data.lootPoolSize} entrée(s)` : "aucune"}
           </Row>
-        </dl>
+        </>
       )}
-
-      {status === "loaded" && data && (
-        <CreatureAbilitiesEditor templateKey={data.templateKey} />
-      )}
-    </section>
+    </div>
   );
 }

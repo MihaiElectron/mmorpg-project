@@ -1076,7 +1076,7 @@
 }
 
 .admin-panel__create-inline-btn {
-  @include m.devtools-create-button;
+  @include m.devtools-save-button;
   padding: 2px 10px;
 }
 
@@ -1165,7 +1165,9 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  @include m.devtools-create-button;
+  // Même style de bouton « créer » que les modules DevTools (Skills, Maîtrises…) :
+  // tone `save` (vert) via le mixin partagé, pour un rendu identique partout.
+  @include m.devtools-save-button;
 }
 
 // Sélecteur d'item searchable pour le lootPool.

@@ -38,6 +38,8 @@ import {
 import RuntimeStatsPanel from "../DevTools/modules/PlayerRuntime/RuntimeStatsPanel";
 import RuntimeInspectorPanel from "../DevTools/modules/PlayerRuntime/RuntimeInspectorPanel";
 import AssetPicker from "../DevTools/AssetPicker";
+import CreatureAbilitiesEditor from "../DevTools/CreatureAbilitiesEditor";
+import CreatureRuntimeInspector from "../DevTools/CreatureRuntimeInspector";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -1515,6 +1517,16 @@ export default function AdminPanelWOM() {
           onResult={pushResult}
           onInstanceDeleted={(ik) => handleInstanceDeleted(cfg.id, ik)}
           highlightId={highlightIds[cfg.id] ?? null}
+          // V5-A : capacités configurables au niveau TEMPLATE (config only, aucun
+          // cast auto). Toujours visible, indépendant du runtime de l'instance.
+          renderGroupExtra={(group) => <CreatureAbilitiesEditor templateKey={group.key} />}
+          // Runtime combat : uniquement pour l'instance sélectionnée (1 fetch),
+          // et sans conditionner l'édition des capacités.
+          renderInstanceExtra={(inst) =>
+            selectedWO?.category === "creature" && selectedWO?.id === inst.id ? (
+              <CreatureRuntimeInspector creatureId={inst.id} />
+            ) : null
+          }
           rightHeader={
             <span className="admin-panel__count">
               {(groupData["creatures"] ?? []).length} créature{(groupData["creatures"] ?? []).length > 1 ? "s" : ""}
