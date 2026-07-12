@@ -113,6 +113,72 @@ describe("formatCombatLogMessage", () => {
     expect(msg).toBe("Vous infligez 8 dégâts à turkey");
   });
 
+  // ── V4-I : parade ─────────────────────────────────────────────────────────
+  it("V4-I : le joueur local pare l'attaque d'une créature", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 0, isParried: true, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },
+      opts,
+    );
+    expect(msg).toBe("Vous parez l'attaque de turkey");
+    expect(msg).not.toContain("dégât");
+    expect(msg).not.toContain("0");
+    expect(msg).not.toContain("esquiv");
+    expect(msg).not.toContain("bloqué");
+    expect(msg).not.toContain("critique");
+  });
+
+  it("V4-I : parade générique (une autre cible pare)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 0, isParried: true, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: "char-other" },
+      opts,
+    );
+    expect(msg).toBe("un joueur pare l'attaque de turkey");
+  });
+
+  it("V4-I : la parade est prioritaire sur esquive / blocage / critique", () => {
+    const msg = formatCombatLogMessage(
+      {
+        type: "damage",
+        amount: 0,
+        isParried: true,
+        isDodged: true,
+        isBlocked: true,
+        isCritical: true,
+        sourceType: "creature",
+        sourceId: "creature-1",
+        targetType: "player",
+        targetId: LOCAL,
+      },
+      opts,
+    );
+    expect(msg).toBe("Vous parez l'attaque de turkey");
+  });
+
+  // ── V4-I : contre-attaque ───────────────────────────────────────────────────
+  it("V4-I : le joueur local contre-attaque une créature", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 32, isCounterAttack: true, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("Vous contre-attaquez turkey : 32 dégâts");
+  });
+
+  it("V4-I : contre-attaque critique → conserve 'coup critique'", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 48, isCounterAttack: true, isCritical: true, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("Vous contre-attaquez turkey avec un coup critique : 48 dégâts");
+  });
+
+  it("V4-I : contre-attaque respecte l'accord singulier (1 dégât)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 1, isCounterAttack: true, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("Vous contre-attaquez turkey : 1 dégât");
+  });
+
   it("créature nommée inflige des dégâts au joueur local", () => {
     const msg = formatCombatLogMessage(
       { type: "damage", amount: 3, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },

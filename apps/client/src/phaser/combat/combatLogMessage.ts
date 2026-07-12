@@ -78,6 +78,19 @@ export function formatCombatLogMessage(
   }
 
   if (event.type === "damage") {
+    // V4-I : parade (info serveur `isParried`, jamais devinée depuis amount 0).
+    // Prioritaire sur esquive/blocage/critique : le hit entrant est ANNULÉ
+    // (0 dégât) et convertit en contre-attaque (event séparé). Jamais "0 dégât",
+    // jamais "esquive", jamais "bloqué", jamais "coup critique" sur le hit paré.
+    if (event.isParried) {
+      const src = actorLabel(event.sourceType, event.sourceId, opts, { subject: false });
+      if (isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId)) {
+        return `Vous parez l'attaque de ${src}`;
+      }
+      const target = actorLabel(event.targetType, event.targetId, opts, { subject: true });
+      return `${target} pare l'attaque de ${src}`;
+    }
+
     // V4-F : esquive (info serveur `isDodged`, jamais devinée depuis amount 0).
     // Le DÉFENSEUR (cible) esquive → aucun montant, aucun critique.
     if (event.isDodged) {
@@ -110,6 +123,29 @@ export function formatCombatLogMessage(
     const targetLocal = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId);
 
     const word = damageWord(amount);
+
+    // V4-I : contre-attaque (event damage SÉPARÉ, `isCounterAttack`). Verbe dédié
+    // « contre-attaque » ; conserve critique et accord singulier/pluriel. La mort
+    // éventuelle reste gérée par l'event death séparé (pas de doublon ici).
+    if (event.isCounterAttack) {
+      if (sourceLocal) {
+        const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
+        return crit
+          ? `Vous contre-attaquez ${target} avec un coup critique : ${amount} ${word}`
+          : `Vous contre-attaquez ${target} : ${amount} ${word}`;
+      }
+      if (targetLocal) {
+        const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
+        return crit
+          ? `${source} vous contre-attaque avec un coup critique : ${amount} ${word}`
+          : `${source} vous contre-attaque : ${amount} ${word}`;
+      }
+      const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
+      const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
+      return crit
+        ? `${source} contre-attaque ${target} avec un coup critique : ${amount} ${word}`
+        : `${source} contre-attaque ${target} : ${amount} ${word}`;
+    }
 
     if (sourceLocal) {
       const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });

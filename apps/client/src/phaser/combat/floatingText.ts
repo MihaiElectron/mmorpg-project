@@ -33,6 +33,10 @@ export interface CombatEventPayload {
   isBlocked?: boolean;
   /** V4-H : montant absorbé par le blocage (0 si non bloqué). */
   blockedDamage?: number;
+  /** V4-I : true si le défenseur a paré le hit (annulé, 0 dégât, + contre-attaque). */
+  isParried?: boolean;
+  /** V4-I : true si ce hit EST la contre-attaque déclenchée par une parade. */
+  isCounterAttack?: boolean;
   createdAt?: number;
 }
 
@@ -43,6 +47,7 @@ export const FLOATING_COLORS = {
   critical: "#ff3b3b", // coup critique : rouge (distinct du jaune normal)
   dodge: "#8fd3ff", // esquive : bleu clair sobre (V4-F)
   blocked: "#b8c4d0", // blocage : gris acier (dégâts réduits, distinct de l'esquive) (V4-H)
+  parried: "#6fe0a8", // parade : vert martial sobre (réaction active, distinct) (V4-I)
   death: "#c0c0c0", // mort : gris
 } as const;
 
@@ -60,6 +65,9 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
   }
 
   if (event.type === "damage") {
+    // V4-I : parade → "Parade" (hit annulé, 0 dégât), AVANT esquive/montant.
+    // Réaction active du défenseur, jamais confondue avec une esquive.
+    if (event.isParried) return "Parade";
     // V4-F : esquive → "Esquive" (jamais "-0"), avant le test de montant.
     if (event.isDodged) return "Esquive";
     const hasAmount = typeof event.amount === "number" && Number.isFinite(event.amount);
@@ -77,13 +85,15 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
 }
 
 /**
- * Couleur du texte selon type/cible. Esquive → bleu clair (V4-F, avant tout) ;
- * blocage → gris acier (V4-H, dégâts réduits) ; un coup critique (dégâts) passe
- * en rouge (V4-E). Le blocage prime sur le critique et la cible : c'est
- * l'information défensive saillante du hit.
+ * Couleur du texte selon type/cible. Parade → vert martial (V4-I, avant tout —
+ * réaction active) ; esquive → bleu clair (V4-F) ; blocage → gris acier (V4-H,
+ * dégâts réduits) ; un coup critique (dégâts) passe en rouge (V4-E). La
+ * contre-attaque n'a PAS de couleur dédiée : elle suit le rendu normal (cible
+ * créature = jaune, ou rouge si critique).
  */
 export function resolveFloatingColor(event: CombatEventPayload): string {
   if (event.type === "death") return FLOATING_COLORS.death;
+  if (event.type === "damage" && event.isParried) return FLOATING_COLORS.parried;
   if (event.type === "damage" && event.isDodged) return FLOATING_COLORS.dodge;
   if (event.type === "damage" && event.isBlocked) return FLOATING_COLORS.blocked;
   if (event.targetType === "player") return FLOATING_COLORS.damageToPlayer;

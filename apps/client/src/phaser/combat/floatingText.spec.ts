@@ -97,6 +97,30 @@ describe("formatFloatingCombatText", () => {
   it("V4-H : hit non bloqué → pas d'annotation", () => {
     expect(formatFloatingCombatText({ type: "damage", amount: 8, isBlocked: false })).toBe("-8");
   });
+
+  it("V4-I : hit paré → 'Parade' (jamais '0'), même avec amount 0", () => {
+    expect(formatFloatingCombatText({ type: "damage", isParried: true, amount: 0 })).toBe("Parade");
+    expect(formatFloatingCombatText({ type: "damage", isParried: true })).toBe("Parade");
+  });
+
+  it("V4-I : parade prioritaire sur esquive / blocage / critique", () => {
+    expect(
+      formatFloatingCombatText({
+        type: "damage",
+        isParried: true,
+        isDodged: true,
+        isBlocked: true,
+        isCritical: true,
+        amount: 0,
+      }),
+    ).toBe("Parade");
+  });
+
+  it("V4-I : contre-attaque → montant final (nombre seul, comme un dégât normal)", () => {
+    expect(
+      formatFloatingCombatText({ type: "damage", isCounterAttack: true, amount: 32 }),
+    ).toBe("-32");
+  });
 });
 
 describe("resolveFloatingColor", () => {
@@ -147,6 +171,28 @@ describe("resolveFloatingColor", () => {
       resolveFloatingColor({ type: "damage", isDodged: true, isBlocked: true }),
     ).toBe(FLOATING_COLORS.dodge);
   });
+
+  it("V4-I : parade → vert martial, prioritaire sur esquive/blocage/critique/cible", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "player", isParried: true }),
+    ).toBe(FLOATING_COLORS.parried);
+    expect(
+      resolveFloatingColor({
+        type: "damage",
+        targetType: "player",
+        isParried: true,
+        isDodged: true,
+        isBlocked: true,
+        isCritical: true,
+      }),
+    ).toBe(FLOATING_COLORS.parried);
+  });
+
+  it("V4-I : contre-attaque critique → couleur critique (pas de couleur dédiée)", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "creature", isCounterAttack: true, isCritical: true }),
+    ).toBe(FLOATING_COLORS.critical);
+  });
 });
 
 describe("resolveFloatingFontStyle (V4-E)", () => {
@@ -161,5 +207,11 @@ describe("resolveFloatingFontStyle (V4-E)", () => {
 
   it("death (même critique) → bold (pas d'italique)", () => {
     expect(resolveFloatingFontStyle({ type: "death", isCritical: true })).toBe("bold");
+  });
+
+  it("V4-I : contre-attaque critique → conserve le style critique (bold italic)", () => {
+    expect(
+      resolveFloatingFontStyle({ type: "damage", isCounterAttack: true, isCritical: true }),
+    ).toBe("bold italic");
   });
 });
