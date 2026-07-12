@@ -271,6 +271,45 @@ describe('CreaturesService', () => {
   });
 
   // -------------------------------------------------------------------------
+  describe('getRuntimeCombatInfo — capacités + cooldown live (V5-C1)', () => {
+    it('expose les capacités damage configurées avec leur état de cooldown', async () => {
+      const creature = makeCreature({ state: 'fighting', health: 20 });
+      (service as any).liveCreatures.set(creature.id, creature);
+      const now = Date.now();
+      // Cache de capacités (config) pré-seedé + cooldown live d'une seule.
+      (service as any).damageAbilityCache.set('turkey', [
+        { skillKey: 'fireball', skillName: 'Boule de feu', displayOrder: 0, rangeWU: 5000, cooldownMs: 3000, damageType: 'physical', scaling: {} },
+        { skillKey: 'ice', skillName: 'Glace', displayOrder: 1, rangeWU: 2000, cooldownMs: 1000, damageType: 'raw', scaling: {} },
+      ]);
+      (service as any).creatureSkillCooldowns.set(creature.id, new Map([['fireball', now]]));
+
+      const info = await service.getRuntimeCombatInfo(creature.id);
+      expect(info).not.toBeNull();
+      const abilities = info!.abilities!;
+      expect(abilities).toHaveLength(2);
+
+      const fb = abilities.find((a) => a.skillKey === 'fireball')!;
+      expect(fb).toMatchObject({ skillName: 'Boule de feu', rangeWU: 5000, cooldownMs: 3000, lastCastAt: now, nextCastAt: now + 3000, onCooldown: true });
+      expect(fb.cooldownRemainingMs).toBeGreaterThan(0);
+
+      const ice = abilities.find((a) => a.skillKey === 'ice')!;
+      expect(ice).toMatchObject({ lastCastAt: null, nextCastAt: null, cooldownRemainingMs: 0, onCooldown: false });
+    });
+
+    it('renvoie un tableau abilities vide si aucune capacité configurée', async () => {
+      const creature = makeCreature({ state: 'alive' });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).damageAbilityCache.set('turkey', []);
+      const info = await service.getRuntimeCombatInfo(creature.id);
+      expect(info!.abilities).toEqual([]);
+    });
+
+    it('retourne null si la créature n\'est pas vivante en mémoire', async () => {
+      expect(await service.getRuntimeCombatInfo('inconnu')).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('attack', () => {
     it("rejette si l'creature est introuvable", async () => {
       const result = await service.attack('unknown', 'char-1', { worldX: 0, worldY: 0, mapId: 1 });

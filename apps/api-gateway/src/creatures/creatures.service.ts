@@ -296,7 +296,7 @@ export class CreaturesService implements OnModuleInit {
    * `lastCreatureAutoAttackAt`) + le template. Retourne null si l'id n'est pas
    * une créature vivante connue. Aucune mutation, aucun recalcul délégué au client.
    */
-  getRuntimeCombatInfo(id: string): CreatureRuntimeCombatDto | null {
+  async getRuntimeCombatInfo(id: string): Promise<CreatureRuntimeCombatDto | null> {
     const creature = this.liveCreatures.get(id);
     if (!creature) return null;
     const t = creature.spawn?.template;
@@ -312,6 +312,29 @@ export class CreaturesService implements OnModuleInit {
     );
 
     const lastAtk = this.lastCreatureAutoAttackAt.get(id) ?? null;
+
+    // V5-C1 : capacités damage configurées + cooldown LIVE (lecture seule).
+    // Croise la config (getDamageAbilities, caché) et le runtime
+    // (creatureSkillCooldowns). Aucune mutation, ne déclenche aucun cast.
+    const now = Date.now();
+    const cooldowns = this.creatureSkillCooldowns.get(id);
+    const damageAbilities = await this.getDamageAbilities(t.id, t.key);
+    const abilities = damageAbilities.map((a) => {
+      const lastCastAt = cooldowns?.get(a.skillKey) ?? null;
+      const nextCastAt = lastCastAt != null ? lastCastAt + a.cooldownMs : null;
+      const cooldownRemainingMs = nextCastAt != null ? Math.max(0, nextCastAt - now) : 0;
+      return {
+        skillKey: a.skillKey,
+        skillName: a.skillName,
+        rangeWU: a.rangeWU,
+        cooldownMs: a.cooldownMs,
+        lastCastAt,
+        nextCastAt,
+        cooldownRemainingMs,
+        onCooldown: cooldownRemainingMs > 0,
+      };
+    });
+
     const lootPool = t.lootPool as unknown;
     const lootPoolSize = Array.isArray(lootPool)
       ? lootPool.length
@@ -348,6 +371,7 @@ export class CreaturesService implements OnModuleInit {
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,
+      abilities,
     };
   }
 

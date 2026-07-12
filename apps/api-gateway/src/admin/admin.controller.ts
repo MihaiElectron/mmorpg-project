@@ -71,8 +71,8 @@ export class AdminController {
    * n'est pas une créature vivante connue.
    */
   @Get('creatures/:id/runtime-combat')
-  getCreatureRuntimeCombat(@Param('id') id: string) {
-    const info = this.creaturesService.getRuntimeCombatInfo(id);
+  async getCreatureRuntimeCombat(@Param('id') id: string) {
+    const info = await this.creaturesService.getRuntimeCombatInfo(id);
     if (!info) throw new NotFoundException(`Créature vivante "${id}" introuvable.`);
     return info;
   }

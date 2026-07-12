@@ -13,6 +13,26 @@ export type CreatureRuntimeStats = {
  * Ne transite JAMAIS par le broadcast joueur (`CreatureDto`/`creature_update`).
  * Aucune valeur n'est recalculée côté client : le serveur est la source.
  */
+/**
+ * Capacité damage d'une créature avec son état de cooldown LIVE (V5-C1, lecture
+ * seule). Croise la config (getDamageAbilities) et le runtime
+ * (`creatureSkillCooldowns`). Aucune donnée recalculée côté client.
+ */
+export type CreatureRuntimeAbilityDto = {
+  skillKey: string;
+  skillName: string;
+  rangeWU: number;
+  cooldownMs: number;
+  /** Epoch ms du dernier cast de ce skill par cette créature, ou null si jamais. */
+  lastCastAt: number | null;
+  /** Epoch ms du prochain cast possible, ou null si jamais casté. */
+  nextCastAt: number | null;
+  /** Temps de cooldown restant en ms (0 si prêt / jamais casté). */
+  cooldownRemainingMs: number;
+  /** true si la capacité est encore en cooldown. */
+  onCooldown: boolean;
+};
+
 export type CreatureRuntimeCombatDto = {
   // A. Identité / état
   id: string;
@@ -51,6 +71,9 @@ export type CreatureRuntimeCombatDto = {
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
+  // F. Capacités damage configurées + cooldown live (V5-C1). Toujours présent
+  // (tableau vide si aucune capacité). Lecture seule.
+  abilities?: CreatureRuntimeAbilityDto[];
 };
 
 export type CreatureDto = {
