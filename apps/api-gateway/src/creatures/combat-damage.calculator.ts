@@ -4,8 +4,10 @@
  * Aucun accès DB, aucun socket, aucun effet de bord. Contrat de résolution
  * (docs/08_Gameplay/combat-resolution.md) — évitement puis deux blocs séparés :
  *
- *   HIT AVOIDANCE (esquive du DÉFENSEUR, avant tout le reste) :
- *     isDodged = defenderDodgeChancePercent > 0 && rng() < defenderDodgeChancePercent / 100
+ *   HIT AVOIDANCE (esquive du DÉFENSEUR, réduite par la précision de
+ *   l'ATTAQUANT, avant tout le reste) :
+ *     effectiveDodge = clamp(defenderDodgeChancePercent − attackerAccuracyPercent, 0, 100)
+ *     isDodged       = effectiveDodge > 0 && rng() < effectiveDodge / 100
  *     → si esquivé : dégâts 0, pas de critique, pas d'armure, pas de pénétration.
  *
  *   BLOC ATTAQUE (offensif, critique inclus — seulement si non esquivé) :
@@ -77,6 +79,14 @@ export interface CombatDamageInput {
    */
   defenderDodgeChancePercent?: number;
   /**
+   * Précision de l'ATTAQUANT en POINTS DE POURCENTAGE (V4-G, stat dérivée
+   * offensive `accuracy`). Réduit la chance d'esquive EFFECTIVE du défenseur
+   * (`effectiveDodge = clamp(dodge − accuracy, 0, 100)`). NaN/Infinity/négatif
+   * → 0. Défaut 0. Ce n'est PAS une chance de toucher séparée : sans esquive
+   * défenseur, la précision n'a aucun effet.
+   */
+  attackerAccuracyPercent?: number;
+  /**
    * Générateur aléatoire injectable renvoyant [0, 1). Défaut `Math.random`.
    * Fourni par les tests pour un roll déterministe (esquive puis critique).
    * Serveur uniquement.
@@ -94,6 +104,10 @@ export interface CombatDamageResult {
   /** V4-F : true si le défenseur a esquivé (aucun dégât, pas de critique). */
   isDodged: boolean;
   defenderDodgeChancePercent: number;
+  /** V4-G : précision de l'attaquant appliquée (points de %). */
+  attackerAccuracyPercent: number;
+  /** V4-G : esquive effective après précision = clamp(dodge − accuracy, 0, 100). */
+  effectiveDodgeChancePercent: number;
   /** true si le hit est critique (roll < criticalChancePercent / 100). */
   isCritical: boolean;
   criticalChancePercent: number;
@@ -124,15 +138,27 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       ? Math.max(0, rawCritDamage)
       : 100;
 
-  // ── Hit avoidance : esquive du défenseur (AVANT tout le reste) ─────────────
-  // Défensif : NaN/négatif → 0, borné 100. Le roll d'esquive précède le critique
-  // (un hit esquivé ne peut pas être critique). Court-circuit : 0 dégât.
+  // ── Hit avoidance : esquive du défenseur, réduite par la précision (AVANT
+  // tout le reste). Défensif : NaN/négatif → 0. La précision de l'attaquant
+  // (V4-G) retranche des points à l'esquive : effectiveDodge = clamp(dodge −
+  // accuracy, 0, 100). Le roll précède le critique (un hit esquivé ne peut pas
+  // être critique). Court-circuit : 0 dégât.
   const rawDodge = input.defenderDodgeChancePercent;
   const defenderDodgeChancePercent =
     typeof rawDodge === 'number' && Number.isFinite(rawDodge)
       ? Math.min(100, Math.max(0, rawDodge))
       : 0;
-  const isDodged = defenderDodgeChancePercent > 0 && rng() < defenderDodgeChancePercent / 100;
+  const rawAccuracy = input.attackerAccuracyPercent;
+  const attackerAccuracyPercent =
+    typeof rawAccuracy === 'number' && Number.isFinite(rawAccuracy)
+      ? Math.max(0, rawAccuracy)
+      : 0;
+  const effectiveDodgeChancePercent = Math.min(
+    100,
+    Math.max(0, defenderDodgeChancePercent - attackerAccuracyPercent),
+  );
+  const isDodged =
+    effectiveDodgeChancePercent > 0 && rng() < effectiveDodgeChancePercent / 100;
   if (isDodged) {
     return {
       attackerValue,
@@ -143,6 +169,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       effectiveArmor: 0,
       isDodged: true,
       defenderDodgeChancePercent,
+      attackerAccuracyPercent,
+      effectiveDodgeChancePercent,
       isCritical: false,
       criticalChancePercent,
       criticalDamagePercent,
@@ -186,6 +214,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     effectiveArmor,
     isDodged: false,
     defenderDodgeChancePercent,
+    attackerAccuracyPercent,
+    effectiveDodgeChancePercent,
     isCritical,
     criticalChancePercent,
     criticalDamagePercent,

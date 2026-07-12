@@ -379,4 +379,94 @@ describe('calculateCombatDamage', () => {
       expect(r.finalDamage).toBe(0);
     });
   });
+
+  // ── V4-G : précision (accuracy) réduit l'esquive effective ─────────────────
+  describe('précision vs esquive (V4-G)', () => {
+    const base = {
+      attackerValue: 100,
+      targetDefense: 40,
+      minimumAttack: 0,
+      minimumDamage: 0,
+      hpBefore: 1000,
+    };
+
+    it('dodge 30, accuracy 0, roll 0.29 → esquivé (effective 30)', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 30,
+        attackerAccuracyPercent: 0,
+        rng: () => 0.29,
+      });
+      expect(r.effectiveDodgeChancePercent).toBe(30);
+      expect(r.isDodged).toBe(true);
+    });
+
+    it('dodge 30, accuracy 10, roll 0.25 → NON esquivé (effective 20)', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 30,
+        attackerAccuracyPercent: 10,
+        rng: () => 0.25, // 0.25 >= 0.20
+      });
+      expect(r.effectiveDodgeChancePercent).toBe(20);
+      expect(r.isDodged).toBe(false);
+      expect(r.finalDamage).toBe(60); // pipeline normal : 100 − 40
+    });
+
+    it('dodge 30, accuracy 50 → effective 0, jamais esquivé', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 30,
+        attackerAccuracyPercent: 50,
+        rng: () => 0, // même roll 0 : effective 0 → pas d'esquive
+      });
+      expect(r.effectiveDodgeChancePercent).toBe(0);
+      expect(r.isDodged).toBe(false);
+    });
+
+    it('dodge 0, accuracy 50 → effective 0, comportement inchangé', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 0,
+        attackerAccuracyPercent: 50,
+        rng: () => 0,
+      });
+      expect(r.effectiveDodgeChancePercent).toBe(0);
+      expect(r.isDodged).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('accuracy négative / NaN / Infinity → 0 (n\'augmente jamais l\'esquive)', () => {
+      const neg = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 30,
+        attackerAccuracyPercent: -50,
+        rng: () => 0.29,
+      });
+      expect(neg.attackerAccuracyPercent).toBe(0);
+      expect(neg.effectiveDodgeChancePercent).toBe(30);
+      expect(
+        calculateCombatDamage({ ...base, defenderDodgeChancePercent: 30, attackerAccuracyPercent: Number.NaN, rng: () => 0.29 }).effectiveDodgeChancePercent,
+      ).toBe(30);
+      expect(
+        calculateCombatDamage({ ...base, defenderDodgeChancePercent: 30, attackerAccuracyPercent: Number.POSITIVE_INFINITY, rng: () => 0.29 }).effectiveDodgeChancePercent,
+      ).toBe(30);
+    });
+
+    it('effective 0 (accuracy annule dodge) → critique et armure fonctionnent', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderDodgeChancePercent: 30,
+        attackerAccuracyPercent: 50, // effective 0 → pas d'esquive
+        armorPenetrationPercent: 50,
+        criticalChancePercent: 100,
+        criticalDamagePercent: 150,
+        rng: () => 0, // pas d'esquive (effective 0), donc critique s'applique
+      });
+      expect(r.isDodged).toBe(false);
+      expect(r.isCritical).toBe(true);
+      // attaque round(100 × 1.5) = 150 ; armure effective round(40 × 0.5) = 20 → 130.
+      expect(r.finalDamage).toBe(130);
+    });
+  });
 });

@@ -71,6 +71,8 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   'criticalDamage',
   // V4-F : esquive du défenseur (hit avoidance, avant le bloc attaque).
   'dodgeChance',
+  // V4-G : précision de l'attaquant — réduit l'esquive effective du défenseur.
+  'accuracy',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [

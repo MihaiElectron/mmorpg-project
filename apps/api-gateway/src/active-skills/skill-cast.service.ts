@@ -291,6 +291,8 @@ export class SkillCastService {
       // V4-D : critique (bloc attaque) — stats dérivées serveur du lanceur.
       stats.derived.criticalChance ?? 0,
       stats.derived.criticalDamage ?? 100,
+      // V4-G : précision du lanceur (réduit l'esquive du défenseur).
+      stats.derived.accuracy ?? 0,
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

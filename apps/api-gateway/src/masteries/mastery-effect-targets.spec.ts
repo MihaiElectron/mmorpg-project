@@ -167,4 +167,21 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('dodgeChance');
     });
   });
+
+  // ── V4-G : précision exposée comme target permanent ───────────────────────
+  describe('précision (V4-G)', () => {
+    const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+
+    it('accuracy est exposée comme target (2 modes, implemented)', () => {
+      const t = targets.find((x) => x.key === 'accuracy');
+      expect(t).toBeDefined();
+      expect(t!.runtimeStatus).toBe('implemented');
+      expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+    });
+
+    it("accuracy n'est PAS contextuelle weaponType ; contextualStats reste [physicalAttack]", () => {
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('accuracy');
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
+    });
+  });
 });

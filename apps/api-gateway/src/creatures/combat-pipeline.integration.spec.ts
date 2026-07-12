@@ -33,8 +33,8 @@ import { Character } from '../characters/entities/character.entity';
 const TARGETS = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
 
 /** Personnage minimal : `attack` brut pilote physicalAttack (strength 0). */
-function makeCharacter(attack: number): Character {
-  return { attack, defense: 0, maxHealth: 100 } as Character;
+function makeCharacter(attack: number, dexterity = 0): Character {
+  return { attack, defense: 0, maxHealth: 100, baseDexterity: dexterity } as Character;
 }
 
 /** Maîtrise portant un unique modifier permanent sur une stat cible. */
@@ -55,11 +55,13 @@ function masteryWith(
 function resolve(opts: {
   attack: number;
   targetArmor: number;
+  dexterity?: number;
+  defenderDodgeChancePercent?: number;
   masteryDefs?: MasteryEffectsDefinitionLike[];
   masteryLevels?: Record<string, number>;
   damageType?: DamageType;
   minimumDamage?: number;
-  /** rng injecté → roll critique déterministe (défaut : jamais de critique). */
+  /** rng injecté → roll esquive/critique déterministe (défaut : ni esquive ni critique). */
   rng?: () => number;
 }) {
   const modifiers = aggregateMasteryStatModifiers(
@@ -68,7 +70,7 @@ function resolve(opts: {
     TARGETS,
   );
   const stats = CharacterStatsCalculator.compute(
-    makeCharacter(opts.attack),
+    makeCharacter(opts.attack, opts.dexterity ?? 0),
     DEFAULT_DERIVED_STAT_DEFINITIONS,
     undefined,
     modifiers,
@@ -81,7 +83,10 @@ function resolve(opts: {
     // V4-D : critique alimenté par les stats dérivées serveur (bloc attaque).
     criticalChancePercent: stats.derived.criticalChance,
     criticalDamagePercent: stats.derived.criticalDamage,
-    rng: opts.rng ?? (() => 0.999999), // par défaut : pas de critique
+    // V4-G : précision de l'attaquant (dérivée) vs esquive du défenseur fournie.
+    attackerAccuracyPercent: stats.derived.accuracy,
+    defenderDodgeChancePercent: opts.defenderDodgeChancePercent ?? 0,
+    rng: opts.rng ?? (() => 0.999999), // par défaut : ni esquive ni critique
     minimumAttack: 0,
     minimumDamage: opts.minimumDamage ?? 0,
     hpBefore: 1000,
@@ -254,6 +259,53 @@ describe('Combat pipeline (integration) — physical / armorPenetrationPercent /
       expect(stats.derived.criticalChance).toBe(0);
       expect(result.isCritical).toBe(false);
       expect(result.finalDamage).toBe(60);
+    });
+  });
+
+  // ── Précision (V4-G) : dexterity → accuracy → réduit l'esquive effective ───
+  describe('précision (V4-G)', () => {
+    it('dexterity augmente accuracy (coef 0.5)', () => {
+      const { stats } = resolve({ attack: 100, targetArmor: 40, dexterity: 40 });
+      expect(stats.derived.accuracy).toBe(20); // 40 × 0.5
+    });
+
+    it("accuracy dérivée réduit l'esquive effective du défenseur", () => {
+      // dexterity 40 → accuracy 20 ; défenseur dodge 30 → effective 30 − 20 = 10.
+      const { stats, result } = resolve({
+        attack: 100,
+        targetArmor: 40,
+        dexterity: 40,
+        defenderDodgeChancePercent: 30,
+        rng: () => 0.15, // 0.15 >= 0.10 → non esquivé
+      });
+      expect(stats.derived.accuracy).toBe(20);
+      expect(result.effectiveDodgeChancePercent).toBe(10);
+      expect(result.isDodged).toBe(false);
+      expect(result.finalDamage).toBe(60);
+    });
+
+    it("sous le seuil réduit, l'esquive réussit encore", () => {
+      const { result } = resolve({
+        attack: 100,
+        targetArmor: 40,
+        dexterity: 40, // accuracy 20
+        defenderDodgeChancePercent: 30, // effective 10
+        rng: () => 0.05, // 0.05 < 0.10 → esquivé
+      });
+      expect(result.isDodged).toBe(true);
+      expect(result.finalDamage).toBe(0);
+    });
+
+    it('sans précision (dexterity 0), esquive pleine', () => {
+      const { stats, result } = resolve({
+        attack: 100,
+        targetArmor: 40,
+        defenderDodgeChancePercent: 30,
+        rng: () => 0.29, // 0.29 < 0.30 → esquivé
+      });
+      expect(stats.derived.accuracy).toBe(0);
+      expect(result.effectiveDodgeChancePercent).toBe(30);
+      expect(result.isDodged).toBe(true);
     });
   });
 

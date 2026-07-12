@@ -102,10 +102,10 @@ describe("DerivedStatsService", () => {
     });
 
     it("ignore une clé hors des implémentées (garde défensif)", async () => {
-      // `accuracy` reste calculatedOnly (non branchée combat) → jamais promue.
+      // `parryChance` reste calculatedOnly (non branchée combat) → jamais promue.
       repo.find.mockResolvedValue(
         fullCatalogRows({
-          accuracy: {
+          parryChance: {
             masteryEligible: false,
             runtimeStatus: "calculatedOnly",
             allowedModifierModes: [],

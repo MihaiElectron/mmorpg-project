@@ -601,6 +601,10 @@ export class CreaturesService implements OnModuleInit {
       // par défaut (Math.random). 0 % → jamais de critique, historique inchangé.
       criticalChancePercent: charStats.derived.criticalChance ?? 0,
       criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
+      // V4-G : précision du joueur (attaquant). Le défenseur est la créature
+      // (pas de dodgeChance) → aucune esquive à réduire ; inchangé aujourd'hui.
+      attackerAccuracyPercent: charStats.derived.accuracy ?? 0,
+      defenderDodgeChancePercent: 0,
       minimumAttack: 5,
       minimumDamage: 1,
       hpBefore: creature.health,
@@ -675,6 +679,9 @@ export class CreaturesService implements OnModuleInit {
         attackerValue: derived.attackPower,
         targetDefense: charStats.derived.defense,
         defenderDodgeChancePercent: charStats.derived.dodgeChance ?? 0,
+        // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
+        // Le joueur défenseur esquive comme en V4-F (comportement identique).
+        attackerAccuracyPercent: 0,
         minimumAttack: 0,
         minimumDamage: 1,
         hpBefore: character.health,
@@ -727,6 +734,9 @@ export class CreaturesService implements OnModuleInit {
     // 0 % → jamais de critique. Roll serveur par défaut (Math.random).
     criticalChancePercent = 0,
     criticalDamagePercent = 100,
+    // V4-G : précision du lanceur (réduit l'esquive du défenseur). Le défenseur
+    // est la créature (pas de dodgeChance) → sans effet aujourd'hui. Défaut 0.
+    attackerAccuracyPercent = 0,
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -762,6 +772,8 @@ export class CreaturesService implements OnModuleInit {
       damageType,
       criticalChancePercent,
       criticalDamagePercent,
+      attackerAccuracyPercent,
+      defenderDodgeChancePercent: 0,
       minimumAttack: 0,
       minimumDamage: 1,
       hpBefore: creature.health,
