@@ -14,7 +14,8 @@ import {
   MELEE_RANGE_WU,
 } from '../characters/attack-range.helper';
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
-import { calculateCombatDamage, DamageType } from './combat-damage.calculator';
+import { DamageType } from './combat-damage.calculator';
+import { resolveCombatHit } from './combat-hit.resolver';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -681,22 +682,24 @@ export class CreaturesService implements OnModuleInit {
         masteryCombat.damageFlat,
     );
 
-    const damageResult = calculateCombatDamage({
-      attackerValue: effectiveAttack,
-      targetDefense: derived.defenseTotal,
-      // V4-A : pénétration d'armure en % de l'attaquant (stat dérivée serveur,
-      // inclut les modificateurs de maîtrise permanents). 0 → inchangé.
-      armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+    const damageResult = resolveCombatHit({
+      attacker: {
+        attackPower: effectiveAttack,
+        minimumAttack: 5,
+        // V4-A : pénétration d'armure en % (stat dérivée serveur, inclut les
+        // modificateurs de maîtrise permanents). 0 → inchangé.
+        armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+        // V4-D : critique (bloc attaque) — stats dérivées serveur. 0 % → jamais.
+        criticalChancePercent: charStats.derived.criticalChance ?? 0,
+        criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
+        // V4-G : précision du joueur. Défenseur = créature (pas d'esquive) → sans effet.
+        accuracyPercent: charStats.derived.accuracy ?? 0,
+      },
+      defender: {
+        defense: derived.defenseTotal,
+        dodgeChancePercent: 0,
+      },
       damageType: 'physical',
-      // V4-D : critique (bloc attaque) — stats dérivées serveur. Roll serveur
-      // par défaut (Math.random). 0 % → jamais de critique, historique inchangé.
-      criticalChancePercent: charStats.derived.criticalChance ?? 0,
-      criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
-      // V4-G : précision du joueur (attaquant). Le défenseur est la créature
-      // (pas de dodgeChance) → aucune esquive à réduire ; inchangé aujourd'hui.
-      attackerAccuracyPercent: charStats.derived.accuracy ?? 0,
-      defenderDodgeChancePercent: 0,
-      minimumAttack: 5,
       minimumDamage: 1,
       hpBefore: creature.health,
     });
@@ -789,20 +792,24 @@ export class CreaturesService implements OnModuleInit {
       const defenderCanParry =
         defenderMeleeReachWU !== null && defenderMeleeReachWU >= incomingAttackReachWU;
 
-      const riposteResult = calculateCombatDamage({
-        attackerValue: derived.attackPower,
-        targetDefense: charStats.derived.defense,
-        // V4-I : parade du défenseur, résolue en premier. Annule le hit entrant.
-        defenderParryChancePercent: charStats.derived.parryChance ?? 0,
-        defenderCanParry,
-        defenderDodgeChancePercent: charStats.derived.dodgeChance ?? 0,
-        // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
-        // Le joueur défenseur esquive comme en V4-F (comportement identique).
-        attackerAccuracyPercent: 0,
-        // V4-H : le joueur défenseur peut BLOQUER la riposte (réduction des dégâts).
-        defenderBlockChancePercent: charStats.derived.blockChance ?? 0,
-        defenderBlockReductionPercent: charStats.derived.blockReductionPercent ?? 0,
-        minimumAttack: 0,
+      const riposteResult = resolveCombatHit({
+        attacker: {
+          attackPower: derived.attackPower,
+          minimumAttack: 0,
+          // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
+          accuracyPercent: 0,
+        },
+        defender: {
+          defense: charStats.derived.defense,
+          // V4-F : le joueur défenseur peut esquiver la riposte.
+          dodgeChancePercent: charStats.derived.dodgeChance ?? 0,
+          // V4-H : et la bloquer (réduction des dégâts).
+          blockChancePercent: charStats.derived.blockChance ?? 0,
+          blockReductionPercent: charStats.derived.blockReductionPercent ?? 0,
+          // V4-I : parade (résolue en premier, annule le hit) si éligible.
+          parryChancePercent: charStats.derived.parryChance ?? 0,
+          canParry: defenderCanParry,
+        },
         minimumDamage: 1,
         hpBefore: character.health,
       });
@@ -825,19 +832,23 @@ export class CreaturesService implements OnModuleInit {
       // CONTRE-ATTAQUE serveur joueur → créature. La contre-attaque n'autorise
       // JAMAIS une parade en retour (defenderCanParry: false) : pas de chaîne.
       if (riposteResult.isParried && (creature.state === 'alive' || creature.state === 'fighting')) {
-        const counterResult = calculateCombatDamage({
-          attackerValue: charStats.derived.counterAttackPower ?? 0,
-          targetDefense: derived.defenseTotal,
-          armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+        const counterResult = resolveCombatHit({
+          attacker: {
+            attackPower: charStats.derived.counterAttackPower ?? 0,
+            minimumAttack: 0,
+            armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+            criticalChancePercent: charStats.derived.criticalChance ?? 0,
+            criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
+            accuracyPercent: charStats.derived.accuracy ?? 0,
+          },
+          defender: {
+            // Créature défenseur : pas d'esquive, pas de blocage, JAMAIS de parade.
+            defense: derived.defenseTotal,
+            dodgeChancePercent: 0,
+            canParry: false,
+            parryChancePercent: 0,
+          },
           damageType: 'physical',
-          criticalChancePercent: charStats.derived.criticalChance ?? 0,
-          criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
-          attackerAccuracyPercent: charStats.derived.accuracy ?? 0,
-          // Créature défenseur : pas d'esquive, pas de blocage, JAMAIS de parade.
-          defenderDodgeChancePercent: 0,
-          defenderCanParry: false,
-          defenderParryChancePercent: 0,
-          minimumAttack: 0,
           minimumDamage: 1,
           hpBefore: creature.health,
         });
@@ -956,16 +967,20 @@ export class CreaturesService implements OnModuleInit {
       debugMods,
     );
 
-    const damageResult = calculateCombatDamage({
-      attackerValue: Math.max(0, rawAmount),
-      targetDefense: derived.defenseTotal,
-      armorPenetrationPercent,
+    const damageResult = resolveCombatHit({
+      attacker: {
+        attackPower: Math.max(0, rawAmount),
+        minimumAttack: 0,
+        armorPenetrationPercent,
+        criticalChancePercent,
+        criticalDamagePercent,
+        accuracyPercent: attackerAccuracyPercent,
+      },
+      defender: {
+        defense: derived.defenseTotal,
+        dodgeChancePercent: 0,
+      },
       damageType,
-      criticalChancePercent,
-      criticalDamagePercent,
-      attackerAccuracyPercent,
-      defenderDodgeChancePercent: 0,
-      minimumAttack: 0,
       minimumDamage: 1,
       hpBefore: creature.health,
     });
