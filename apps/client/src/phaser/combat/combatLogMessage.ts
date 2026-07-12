@@ -35,6 +35,23 @@ function actorLabel(
 }
 
 /**
+ * V4-H : suffixe " (N bloqués)" quand le DÉFENSEUR a bloqué le hit. Le serveur
+ * est seul juge (`isBlocked` + `blockedDamage`, dégâts absorbés). Vide si le hit
+ * n'est pas bloqué ou si aucun montant absorbé n'est fourni — jamais deviné.
+ */
+/** Accord singulier/pluriel du mot "dégât(s)" selon le montant. */
+function damageWord(amount: number): string {
+  return amount === 1 ? "dégât" : "dégâts";
+}
+
+function blockedSuffix(event: CombatEventPayload): string {
+  if (!event.isBlocked) return "";
+  const blocked = event.blockedDamage;
+  if (typeof blocked !== "number" || !Number.isFinite(blocked) || blocked <= 0) return "";
+  return blocked === 1 ? " (1 bloqué)" : ` (${blocked} bloqués)`;
+}
+
+/**
  * Retourne un message lisible, ou null si l'event ne doit pas être loggé.
  * Exemples : "Vous infligez 8 dégâts à turkey", "turkey vous inflige 3 dégâts",
  * "turkey est mort".
@@ -55,7 +72,7 @@ export function formatCombatLogMessage(
       typeof event.amount === "number" && Number.isFinite(event.amount) && event.amount > 0;
     if (hasAmount) {
       const critPart = event.isCritical ? "un coup critique de " : "";
-      return `${target} succombe après avoir subi ${critPart}${event.amount} dégâts`;
+      return `${target} succombe après avoir subi ${critPart}${event.amount} ${damageWord(event.amount as number)}`;
     }
     return `${target} succombe`;
   }
@@ -87,27 +104,30 @@ export function formatCombatLogMessage(
         ? ` avec ${event.skillName}`
         : "";
     const crit = event.isCritical === true; // V4-E : info serveur fiable
+    const block = blockedSuffix(event); // V4-H : " (N bloqués)" si le défenseur a bloqué
 
     const sourceLocal = isLocalPlayer(event.sourceType, event.sourceId, opts.localCharacterId);
     const targetLocal = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId);
 
+    const word = damageWord(amount);
+
     if (sourceLocal) {
       const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
       return crit
-        ? `Vous infligez un coup critique à ${target}${withSkill} : ${amount} dégâts`
-        : `Vous infligez ${amount} dégâts à ${target}${withSkill}`;
+        ? `Vous infligez un coup critique à ${target}${withSkill} : ${amount} ${word}${block}`
+        : `Vous infligez ${amount} ${word} à ${target}${withSkill}${block}`;
     }
     if (targetLocal) {
       const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
       return crit
-        ? `${source} vous inflige un coup critique${withSkill} : ${amount} dégâts`
-        : `${source} vous inflige ${amount} dégâts${withSkill}`;
+        ? `${source} vous inflige un coup critique${withSkill} : ${amount} ${word}${block}`
+        : `${source} vous inflige ${amount} ${word}${withSkill}${block}`;
     }
     const source = actorLabel(event.sourceType, event.sourceId, opts, { subject: true });
     const target = actorLabel(event.targetType, event.targetId, opts, { subject: false });
     return crit
-      ? `${source} inflige un coup critique à ${target}${withSkill} : ${amount} dégâts`
-      : `${source} inflige ${amount} dégâts à ${target}${withSkill}`;
+      ? `${source} inflige un coup critique à ${target}${withSkill} : ${amount} ${word}${block}`
+      : `${source} inflige ${amount} ${word} à ${target}${withSkill}${block}`;
   }
 
   return null;

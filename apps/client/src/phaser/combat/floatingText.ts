@@ -29,6 +29,10 @@ export interface CombatEventPayload {
   targetDied?: boolean;
   /** V4-F : true si le défenseur a esquivé le hit (0 dégât). */
   isDodged?: boolean;
+  /** V4-H : true si le défenseur a bloqué le hit (dégâts réduits, pas annulés). */
+  isBlocked?: boolean;
+  /** V4-H : montant absorbé par le blocage (0 si non bloqué). */
+  blockedDamage?: number;
   createdAt?: number;
 }
 
@@ -38,6 +42,7 @@ export const FLOATING_COLORS = {
   damageToCreature: "#ffe066", // le joueur inflige : jaune
   critical: "#ff3b3b", // coup critique : rouge (distinct du jaune normal)
   dodge: "#8fd3ff", // esquive : bleu clair sobre (V4-F)
+  blocked: "#b8c4d0", // blocage : gris acier (dégâts réduits, distinct de l'esquive) (V4-H)
   death: "#c0c0c0", // mort : gris
 } as const;
 
@@ -59,9 +64,13 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
     if (event.isDodged) return "Esquive";
     const hasAmount = typeof event.amount === "number" && Number.isFinite(event.amount);
     if (hasAmount && (event.amount as number) <= 0) return null; // anti-spam : ignore <= 0
-    if (typeof event.text === "string" && event.text.length > 0) return event.text;
-    if (hasAmount) return `-${event.amount}`;
-    return null;
+    let base: string | null = null;
+    if (typeof event.text === "string" && event.text.length > 0) base = event.text;
+    else if (hasAmount) base = `-${event.amount}`;
+    if (base === null) return null;
+    // V4-H : le hit bloqué inflige quand même `amount` dégâts, mais on signale le
+    // blocage (jamais confondu avec une esquive). Le serveur reste seul juge.
+    return event.isBlocked ? `${base} (bloqué)` : base;
   }
 
   return null;
@@ -69,11 +78,14 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
 
 /**
  * Couleur du texte selon type/cible. Esquive → bleu clair (V4-F, avant tout) ;
- * un coup critique (dégâts) passe en rouge (V4-E).
+ * blocage → gris acier (V4-H, dégâts réduits) ; un coup critique (dégâts) passe
+ * en rouge (V4-E). Le blocage prime sur le critique et la cible : c'est
+ * l'information défensive saillante du hit.
  */
 export function resolveFloatingColor(event: CombatEventPayload): string {
   if (event.type === "death") return FLOATING_COLORS.death;
   if (event.type === "damage" && event.isDodged) return FLOATING_COLORS.dodge;
+  if (event.type === "damage" && event.isBlocked) return FLOATING_COLORS.blocked;
   if (event.targetType === "player") return FLOATING_COLORS.damageToPlayer;
   if (event.isCritical) return FLOATING_COLORS.critical; // V4-E : crit → rouge
   return FLOATING_COLORS.damageToCreature;

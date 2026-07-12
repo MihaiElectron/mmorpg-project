@@ -65,6 +65,54 @@ describe("formatCombatLogMessage", () => {
     expect(msg).not.toContain("critique");
   });
 
+  it("accord singulier : 1 point de dégât → 'dégât' (pas 'dégâts')", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 1, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1" },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 1 dégât à turkey");
+  });
+
+  it("V4-H : hit bloqué par la créature → suffixe '(N bloqués)'", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 77, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isBlocked: true, blockedDamage: 33 },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 77 dégâts à turkey (33 bloqués)");
+  });
+
+  it("V4-H : 1 seul point bloqué → singulier '(1 bloqué)'", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 1, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isBlocked: true, blockedDamage: 1 },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 1 dégât à turkey (1 bloqué)");
+  });
+
+  it("V4-H : coup critique ET bloqué → les deux annotations sont conservées", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 90, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isCritical: true, isBlocked: true, blockedDamage: 20 },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez un coup critique à turkey : 90 dégâts (20 bloqués)");
+  });
+
+  it("V4-H : riposte bloquée par le joueur local → suffixe conservé", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 1, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL, isBlocked: true, blockedDamage: 1 },
+      opts,
+    );
+    expect(msg).toBe("turkey vous inflige 1 dégât (1 bloqué)");
+  });
+
+  it("V4-H : isBlocked sans blockedDamage valide → aucun suffixe (jamais deviné)", () => {
+    const msg = formatCombatLogMessage(
+      { type: "damage", amount: 8, sourceType: "player", sourceId: LOCAL, targetType: "creature", targetId: "creature-1", isBlocked: true, blockedDamage: 0 },
+      opts,
+    );
+    expect(msg).toBe("Vous infligez 8 dégâts à turkey");
+  });
+
   it("créature nommée inflige des dégâts au joueur local", () => {
     const msg = formatCombatLogMessage(
       { type: "damage", amount: 3, sourceType: "creature", sourceId: "creature-1", targetType: "player", targetId: LOCAL },

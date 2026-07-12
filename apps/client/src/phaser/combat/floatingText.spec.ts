@@ -77,6 +77,26 @@ describe("formatFloatingCombatText", () => {
     expect(formatFloatingCombatText({ type: "damage", isDodged: true, amount: 0 })).toBe("Esquive");
     expect(formatFloatingCombatText({ type: "damage", isDodged: true })).toBe("Esquive");
   });
+
+  it("V4-H : hit bloqué → '-amount (bloqué)' (les dégâts finaux restent affichés)", () => {
+    expect(
+      formatFloatingCombatText({ type: "damage", amount: 30, isBlocked: true, blockedDamage: 30 }),
+    ).toBe("-30 (bloqué)");
+    // Avec text serveur prioritaire, l'annotation de blocage est ajoutée.
+    expect(
+      formatFloatingCombatText({ type: "damage", amount: 30, text: "-30", isBlocked: true }),
+    ).toBe("-30 (bloqué)");
+  });
+
+  it("V4-H : esquive prime sur blocage (mutuellement exclusifs serveur) → 'Esquive'", () => {
+    expect(
+      formatFloatingCombatText({ type: "damage", isDodged: true, isBlocked: true, amount: 0 }),
+    ).toBe("Esquive");
+  });
+
+  it("V4-H : hit non bloqué → pas d'annotation", () => {
+    expect(formatFloatingCombatText({ type: "damage", amount: 8, isBlocked: false })).toBe("-8");
+  });
 });
 
 describe("resolveFloatingColor", () => {
@@ -110,6 +130,21 @@ describe("resolveFloatingColor", () => {
     ).toBe(FLOATING_COLORS.dodge);
     expect(
       resolveFloatingColor({ type: "damage", targetType: "creature", isDodged: true, isCritical: false }),
+    ).toBe(FLOATING_COLORS.dodge);
+  });
+
+  it("V4-H : hit bloqué → gris acier, prime sur crit et sur la cible", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "creature", isBlocked: true }),
+    ).toBe(FLOATING_COLORS.blocked);
+    expect(
+      resolveFloatingColor({ type: "damage", targetType: "player", isBlocked: true, isCritical: true }),
+    ).toBe(FLOATING_COLORS.blocked);
+  });
+
+  it("V4-H : esquive prime sur blocage (couleur esquive)", () => {
+    expect(
+      resolveFloatingColor({ type: "damage", isDodged: true, isBlocked: true }),
     ).toBe(FLOATING_COLORS.dodge);
   });
 });
