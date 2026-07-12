@@ -142,7 +142,7 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isDodged: false,
       isBlocked: false,
       blockedDamage: 0,
-      riposte: { damage: 3, characterHealth: 97, isDodged: false, isBlocked: false, blockedDamage: 0 },
+      riposte: { damage: 3, characterHealth: 97, isDodged: false, isBlocked: false, blockedDamage: 0, isParried: false },
     });
     const client = makeClient();
 
@@ -183,7 +183,7 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isDodged: false,
       isBlocked: false,
       blockedDamage: 0,
-      riposte: { damage: 2, characterHealth: 98, isDodged: false, isBlocked: true, blockedDamage: 2 },
+      riposte: { damage: 2, characterHealth: 98, isDodged: false, isBlocked: true, blockedDamage: 2, isParried: false },
     });
     const client = makeClient();
 
@@ -200,6 +200,89 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
       isDodged: false,
       isBlocked: true,
       blockedDamage: 2,
+    });
+  });
+
+  it('V4-I : hit paré (riposte) → isParried true, amount 0, aucun death event ; contre-attaque = event séparé joueur → créature', async () => {
+    const { gw, roomEmits } = makeGateway({
+      success: true,
+      dto: { ...CREATURE_DTO, health: 14 },
+      damage: 8,
+      attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      riposte: { damage: 0, characterHealth: 100, isDodged: false, isBlocked: false, blockedDamage: 0, isParried: true },
+      counterAttack: { damage: 8, creatureHealth: 14, killed: false, isCritical: false },
+    });
+    const client = makeClient();
+
+    await (gw as any).onAttackCreature(client, { targetId: 'creature-1' });
+
+    // Le hit paré (riposte créature → joueur) : amount 0, isParried true.
+    const parriedHit = roomEmits.filter(
+      (e) => e.event === COMBAT_EVENT && e.payload.type === 'damage' && e.payload.targetType === 'player',
+    );
+    expect(parriedHit).toHaveLength(1);
+    expect(parriedHit[0].payload).toMatchObject({
+      targetType: 'player',
+      targetId: 'char-1',
+      amount: 0,
+      isParried: true,
+      isDodged: false,
+      isBlocked: false,
+    });
+
+    // Contre-attaque = event damage SÉPARÉ, source joueur → cible créature.
+    const counter = roomEmits.filter(
+      (e) =>
+        e.event === COMBAT_EVENT &&
+        e.payload.type === 'damage' &&
+        e.payload.isCounterAttack === true,
+    );
+    expect(counter).toHaveLength(1);
+    expect(counter[0].payload).toMatchObject({
+      sourceType: 'player',
+      sourceId: 'char-1',
+      targetType: 'creature',
+      targetId: 'creature-1',
+      amount: 8,
+      isCounterAttack: true,
+      targetDied: false,
+    });
+
+    // Aucun death event sur le hit paré entrant (créature vivante).
+    expect(roomEmits.some((e) => e.event === COMBAT_EVENT && e.payload.type === 'death')).toBe(false);
+  });
+
+  it('V4-I : contre-attaque létale → death event lié à la contre-attaque uniquement', async () => {
+    const { gw, roomEmits } = makeGateway({
+      success: true,
+      dto: { ...CREATURE_DTO, state: 'dead', health: 0 },
+      damage: 8,
+      attackerId: 'char-1',
+      isCritical: false,
+      killed: false, // le hit principal n'a PAS tué
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      riposte: { damage: 0, characterHealth: 100, isDodged: false, isBlocked: false, blockedDamage: 0, isParried: true },
+      counterAttack: { damage: 98, creatureHealth: 0, killed: true, isCritical: false },
+    });
+    const client = makeClient();
+
+    await (gw as any).onAttackCreature(client, { targetId: 'creature-1' });
+
+    const deaths = roomEmits.filter((e) => e.event === COMBAT_EVENT && e.payload.type === 'death');
+    expect(deaths).toHaveLength(1);
+    expect(deaths[0].payload).toMatchObject({
+      sourceType: 'player',
+      targetType: 'creature',
+      targetId: 'creature-1',
+      isCounterAttack: true,
+      targetDied: true,
     });
   });
 });

@@ -198,8 +198,10 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       }
     });
 
-    it("parryChance reste NON exposée (hors scope V4-H)", () => {
-      expect(targets.find((x) => x.key === 'parryChance')).toBeUndefined();
+    it("une dérivée non branchée (attackSpeed) reste NON exposée", () => {
+      // parryChance a été promue en V4-I ; on vérifie ici qu'une stat encore
+      // calculatedOnly (attackSpeed) n'est toujours pas exposée comme target.
+      expect(targets.find((x) => x.key === 'attackSpeed')).toBeUndefined();
     });
 
     it("blockReductionPercent a une baseValue de 25 % (un blocage absorbe 25 % par défaut)", () => {
@@ -209,6 +211,42 @@ describe('buildMasteryEffectTargets (V3-B — depuis les DerivedStatDefinition)'
       expect(def!.minValue).toBe(0);
       expect(def!.maxValue).toBe(100);
       expect(def!.category).toBe('defensive');
+    });
+  });
+
+  // ── V4-I : parade + contre-attaque exposées comme targets permanentes ──────
+  describe('parade + contre-attaque (V4-I)', () => {
+    const targets = buildMasteryEffectTargets(DEFAULT_DERIVED_STAT_DEFINITIONS);
+
+    it('parryChance et counterAttackPower sont exposées comme targets (2 modes)', () => {
+      for (const key of ['parryChance', 'counterAttackPower']) {
+        const t = targets.find((x) => x.key === key);
+        expect(t).toBeDefined();
+        expect(t!.runtimeStatus).toBe('implemented');
+        expect(t!.allowedModes).toEqual(['percentPerLevel', 'flatPerLevel']);
+      }
+    });
+
+    it("parryChance conserve ses coefficients et sa catégorie defensive", () => {
+      const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === 'parryChance');
+      expect(def!.category).toBe('defensive');
+      expect(def!.primaryCoefficients).toEqual({ strength: 0.15, dexterity: 0.15 });
+      expect(def!.maxValue).toBe(40);
+    });
+
+    it("counterAttackPower : offensive, coeffs dex/agi/int, non bornée en haut", () => {
+      const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === 'counterAttackPower');
+      expect(def!.category).toBe('offensive');
+      expect(def!.primaryCoefficients).toEqual({ dexterity: 0.4, agility: 0.3, intelligence: 0.2 });
+      expect(def!.baseValue).toBe(0);
+      expect(def!.minValue).toBe(0);
+      expect(def!.maxValue).toBeNull();
+    });
+
+    it("ni parryChance ni counterAttackPower ne sont contextuelles ; contextualStats reste [physicalAttack]", () => {
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('parryChance');
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).not.toContain('counterAttackPower');
+      expect(CONTEXTUAL_MASTERY_EFFECT_STATS).toEqual(['physicalAttack']);
     });
   });
 });

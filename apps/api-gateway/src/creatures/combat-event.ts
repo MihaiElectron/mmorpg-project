@@ -36,6 +36,10 @@ export interface CombatEvent {
   isBlocked?: boolean;
   /** V4-H : montant absorbé par le blocage (0 si non bloqué). */
   blockedDamage?: number;
+  /** V4-I : true si le défenseur a paré le hit entrant (annulé, 0 dégât). */
+  isParried?: boolean;
+  /** V4-I : true si ce hit EST la contre-attaque déclenchée par une parade. */
+  isCounterAttack?: boolean;
   createdAt: number;
 }
 
@@ -56,6 +60,8 @@ export interface CombatEventInput {
   isDodged?: boolean;
   isBlocked?: boolean;
   blockedDamage?: number;
+  isParried?: boolean;
+  isCounterAttack?: boolean;
 }
 
 /** Construit un CombatEvent en remplissant `id` (unique) et `createdAt`. */

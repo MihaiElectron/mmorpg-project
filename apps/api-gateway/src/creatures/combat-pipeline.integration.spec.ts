@@ -374,4 +374,66 @@ describe('Combat pipeline (integration) — physical / armorPenetrationPercent /
     });
     expect(result.finalDamage).toBe(15); // 20 − 5
   });
+
+  // ── V4-I : parade + contre-attaque (stats dérivées réelles) ────────────────
+  describe('parade + contre-attaque (V4-I)', () => {
+    it('strength + dexterity augmentent parryChance (coefs 0.15 / 0.15)', () => {
+      const character = {
+        attack: 0,
+        defense: 0,
+        maxHealth: 100,
+        baseStrength: 20,
+        baseDexterity: 20,
+      } as Character;
+      const stats = CharacterStatsCalculator.compute(character, DEFAULT_DERIVED_STAT_DEFINITIONS);
+      // parryChance = 20 × 0.15 + 20 × 0.15 = 6.
+      expect(stats.derived.parryChance).toBe(6);
+    });
+
+    it('dexterity/agility/intelligence augmentent counterAttackPower (0.4 / 0.3 / 0.2)', () => {
+      const character = {
+        attack: 0,
+        defense: 0,
+        maxHealth: 100,
+        baseDexterity: 10,
+        baseAgility: 10,
+        baseIntelligence: 10,
+      } as Character;
+      const stats = CharacterStatsCalculator.compute(character, DEFAULT_DERIVED_STAT_DEFINITIONS);
+      // counterAttackPower = 10 × 0.4 + 10 × 0.3 + 10 × 0.2 = 9.
+      expect(stats.derived.counterAttackPower).toBe(9);
+    });
+
+    it('une maîtrise (flatPerLevel) augmente parryChance', () => {
+      const modifiers = aggregateMasteryStatModifiers(
+        [masteryWith('parryChance', 'flatPerLevel', 5)],
+        { test_mastery: 3 },
+        TARGETS,
+      );
+      const stats = CharacterStatsCalculator.compute(
+        makeCharacter(0),
+        DEFAULT_DERIVED_STAT_DEFINITIONS,
+        undefined,
+        modifiers,
+      );
+      // base 0 + flat (level 3 × 5) = 15.
+      expect(stats.derived.parryChance).toBe(15);
+    });
+
+    it('une maîtrise (flatPerLevel) augmente counterAttackPower', () => {
+      const modifiers = aggregateMasteryStatModifiers(
+        [masteryWith('counterAttackPower', 'flatPerLevel', 10)],
+        { test_mastery: 2 },
+        TARGETS,
+      );
+      const stats = CharacterStatsCalculator.compute(
+        makeCharacter(0),
+        DEFAULT_DERIVED_STAT_DEFINITIONS,
+        undefined,
+        modifiers,
+      );
+      // base 0 + flat (level 2 × 10) = 20.
+      expect(stats.derived.counterAttackPower).toBe(20);
+    });
+  });
 });

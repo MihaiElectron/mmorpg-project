@@ -2,7 +2,13 @@
  * CombatDamageCalculator — calcul de dégâts PUR (Combat V1).
  * ---------------------------------------------------------------------------
  * Aucun accès DB, aucun socket, aucun effet de bord. Contrat de résolution
- * (docs/08_Gameplay/combat-resolution.md) — évitement puis deux blocs séparés :
+ * (docs/08_Gameplay/combat-resolution.md) — parade, évitement, puis deux blocs :
+ *
+ *   PARADE (V4-I, réaction active du DÉFENSEUR, EN PREMIER — avant l'esquive) :
+ *     effectiveParry = defenderCanParry ? clamp(defenderParryChancePercent, 0, 100) : 0
+ *     isParried      = effectiveParry > 0 && rng() < effectiveParry / 100
+ *     → si paré : hit entrant ANNULÉ (0 dégât, pas d'esquive/critique/armure/
+ *       blocage). La contre-attaque est déclenchée par le SERVICE (jamais ici).
  *
  *   HIT AVOIDANCE (esquive du DÉFENSEUR, réduite par la précision de
  *   l'ATTAQUANT, avant tout le reste) :
@@ -104,9 +110,24 @@ export interface CombatDamageInput {
    */
   defenderBlockReductionPercent?: number;
   /**
+   * Chance de parade du DÉFENSEUR en POURCENTAGE (V4-I, stat dérivée
+   * `parryChance`). Évaluée EN PREMIER, AVANT l'esquive : une parade est une
+   * réaction active qui ANNULE le hit entrant et déclenche une contre-attaque
+   * (calculée côté service, jamais ici). Clampée 0–100, NaN/Infinity/négatif → 0.
+   * Ignorée (effective 0) si `defenderCanParry !== true`.
+   */
+  defenderParryChancePercent?: number;
+  /**
+   * Éligibilité de la parade, décidée par le SERVICE (défenseur joueur, attaque
+   * corps-à-corps, arme de mêlée équipée, portée suffisante). Le calculateur pur
+   * ne lit jamais l'équipement : il reçoit ce booléen. `false`/absent → parade
+   * impossible (chance effective 0, aucun roll consommé).
+   */
+  defenderCanParry?: boolean;
+  /**
    * Générateur aléatoire injectable renvoyant [0, 1). Défaut `Math.random`.
-   * Fourni par les tests pour un roll déterministe (esquive → critique → blocage).
-   * Serveur uniquement.
+   * Fourni par les tests pour un roll déterministe (parade → esquive → critique
+   * → blocage). Serveur uniquement.
    */
   rng?: () => number;
 }
@@ -118,6 +139,14 @@ export interface CombatDamageResult {
   damageType: DamageType;
   armorPenetrationPercent: number;
   effectiveArmor: number;
+  /**
+   * V4-I : true si le défenseur a PARÉ (hit entrant annulé). Prime sur tout :
+   * pas d'esquive, pas de critique, pas d'armure, pas de blocage, 0 dégât. La
+   * contre-attaque associée est déclenchée par le service.
+   */
+  isParried: boolean;
+  /** V4-I : chance de parade EFFECTIVE appliquée (0 si `defenderCanParry` false). */
+  defenderParryChancePercent: number;
   /** V4-F : true si le défenseur a esquivé (aucun dégât, pas de critique). */
   isDodged: boolean;
   defenderDodgeChancePercent: number;
@@ -194,6 +223,50 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       ? Math.min(100, Math.max(0, rawBlockReduction))
       : 0;
 
+  // ── Parade (V4-I) : réaction active du défenseur, résolue EN PREMIER (avant
+  // l'esquive). L'éligibilité (arme de mêlée, portée, défenseur joueur) est
+  // décidée par le service via `defenderCanParry` — le calculateur ne lit jamais
+  // l'équipement. Chance effective 0 si non éligible : aucun roll consommé
+  // (court-circuit `> 0 &&`), donc les pipelines sans parade sont inchangés.
+  const canParry = input.defenderCanParry === true;
+  const rawParry = input.defenderParryChancePercent;
+  const defenderParryChancePercent =
+    canParry && typeof rawParry === 'number' && Number.isFinite(rawParry)
+      ? Math.min(100, Math.max(0, rawParry))
+      : 0;
+  const isParried =
+    defenderParryChancePercent > 0 && rng() < defenderParryChancePercent / 100;
+  if (isParried) {
+    // Hit entrant ANNULÉ : 0 dégât, ni esquive, ni critique, ni armure, ni
+    // blocage. La contre-attaque est calculée/appliquée par le service.
+    return {
+      attackerValue,
+      effectiveAttack,
+      targetDefense,
+      damageType,
+      armorPenetrationPercent: 0,
+      effectiveArmor: 0,
+      isParried: true,
+      defenderParryChancePercent,
+      isDodged: false,
+      defenderDodgeChancePercent,
+      attackerAccuracyPercent,
+      effectiveDodgeChancePercent,
+      isCritical: false,
+      criticalChancePercent,
+      criticalDamagePercent,
+      attackPowerFinal: 0,
+      rawDamage: 0,
+      isBlocked: false,
+      defenderBlockChancePercent,
+      defenderBlockReductionPercent,
+      blockedDamage: 0,
+      finalDamage: 0,
+      hpBefore,
+      hpAfter: hpBefore,
+    };
+  }
+
   const isDodged =
     effectiveDodgeChancePercent > 0 && rng() < effectiveDodgeChancePercent / 100;
   if (isDodged) {
@@ -204,6 +277,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       damageType,
       armorPenetrationPercent: 0,
       effectiveArmor: 0,
+      isParried: false,
+      defenderParryChancePercent,
       isDodged: true,
       defenderDodgeChancePercent,
       attackerAccuracyPercent,
@@ -270,6 +345,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     damageType,
     armorPenetrationPercent,
     effectiveArmor,
+    isParried: false,
+    defenderParryChancePercent,
     isDodged: false,
     defenderDodgeChancePercent,
     attackerAccuracyPercent,

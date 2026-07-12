@@ -76,6 +76,10 @@ export const MASTERY_IMPLEMENTED_DERIVED_KEYS = [
   // V4-H : blocage du défenseur (après esquive/critique/armure, physical seul).
   'blockChance',
   'blockReductionPercent',
+  // V4-I : parade du défenseur (réaction active, avant esquive) + puissance de
+  // la contre-attaque déclenchée par une parade réussie.
+  'parryChance',
+  'counterAttackPower',
 ] as const;
 
 export const DERIVED_STAT_CATEGORIES: { key: DerivedStatCategory; label: string }[] = [
@@ -149,6 +153,15 @@ export const DEFAULT_DERIVED_STAT_DEFINITIONS: DerivedStatDefinition[] = [
   def('criticalDamage', 'Dégâts critiques', 'offensive', 12, {
     baseValue: 150,
     primaryCoefficients: { dexterity: 1 },
+  }),
+  // V4-I : puissance offensive utilisée par les contre-attaques déclenchées par
+  // une parade réussie. Scale dextérité/agilité/intelligence ; configurable via
+  // le Studio et ciblable par les maîtrises. baseValue 0, non bornée en haut.
+  def('counterAttackPower', 'Puissance de contre-attaque', 'offensive', 27, {
+    minValue: 0,
+    primaryCoefficients: { dexterity: 0.4, agility: 0.3, intelligence: 0.2 },
+    description:
+      'Puissance offensive utilisée par les contre-attaques déclenchées par une parade.',
   }),
 
   // ── Défensif ────────────────────────────────────────────────────────────

@@ -488,6 +488,148 @@ describe('CreaturesService', () => {
           expect(result.riposte?.characterHealth).toBe(99);
         }
       });
+
+      // ── V4-I : parade + contre-attaque ──────────────────────────────────────
+      // Arme de mêlée du défenseur (range null → reach fallback MELEE_RANGE_WU ≥
+      // reach attaque créature) → parade éligible.
+      const MELEE_EQUIP = [
+        { slot: EquipmentSlot.RIGHT_HAND, item: { id: 'w', type: 'weapon', weaponType: null, range: null } },
+      ] as any;
+
+      it("parade réussie (parryChance 100) → riposte annulée + contre-attaque appliquée", async () => {
+        // parryChance 100 → riposte parée (0 dégât, PV joueur inchangés).
+        // counterAttackPower flat 10 → contre-attaque : 10 − defenseTotal créature 2 = 8.
+        // Créature 30 − 8 (hit principal) = 22, puis − 8 (contre-attaque) = 14.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { parryChance: 100, counterAttackPower: 10 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({ attack: 10, defense: 3, equipment: MELEE_EQUIP }),
+        );
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(true);
+          expect(result.riposte?.damage).toBe(0);
+          expect(result.riposte?.characterHealth).toBe(100); // PV joueur intacts
+          expect(result.counterAttack).toBeDefined();
+          expect(result.counterAttack?.damage).toBe(8);
+          expect(result.counterAttack?.killed).toBe(false);
+          expect(result.counterAttack?.creatureHealth).toBe(14);
+          expect(result.killed).toBe(false); // le hit principal n'a pas tué
+          expect(result.dto.health).toBe(14);
+        }
+      });
+
+      it("contre-attaque létale → créature tuée par la contre-attaque (pas par le hit principal)", async () => {
+        // counterAttackPower flat 100 → contre-attaque 98 > PV restants (22) → mort.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { parryChance: 100, counterAttackPower: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({ attack: 10, defense: 3, equipment: MELEE_EQUIP }),
+        );
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(true);
+          expect(result.counterAttack?.killed).toBe(true);
+          expect(result.counterAttack?.creatureHealth).toBe(0);
+          expect(result.killed).toBe(false); // mort attribuée à la contre-attaque
+          expect(result.dto.health).toBe(0);
+          expect(result.dto.state).toBe('dead');
+        }
+      });
+
+      it("pas d'arme de mêlée → pas de parade (riposte normale, aucune contre-attaque)", async () => {
+        // parryChance 100 mais équipement vide → defenderCanParry false.
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { parryChance: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 }); // makeCharacter equipment: []
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(false);
+          expect(result.riposte?.damage).toBe(2); // riposte normale (5 − 3)
+          expect(result.counterAttack).toBeUndefined();
+        }
+      });
+
+      it("arme à distance seule → pas de parade", async () => {
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { parryChance: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({
+            attack: 10,
+            defense: 3,
+            equipment: [
+              { slot: EquipmentSlot.RANGED_WEAPON, item: { id: 'bow', type: 'weapon', weaponType: 'bow', range: null } },
+            ] as any,
+          }),
+        );
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(false);
+          expect(result.counterAttack).toBeUndefined();
+        }
+      });
+
+      it("portée arme mêlée défenseur < portée attaque entrante → pas de parade", async () => {
+        // range 40 px → 640 WU < MELEE_RANGE_WU (1280) → defenderCanParry false.
+        // La même arme raccourcit aussi la portée d'attaque du joueur (640 WU) :
+        // on place donc la créature à 512 WU (≤ 640) pour que le hit principal
+        // porte, tout en gardant reach défenseur (640) < attaque entrante (1280).
+        masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
+          statModifiers: { percent: {}, flat: { parryChance: 100 } },
+          combat: { damagePercent: 0, damageFlat: 0 },
+        });
+        const creature = armCreature({ health: 30 });
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({
+            attack: 10,
+            defense: 3,
+            equipment: [
+              { slot: EquipmentSlot.RIGHT_HAND, item: { id: 'dagger', type: 'weapon', weaponType: null, range: 40 } },
+            ] as any,
+          }),
+        );
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + 512,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(false);
+          expect(result.counterAttack).toBeUndefined();
+        }
+      });
     });
 
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────

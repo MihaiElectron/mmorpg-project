@@ -102,10 +102,10 @@ describe("DerivedStatsService", () => {
     });
 
     it("ignore une clé hors des implémentées (garde défensif)", async () => {
-      // `parryChance` reste calculatedOnly (non branchée combat) → jamais promue.
+      // `threatGeneration` reste calculatedOnly (non branchée combat) → jamais promue.
       repo.find.mockResolvedValue(
         fullCatalogRows({
-          parryChance: {
+          threatGeneration: {
             masteryEligible: false,
             runtimeStatus: "calculatedOnly",
             allowedModifierModes: [],
@@ -196,6 +196,29 @@ describe("DerivedStatsService", () => {
       expect(
         DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "defensePenetration"),
       ).toBeUndefined();
+    });
+  });
+
+  describe("counterAttackPower — stat système V4-I", () => {
+    const def = DEFAULT_DERIVED_STAT_DEFINITIONS.find((d) => d.key === "counterAttackPower");
+
+    it("existe dans les defaults : offensive, implemented + masteryEligible + 2 modes", () => {
+      expect(def).toBeDefined();
+      expect(def!.category).toBe("offensive");
+      expect(def!.runtimeStatus).toBe("implemented");
+      expect(def!.masteryEligible).toBe(true);
+      expect(def!.allowedModifierModes).toEqual(["percentPerLevel", "flatPerLevel"]);
+      expect(def!.baseValue).toBe(0);
+      expect(def!.minValue).toBe(0);
+      expect(def!.maxValue).toBeNull();
+    });
+
+    it("est une stat système donc non supprimable", async () => {
+      expect(service.isSystemStat("counterAttackPower")).toBe(true);
+      repo.findOne.mockResolvedValue({ key: "counterAttackPower" });
+      await expect(service.deleteDefinition("counterAttackPower")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
   });
 

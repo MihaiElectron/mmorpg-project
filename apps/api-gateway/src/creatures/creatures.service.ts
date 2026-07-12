@@ -8,7 +8,11 @@ import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
 import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
-import { resolveEffectiveAttackRangeWU, MELEE_RANGE_WU } from '../characters/attack-range.helper';
+import {
+  resolveEffectiveAttackRangeWU,
+  resolveMeleeWeaponReachWU,
+  MELEE_RANGE_WU,
+} from '../characters/attack-range.helper';
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { calculateCombatDamage, DamageType } from './combat-damage.calculator';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
@@ -99,6 +103,19 @@ export type AttackSuccess = {
     isDodged: boolean;
     isBlocked: boolean;
     blockedDamage: number;
+    /** V4-I : true si le joueur a PARÉ la riposte (0 dégât entrant + contre-attaque). */
+    isParried: boolean;
+  };
+  /**
+   * V4-I : contre-attaque déclenchée par une parade réussie de la riposte
+   * (joueur → créature). Absente si aucune parade. `damage` déjà mitigé par
+   * l'armure de la créature ; `killed` = la contre-attaque a tué la créature.
+   */
+  counterAttack?: {
+    damage: number;
+    creatureHealth: number;
+    killed: boolean;
+    isCritical: boolean;
   };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -690,15 +707,33 @@ export class CreaturesService implements OnModuleInit {
           isDodged: boolean;
           isBlocked: boolean;
           blockedDamage: number;
+          isParried: boolean;
         }
+      | undefined;
+    let counterAttack:
+      | { damage: number; creatureHealth: number; killed: boolean; isCritical: boolean }
       | undefined;
     if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       // Riposte : aucun plancher d'attaque (minimumAttack = 0), plancher dégâts 1.
       // V4-F : le joueur est le DÉFENSEUR → sa `dodgeChance` peut esquiver la
       // riposte (0 dégât, pas de mort). Roll serveur (Math.random).
+      //
+      // V4-I : le joueur peut aussi PARER la riposte (résolue AVANT l'esquive).
+      // Éligibilité décidée ici (le calculateur ne lit jamais l'équipement) :
+      // attaque créature = corps-à-corps de portée MELEE_RANGE_WU ; le joueur doit
+      // avoir une arme de mêlée dont la portée couvre l'attaque entrante. Une arme
+      // à distance seule ne pare pas.
+      const defenderMeleeReachWU = resolveMeleeWeaponReachWU(character.equipment);
+      const incomingAttackReachWU = MELEE_RANGE_WU; // attaque créature = mêlée
+      const defenderCanParry =
+        defenderMeleeReachWU !== null && defenderMeleeReachWU >= incomingAttackReachWU;
+
       const riposteResult = calculateCombatDamage({
         attackerValue: derived.attackPower,
         targetDefense: charStats.derived.defense,
+        // V4-I : parade du défenseur, résolue en premier. Annule le hit entrant.
+        defenderParryChancePercent: charStats.derived.parryChance ?? 0,
+        defenderCanParry,
         defenderDodgeChancePercent: charStats.derived.dodgeChance ?? 0,
         // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
         // Le joueur défenseur esquive comme en V4-F (comportement identique).
@@ -719,13 +754,78 @@ export class CreaturesService implements OnModuleInit {
         isDodged: riposteResult.isDodged,
         isBlocked: riposteResult.isBlocked,
         blockedDamage: riposteResult.blockedDamage,
+        isParried: riposteResult.isParried,
       };
       if (characterHealth === 0 && this.server) {
         await this.worldService.respawnCharacter(characterId, this.server);
       }
+
+      // V4-I : parade réussie → hit entrant annulé (déjà 0 via le calculateur) et
+      // CONTRE-ATTAQUE serveur joueur → créature. La contre-attaque n'autorise
+      // JAMAIS une parade en retour (defenderCanParry: false) : pas de chaîne.
+      if (riposteResult.isParried && (creature.state === 'alive' || creature.state === 'fighting')) {
+        const counterResult = calculateCombatDamage({
+          attackerValue: charStats.derived.counterAttackPower ?? 0,
+          targetDefense: derived.defenseTotal,
+          armorPenetrationPercent: charStats.derived.armorPenetrationPercent ?? 0,
+          damageType: 'physical',
+          criticalChancePercent: charStats.derived.criticalChance ?? 0,
+          criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
+          attackerAccuracyPercent: charStats.derived.accuracy ?? 0,
+          // Créature défenseur : pas d'esquive, pas de blocage, JAMAIS de parade.
+          defenderDodgeChancePercent: 0,
+          defenderCanParry: false,
+          defenderParryChancePercent: 0,
+          minimumAttack: 0,
+          minimumDamage: 1,
+          hpBefore: creature.health,
+        });
+        creature.health = counterResult.hpAfter;
+        const counterKilled = creature.health === 0;
+        if (counterKilled) {
+          // Réutilise EXACTEMENT la mécanique de mort du hit principal (état,
+          // désinscription patrouille, planification du respawn) + loot/XP kill.
+          creature.state = 'dead';
+          this.patrolStates.delete(creature.id);
+          const delay =
+            creature.respawnDelayMs ??
+            creature.spawn.respawnDelayMs ??
+            creature.spawn.template.respawnDelayMs;
+          creature.respawnAt = new Date(Date.now() + delay);
+          setTimeout(() => this.respawnCreature(creature.id), delay);
+          const generated = this.loot.generateLoot(template.key, template.lootPool ?? null);
+          if (generated.length > 0) loot = generated;
+          if (template.killCharacterXpReward > 0) {
+            try {
+              characterXpUpdate = await this.dataSource.transaction((manager) =>
+                this.progression.applyCharacterXpInTx(
+                  characterId,
+                  template.killCharacterXpReward,
+                  ProgressionSource.COMBAT,
+                  manager,
+                ),
+              );
+            } catch (err) {
+              console.warn(
+                `[CreaturesService] XP contre-attaque ignorée pour ${characterId}: ${(err as Error).message}`,
+              );
+            }
+          }
+        }
+        await this.creatureRepository.save(creature);
+        counterAttack = {
+          damage: counterResult.finalDamage,
+          creatureHealth: creature.health,
+          killed: counterKilled,
+          isCritical: counterResult.isCritical,
+        };
+      }
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, riposte, loot, characterXpUpdate, masteryUpdate };
+    // `killed` = la mort causée par le HIT PRINCIPAL uniquement (jamais par la
+    // contre-attaque, qui a son propre `counterAttack.killed`). On lit donc
+    // `damageResult.hpAfter` et non `creature.health` (modifiée par la contre-attaque).
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: damageResult.hpAfter === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, riposte, counterAttack, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**

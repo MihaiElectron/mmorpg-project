@@ -62,3 +62,24 @@ export function resolveEffectiveAttackRangeWU(
 
   return MELEE_RANGE_WU;
 }
+
+/**
+ * Portée (WU) de l'arme de MÊLÉE équipée, ou `null` si le personnage n'a AUCUNE
+ * arme de mêlée (main droite/gauche, type "weapon"). Contrairement à
+ * `resolveEffectiveAttackRangeWU`, ce helper ignore une arme à distance : il
+ * sert la parade (V4-I), qui exige une arme de mêlée. Une arme RANGED_WEAPON
+ * seule → `null` (pas de parade). Helper PUR, aucune I/O.
+ */
+export function resolveMeleeWeaponReachWU(
+  equipment: CharacterEquipment[] | null | undefined,
+): number | null {
+  const items = equipment ?? [];
+  const melee = items.find(
+    (eq) =>
+      ((eq.slot as EquipmentSlot) === EquipmentSlot.RIGHT_HAND ||
+        (eq.slot as EquipmentSlot) === EquipmentSlot.LEFT_HAND) &&
+      eq.item?.type === 'weapon',
+  );
+  if (!melee) return null;
+  return safeWeaponRangeWU(melee.item.range, MELEE_RANGE_WU);
+}

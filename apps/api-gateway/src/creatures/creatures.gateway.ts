@@ -142,7 +142,47 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
         isDodged: result.riposte.isDodged,
         isBlocked: result.riposte.isBlocked,
         blockedDamage: result.riposte.blockedDamage,
+        // V4-I : hit paré → 0 dégât, marqué isParried (aucun death event ici).
+        isParried: result.riposte.isParried,
       }));
+    }
+
+    // V4-I : contre-attaque déclenchée par une parade — event combat:event SÉPARÉ
+    // (source joueur → cible créature). La mort éventuelle est liée à la
+    // contre-attaque seulement (jamais au hit paré entrant).
+    if (result.counterAttack) {
+      const counterRoom = getMapRoomId(result.dto.mapId ?? DEFAULT_MAP_ID);
+      this.server.to(counterRoom).emit(COMBAT_EVENT, makeCombatEvent({
+        type: 'damage',
+        amount: result.counterAttack.damage,
+        sourceType: 'player',
+        sourceId: result.attackerId,
+        targetType: 'creature',
+        targetId: result.dto.id,
+        worldX: result.dto.worldX ?? 0,
+        worldY: result.dto.worldY ?? 0,
+        text: `-${result.counterAttack.damage}`,
+        isCritical: result.counterAttack.isCritical,
+        isCounterAttack: true,
+        targetName: result.dto.name,
+        targetDied: result.counterAttack.killed,
+      }));
+      if (result.counterAttack.killed) {
+        this.server.to(counterRoom).emit(COMBAT_EVENT, makeCombatEvent({
+          type: 'death',
+          amount: result.counterAttack.damage,
+          sourceType: 'player',
+          sourceId: result.attackerId,
+          targetType: 'creature',
+          targetId: result.dto.id,
+          worldX: result.dto.worldX ?? 0,
+          worldY: result.dto.worldY ?? 0,
+          isCritical: result.counterAttack.isCritical,
+          isCounterAttack: true,
+          targetName: result.dto.name,
+          targetDied: true,
+        }));
+      }
     }
 
     if (result.loot && result.loot.length > 0) {

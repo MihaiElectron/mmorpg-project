@@ -591,4 +591,122 @@ describe('calculateCombatDamage', () => {
       expect(neg.blockedDamage).toBe(0);
     });
   });
+
+  // ── V4-I : parade (résolue EN PREMIER, avant l'esquive) ────────────────────
+  describe('parade (V4-I)', () => {
+    const base = {
+      attackerValue: 100,
+      targetDefense: 40,
+      minimumAttack: 0,
+      minimumDamage: 1,
+      hpBefore: 1000,
+    };
+
+    it('defenderCanParry false → pas de parade même avec parryChance 100', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: false,
+        defenderParryChancePercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isParried).toBe(false);
+      expect(r.defenderParryChancePercent).toBe(0); // effective 0 si non éligible
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('defenderCanParry true + parryChance 100 → hit paré, 0 dégât', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isParried).toBe(true);
+      expect(r.finalDamage).toBe(0);
+      expect(r.hpAfter).toBe(1000); // PV inchangés
+    });
+
+    it('hit paré → ni esquive, ni critique, ni blocage, ni armure', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 100,
+        // Toutes ces mécaniques doivent être court-circuitées par la parade.
+        defenderDodgeChancePercent: 100,
+        criticalChancePercent: 100,
+        criticalDamagePercent: 200,
+        armorPenetrationPercent: 100,
+        defenderBlockChancePercent: 100,
+        defenderBlockReductionPercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isParried).toBe(true);
+      expect(r.isDodged).toBe(false);
+      expect(r.isCritical).toBe(false);
+      expect(r.isBlocked).toBe(false);
+      expect(r.blockedDamage).toBe(0);
+      expect(r.effectiveArmor).toBe(0);
+      expect(r.armorPenetrationPercent).toBe(0);
+      expect(r.finalDamage).toBe(0);
+    });
+
+    it('parryChance 0 → pipeline normal (aucun roll de parade consommé)', () => {
+      // rng renvoie toujours 0 : sans parade, le hit passe et applique l'armure.
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 0,
+        rng: () => 0,
+      });
+      expect(r.isParried).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+
+    it('parade prioritaire sur l\'esquive : roll bas → paré, pas esquivé', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 100,
+        defenderDodgeChancePercent: 100,
+        rng: () => 0,
+      });
+      expect(r.isParried).toBe(true);
+      expect(r.isDodged).toBe(false);
+    });
+
+    it('parryChance négative / NaN / Infinity → 0 (safe)', () => {
+      for (const bad of [-50, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const r = calculateCombatDamage({
+          ...base,
+          defenderCanParry: true,
+          defenderParryChancePercent: bad,
+          rng: () => 0,
+        });
+        expect(r.isParried).toBe(false);
+        expect(r.defenderParryChancePercent).toBe(0);
+      }
+    });
+
+    it('parryChance > 100 clampée à 100', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 150,
+        rng: () => 0.99, // 0.99 < 1.0 (100 %) → toujours paré
+      });
+      expect(r.defenderParryChancePercent).toBe(100);
+      expect(r.isParried).toBe(true);
+    });
+
+    it('roll au-dessus du seuil → pas de parade', () => {
+      const r = calculateCombatDamage({
+        ...base,
+        defenderCanParry: true,
+        defenderParryChancePercent: 25,
+        rng: () => 0.5, // 0.5 >= 0.25
+      });
+      expect(r.isParried).toBe(false);
+      expect(r.finalDamage).toBe(60);
+    });
+  });
 });
