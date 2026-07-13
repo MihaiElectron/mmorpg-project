@@ -3,6 +3,8 @@ import {
   emptyStatBonusesDraft,
   statBonusesDraftFromItem,
   cleanStatBonuses,
+  secondaryStatKeysInDraft,
+  secondaryStatUnit,
   normalizeRequiredLevel,
   normalizeRequiredClass,
   cleanRequiredMasteries,
@@ -25,6 +27,26 @@ describe("equipmentItemEditor.helpers", () => {
     it("draft vide → objet vide", () => {
       expect(cleanStatBonuses(emptyStatBonusesDraft())).toEqual({});
     });
+
+    it("V5-F : conserve primaires + secondaires autorisées (bag unique)", () => {
+      const out = cleanStatBonuses(
+        { strength: "5", parryChance: "15", counterAttackPower: "8" },
+        ["parryChance", "counterAttackPower", "dodgeChance"],
+      );
+      expect(out).toEqual({ strength: 5, parryChance: 15, counterAttackPower: 8 });
+    });
+
+    it("V5-F : rejette une secondaire hors allowlist", () => {
+      const out = cleanStatBonuses(
+        { strength: "5", parryChance: "15", bogus: "9" },
+        ["parryChance"], // bogus non autorisée
+      );
+      expect(out).toEqual({ strength: 5, parryChance: 15 });
+    });
+
+    it("V5-F : sans allowlist, comportement primaire inchangé (rétro-compat)", () => {
+      expect(cleanStatBonuses({ strength: "5", parryChance: "15" })).toEqual({ strength: 5 });
+    });
   });
 
   describe("statBonusesDraftFromItem", () => {
@@ -33,6 +55,46 @@ describe("equipmentItemEditor.helpers", () => {
       expect(draft.strength).toBe("5");
       expect(draft.agility).toBe(""); // 0 → non affiché
       expect(draft.vitality).toBe(""); // absent
+    });
+
+    it("V5-F : pré-remplit aussi les secondaires déjà présentes sur l'item", () => {
+      const draft = statBonusesDraftFromItem({ strength: 5, parryChance: 15, counterAttackPower: 8 });
+      expect(draft.strength).toBe("5");
+      expect(draft.parryChance).toBe("15");
+      expect(draft.counterAttackPower).toBe("8");
+    });
+  });
+
+  describe("secondaryStatKeysInDraft (V5-F)", () => {
+    it("retourne les clés non primaires présentes, y compris à valeur vide", () => {
+      const draft = { ...emptyStatBonusesDraft(), parryChance: "15", dodgeChance: "" };
+      const keys = secondaryStatKeysInDraft(draft);
+      expect(keys.sort()).toEqual(["dodgeChance", "parryChance"]);
+    });
+
+    it("aucune secondaire → tableau vide", () => {
+      expect(secondaryStatKeysInDraft(emptyStatBonusesDraft())).toEqual([]);
+    });
+  });
+
+  describe("secondaryStatUnit (V5-F)", () => {
+    it("chances / pourcentages → '%'", () => {
+      for (const key of [
+        "parryChance", "dodgeChance", "criticalChance", "blockChance",
+        "blockReductionPercent", "armorPenetrationPercent", "criticalDamage",
+      ]) {
+        expect(secondaryStatUnit(key)).toBe("%");
+      }
+    });
+
+    it("valeurs plates / puissances / regen → '' (pas de %)", () => {
+      for (const key of [
+        "counterAttackPower", "healingPower", "physicalAttack", "defense",
+        "accuracy", "maxHealth", "maxMana", "maxEnergy",
+        "healthRegen", "manaRegen", "energyRegen",
+      ]) {
+        expect(secondaryStatUnit(key)).toBe("");
+      }
     });
   });
 

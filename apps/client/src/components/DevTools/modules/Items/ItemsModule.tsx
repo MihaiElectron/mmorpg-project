@@ -21,12 +21,16 @@ import type {
   ItemUsageStats,
 } from "./itemEditor.types";
 import { EQUIPMENT_SLOTS, ITEM_CATEGORIES_BY_TYPE, ITEM_TYPES, OBJECT_MODES, WEAPON_TYPES } from "./itemEditor.types";
-import { EQUIPMENT_STAT_FIELDS, emptyStatBonusesDraft } from "./equipmentItemEditor.helpers";
+import { EQUIPMENT_STAT_FIELDS, emptyStatBonusesDraft, secondaryStatKeysInDraft, secondaryStatUnit } from "./equipmentItemEditor.helpers";
 import { notifyItemDefinitionsChanged } from "./itemEvents";
 import KeyValueRowsEditor from "../Skills/KeyValueRowsEditor";
 import { fetchMasterySuggestions } from "../Skills/skillsApi";
 import type { KeySuggestion } from "../Skills/skills.types";
+import { fetchDerivedStats } from "../DerivedStats/derivedStatsApi";
 import "./ItemsModule.scss";
+
+/** Option de stat secondaire proposée dans le picker (catalogue serveur). */
+type SecondaryStatOption = { key: string; label: string };
 
 function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
@@ -82,6 +86,142 @@ function emptyDraft(): ItemEditorDraft {
 }
 
 /**
+ * Éditeur compact des stats SECONDAIRES d'un item (V5-F). N'affiche que les
+ * stats déjà ajoutées ; l'ajout passe par un petit popover avec recherche,
+ * alimenté par le catalogue serveur (jamais les 19 stats en permanence). Les
+ * valeurs rejoignent le MÊME bag `statBonuses` que les primaires ; le serveur
+ * reste autoritaire (allowlist). Aucun calcul gameplay ici.
+ */
+function SecondaryStatEditor({
+  draft,
+  onPatch,
+  catalog,
+}: {
+  draft: ItemEditorDraft;
+  onPatch: (partial: Partial<ItemEditorDraft>) => void;
+  catalog: SecondaryStatOption[];
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const labelOf = (key: string) => catalog.find((c) => c.key === key)?.label ?? key;
+  const addedKeys = secondaryStatKeysInDraft(draft.statBonuses);
+  const addedSet = new Set(addedKeys);
+
+  const query = search.trim().toLowerCase();
+  const options = catalog.filter((c) => {
+    if (addedSet.has(c.key)) return false; // jamais deux fois la même stat
+    if (!query) return true;
+    return c.label.toLowerCase().includes(query) || c.key.toLowerCase().includes(query);
+  });
+
+  const setValue = (key: string, value: string) =>
+    onPatch({ statBonuses: { ...draft.statBonuses, [key]: value } });
+  const addStat = (key: string) => {
+    onPatch({ statBonuses: { ...draft.statBonuses, [key]: "" } });
+    setSearch("");
+    setPickerOpen(false);
+  };
+  const removeStat = (key: string) => {
+    const next = { ...draft.statBonuses };
+    delete next[key];
+    onPatch({ statBonuses: next });
+  };
+
+  return (
+    <div className="item-editor__equipment-block item-editor__secondary">
+      <span className="item-editor__equipment-title">Stats secondaires</span>
+      <p className="item-editor__secondary-help">
+        Les stats marquées <span className="item-editor__unit item-editor__unit--pct">%</span> sont des
+        chances/pourcentages. Les autres sont des bonus plats.
+      </p>
+
+      {addedKeys.length === 0 && (
+        <p className="item-editor__secondary-empty">Aucune stat secondaire.</p>
+      )}
+
+      {addedKeys.length > 0 && (
+        <div className="item-editor__secondary-grid">
+          {addedKeys.map((key) => {
+            const unit = secondaryStatUnit(key);
+            return (
+              <div key={key} className="item-editor__secondary-field">
+                <span className="item-editor__secondary-name" title={key}>
+                  {labelOf(key)}
+                  {unit === "%" && <span className="item-editor__unit item-editor__unit--pct">%</span>}
+                </span>
+                <input
+                  type="number"
+                  className="item-editor__input item-editor__secondary-input"
+                  value={draft.statBonuses[key] ?? ""}
+                  onChange={(e) => setValue(key, e.target.value)}
+                  aria-label={`Valeur ${labelOf(key)}${unit === "%" ? " en pourcentage" : ""}`}
+                />
+                <button
+                  type="button"
+                  className="item-editor__secondary-remove"
+                  onClick={() => removeStat(key)}
+                  aria-label={`Retirer ${labelOf(key)}`}
+                  title="Retirer"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="item-editor__secondary-add">
+        <button
+          type="button"
+          className="item-editor__secondary-add-btn"
+          onClick={() => setPickerOpen((v) => !v)}
+          disabled={catalog.length === 0}
+        >
+          + Ajouter une stat secondaire
+        </button>
+
+        {pickerOpen && (
+          <div className="item-editor__secondary-popover">
+            <input
+              type="search"
+              className="item-editor__input item-editor__secondary-search"
+              placeholder="Rechercher une stat…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Rechercher une stat secondaire"
+            />
+            <div className="item-editor__secondary-options">
+              {options.length === 0 ? (
+                <span className="item-editor__secondary-empty">Aucune stat.</span>
+              ) : (
+                options.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className="item-editor__secondary-option"
+                    onClick={() => addStat(opt.key)}
+                  >
+                    {opt.label}
+                    {secondaryStatUnit(opt.key) === "%" ? (
+                      <span className="item-editor__unit item-editor__unit--pct">%</span>
+                    ) : (
+                      <span className="item-editor__unit">valeur</span>
+                    )}
+                    <span className="item-editor__secondary-key">({opt.key})</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Section « Équipement · Bonus · Prérequis » (Équipement V1-C-B). Édition des
  * données BRUTES uniquement : bonus de stats primaires (liste fixe), niveau,
  * classe (informatif) et maîtrises requises. Aucune stat dérivée calculée ici —
@@ -92,11 +232,13 @@ function EquipmentFields({
   onPatch,
   resetToken,
   masterySuggestions,
+  secondaryCatalog,
 }: {
   draft: ItemEditorDraft;
   onPatch: (partial: Partial<ItemEditorDraft>) => void;
   resetToken: string;
   masterySuggestions: KeySuggestion[];
+  secondaryCatalog: SecondaryStatOption[];
 }) {
   return (
     <fieldset className="item-editor__equipment">
@@ -120,6 +262,8 @@ function EquipmentFields({
           ))}
         </div>
       </div>
+
+      <SecondaryStatEditor draft={draft} onPatch={onPatch} catalog={secondaryCatalog} />
 
       <div className="item-editor__equipment-block">
         <label className="item-editor__field">
@@ -209,6 +353,7 @@ export default function ItemsModule() {
   const [typeFilter, setTypeFilter] = useState(ALL_FILTER);
   const [categoryFilter, setCategoryFilter] = useState(ALL_FILTER);
   const [enabledFilter, setEnabledFilter] = useState<"all" | "active" | "disabled">("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(
     "loading",
   );
@@ -222,10 +367,28 @@ export default function ItemsModule() {
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   // Catalogue des maîtrises (select strict de requiredMasteries — V1-C-B fix).
   const [masterySuggestions, setMasterySuggestions] = useState<KeySuggestion[]>([]);
+  // Catalogue des stats secondaires (V5-F) : dérivées enabled + implemented,
+  // labellisées par le serveur. Aucune liste hardcodée frontend.
+  const [secondaryCatalog, setSecondaryCatalog] = useState<SecondaryStatOption[]>([]);
 
   useEffect(() => {
     void fetchMasterySuggestions().then(setMasterySuggestions).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    void fetchDerivedStats()
+      .then((defs) =>
+        setSecondaryCatalog(
+          defs
+            .filter((d) => d.enabled && d.runtimeStatus === "implemented")
+            .map((d) => ({ key: d.key, label: d.label }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+        ),
+      )
+      .catch(() => {});
+  }, []);
+
+  const secondaryKeys = useMemo(() => secondaryCatalog.map((c) => c.key), [secondaryCatalog]);
 
   useEffect(() => {
     let mounted = true;
@@ -298,7 +461,11 @@ export default function ItemsModule() {
     if (enabledFilter === "disabled") return base.filter((it) => it.enabled === false);
     return base;
   }, [items, query, typeFilter, categoryFilter, enabledFilter]);
-  const patch = selectedItem ? buildItemPatch(selectedItem, draft) : {};
+  const activeFilterCount =
+    (typeFilter !== ALL_FILTER ? 1 : 0) +
+    (categoryFilter !== ALL_FILTER ? 1 : 0) +
+    (enabledFilter !== "all" ? 1 : 0);
+  const patch = selectedItem ? buildItemPatch(selectedItem, draft, secondaryKeys) : {};
   const dirty = Object.keys(patch).length > 0;
   const valid = isValidItemDraft(draft) && !isRangeInvalid(draft.range);
   const createValid = isValidItemDraft(createDraft) && !isRangeInvalid(createDraft.range);
@@ -317,7 +484,7 @@ export default function ItemsModule() {
     setCreating(true);
     setMessage(null);
     try {
-      const created = await createItem(buildItemCreateInput(createDraft));
+      const created = await createItem(buildItemCreateInput(createDraft, secondaryKeys));
       const refreshed = await fetchItems();
       setItems(refreshed);
       setSelectedId(created.id);
@@ -488,6 +655,7 @@ export default function ItemsModule() {
             onPatch={(partial) => setCreateDraft((c) => ({ ...c, ...partial }))}
             resetToken="create"
             masterySuggestions={masterySuggestions}
+            secondaryCatalog={secondaryCatalog}
           />
           <button
             className="item-editor__save"
@@ -506,45 +674,72 @@ export default function ItemsModule() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Recherche"
+          placeholder="Rechercher un item…"
           aria-label="Rechercher un item"
         />
-        <select
-          className="item-editor__filter"
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          aria-label="Filtrer par type"
-        >
-          <option value={ALL_FILTER}>Tous types</option>
-          {typeOptions.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-        <select
-          className="item-editor__filter"
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          aria-label="Filtrer par category"
-        >
-          <option value={ALL_FILTER}>Toutes catégories</option>
-          {categoryOptions.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-        <select
-          className="item-editor__filter"
-          value={enabledFilter}
-          onChange={(e) => setEnabledFilter(e.target.value as "all" | "active" | "disabled")}
-          aria-label="Filtrer par état"
-        >
-          <option value="all">Tous états</option>
-          <option value="active">Actifs</option>
-          <option value="disabled">Désactivés</option>
-        </select>
+        <div className="item-editor__filters">
+          <button
+            type="button"
+            className="item-editor__filters-toggle"
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+          >
+            Filtres
+            {activeFilterCount > 0 && (
+              <span className="item-editor__filters-badge">{activeFilterCount}</span>
+            )}
+            <span className="item-editor__chevron">{filtersOpen ? "▾" : "▸"}</span>
+          </button>
+          {filtersOpen && (
+            <div className="item-editor__filters-panel">
+              <label className="item-editor__filter-row">
+                <span className="item-editor__filter-caption">Type</span>
+                <select
+                  className="item-editor__filter"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  aria-label="Filtrer par type"
+                >
+                  <option value={ALL_FILTER}>Tous types</option>
+                  {typeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="item-editor__filter-row">
+                <span className="item-editor__filter-caption">Catégorie</span>
+                <select
+                  className="item-editor__filter"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  aria-label="Filtrer par category"
+                >
+                  <option value={ALL_FILTER}>Toutes catégories</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="item-editor__filter-row">
+                <span className="item-editor__filter-caption">État</span>
+                <select
+                  className="item-editor__filter"
+                  value={enabledFilter}
+                  onChange={(e) => setEnabledFilter(e.target.value as "all" | "active" | "disabled")}
+                  aria-label="Filtrer par état"
+                >
+                  <option value="all">Tous états</option>
+                  <option value="active">Actifs</option>
+                  <option value="disabled">Désactivés</option>
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
       </div>
 
       {status === "error" && (
@@ -748,6 +943,7 @@ export default function ItemsModule() {
                   onPatch={(partial) => setDraft((c) => ({ ...c, ...partial }))}
                   resetToken={selectedId ?? "new"}
                   masterySuggestions={masterySuggestions}
+                  secondaryCatalog={secondaryCatalog}
                 />
 
                 <div className="item-editor__usage">

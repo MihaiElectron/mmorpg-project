@@ -88,6 +88,30 @@ describe("item editor filters", () => {
     expect(buildItemPatch(item, draft)).toEqual({});
   });
 
+  it("V5-F : le patch renvoie UN SEUL statBonuses (primaires + secondaires autorisées)", () => {
+    const item = { ...ITEMS[2], statBonuses: { strength: 5 } } as ItemCatalogEntry;
+    const draft = draftFromItem(item);
+    draft.statBonuses = { ...draft.statBonuses, parryChance: "15", counterAttackPower: "8" };
+    const patch = buildItemPatch(item, draft, ["parryChance", "counterAttackPower"]);
+    expect(patch.statBonuses).toEqual({ strength: 5, parryChance: 15, counterAttackPower: 8 });
+  });
+
+  it("V5-F : une secondaire hors allowlist n'entre pas dans le patch", () => {
+    const item = { ...ITEMS[2], statBonuses: { strength: 5 } } as ItemCatalogEntry;
+    const draft = draftFromItem(item);
+    draft.statBonuses = { ...draft.statBonuses, bogus: "9" };
+    // bogus ignorée → statBonuses inchangé → pas de patch.statBonuses.
+    expect(buildItemPatch(item, draft, ["parryChance"]).statBonuses).toBeUndefined();
+  });
+
+  it("V5-F : buildItemCreateInput fusionne primaires + secondaires dans statBonuses", () => {
+    const input = buildItemCreateInput(
+      makeDraft({ statBonuses: { strength: "5", dodgeChance: "10" } as never }),
+      ["dodgeChance"],
+    );
+    expect(input.statBonuses).toEqual({ strength: 5, dodgeChance: 10 });
+  });
+
   it("détecte requiredLevel et requiredClass modifiés", () => {
     const item = { ...ITEMS[2], requiredLevel: 1, requiredClass: null } as ItemCatalogEntry;
     const draft = draftFromItem(item);

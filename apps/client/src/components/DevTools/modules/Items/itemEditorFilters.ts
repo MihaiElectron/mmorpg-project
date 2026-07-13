@@ -77,6 +77,7 @@ function parseNum(s: string): number | null {
 export function buildItemPatch(
   item: ItemCatalogEntry,
   draft: ItemEditorDraft,
+  allowedSecondaryKeys: readonly string[] = [],
 ): ItemEditorPatch {
   const patch: ItemEditorPatch = {};
 
@@ -104,7 +105,7 @@ export function buildItemPatch(
   if (nextWeaponType !== (item.weaponType ?? null)) patch.weaponType = nextWeaponType;
 
   // ── Équipement V1-C-B : bonus / prérequis (JSONB comparés en stable) ────────
-  const nextStatBonuses = cleanStatBonuses(draft.statBonuses);
+  const nextStatBonuses = cleanStatBonuses(draft.statBonuses, allowedSecondaryKeys);
   if (!recordsEqual(nextStatBonuses, item.statBonuses)) patch.statBonuses = nextStatBonuses;
 
   const nextRequiredLevel = normalizeRequiredLevel(draft.requiredLevel);
@@ -129,6 +130,7 @@ export function isValidItemDraft(draft: ItemEditorDraft): boolean {
 
 export function buildItemCreateInput(
   draft: ItemEditorDraft,
+  allowedSecondaryKeys: readonly string[] = [],
 ): ItemCreateInput {
   const input: ItemCreateInput = {
     name: draft.name.trim(),
@@ -152,7 +154,7 @@ export function buildItemCreateInput(
   // Équipement V1-C-B : n'envoie que ce qui diffère du défaut entity.
   // Bonus/masteries seulement si non vides ; requiredLevel seulement si > 1
   // (défaut serveur = 1) ; requiredClass seulement si renseignée.
-  const statBonuses = cleanStatBonuses(draft.statBonuses);
+  const statBonuses = cleanStatBonuses(draft.statBonuses, allowedSecondaryKeys);
   if (Object.keys(statBonuses).length > 0) input.statBonuses = statBonuses;
   const requiredLevel = normalizeRequiredLevel(draft.requiredLevel);
   if (requiredLevel > 1) input.requiredLevel = requiredLevel;

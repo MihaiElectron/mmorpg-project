@@ -30,7 +30,14 @@ export function emptyStatBonusesDraft(): Record<string, string> {
   return out;
 }
 
-/** Pré-remplit les champs texte depuis les statBonuses persistés de l'item. */
+const PRIMARY_KEY_SET = new Set(PRIMARY_KEYS);
+
+/**
+ * Pré-remplit les champs texte depuis les statBonuses persistés de l'item :
+ * les stats PRIMAIRES (grille fixe) ET les stats SECONDAIRES déjà présentes
+ * (parade, esquive, etc.). Une secondaire présente sur l'item apparaît donc
+ * dans le draft, même hors grille primaire. 0/absent → champ vide.
+ */
 export function statBonusesDraftFromItem(
   statBonuses: Record<string, number> | null | undefined,
 ): Record<string, string> {
@@ -42,19 +49,56 @@ export function statBonusesDraftFromItem(
         out[key] = String(value);
       }
     }
+    // Secondaires déjà persistées (toute clé non primaire présente sur l'item).
+    for (const [key, value] of Object.entries(statBonuses)) {
+      if (PRIMARY_KEY_SET.has(key)) continue;
+      if (typeof value === "number" && Number.isFinite(value) && value !== 0) {
+        out[key] = String(value);
+      }
+    }
   }
   return out;
 }
 
 /**
- * Nettoie les champs texte statBonuses → objet numérique : ne garde que les
- * valeurs finies NON NULLES (négatives autorisées = malus), whitelist primaire.
- * Champs vides / 0 / non numériques omis.
+ * Unité d'affichage d'une stat secondaire (V5-F) — présentation UNIQUEMENT,
+ * aucune incidence gameplay. "%" pour les chances/pourcentages (parryChance,
+ * dodgeChance, criticalChance, blockChance, *Percent, criticalDamage = multiplicateur %) ;
+ * chaîne vide pour les valeurs plates (puissance, points, PV/regen…). Dérivé du
+ * nom de clé (pas de liste codée en dur) : "*Chance", "*Percent", "criticalDamage".
  */
-export function cleanStatBonuses(draft: Record<string, string> | null | undefined): Record<string, number> {
+export function secondaryStatUnit(key: string): "%" | "" {
+  if (/Chance$/.test(key) || /Percent$/.test(key) || key === "criticalDamage") return "%";
+  return "";
+}
+
+/**
+ * Clés secondaires (non primaires) présentes dans un draft — y compris une stat
+ * fraîchement ajoutée à valeur vide (pour la rendre éditable). Sert au rendu des
+ * lignes « stats secondaires ajoutées ».
+ */
+export function secondaryStatKeysInDraft(
+  draft: Record<string, string> | null | undefined,
+): string[] {
+  if (!draft) return [];
+  return Object.keys(draft).filter((key) => !PRIMARY_KEY_SET.has(key));
+}
+
+/**
+ * Nettoie les champs texte statBonuses → objet numérique unique (primaires +
+ * secondaires). Ne garde que les valeurs finies NON NULLES (négatives autorisées
+ * = malus). Whitelist : les 10 primaires + les clés secondaires AUTORISÉES
+ * passées par l'appelant (catalogue serveur `enabled + runtimeStatus implemented`).
+ * Toute autre clé est ignorée. Champs vides / 0 / non numériques omis.
+ */
+export function cleanStatBonuses(
+  draft: Record<string, string> | null | undefined,
+  allowedSecondaryKeys: readonly string[] = [],
+): Record<string, number> {
   const out: Record<string, number> = {};
   if (!draft) return out;
-  for (const key of PRIMARY_KEYS) {
+  const keys = [...PRIMARY_KEYS, ...allowedSecondaryKeys];
+  for (const key of keys) {
     const raw = draft[key];
     if (typeof raw !== "string" || raw.trim() === "") continue;
     const value = Number(raw);
