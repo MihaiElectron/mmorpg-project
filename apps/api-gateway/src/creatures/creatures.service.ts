@@ -712,7 +712,10 @@ export class CreaturesService implements OnModuleInit {
             aggregateEquipmentDerivedModifiers(char.equipment, derivedStatDefinitions),
           ),
         ).derived.defense;
-        const dmg = Math.max(template.baseAttack - charDefense, 1);
+        // Arrondi entier : `charDefense` (dérivée, ex. bonus d'équipement) peut
+        // être fractionnaire → PV joueur fractionnaires → échec de persistance
+        // (colonne health INTEGER). Invariant entier, pas de changement d'équilibrage.
+        const dmg = Math.max(Math.round(template.baseAttack - charDefense), 1);
         const newHealth = Math.max(char.health - dmg, 0);
         await this.characterRepository.update(char.id, { health: newHealth });
         server.to(target.socketId).emit('character_damaged', {
@@ -870,7 +873,10 @@ export class CreaturesService implements OnModuleInit {
     cd.set(ability.skillKey, now);
 
     const maxHealth = template.baseHealth;
-    const amount = this.computeCreatureSkillAmount(creature, template, ability);
+    // Arrondi entier : le montant de soin (calculateSkillEffect) peut être
+    // fractionnaire → PV créature fractionnaires → échec de persistance
+    // (colonne health INTEGER). Invariant entier, pas de changement d'équilibrage.
+    const amount = Math.round(this.computeCreatureSkillAmount(creature, template, ability));
     const healApplied = Math.min(amount, Math.max(0, maxHealth - creature.health));
     if (healApplied <= 0) return; // rien à soigner / montant nul : pas d'event inutile
 

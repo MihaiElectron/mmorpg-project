@@ -1,6 +1,35 @@
 import { calculateCombatDamage } from './combat-damage.calculator';
 
 describe('calculateCombatDamage', () => {
+  // Régression : les colonnes health (creature/character) sont INTEGER. Une valeur
+  // d'attaque fractionnaire (ex. stat dérivée non arrondie) ne doit jamais produire
+  // des dégâts / PV fractionnaires (échec de persistance Postgres 22P02).
+  it('valeur d\'attaque fractionnaire → dégâts et PV entiers', () => {
+    const r = calculateCombatDamage({
+      attackerValue: 4.9, // ex. counterAttackPower dérivé
+      minimumAttack: 0,
+      targetDefense: 2,
+      minimumDamage: 1,
+      hpBefore: 30,
+    });
+    expect(Number.isInteger(r.finalDamage)).toBe(true);
+    expect(Number.isInteger(r.hpAfter)).toBe(true);
+    expect(r.finalDamage).toBe(3); // round(4.9 - 2) = round(2.9) = 3
+    expect(r.hpAfter).toBe(27);
+  });
+
+  it('hpBefore fractionnaire (état corrompu antérieur) → hpAfter entier (auto-guérison)', () => {
+    const r = calculateCombatDamage({
+      attackerValue: 5,
+      minimumAttack: 0,
+      targetDefense: 0,
+      minimumDamage: 1,
+      hpBefore: 27170.1,
+    });
+    expect(Number.isInteger(r.hpAfter)).toBe(true);
+    expect(r.hpAfter).toBe(27165); // round(27170.1 - 5)
+  });
+
   it('attaque 10 défense 3 → rawDamage 7, finalDamage 7', () => {
     const r = calculateCombatDamage({
       attackerValue: 10,

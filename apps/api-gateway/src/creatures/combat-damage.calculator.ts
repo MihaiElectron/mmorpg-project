@@ -317,8 +317,13 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     damageType === 'raw' ? 0 : Math.max(0, Math.round(targetDefense * (1 - ratio)));
 
   // ── Résolution ─────────────────────────────────────────────────────────────
+  // Les dégâts sont ARRONDIS à l'entier : les colonnes `health` (creature /
+  // character) sont INTEGER. Une valeur d'attaque fractionnaire (ex. stat
+  // dérivée non arrondie comme counterAttackPower 4.9) produirait sinon des PV
+  // fractionnaires → échec de persistance Postgres (22P02) et combat figé. Sub-
+  // unité seulement : pas de changement d'équilibrage, invariant entier existant.
   const rawDamage = attackPowerFinal - effectiveArmor;
-  const damageAfterArmor = Math.max(rawDamage, minimumDamage);
+  const damageAfterArmor = Math.max(Math.round(rawDamage), minimumDamage);
 
   // ── Blocage (V4-H) : après esquive + critique + armure, sur les dégâts
   // physiques restants (> 0). raw ignore le blocage. Le roll suit le critique.
@@ -336,7 +341,9 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     blockedDamage = damageAfterArmor - finalDamage;
   }
 
-  const hpAfter = Math.max(hpBefore - finalDamage, 0);
+  // `Math.round(hpBefore - …)` : garantit un PV entier même si `hpBefore` a été
+  // corrompu en fractionnaire par un état antérieur (auto-guérison à la volée).
+  const hpAfter = Math.max(Math.round(hpBefore - finalDamage), 0);
 
   return {
     attackerValue,
