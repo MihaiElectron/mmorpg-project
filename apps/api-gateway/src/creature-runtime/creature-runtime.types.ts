@@ -29,6 +29,21 @@ export interface CreatureBaseStats {
   speedMin: number;
   /** Vitesse maximale de patrouille (WU/tick). */
   speedMax: number;
+
+  // ── Stats de combat avancées (V5-D2-A) ─────────────────────────────────────
+  // Valeurs de config lues directement depuis le template. Pas encore
+  // modifiables par RuntimeModifier (contrairement à maxHp/attackPower/defense).
+  // 0 = comportement V5-B/D1 inchangé.
+  /** Puissance de soin brute. 0 → fallback runtime sur attackPower (V5-D1). */
+  healingPower: number;
+  /** Chance de critique en % (0–100). 0 = jamais de critique. */
+  criticalChance: number;
+  /** Multiplicateur critique total en % (150 = ×1.5). Pertinent si criticalChance > 0. */
+  criticalDamage: number;
+  /** Précision en points de % (réduit l'esquive effective de la cible). 0 = aucune. */
+  accuracy: number;
+  /** Pénétration d'armure en % (0–100), appliquée aux dégâts physiques. 0 = aucune. */
+  armorPenetrationPercent: number;
 }
 
 // ─── Stats dérivées ───────────────────────────────────────────────────────────

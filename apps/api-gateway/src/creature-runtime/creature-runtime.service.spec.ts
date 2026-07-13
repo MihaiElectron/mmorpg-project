@@ -31,6 +31,11 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     respawnDelayMs: 20000,
     lootPool: null,
     killCharacterXpReward: 0,
+    healingPower: 0,
+    criticalChance: 0,
+    criticalDamage: 150,
+    accuracy: 0,
+    armorPenetrationPercent: 0,
     ...overrides,
   };
 }

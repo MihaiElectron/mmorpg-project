@@ -53,4 +53,28 @@ export class CreatureTemplate {
   /** XP globale accordée au personnage à chaque kill de cette créature. 0 = pas d'XP. */
   @Column('int', { default: 0, name: 'kill_character_xp_reward' })
   killCharacterXpReward: number;
+
+  // ── Stats de combat avancées (V5-D2-A) ────────────────────────────────────
+  // Valeurs de config lues directement (pas de RuntimeModifier pour l'instant).
+  // Défauts = comportement V5-B/D1 inchangé (0 → pas de crit/accuracy/pénétration).
+
+  /** Puissance de soin. 0 → fallback runtime sur attackPower (comportement V5-D1). */
+  @Column('int', { default: 0, name: 'healing_power' })
+  healingPower: number;
+
+  /** Chance de critique en % (0–100). 0 = jamais de critique. */
+  @Column('int', { default: 0, name: 'critical_chance' })
+  criticalChance: number;
+
+  /** Multiplicateur critique total en % (150 = ×1.5). Pertinent si criticalChance > 0. */
+  @Column('int', { default: 150, name: 'critical_damage' })
+  criticalDamage: number;
+
+  /** Précision en points de % (réduit l'esquive effective de la cible). 0 = aucune. */
+  @Column('int', { default: 0, name: 'accuracy' })
+  accuracy: number;
+
+  /** Pénétration d'armure en % (0–100) appliquée aux dégâts physiques. 0 = aucune. */
+  @Column('int', { default: 0, name: 'armor_penetration_percent' })
+  armorPenetrationPercent: number;
 }

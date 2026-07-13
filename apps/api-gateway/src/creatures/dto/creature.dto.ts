@@ -69,6 +69,13 @@ export type CreatureRuntimeCombatDto = {
   canDodge: boolean;
   canBlock: boolean;
   canParry: boolean;
+  // D-bis. Stats de combat avancées (V5-D2-A, lecture seule). healingPower = valeur
+  // effective (fallback attackPower si non configurée) ; les 4 autres = config template.
+  healingPower: number;
+  criticalChance: number;
+  criticalDamage: number;
+  accuracy: number;
+  armorPenetrationPercent: number;
   // E. Loot / XP (facts du template ; le loot restant n'est pas tracké par instance)
   killCharacterXpReward: number;
   hasLootPool: boolean;

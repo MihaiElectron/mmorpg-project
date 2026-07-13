@@ -69,6 +69,14 @@ export class CreatureRuntimeCalculator {
       currentHealth: creature.health,
       speedMin:      template.speedMin,
       speedMax:      template.speedMax,
+      // Stats de combat avancées (V5-D2-A) — config brute du template.
+      // Défauts sûrs si une colonne est absente (base non migrée) : 0, sauf
+      // criticalDamage (150 = ×1.5, inerte tant que criticalChance = 0).
+      healingPower:            template.healingPower ?? 0,
+      criticalChance:          template.criticalChance ?? 0,
+      criticalDamage:          template.criticalDamage ?? 150,
+      accuracy:                template.accuracy ?? 0,
+      armorPenetrationPercent: template.armorPenetrationPercent ?? 0,
     };
   }
 

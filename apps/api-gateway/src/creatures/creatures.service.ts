@@ -374,6 +374,14 @@ export class CreaturesService implements OnModuleInit {
       canDodge: false,
       canBlock: false,
       canParry: false,
+      // V5-D2-A : stats de combat avancées (lecture seule). healingPower expose
+      // la valeur effective (fallback attackPower si non configurée, cohérent avec
+      // le cast heal). Les 4 autres sont la config brute du template.
+      healingPower: base.healingPower > 0 ? base.healingPower : derived.attackPower,
+      criticalChance: base.criticalChance,
+      criticalDamage: base.criticalDamage,
+      accuracy: base.accuracy,
+      armorPenetrationPercent: base.armorPenetrationPercent,
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,
@@ -503,9 +511,10 @@ export class CreaturesService implements OnModuleInit {
         derived: {
           attackPower: derived.attackPower,
           physicalAttack: derived.attackPower,
-          // Créatures V5-D1 : healingPower réutilise attackPower jusqu'à
-          // l'introduction de stats créature avancées.
-          healingPower: derived.attackPower,
+          // V5-D2-A : healingPower devient une vraie stat template. Fallback sur
+          // attackPower quand elle vaut 0 (préserve exactement le comportement
+          // V5-D1 pour les créatures non configurées).
+          healingPower: base.healingPower > 0 ? base.healingPower : derived.attackPower,
           defenseTotal: derived.defenseTotal,
           maxHp: derived.maxHp,
         },
@@ -774,8 +783,19 @@ export class CreaturesService implements OnModuleInit {
     ).derived;
 
     const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
+    // V5-D2-A : stats offensives avancées de la créature (config template, lues
+    // via CreatureBaseStats). Défauts 0 → comportement V5-B inchangé. `raw`
+    // ignore armure + pénétration côté calculateur (inchangé).
+    const attackerBase = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
     const result = resolveCombatHit({
-      attacker: { attackPower: rawAmount, minimumAttack: 0 },
+      attacker: {
+        attackPower: rawAmount,
+        minimumAttack: 0,
+        armorPenetrationPercent: attackerBase.armorPenetrationPercent,
+        criticalChancePercent: attackerBase.criticalChance,
+        criticalDamagePercent: attackerBase.criticalDamage,
+        accuracyPercent: attackerBase.accuracy,
+      },
       defender: {
         defense: charDerived.defense,
         dodgeChancePercent: charDerived.dodgeChance ?? 0,
@@ -808,6 +828,7 @@ export class CreaturesService implements OnModuleInit {
       worldY: target.worldY ?? char.worldY ?? 0,
       text: `-${dmg}`,
       skillName: ability.skillName,
+      isCritical: result.isCritical,
       isDodged: result.isDodged,
       isBlocked: result.isBlocked,
       blockedDamage: result.blockedDamage,

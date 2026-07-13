@@ -18,6 +18,7 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
+import { CreatureRuntimeCalculator } from '../creature-runtime/creature-runtime.calculator';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2453,6 +2454,203 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
       expect(creature.health).toBe(30); // clampé
       expect(healOf(emits).payload.amount).toBe(2); // heal réellement appliqué
+    });
+
+    // ─── V5-D2-A : stats de combat avancées créature ──────────────────────────
+    describe("stats de combat avancées (V5-D2-A)", () => {
+      // Capacité damage physique : montant = attackPower(baseAttack 5) × coef 2 = 10.
+      const PHYS = {
+        skillKey: "fireball",
+        skillName: "Boule de feu",
+        effectType: "damage" as const,
+        displayOrder: 0,
+        rangeWU: 5000,
+        cooldownMs: 3000,
+        damageType: "physical" as const,
+        scaling: { derivedCoefficients: { physicalAttack: 2 } },
+      };
+
+      // Id unique par cast : évite que deux casts d'un même test partagent le
+      // cooldown skill / la fenêtre d'action (map keyée par creature.id).
+      let castSeq = 0;
+
+      // Lance une capacité (template + stats défenseur paramétrables) et renvoie l'event damage.
+      async function castAbility(
+        ability: any,
+        templateOverrides: Partial<CreatureTemplate>,
+        derived: Record<string, number> = { defense: 0 },
+      ) {
+        const creature = makeCreature({ id: `adv-cast-${++castSeq}`, worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: 30 });
+        (service as any).combatAbilityCache.set("turkey", [ability]);
+        const player = makePlayer(6080 + 1000, 12480); // en portée skill
+        (service as any).characterRepository = {
+          findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100000, defense: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        };
+        (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+        mockDefenderDerived(derived);
+        const emits: { event: string; payload: any }[] = [];
+        await (service as any).doFighting(
+          creature,
+          fightingState(),
+          makeTemplate(templateOverrides),
+          [player],
+          Date.now(),
+          captureServer(emits),
+        );
+        return combatOf(emits)?.payload;
+      }
+
+      // A. Compat : template sans stats avancées → défauts sûrs.
+      it("A. base non migrée → défauts sûrs (crit 0, criticalDamage 150, accuracy/pen/heal 0)", () => {
+        const base = CreatureRuntimeCalculator.calculateBaseStats(makeCreature(), makeTemplate());
+        expect(base).toMatchObject({
+          healingPower: 0,
+          criticalChance: 0,
+          criticalDamage: 150,
+          accuracy: 0,
+          armorPenetrationPercent: 0,
+        });
+      });
+
+      it("A-bis. cast damage template par défaut → pas de critique, montant historique 10", async () => {
+        const ev = await castAbility(PHYS, {});
+        expect(ev.amount).toBe(10);
+        expect(ev.isCritical).toBe(false);
+      });
+
+      // B. Runtime : getRuntimeCombatInfo expose les 5 stats.
+      it("B. getRuntimeCombatInfo expose les 5 stats avancées + défensif toujours false", async () => {
+        const template = makeTemplate({
+          key: "adv",
+          healingPower: 12,
+          criticalChance: 7,
+          criticalDamage: 180,
+          accuracy: 9,
+          armorPenetrationPercent: 25,
+        });
+        const creature = makeCreature({ id: "adv-1", state: "fighting", health: 20, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("adv", []);
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        expect(dto).toMatchObject({
+          healingPower: 12,
+          criticalChance: 7,
+          criticalDamage: 180,
+          accuracy: 9,
+          armorPenetrationPercent: 25,
+          canDodge: false,
+          canBlock: false,
+          canParry: false,
+        });
+      });
+
+      it("B-bis. healingPower non configurée → getRuntimeCombatInfo retombe sur attackPower", async () => {
+        const template = makeTemplate({ key: "adv2", baseAttack: 5, healingPower: 0 });
+        const creature = makeCreature({ id: "adv-2", state: "fighting", health: 20, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("adv2", []);
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        expect(dto!.healingPower).toBe(5); // fallback attackPower (baseAttack 5)
+      });
+
+      // C. Heal : préserve V5-D1 (fallback) et prend la vraie valeur si configurée.
+      const HEAL2 = {
+        skillKey: "soin",
+        skillName: "Soin",
+        effectType: "heal" as const,
+        displayOrder: 0,
+        rangeWU: 0,
+        cooldownMs: 1000,
+        damageType: "physical" as const,
+        scaling: { derivedCoefficients: { healingPower: 2 } },
+      };
+      async function castHeal(templateOverrides: Partial<CreatureTemplate>, creatureHealth: number) {
+        const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: creatureHealth });
+        (service as any).combatAbilityCache.set("turkey", [HEAL2]);
+        (service as any).characterRepository = {
+          findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        };
+        (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+        mockDefenderDerived({ defense: 0 });
+        const emits: { event: string; payload: any }[] = [];
+        await (service as any).doFighting(
+          creature,
+          fightingState(),
+          makeTemplate(templateOverrides),
+          [makePlayer(6880, 12480)],
+          Date.now(),
+          captureServer(emits),
+        );
+        return emits.find((e) => e.event === "combat:event" && e.payload.type === "heal")?.payload;
+      }
+
+      it("C. healingPower non configurée → heal = fallback attackPower (comportement V5-D1)", async () => {
+        const heal = await castHeal({ baseHealth: 100, baseAttack: 5, healingPower: 0 }, 10);
+        expect(heal.amount).toBe(10); // attackPower 5 × coef 2
+      });
+
+      it("C-bis. healingPower configurée → heal utilise la vraie valeur", async () => {
+        const heal = await castHeal({ baseHealth: 100, baseAttack: 5, healingPower: 20 }, 10);
+        expect(heal.amount).toBe(40); // healingPower 20 × coef 2 (90 PV manquants → non clampé)
+      });
+
+      // D. Critique : criticalChance 100 → toujours critique (roll < 1), × criticalDamage.
+      it("D. criticalChance 100 → dégâts critiques (× criticalDamage), isCritical émis", async () => {
+        const ev = await castAbility(PHYS, { criticalChance: 100, criticalDamage: 200 });
+        expect(ev.isCritical).toBe(true);
+        expect(ev.amount).toBe(20); // 10 × 200 %
+      });
+
+      // E. Pénétration d'armure : ignore un % de l'armure du défenseur (dégâts physiques).
+      it("E. armorPenetrationPercent réduit l'armure effective de la cible", async () => {
+        const without = await castAbility(PHYS, { armorPenetrationPercent: 0 }, { defense: 8 });
+        expect(without.amount).toBe(2); // 10 − 8
+        const withPen = await castAbility(PHYS, { armorPenetrationPercent: 50 }, { defense: 8 });
+        expect(withPen.amount).toBe(6); // 10 − round(8 × 0.5)=4
+      });
+
+      it("E-bis. damageType raw ignore l'armure ET armorPenetrationPercent", async () => {
+        const raw = { ...PHYS, damageType: "raw" as const };
+        const ev = await castAbility(raw, { armorPenetrationPercent: 80 }, { defense: 100 });
+        expect(ev.amount).toBe(10); // brut : ni armure (100) ni pénétration appliquées
+      });
+
+      // F. Précision : réduit l'esquive effective du défenseur (V4-G).
+      it("F. accuracy annule l'esquive du défenseur", async () => {
+        const dodged = await castAbility(PHYS, { accuracy: 0 }, { defense: 0, dodgeChance: 100 });
+        expect(dodged.isDodged).toBe(true);
+        expect(dodged.amount).toBe(0);
+        const hit = await castAbility(PHYS, { accuracy: 100 }, { defense: 0, dodgeChance: 100 });
+        expect(hit.isDodged).toBe(false);
+        expect(hit.amount).toBe(10);
+      });
+
+      // G. Non-régression : l'auto-attaque legacy ne critique jamais, même crit 100.
+      it("G. auto-attaque legacy inchangée (aucun critique) même avec criticalChance 100", async () => {
+        const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: 30 });
+        (service as any).combatAbilityCache.set("turkey", []); // aucune capacité → auto-attaque legacy
+        (service as any).characterRepository = {
+          findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100000, defense: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        };
+        (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+        mockDefenderDerived({ defense: 0 });
+        const emits: { event: string; payload: any }[] = [];
+        await (service as any).doFighting(
+          creature,
+          fightingState(),
+          makeTemplate({ criticalChance: 100, criticalDamage: 300 }),
+          [makePlayer(6880, 12480)],
+          Date.now(),
+          captureServer(emits),
+        );
+        const ev = combatOf(emits).payload;
+        expect(ev.skillName).toBeUndefined(); // chemin legacy
+        expect(ev.amount).toBe(5); // baseAttack 5, jamais ×3
+        expect(ev.isCritical).toBeUndefined();
+      });
     });
   });
 });
