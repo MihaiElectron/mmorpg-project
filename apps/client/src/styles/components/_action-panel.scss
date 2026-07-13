@@ -7,13 +7,13 @@
   bottom: 80px;
   transform: translateX(-50%);
   background: vars.$panel-overlay-bg;
-  padding: 16px;
+  padding: 8px 12px;
   border-radius: vars.$panel-radius-card;
   border: 1px solid vars.$panel-border;
   color: vars.$color-text-primary;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: vars.$dt-gap-xs;
   z-index: 10000;
   min-width: 200px;
   box-shadow: vars.$panel-shadow-float;
@@ -21,11 +21,11 @@
   &__title {
     position: relative;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 14px;
     text-align: center;
     border-bottom: 1px solid vars.$btn-neutral-bg;
-    padding-bottom: 8px;
-    margin-bottom: 4px;
+    padding-bottom: 4px;
+    margin-bottom: 0;
     color: vars.$color-text-gold;
   }
 
@@ -51,7 +51,7 @@
     align-items: center;
     gap: 6px;
     border-top: 1px solid vars.$panel-border;
-    padding-top: 8px;
+    padding-top: vars.$dt-gap-xs;
   }
 
   &__overlap-label {
@@ -86,7 +86,7 @@
   &__actions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: vars.$dt-gap-xs;
   }
 
   &__button {
@@ -104,7 +104,7 @@
     flex-direction: column;
     gap: vars.$dt-gap-xs;
     border-top: 1px solid vars.$panel-border;
-    padding-top: 8px;
+    padding-top: vars.$dt-gap-xs;
   }
 
   &__skills-title {
@@ -182,12 +182,12 @@
   &__crafting {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: vars.$dt-gap-sm;
     width: min(420px, calc(100vw - 48px));
     max-height: 58vh;
     overflow-y: auto;
     border-top: 1px solid vars.$panel-border;
-    padding-top: 10px;
+    padding-top: vars.$dt-gap-sm;
   }
 
   &__crafting-header,
