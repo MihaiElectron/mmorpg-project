@@ -21,6 +21,7 @@ import {
   chebyshevDistanceWU,
 } from "../utils/worldCoordinates";
 import { getAutoAttackRangeDecision } from "../combat/autoAttackDecision";
+import { isRenderableCreatureState } from "../combat/creatureRenderFilter";
 import {
   formatFloatingCombatText,
   resolveFloatingColor,
@@ -1975,7 +1976,10 @@ export default class WorldScene extends Phaser.Scene {
     this.clearCreatures();
 
     creatures
-      .filter((creature) => creature.state === "alive")
+      // Rendre toutes les créatures NON mortes (alive/fighting/escaping) : filtrer
+      // sur "alive" seul faisait disparaître la créature du combat en cours lors
+      // d'un re-render complet (get_creatures au reconnect), rendant ce combat muet.
+      .filter((creature) => isRenderableCreatureState(creature.state))
       .forEach((creature) => this.upsertCreature(creature));
 
     this.redrawCreatureOverlay();
