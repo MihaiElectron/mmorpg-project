@@ -176,7 +176,7 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
 
             {/* B. Survie */}
             <Row label="PV">{data.currentHealth} / {data.maxHealth}</Row>
-            <Row label="défense">
+            <Row label="défense (effective)">
               {data.defenseTotal}
               <span className="creature-runtime__hint"> (base {data.baseArmor})</span>
             </Row>
@@ -184,7 +184,7 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             {data.respawnAt && <Row label="respawnAt">{String(data.respawnAt)}</Row>}
 
             {/* C. Combat offensif */}
-            <Row label="attaque">
+            <Row label="attaque (effective)">
               {data.attackPower}
               <span className="creature-runtime__hint"> (base {data.baseAttack})</span>
             </Row>
@@ -200,7 +200,8 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
               )}
             </Row>
 
-            {/* D. Combat défensif — non supporté côté créature aujourd'hui */}
+            {/* D. Combat défensif — non supporté côté créature aujourd'hui : une
+                créature ne peut ni esquiver, ni bloquer, ni parer un hit entrant. */}
             <Row label="esquive"><Unsupported /></Row>
             <Row label="blocage"><Unsupported /></Row>
             <Row label="parade"><Unsupported /></Row>
@@ -215,9 +216,9 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           {/* E-bis. Stats de combat avancées (V5-D2-A) — valeurs effectives serveur, lecture seule. */}
           <p className="creature-runtime__title">Stats avancées</p>
           <dl className="creature-runtime__grid">
-            <Row label="soin">
+            <Row label="soin (effectif)">
               {data.healingPower}
-              <span className="creature-runtime__hint"> (effectif · fallback ATK si 0)</span>
+              <span className="creature-runtime__hint"> (fallback ATK si 0)</span>
             </Row>
             <Row label="critique">{data.criticalChance} %</Row>
             <Row label="dégâts crit">{data.criticalDamage} %</Row>

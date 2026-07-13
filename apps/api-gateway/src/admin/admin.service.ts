@@ -545,7 +545,7 @@ export class AdminService {
 
   async createCreatureTemplate(
     fields: Pick<CreatureTemplate, 'key' | 'name'> &
-      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs'>>,
+      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent'>>,
   ): Promise<CreatureTemplate> {
     if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
     AdminService.validateSnakeCase(fields.key, 'key');
@@ -559,6 +559,10 @@ export class AdminService {
         throw new BadRequestException('textureKey doit être une chaîne non vide.');
       }
     }
+    // Stat numérique optionnelle : valeur finie fournie → utilisée, sinon défaut
+    // (même contrat que le chemin d'édition, qui rejette NaN/absent).
+    const numOr = (v: unknown, fallback: number): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : fallback;
     return this.templateRepo.save(this.templateRepo.create({
       key: fields.key,
       name: fields.name.trim(),
@@ -572,6 +576,14 @@ export class AdminService {
       speedMin: fields.speedMin ?? 60,
       speedMax: fields.speedMax ?? 100,
       respawnDelayMs: fields.respawnDelayMs ?? 20_000,
+      // V6-A Lot 1 : stats de combat avancées configurables dès la création.
+      // Défauts alignés sur l'entity (healingPower 0 = fallback attackPower runtime,
+      // criticalDamage 150 = ×1.5). Aucun changement de calcul/formule.
+      healingPower: numOr(fields.healingPower, 0),
+      criticalChance: numOr(fields.criticalChance, 0),
+      criticalDamage: numOr(fields.criticalDamage, 150),
+      accuracy: numOr(fields.accuracy, 0),
+      armorPenetrationPercent: numOr(fields.armorPenetrationPercent, 0),
     }));
   }
 

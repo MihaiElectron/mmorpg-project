@@ -399,6 +399,25 @@
     align-items: flex-start;
   }
 
+  // En-tête de catégorie (regroupement visuel des champs) — pleine largeur.
+  &__template-group {
+    flex: 0 0 100%;
+    width: 100%;
+    margin-top: 4px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    opacity: 0.62;
+  }
+
+  // Note d'aide courte (ex. HEAL = 0 → fallback attackPower).
+  &__hint {
+    margin: 2px 0 0;
+    font-size: 0.62rem;
+    opacity: 0.6;
+  }
+
   &__template-stat {
     display: flex;
     flex-direction: column;

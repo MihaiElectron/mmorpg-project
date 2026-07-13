@@ -1241,6 +1241,43 @@ describe('createCreatureTemplate', () => {
     expect(result.textureKey).toBe('goblin_sprite');
   });
 
+  it('V6-A : stats avancées absentes → défauts de l\'entity', async () => {
+    const result = await service.createCreatureTemplate({ key: 'plain_mob', name: 'Plain' });
+    expect(result.healingPower).toBe(0);
+    expect(result.criticalChance).toBe(0);
+    expect(result.criticalDamage).toBe(150);
+    expect(result.accuracy).toBe(0);
+    expect(result.armorPenetrationPercent).toBe(0);
+  });
+
+  it('V6-A : stats avancées fournies → persistées dès la création', async () => {
+    const result = await service.createCreatureTemplate({
+      key: 'crit_mob',
+      name: 'Crit Mob',
+      healingPower: 12,
+      criticalChance: 25,
+      criticalDamage: 200,
+      accuracy: 10,
+      armorPenetrationPercent: 40,
+    } as any);
+    expect(result.healingPower).toBe(12);
+    expect(result.criticalChance).toBe(25);
+    expect(result.criticalDamage).toBe(200);
+    expect(result.accuracy).toBe(10);
+    expect(result.armorPenetrationPercent).toBe(40);
+  });
+
+  it('V6-A : valeur avancée non finie → défaut (sanitize)', async () => {
+    const result = await service.createCreatureTemplate({
+      key: 'nan_mob',
+      name: 'NaN Mob',
+      criticalChance: Number.NaN,
+      criticalDamage: undefined,
+    } as any);
+    expect(result.criticalChance).toBe(0);
+    expect(result.criticalDamage).toBe(150);
+  });
+
   it('refuse une key non snake_case', async () => {
     await expect(service.createCreatureTemplate({ key: 'Bad Key', name: 'x' })).rejects.toThrow(BadRequestException);
   });

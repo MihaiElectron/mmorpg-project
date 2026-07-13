@@ -126,21 +126,25 @@ function buildGroupedSectionConfigs(masteryKeys: string[]): GroupedSectionConfig
     getGroupKey:  (t) => t.key,
     getGroupName: (t) => t.name,
     groupFields: [
-      { key: "name",             label: "Nom",          type: "text" as const },
-      { key: "textureKey",       label: "Texture",      type: "asset" as const, assetCategory: "bestiary" },
-      { key: "baseHealth",       label: "PV",           min: 1 },
-      { key: "baseAttack",       label: "ATK",          min: 0 },
-      { key: "baseArmor",        label: "ARM",          min: 0 },
-      { key: "aggroRadius",            label: "Aggro",           min: 0 },
-      { key: "fleeThresholdPct",       label: "Fuite%",          min: 0 },
-      { key: "respawnDelayMs",         label: "Respawn (ms)",    min: 1, step: 1000 },
-      { key: "killCharacterXpReward",  label: "XP perso (kill)", min: 0 },
-      // Stats de combat avancées (V5-D2-A). healingPower 0 = fallback ATK runtime.
-      { key: "healingPower",            label: "HEAL (0=ATK)",    min: 0 },
-      { key: "criticalChance",          label: "CRIT %",          min: 0 },
-      { key: "criticalDamage",          label: "CRIT DMG %",      min: 0 },
-      { key: "accuracy",                label: "ACC",             min: 0 },
-      { key: "armorPenetrationPercent", label: "PEN ARM %",       min: 0 },
+      // Identité
+      { key: "name",             label: "Nom",          type: "text" as const, group: "Identité" },
+      { key: "textureKey",       label: "Texture",      type: "asset" as const, assetCategory: "bestiary", group: "Identité" },
+      // Base
+      { key: "baseHealth",       label: "PV",           min: 1, group: "Base" },
+      { key: "baseAttack",       label: "ATK",          min: 0, group: "Base" },
+      { key: "baseArmor",        label: "ARM",          min: 0, group: "Base" },
+      // Offensif (V5-D2-A)
+      { key: "criticalChance",          label: "CRIT %",          min: 0, group: "Offensif" },
+      { key: "criticalDamage",          label: "CRIT DMG %",      min: 0, group: "Offensif" },
+      { key: "accuracy",                label: "ACC",             min: 0, group: "Offensif" },
+      { key: "armorPenetrationPercent", label: "PEN ARM %",       min: 0, group: "Offensif" },
+      // Soutien (healingPower 0 = fallback ATK runtime)
+      { key: "healingPower",            label: "HEAL (0=ATK)",    min: 0, group: "Soutien" },
+      // IA / spawn
+      { key: "aggroRadius",            label: "Aggro",           min: 0, group: "IA / spawn" },
+      { key: "fleeThresholdPct",       label: "Fuite%",          min: 0, group: "IA / spawn" },
+      { key: "respawnDelayMs",         label: "Respawn (ms)",    min: 1, step: 1000, group: "IA / spawn" },
+      { key: "killCharacterXpReward",  label: "XP perso (kill)", min: 0, group: "IA / spawn" },
     ],
     groupSaveEvent: "admin:update_template",
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),
@@ -606,7 +610,7 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
-const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000 };
+const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000, healingPower: 0, criticalChance: 0, criticalDamage: 150, accuracy: 0, armorPenetrationPercent: 0 };
 const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0, lootPool: [] as Array<{ itemId: string; minQty: number; maxQty: number; probability: number }> };
 const NEW_STATION_TEMPLATE_DEFAULT = {
   key: "",
@@ -1628,7 +1632,44 @@ export default function AdminPanelWOM() {
                     onChange={(e) => setNewCreature((prev) => ({ ...prev, respawnDelayMs: Number(e.target.value) }))}
                     {...kbHandlers} />
                 </label>
+                {/* V6-A Lot 1 : stats avancées configurables dès la création. */}
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label" title="Puissance de soin — 0 = fallback sur l'attaque (attackPower)">HEAL</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.healingPower}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, healingPower: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">CRIT %</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.criticalChance}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, criticalChance: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">CRIT DMG %</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.criticalDamage}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, criticalDamage: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">ACC</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.accuracy}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, accuracy: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
+                <label className="admin-panel__template-stat">
+                  <span className="admin-panel__template-stat-label">PEN ARM %</span>
+                  <input className="admin-panel__template-stat-input" type="number" min={0}
+                    value={newCreature.armorPenetrationPercent}
+                    onChange={(e) => setNewCreature((prev) => ({ ...prev, armorPenetrationPercent: Number(e.target.value) }))}
+                    {...kbHandlers} />
+                </label>
               </div>
+              <p className="admin-panel__hint">HEAL = 0 → utilise l'attaque (attackPower) comme soin.</p>
               <button className="admin-panel__apply-btn" disabled={creating}
                 onClick={async () => {
                   const socket = getSocket();

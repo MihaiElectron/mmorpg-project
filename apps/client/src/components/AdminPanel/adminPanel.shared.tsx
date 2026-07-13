@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Fragment, useEffect, useRef, useState } from "react";
 import AssetPicker from "../DevTools/AssetPicker";
 import { getDevToolsStore } from "../../store/devtools.store";
 import { getDevToolsSocket, getMainCamera, getWorldScene } from "../DevTools/devtoolsBridge";
@@ -19,6 +19,13 @@ export type FieldDef = {
   type?: 'text' | 'asset';
   /** Dossier cible du picker (ex: "items", "sprites", "bestiary"). Requis si type === 'asset'. */
   assetCategory?: string;
+  /**
+   * Catégorie d'affichage optionnelle (ex: "Base", "Offensif", "Soutien"). Quand
+   * elle change d'un champ au suivant, un en-tête pleine largeur est rendu au
+   * dessus (regroupement visuel). Sans `group`, aucun en-tête (comportement
+   * inchangé pour les sections qui ne l'utilisent pas).
+   */
+  group?: string;
 };
 
 export type ConsoleLine = { text: string; ok: boolean };
@@ -664,13 +671,18 @@ export function GroupedSection({ config, groups, instances, onResult, onInstance
 
                     {config.groupFields.length > 0 && (
                       <div className="admin-panel__template-stats">
-                        {config.groupFields.map((f) => (
-                          <label key={f.key} className="admin-panel__template-stat">
-                            <span className="admin-panel__template-stat-label">{f.label}</span>
-                            <StatField def={f} dirty={groupDraft.isDirty(gk, f.key, group)}
-                              value={groupDraft.getDisplayField(gk, f.key, group)}
-                              onChange={(v) => groupDraft.onChange(gk, f.key, v)} />
-                          </label>
+                        {config.groupFields.map((f, i) => (
+                          <Fragment key={f.key}>
+                            {f.group && f.group !== config.groupFields[i - 1]?.group && (
+                              <span className="admin-panel__template-group">{f.group}</span>
+                            )}
+                            <label className="admin-panel__template-stat">
+                              <span className="admin-panel__template-stat-label">{f.label}</span>
+                              <StatField def={f} dirty={groupDraft.isDirty(gk, f.key, group)}
+                                value={groupDraft.getDisplayField(gk, f.key, group)}
+                                onChange={(v) => groupDraft.onChange(gk, f.key, v)} />
+                            </label>
+                          </Fragment>
                         ))}
                       </div>
                     )}
