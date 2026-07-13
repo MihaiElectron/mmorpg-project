@@ -1,6 +1,7 @@
 import { ConnectedPlayer, MAX_REASONABLE_POSITION, WorldService } from './world.service';
 import { WorldSocket } from '../types/world-socket';
 import { wuToChunkIndex, DEFAULT_MAP_ID } from '../common/world-coordinates';
+import { getMapRoomId } from '../common/socket-rooms';
 
 // Fallback vide → CharacterStatsCalculator retombe sur DEFAULT_DERIVED_STAT_DEFINITIONS
 // (mêmes valeurs que les anciennes formules hardcodées).
@@ -562,11 +563,14 @@ describe('WorldService.respawnCharacter', () => {
   function makeRespawnServer() {
     const emitted: { event: string; payload: any }[] = [];
     const socketEmit = jest.fn((event: string, payload: any) => { emitted.push({ event, payload }); });
+    const socketsJoin = jest.fn();
+    const socketsLeave = jest.fn();
     const server = {
       to: jest.fn().mockReturnValue({ emit: socketEmit }),
       except: jest.fn().mockReturnValue({ emit: jest.fn() }),
+      in: jest.fn().mockReturnValue({ socketsJoin, socketsLeave }),
     } as unknown as any;
-    return { server, emitted };
+    return { server, emitted, socketsJoin, socketsLeave };
   }
 
   function makeRespawnService(
@@ -641,6 +645,36 @@ describe('WorldService.respawnCharacter', () => {
     const respawnEvt = emitted.find((e) => e.event === 'character_respawn');
     expect(respawnEvt).toBeDefined();
     expect(respawnEvt!.payload.health).toBe(150); // 100 base + 50 (item, canal flat)
+  });
+
+  it("V5-F : respawn cross-map déplace le socket vers la room de la nouvelle carte", async () => {
+    // Perso (DB) sur la map 2 ; aucun point de respawn sur la map 2 → fallback
+    // sur le point map 1. Le socket (live map 2) doit quitter map:2 et rejoindre map:1,
+    // sinon les combat:event (room-scoped) ne l'atteignent plus après respawn.
+    const svc = makeRespawnService(
+      { id: 'char-1', maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 2, positionX: 600, positionY: 300 },
+      { worldX: 0, worldY: 0, mapId: 1, radius: 0 },
+    );
+    const socket = makeSocket();
+    injectPlayer(svc, socket, makePlayer({ worldX: 1600, worldY: 8000, mapId: 2 }));
+    const { server, socketsJoin, socketsLeave } = makeRespawnServer();
+    await svc.respawnCharacter('char-1', server);
+    expect(server.in).toHaveBeenCalledWith('socket-1');
+    expect(socketsLeave).toHaveBeenCalledWith(getMapRoomId(2));
+    expect(socketsJoin).toHaveBeenCalledWith(getMapRoomId(1));
+  });
+
+  it("V5-F : respawn same-map ne change pas la room (idempotent, pas de churn)", async () => {
+    const svc = makeRespawnService(
+      { id: 'char-1', maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 1, positionX: 600, positionY: 300 },
+      { worldX: 0, worldY: 0, mapId: 1, radius: 0 },
+    );
+    const socket = makeSocket();
+    injectPlayer(svc, socket, makePlayer({ mapId: 1 }));
+    const { server, socketsJoin, socketsLeave } = makeRespawnServer();
+    await svc.respawnCharacter('char-1', server);
+    expect(socketsJoin).not.toHaveBeenCalled();
+    expect(socketsLeave).not.toHaveBeenCalled();
   });
 
   it("ne fait rien si le personnage est introuvable", async () => {

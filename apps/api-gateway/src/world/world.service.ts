@@ -5,7 +5,7 @@ import { WorldSocket } from '../types/world-socket';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
-import { ADMIN_ROOM } from '../common/socket-rooms';
+import { ADMIN_ROOM, getMapRoomId } from '../common/socket-rooms';
 import type { MasteryUpdatePayload } from '../masteries/masteries.service';
 
 export type AdminCharacterDirtyReason =
@@ -298,9 +298,18 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
     // Mettre à jour la position en mémoire et notifier le joueur
     for (const player of this.connectedPlayers.values()) {
       if (player.characterId === characterId) {
+        const previousMapId = player.mapId;
         player.worldX  = newWX;
         player.worldY  = newWY;
         player.mapId   = nearestWU.mapId;
+        // Respawn cross-map : le socket doit quitter la room de l'ancienne carte
+        // et rejoindre celle de la nouvelle, sinon les événements room-scoped
+        // (combat:event, player_moved…) ne l'atteignent plus alors que l'unicast
+        // (PV) continue. Idempotent, no-op si la carte ne change pas.
+        if (previousMapId !== nearestWU.mapId) {
+          server.in(player.socketId).socketsLeave(getMapRoomId(previousMapId));
+          server.in(player.socketId).socketsJoin(getMapRoomId(nearestWU.mapId));
+        }
         // Mouvement forcé serveur : resynchroniser le distance gate (cf. teleport).
         this.resyncMovementValidation(player.socketId);
         server.to(player.socketId).emit('character_respawn', {

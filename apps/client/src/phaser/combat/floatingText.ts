@@ -195,7 +195,14 @@ export function showFloatingCombatText(
     .setOrigin(0.5)
     .setDepth(FLOATING_DEPTH);
 
+  // `released` garantit une SEULE décrémentation même si `onComplete` ET `onStop`
+  // se déclenchent (tween tué avant fin : sleep/shutdown de scène). Sans ce
+  // filet, un tween stoppé sans `onComplete` laisserait fuir le compteur, qui
+  // finirait par bloquer l'affichage (cap MAX_FLOATING_TEXTS jamais rendu).
+  let released = false;
   const release = () => {
+    if (released) return;
+    released = true;
     const s = scene as { __floatingTextCount?: number };
     s.__floatingTextCount = Math.max(0, (s.__floatingTextCount ?? 1) - 1);
     if (label.active) label.destroy();
@@ -219,5 +226,7 @@ export function showFloatingCombatText(
       label.alpha = 1 - progress.t;
     },
     onComplete: release,
+    // Tween stoppé/tué avant complétion (scène endormie/détruite) → libère aussi.
+    onStop: release,
   });
 }

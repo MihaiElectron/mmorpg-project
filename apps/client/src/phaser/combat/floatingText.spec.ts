@@ -4,9 +4,38 @@ import {
   resolveFloatingColor,
   resolveFloatingFontStyle,
   resolveAnchorPosition,
+  showFloatingCombatText,
   FLOATING_COLORS,
   FLOATING_TEXT_DURATION_MS,
+  MAX_FLOATING_TEXTS,
 } from "./floatingText";
+
+// Fausse scène Phaser minimale : capture les configs de tween pour déclencher
+// onComplete/onStop à la main, et un label inerte destructible.
+function makeFakeScene() {
+  const tweens: any[] = [];
+  const label = () => {
+    const obj: any = {
+      active: true,
+      x: 0,
+      y: 0,
+      alpha: 1,
+      setOrigin() { return obj; },
+      setDepth() { return obj; },
+      destroy() { obj.active = false; },
+    };
+    return obj;
+  };
+  const scene: any = {
+    add: { text: () => label() },
+    tweens: { add: (cfg: any) => { tweens.push(cfg); return {}; } },
+  };
+  return { scene, tweens };
+}
+
+function pushText(scene: any) {
+  showFloatingCombatText(scene, { text: "-5", fallbackX: 0, fallbackY: 0 });
+}
 
 describe("FLOATING_TEXT_DURATION_MS", () => {
   it("durée d'affichage portée à 1125 ms (×1.5)", () => {
@@ -218,5 +247,49 @@ describe("resolveFloatingFontStyle (V4-E)", () => {
     expect(
       resolveFloatingFontStyle({ type: "damage", isCounterAttack: true, isCritical: true }),
     ).toBe("bold italic");
+  });
+});
+
+describe("showFloatingCombatText — compteur de concurrence (V5-F)", () => {
+  it("incrémente puis libère sur onComplete", () => {
+    const { scene, tweens } = makeFakeScene();
+    pushText(scene);
+    expect(scene.__floatingTextCount).toBe(1);
+    tweens[0].onComplete();
+    expect(scene.__floatingTextCount).toBe(0);
+  });
+
+  it("libère aussi sur onStop (tween tué avant complétion)", () => {
+    const { scene, tweens } = makeFakeScene();
+    pushText(scene);
+    expect(scene.__floatingTextCount).toBe(1);
+    tweens[0].onStop();
+    expect(scene.__floatingTextCount).toBe(0);
+  });
+
+  it("pas de double décrément si onComplete ET onStop se déclenchent", () => {
+    const { scene, tweens } = makeFakeScene();
+    pushText(scene);
+    pushText(scene); // count = 2
+    expect(scene.__floatingTextCount).toBe(2);
+    tweens[0].onComplete();
+    tweens[0].onStop(); // second release ignoré
+    expect(scene.__floatingTextCount).toBe(1); // un seul libéré
+  });
+
+  it("le cap ne reste pas bloqué : après stop des tweens, on peut réafficher", () => {
+    const { scene, tweens } = makeFakeScene();
+    for (let i = 0; i < MAX_FLOATING_TEXTS; i++) pushText(scene);
+    expect(scene.__floatingTextCount).toBe(MAX_FLOATING_TEXTS);
+    // Cap atteint : un nouveau texte est rejeté (aucun tween supplémentaire).
+    const before = tweens.length;
+    pushText(scene);
+    expect(tweens.length).toBe(before);
+    // Les tweens sont stoppés (sleep/shutdown) → compteur libéré.
+    for (const t of tweens) t.onStop();
+    expect(scene.__floatingTextCount).toBe(0);
+    // On peut de nouveau afficher.
+    pushText(scene);
+    expect(scene.__floatingTextCount).toBe(1);
   });
 });
