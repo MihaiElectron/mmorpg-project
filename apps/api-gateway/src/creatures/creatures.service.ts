@@ -15,7 +15,7 @@ import {
 } from '../characters/attack-range.helper';
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { DamageType } from './combat-damage.calculator';
-import { resolveCombatHit } from './combat-hit.resolver';
+import { resolveCombatHit, CombatHitAttacker } from './combat-hit.resolver';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
@@ -774,6 +774,49 @@ export class CreaturesService implements OnModuleInit {
     }
     cd.set(ability.skillKey, now);
 
+    // V5-D2-A : stats offensives avancées de la créature (config template, lues
+    // via CreatureBaseStats). Défauts 0 → comportement V5-B inchangé. `raw`
+    // ignore armure + pénétration côté calculateur (inchangé).
+    const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
+    const attackerBase = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    await this.applyCreatureHitToPlayer(creature, target, server, state, {
+      attacker: {
+        attackPower: rawAmount,
+        minimumAttack: 0,
+        armorPenetrationPercent: attackerBase.armorPenetrationPercent,
+        criticalChancePercent: attackerBase.criticalChance,
+        criticalDamagePercent: attackerBase.criticalDamage,
+        accuracyPercent: attackerBase.accuracy,
+      },
+      damageType: ability.damageType,
+      skillName: ability.skillName,
+    });
+  }
+
+  /**
+   * Applique un hit créature → joueur via le resolver commun (`resolveCombatHit`),
+   * met à jour les PV, émet `character_damaged` (unicast) + `combat:event` (room,
+   * avec les flags isCritical/isDodged/isBlocked/blockedDamage), et gère la
+   * mort/respawn + nettoyage de la cible. Point unique d'application d'un hit
+   * créature → joueur : le défenseur applique son contrat défensif V4 (esquive +
+   * blocage, stats dérivées serveur incluant l'équipement) ; parade JAMAIS sur un
+   * hit créature (`canParry: false`). L'appelant fournit le bloc attaquant déjà
+   * assemblé (montant + stats avancées) et consomme lui-même son cooldown.
+   *
+   * V5-G étape 1 : extrait de `castCreatureDamageSkill` sans changement de
+   * comportement observable. L'auto-attaque legacy ne l'utilise PAS encore.
+   */
+  private async applyCreatureHitToPlayer(
+    creature: Creature,
+    target: ConnectedPlayer,
+    server: Server,
+    state: PatrolState,
+    hit: {
+      attacker: CombatHitAttacker;
+      damageType: DamageType;
+      skillName?: string;
+    },
+  ): Promise<void> {
     const char = await this.characterRepository.findOne({
       where: { id: target.characterId },
       relations: ['equipment', 'equipment.item'],
@@ -791,20 +834,8 @@ export class CreaturesService implements OnModuleInit {
       ),
     ).derived;
 
-    const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
-    // V5-D2-A : stats offensives avancées de la créature (config template, lues
-    // via CreatureBaseStats). Défauts 0 → comportement V5-B inchangé. `raw`
-    // ignore armure + pénétration côté calculateur (inchangé).
-    const attackerBase = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
     const result = resolveCombatHit({
-      attacker: {
-        attackPower: rawAmount,
-        minimumAttack: 0,
-        armorPenetrationPercent: attackerBase.armorPenetrationPercent,
-        criticalChancePercent: attackerBase.criticalChance,
-        criticalDamagePercent: attackerBase.criticalDamage,
-        accuracyPercent: attackerBase.accuracy,
-      },
+      attacker: hit.attacker,
       defender: {
         defense: charDerived.defense,
         dodgeChancePercent: charDerived.dodgeChance ?? 0,
@@ -813,7 +844,7 @@ export class CreaturesService implements OnModuleInit {
         canParry: false,
         parryChancePercent: 0,
       },
-      damageType: ability.damageType,
+      damageType: hit.damageType,
       minimumDamage: 1,
       hpBefore: char.health,
     });
@@ -836,7 +867,7 @@ export class CreaturesService implements OnModuleInit {
       worldX: target.worldX ?? char.worldX ?? 0,
       worldY: target.worldY ?? char.worldY ?? 0,
       text: `-${dmg}`,
-      skillName: ability.skillName,
+      skillName: hit.skillName,
       isCritical: result.isCritical,
       isDodged: result.isDodged,
       isBlocked: result.isBlocked,
