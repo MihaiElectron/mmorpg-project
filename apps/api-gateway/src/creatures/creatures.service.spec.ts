@@ -873,6 +873,24 @@ describe('CreaturesService', () => {
         if (result.success) expect(result.damage).toBe(8);
       });
 
+      it("V6-A : créature défenseur — ni esquive ni blocage (seule defenseTotal s'applique)", async () => {
+        masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } });
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 }); // template défaut : baseArmor 2
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+        const result = await service.attack(creature.id, 'char-1', { ...CREATURE_WU });
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          // La créature ne peut ni esquiver ni bloquer un hit entrant (limite V6-A).
+          expect(result.isDodged).toBe(false);
+          expect(result.isBlocked).toBe(false);
+          // Seule defenseTotal (baseArmor 2) réduit : physicalAttack 10 − 2 = 8.
+          expect(result.damage).toBe(8);
+        }
+      });
+
       it("n'empêche pas l'XP mastery existante (bow → applyMasteryXpInTx)", async () => {
         masteryEffectsService.getMasteryBonuses.mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } });
         const creature = makeCreature({ ...CREATURE_WU, health: 300 });

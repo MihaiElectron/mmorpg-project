@@ -589,7 +589,7 @@ export class AdminService {
 
   async updateTemplate(
     key: string,
-    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey'>> & { lootPool?: unknown },
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent'>> & { lootPool?: unknown },
   ): Promise<CreatureTemplate | null> {
     const template = await this.templateRepo.findOne({ where: { key } });
     if (!template) return null;

@@ -527,6 +527,30 @@ describe('AdminService resources', () => {
       expect(itemRepo.find).not.toHaveBeenCalled();
       expect(creatureTemplateRepo.save).not.toHaveBeenCalled();
     });
+
+    // V6-A Lot 3 : cohérence édition stat par stat (chaque stat avancée modifiable).
+    it.each([
+      ['healingPower', 20],
+      ['criticalChance', 25],
+      ['criticalDamage', 200],
+      ['accuracy', 15],
+      ['armorPenetrationPercent', 40],
+    ] as const)('updateTemplate modifie la stat avancée %s', async (field, value) => {
+      creatureTemplateRepo.findOne.mockResolvedValue({ key: 'turkey', name: 'Turkey', lootPool: null });
+      const updated = await service.updateTemplate('turkey', { [field]: value } as any);
+      expect((updated as any)?.[field]).toBe(value);
+      expect(creatureTemplateRepo.save).toHaveBeenCalledWith(expect.objectContaining({ [field]: value }));
+    });
+
+    it('updateTemplate ne touche pas les champs non fournis', async () => {
+      creatureTemplateRepo.findOne.mockResolvedValue({
+        key: 'turkey', name: 'Turkey', baseAttack: 5, criticalChance: 10, armorPenetrationPercent: 30, lootPool: null,
+      });
+      const updated = await service.updateTemplate('turkey', { criticalChance: 50 });
+      expect(updated?.criticalChance).toBe(50); // modifié
+      expect((updated as any)?.baseAttack).toBe(5); // inchangé
+      expect((updated as any)?.armorPenetrationPercent).toBe(30); // inchangé
+    });
   });
 
   it('createResource WU-only : écrit worldX/worldY/mapId sans cache pixel', async () => {
