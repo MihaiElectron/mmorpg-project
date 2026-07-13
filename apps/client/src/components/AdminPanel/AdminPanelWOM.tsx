@@ -1123,6 +1123,16 @@ export default function AdminPanelWOM() {
     craftingStations: selectedWO?.category === "crafting_station" ? selectedWO.id : null,
     buildings: selectedWO?.category === "building" ? selectedWO.id : null,
   };
+  // V5-C5 : instance créature dont le runtime est inspecté. Découplé de selectedWO :
+  // la sélection map l'OUVRE, mais la désélection ne la ferme pas (inspection
+  // persistante, éditable aussi manuellement depuis le Creature Editor).
+  const [inspectedCreatureId, setInspectedCreatureId] = useState<string | null>(null);
+  useEffect(() => {
+    // Sélection map d'une créature → ouvre/transfère l'inspection sur cette instance.
+    // Une autre entité ou une désélection ne ferme PAS l'inspection en cours.
+    if (selectedWO?.category === "creature") setInspectedCreatureId(selectedWO.id);
+  }, [selectedWO]);
+
   const [overview,     setOverview]     = useState<Overview | null>(null);
   const [sectionData,  setSectionData]  = useState<Record<string, any[]>>({});
 
@@ -1520,13 +1530,24 @@ export default function AdminPanelWOM() {
           // V5-A : capacités configurables au niveau TEMPLATE (config only, aucun
           // cast auto). Toujours visible, indépendant du runtime de l'instance.
           renderGroupExtra={(group) => <CreatureAbilitiesEditor templateKey={group.key} />}
-          // Runtime combat : uniquement pour l'instance sélectionnée (1 fetch),
-          // et sans conditionner l'édition des capacités.
-          renderInstanceExtra={(inst) =>
-            selectedWO?.category === "creature" && selectedWO?.id === inst.id ? (
-              <CreatureRuntimeInspector creatureId={inst.id} />
-            ) : null
-          }
+          // Runtime combat : inspection persistante d'UNE seule instance à la fois,
+          // ouvrable manuellement (bouton) ou par sélection map, indépendante de
+          // selectedWO. Le polling s'arrête au démontage (changement/fermeture).
+          renderInstanceExtra={(inst) => {
+            const inspected = inspectedCreatureId === inst.id;
+            return (
+              <>
+                <button
+                  type="button"
+                  className="creature-abilities__btn creature-abilities__btn--neutral"
+                  onClick={() => setInspectedCreatureId(inspected ? null : inst.id)}
+                >
+                  {inspected ? "Masquer runtime" : "Inspecter"}
+                </button>
+                {inspected && <CreatureRuntimeInspector creatureId={inst.id} />}
+              </>
+            );
+          }}
           rightHeader={
             <span className="admin-panel__count">
               {(groupData["creatures"] ?? []).length} créature{(groupData["creatures"] ?? []).length > 1 ? "s" : ""}
