@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto';
  * un canal séparé). Aucun ancien event n'est remplacé : ceci s'ajoute en parallèle.
  */
 
-export type CombatEventType = 'damage' | 'death';
+export type CombatEventType = 'damage' | 'death' | 'heal';
 export type CombatActorType = 'player' | 'creature';
 
 export interface CombatEvent {

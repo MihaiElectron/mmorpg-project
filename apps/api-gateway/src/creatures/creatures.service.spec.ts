@@ -2373,5 +2373,86 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(a1.onCooldown).toBe(false);
       expect(a1.cooldownRemainingMs).toBe(0);
     });
+
+    // ─── V5-D1-B : self-heal créature ──────────────────────────────────────────
+    const HEAL = {
+      skillKey: "soin",
+      skillName: "Soin",
+      effectType: "heal" as const,
+      displayOrder: 0,
+      rangeWU: 0,
+      cooldownMs: 1000,
+      damageType: "physical" as const,
+      scaling: { derivedCoefficients: { healingPower: 2 } }, // healingPower←attackPower(5) → 10
+    };
+    function healSetup(health: number) {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health });
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0 });
+      return creature;
+    }
+    const healOf = (emits: any[]) =>
+      emits.find((e) => e.event === "combat:event" && e.payload.type === "heal");
+
+    it("A. blessée + heal dispo → heal casté (PV augmentent, event heal, cooldown enregistré)", async () => {
+      const creature = healSetup(10); // maxHealth 30
+      (service as any).combatAbilityCache.set("turkey", [HEAL]);
+      const now = 5_000_000;
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], now, captureServer(emits));
+      expect(creature.health).toBe(20); // 10 + 10
+      const heal = healOf(emits);
+      expect(heal.payload).toMatchObject({ type: "heal", sourceType: "creature", targetType: "creature", amount: 10, skillName: "Soin" });
+      expect((service as any).creatureSkillCooldowns.get(creature.id).get("soin")).toBe(now);
+    });
+
+    it("B. full HP → heal NON casté (auto-attaque prend le relais)", async () => {
+      const creature = healSetup(30); // = maxHealth
+      (service as any).combatAbilityCache.set("turkey", [HEAL]);
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
+      expect(healOf(emits)).toBeUndefined();
+      expect(creature.health).toBe(30);
+      expect(combatOf(emits).payload.skillName).toBeUndefined(); // auto-attaque legacy
+    });
+
+    it("C. blessée + heal ET damage dispo → heal prioritaire, damage non lancé", async () => {
+      const creature = healSetup(10);
+      (service as any).combatAbilityCache.set("turkey", [HEAL, { ...ABILITY, displayOrder: 1 }]);
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
+      expect(healOf(emits)).toBeDefined();
+      // Aucun event damage skill dans le même tick.
+      const dmgSkill = emits.find((e) => e.event === "combat:event" && e.payload.type === "damage" && e.payload.skillName);
+      expect(dmgSkill).toBeUndefined();
+    });
+
+    it("D. heal en cooldown → non casté, auto-attaque fallback ; recast après expiration", async () => {
+      const creature = healSetup(10);
+      (service as any).combatAbilityCache.set("turkey", [HEAL]);
+      const now = 6_000_000;
+      (service as any).creatureSkillCooldowns.set(creature.id, new Map([["soin", now]])); // vient de heal
+      const emits1: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], now, captureServer(emits1));
+      expect(healOf(emits1)).toBeUndefined(); // cooldown → pas de heal
+      expect(combatOf(emits1).payload.skillName).toBeUndefined(); // auto-attaque fallback
+      // Après expiration (cooldownMs 1000) → heal relancé.
+      const emits2: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], now + 1500, captureServer(emits2));
+      expect(healOf(emits2)).toBeDefined();
+    });
+
+    it("E. clamp maxHealth : heal borné aux PV manquants (event = montant réel)", async () => {
+      const creature = healSetup(28); // maxHealth 30 → 2 PV manquants
+      (service as any).combatAbilityCache.set("turkey", [HEAL]); // amount 10
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
+      expect(creature.health).toBe(30); // clampé
+      expect(healOf(emits).payload.amount).toBe(2); // heal réellement appliqué
+    });
   });
 });

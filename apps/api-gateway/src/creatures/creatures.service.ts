@@ -448,8 +448,29 @@ export class CreaturesService implements OnModuleInit {
     if (abilities.length === 0) return null;
     const cd = this.creatureSkillCooldowns.get(creatureId);
     for (const ability of abilities) {
-      if (ability.effectType !== 'damage') continue; // heal non casté (V5-D1-A)
+      if (ability.effectType !== 'damage') continue; // heal traité séparément
       if (distWU > ability.rangeWU) continue; // hors portée
+      const lastCast = cd?.get(ability.skillKey) ?? 0;
+      if (now - lastCast < ability.cooldownMs) continue; // cooldown non expiré
+      return ability;
+    }
+    return null;
+  }
+
+  /**
+   * V5-D1-B : première capacité HEAL utilisable (effectType heal + cooldown skill
+   * expiré), dans l'ordre déjà trié. Self-heal : PAS de check de portée (le lanceur
+   * est la cible). L'appelant garantit que la créature est blessée. null si aucune.
+   */
+  private pickCreatureHealAbility(
+    creatureId: string,
+    abilities: ResolvedCreatureAbility[],
+    now: number,
+  ): ResolvedCreatureAbility | null {
+    if (abilities.length === 0) return null;
+    const cd = this.creatureSkillCooldowns.get(creatureId);
+    for (const ability of abilities) {
+      if (ability.effectType !== 'heal') continue;
       const lastCast = cd?.get(ability.skillKey) ?? 0;
       if (now - lastCast < ability.cooldownMs) continue; // cooldown non expiré
       return ability;
@@ -476,12 +497,15 @@ export class CreaturesService implements OnModuleInit {
       debugMods,
     );
     return calculateSkillEffect(
-      { effectType: 'damage', scaling: ability.scaling },
+      { effectType: ability.effectType, scaling: ability.scaling },
       {
         primary: {},
         derived: {
           attackPower: derived.attackPower,
           physicalAttack: derived.attackPower,
+          // Créatures V5-D1 : healingPower réutilise attackPower jusqu'à
+          // l'introduction de stats créature avancées.
+          healingPower: derived.attackPower,
           defenseTotal: derived.defenseTotal,
           maxHp: derived.maxHp,
         },
@@ -643,6 +667,15 @@ export class CreaturesService implements OnModuleInit {
     const lastAtk = this.lastCreatureAutoAttackAt.get(creature.id) ?? 0;
     if (now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       const abilities = await this.getCombatAbilities(template.id, template.key);
+      // V5-D1-B : si blessée, une capacité HEAL (self) est prioritaire sur le damage.
+      // Le heal consomme la fenêtre d'action : aucun damage dans le même tick.
+      if (creature.health < template.baseHealth) {
+        const healChosen = this.pickCreatureHealAbility(creature.id, abilities, now);
+        if (healChosen) {
+          await this.castCreatureHeal(creature, template, healChosen, server, now);
+          return;
+        }
+      }
       const chosen = this.pickCreatureDamageAbility(creature.id, abilities, dist, now);
       if (chosen) {
         await this.castCreatureDamageSkill(creature, template, chosen, target, server, state, now);
@@ -784,6 +817,54 @@ export class CreaturesService implements OnModuleInit {
       await this.changeCreatureState(creature, 'alive');
       state.targetCharacterId = undefined;
     }
+  }
+
+  /**
+   * V5-D1-B : self-heal créature. NE passe PAS par `resolveCombatHit` (ce n'est
+   * pas un hit damage : ni armure, ni esquive, ni critique). Montant via
+   * `calculateSkillEffect` (effectType heal), clampé aux PV manquants. Consomme la
+   * fenêtre d'action + enregistre le cooldown skill. Pas de heal allié, pas d'AoE,
+   * pas de mana/threat/cast time. L'appelant garantit `health < maxHealth`.
+   */
+  private async castCreatureHeal(
+    creature: Creature,
+    template: CreatureTemplate,
+    ability: ResolvedCreatureAbility,
+    server: Server,
+    now: number,
+  ): Promise<void> {
+    // Consomme la fenêtre d'action + enregistre le cooldown (cast réel).
+    this.lastCreatureAutoAttackAt.set(creature.id, now);
+    let cd = this.creatureSkillCooldowns.get(creature.id);
+    if (!cd) {
+      cd = new Map();
+      this.creatureSkillCooldowns.set(creature.id, cd);
+    }
+    cd.set(ability.skillKey, now);
+
+    const maxHealth = template.baseHealth;
+    const amount = this.computeCreatureSkillAmount(creature, template, ability);
+    const healApplied = Math.min(amount, Math.max(0, maxHealth - creature.health));
+    if (healApplied <= 0) return; // rien à soigner / montant nul : pas d'event inutile
+
+    creature.health = Math.min(maxHealth, creature.health + amount);
+    await this.creatureRepository.save(creature);
+
+    // Event heal (feedback) — source = cible = la créature. Les PV à jour sont
+    // diffusés par le `creature_update` du tick courant.
+    server.to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID)).emit(COMBAT_EVENT, makeCombatEvent({
+      type: 'heal',
+      amount: healApplied,
+      sourceType: 'creature',
+      sourceId: creature.id,
+      targetType: 'creature',
+      targetId: creature.id,
+      worldX: creature.worldX ?? 0,
+      worldY: creature.worldY ?? 0,
+      text: `+${healApplied}`,
+      skillName: ability.skillName,
+      targetName: template.name,
+    }));
   }
 
   private async doEscaping(

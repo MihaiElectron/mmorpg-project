@@ -253,7 +253,15 @@ describe("formatCombatLogMessage", () => {
     expect(formatCombatLogMessage(null)).toBeNull();
     expect(formatCombatLogMessage(undefined)).toBeNull();
     expect(formatCombatLogMessage({} as never)).toBeNull();
-    expect(formatCombatLogMessage({ type: "heal", amount: 5 } as never, opts)).toBeNull();
+    expect(formatCombatLogMessage({ type: "buff", amount: 5 } as never, opts)).toBeNull();
+  });
+
+  it("V5-D1-B : soin créature → « X récupère N PV avec Soin »", () => {
+    const msg = formatCombatLogMessage(
+      { type: "heal", amount: 15, sourceType: "creature", sourceId: "creature-1", targetType: "creature", targetId: "creature-1", skillName: "Soin" },
+      opts,
+    );
+    expect(msg).toBe("turkey récupère 15 PV avec Soin");
   });
 });
 

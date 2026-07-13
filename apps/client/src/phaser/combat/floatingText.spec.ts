@@ -70,7 +70,12 @@ describe("formatFloatingCombatText", () => {
     expect(formatFloatingCombatText(null)).toBeNull();
     expect(formatFloatingCombatText(undefined)).toBeNull();
     expect(formatFloatingCombatText({})).toBeNull();
-    expect(formatFloatingCombatText({ type: "heal", amount: 5 })).toBeNull();
+    expect(formatFloatingCombatText({ type: "buff", amount: 5 })).toBeNull();
+  });
+
+  it("V5-D1-B : soin → « +N » (jamais « +0 »)", () => {
+    expect(formatFloatingCombatText({ type: "heal", amount: 15 })).toBe("+15");
+    expect(formatFloatingCombatText({ type: "heal", amount: 0 })).toBeNull();
   });
 
   it("V4-F : esquive → 'Esquive' (jamais '-0'), même avec amount 0", () => {

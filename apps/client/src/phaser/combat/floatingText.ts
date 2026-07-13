@@ -5,7 +5,7 @@
  * module sépare la logique pure (formatage/style, testable) du rendu Phaser.
  */
 
-export type CombatEventType = "damage" | "death";
+export type CombatEventType = "damage" | "death" | "heal";
 export type CombatActorType = "player" | "creature";
 
 export interface CombatEventPayload {
@@ -48,6 +48,7 @@ export const FLOATING_COLORS = {
   dodge: "#8fd3ff", // esquive : bleu clair sobre (V4-F)
   blocked: "#b8c4d0", // blocage : gris acier (dégâts réduits, distinct de l'esquive) (V4-H)
   parried: "#6fe0a8", // parade : vert martial sobre (réaction active, distinct) (V4-I)
+  heal: "#5fd67a", // soin : vert (V5-D1-B)
   death: "#c0c0c0", // mort : gris
 } as const;
 
@@ -62,6 +63,14 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
 
   if (event.type === "death") {
     return typeof event.text === "string" && event.text.length > 0 ? event.text : "Mort";
+  }
+
+  if (event.type === "heal") {
+    // V5-D1-B : soin → "+N" (jamais "+0"). Le serveur fournit le montant réel.
+    const hasAmount = typeof event.amount === "number" && Number.isFinite(event.amount);
+    if (hasAmount && (event.amount as number) <= 0) return null;
+    if (typeof event.text === "string" && event.text.length > 0) return event.text;
+    return hasAmount ? `+${event.amount}` : null;
   }
 
   if (event.type === "damage") {
@@ -93,6 +102,7 @@ export function formatFloatingCombatText(event: CombatEventPayload | null | unde
  */
 export function resolveFloatingColor(event: CombatEventPayload): string {
   if (event.type === "death") return FLOATING_COLORS.death;
+  if (event.type === "heal") return FLOATING_COLORS.heal; // V5-D1-B : soin → vert
   if (event.type === "damage" && event.isParried) return FLOATING_COLORS.parried;
   if (event.type === "damage" && event.isDodged) return FLOATING_COLORS.dodge;
   if (event.type === "damage" && event.isBlocked) return FLOATING_COLORS.blocked;

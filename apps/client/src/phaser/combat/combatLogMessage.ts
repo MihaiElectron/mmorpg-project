@@ -62,6 +62,22 @@ export function formatCombatLogMessage(
 ): string | null {
   if (!event || typeof event !== "object") return null;
 
+  if (event.type === "heal") {
+    // V5-D1-B : soin (info serveur `amount`). Source = cible (self-heal créature).
+    const hasAmount =
+      typeof event.amount === "number" && Number.isFinite(event.amount) && event.amount > 0;
+    if (!hasAmount) return null;
+    const amount = event.amount as number;
+    const who = isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId)
+      ? "Vous récupérez"
+      : `${actorLabel(event.targetType, event.targetId, opts, { subject: true })} récupère`;
+    const withSkill =
+      typeof event.skillName === "string" && event.skillName.length > 0
+        ? ` avec ${event.skillName}`
+        : "";
+    return `${who} ${amount} PV${withSkill}`;
+  }
+
   if (event.type === "death") {
     if (isLocalPlayer(event.targetType, event.targetId, opts.localCharacterId)) {
       return "Vous êtes mort";
