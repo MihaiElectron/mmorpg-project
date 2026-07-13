@@ -620,6 +620,43 @@ describe('CreaturesService', () => {
         }
       });
 
+      // V5-F : la parade/contre-attaque peut venir des STATS SECONDAIRES d'un item
+      // équipé (canal DerivedStatModifiers.flat), sans aucun modificateur de maîtrise.
+      it("V5-F : parade + contre-attaque pilotées par les statBonuses d'un item équipé", async () => {
+        // Aucun bonus de maîtrise (mock par défaut vide) → tout vient de l'item.
+        const PARRY_ITEM_EQUIP = [
+          {
+            slot: EquipmentSlot.RIGHT_HAND,
+            item: {
+              id: 'w',
+              type: 'weapon',
+              weaponType: null,
+              range: null,
+              statBonuses: { parryChance: 100, counterAttackPower: 20 },
+            },
+          },
+        ] as any;
+        const creature = armCreature({ health: 30 });
+        characterRepository.findOne.mockResolvedValue(
+          makeCharacter({ attack: 10, defense: 3, equipment: PARRY_ITEM_EQUIP }),
+        );
+        const result = await service.attack(creature.id, 'char-1', {
+          worldX: CREATURE_WU.worldX + TILE_SIZE_WU,
+          worldY: CREATURE_WU.worldY,
+          mapId: 1,
+        });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.isParried).toBe(true); // parryChance 100 via item
+          expect(result.riposte?.characterHealth).toBe(100); // riposte annulée
+          expect(result.counterAttack).toBeDefined();
+          // counterAttackPower 20 (item) − armure créature 2 = 18.
+          expect(result.counterAttack?.damage).toBe(18);
+          // Créature 30 − 8 (hit principal) − 18 (contre-attaque) = 4.
+          expect(result.counterAttack?.creatureHealth).toBe(4);
+        }
+      });
+
       it("arme à distance seule → pas de parade", async () => {
         masteryEffectsService.getMasteryBonuses.mockResolvedValueOnce({
           statModifiers: { percent: {}, flat: { parryChance: 100 } },
@@ -2650,6 +2687,46 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(ev.skillName).toBeUndefined(); // chemin legacy
         expect(ev.amount).toBe(5); // baseAttack 5, jamais ×3
         expect(ev.isCritical).toBeUndefined();
+      });
+    });
+
+    // ─── V5-F : défense joueur pilotée par les statBonuses d'un item ──────────
+    describe("V5-F : défense joueur via statBonuses d'item (skill créature)", () => {
+      it("dodgeChance d'un item équipé annule un skill damage créature", async () => {
+        const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: 30 });
+        (service as any).combatAbilityCache.set("turkey", [
+          {
+            skillKey: "fireball",
+            skillName: "Boule de feu",
+            effectType: "damage",
+            displayOrder: 0,
+            rangeWU: 5000,
+            cooldownMs: 3000,
+            damageType: "physical",
+            scaling: { derivedCoefficients: { physicalAttack: 2 } },
+          },
+        ]);
+        const player = makePlayer(6080 + 1000, 12480);
+        (service as any).characterRepository = {
+          findOne: jest.fn().mockResolvedValue({
+            id: "char-1",
+            health: 100,
+            maxHealth: 100,
+            attack: 0,
+            defense: 0,
+            // dodgeChance vient UNIQUEMENT du statBonuses de l'item équipé.
+            equipment: [{ slot: "right-hand", item: { type: "weapon", statBonuses: { dodgeChance: 100 } } }],
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        };
+        (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+        // PAS de mockDefenderDerived → compute réel, la défense passe par le merge équipement.
+        const emits: { event: string; payload: any }[] = [];
+        await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+        const ev = combatOf(emits).payload;
+        expect(ev.skillName).toBe("Boule de feu");
+        expect(ev.isDodged).toBe(true); // dodgeChance 100 (item) → esquive via resolver
+        expect(ev.amount).toBe(0);
       });
     });
   });

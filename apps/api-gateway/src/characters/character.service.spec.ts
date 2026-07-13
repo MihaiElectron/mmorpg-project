@@ -159,6 +159,33 @@ describe('CharacterService.findFirstByUserProjected — enrichissement stats (Pr
     expect(result.stats.derived.criticalChance).toBeCloseTo(0.9);
   });
 
+  it("V5-F : les statBonuses secondaires d'un item équipé enrichissent stats.derived", async () => {
+    const equipment = [
+      { slot: 'right-hand', item: { type: 'weapon', statBonuses: { parryChance: 15, counterAttackPower: 8 } } },
+    ];
+    characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment }));
+    const result = (await service.findFirstByUserProjected('user-1')) as any;
+    // parryChance : base 0.9 (str5×0.15 + dex1×0.15) + 15 (item) = 15.9
+    expect(result.stats.derived.parryChance).toBeCloseTo(15.9);
+    // counterAttackPower : base 1.3 (dex1×0.4 + agi3×0.3 + int0×0.2) + 8 (item) = 9.3
+    expect(result.stats.derived.counterAttackPower).toBeCloseTo(9.3);
+    // Les dérivées primaires restent inchangées (canal primaire séparé).
+    expect(result.stats.derived.physicalAttack).toBe(22);
+    expect(result.stats.derived.maxHealth).toBe(140);
+  });
+
+  it("V5-F non-régression : une clé inconnue dans statBonuses est ignorée", async () => {
+    const base = (await (async () => {
+      characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment: [] }));
+      return (await service.findFirstByUserProjected('user-1')) as any;
+    })());
+    const equipment = [{ slot: 'right-hand', item: { type: 'weapon', statBonuses: { foo: 99 } } }];
+    characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment }));
+    const withUnknown = (await service.findFirstByUserProjected('user-1')) as any;
+    expect(withUnknown.stats.derived.parryChance).toBeCloseTo(base.stats.derived.parryChance);
+    expect(withUnknown.stats.derived.physicalAttack).toBe(base.stats.derived.physicalAttack);
+  });
+
   it('expose combat.attackRangeWU = 1280 sans arme équipée', async () => {
     characterRepo.findOne.mockResolvedValue(makeCharacter({ equipment: [] }));
     const result = (await service.findFirstByUserProjected('user-1')) as any;

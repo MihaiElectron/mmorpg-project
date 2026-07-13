@@ -7,7 +7,7 @@ import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
-import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
+import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from '../characters/equipment-stats.helper';
 import {
   resolveEffectiveAttackRangeWU,
   resolveMeleeWeaponReachWU,
@@ -707,7 +707,10 @@ export class CreaturesService implements OnModuleInit {
           char,
           derivedStatDefinitions,
           aggregateEquipmentBonuses(char.equipment),
-          await this.masteryEffects.getPermanentStatModifiers(char.id),
+          mergeDerivedStatModifiers(
+            await this.masteryEffects.getPermanentStatModifiers(char.id),
+            aggregateEquipmentDerivedModifiers(char.equipment, derivedStatDefinitions),
+          ),
         ).derived.defense;
         const dmg = Math.max(template.baseAttack - charDefense, 1);
         const newHealth = Math.max(char.health - dmg, 0);
@@ -779,7 +782,10 @@ export class CreaturesService implements OnModuleInit {
       char,
       derivedStatDefinitions,
       aggregateEquipmentBonuses(char.equipment),
-      await this.masteryEffects.getPermanentStatModifiers(char.id),
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(char.id),
+        aggregateEquipmentDerivedModifiers(char.equipment, derivedStatDefinitions),
+      ),
     ).derived;
 
     const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
@@ -1040,7 +1046,13 @@ export class CreaturesService implements OnModuleInit {
       character,
       derivedStatDefinitionsForAttack,
       aggregateEquipmentBonuses(character.equipment),
-      statModifiers,
+      // V5-F : stats secondaires d'équipement (flat) fusionnées avec les
+      // modificateurs de maîtrise permanents (statModifiers). Alimente parade,
+      // contre-attaque, critique, pénétration via le canal existant.
+      mergeDerivedStatModifiers(
+        statModifiers,
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedStatDefinitionsForAttack),
+      ),
     );
     // Arrondi : les valeurs de combat restent entières (pattern existant —
     // planchers entiers de calculateCombatDamage, Math.round des dérivées).

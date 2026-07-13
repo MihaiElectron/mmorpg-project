@@ -6,7 +6,7 @@ import { SkillDefinition } from './entities/skill-definition.entity';
 import { calculateSkillEffect } from './calculators/skill-effect.calculator';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
-import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
+import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteriesService } from '../masteries/masteries.service';
 import { MasteryEffectsService } from '../masteries/mastery-effects.service';
@@ -260,7 +260,13 @@ export class SkillCastService {
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+      // V5-F : stats secondaires d'équipement (flat) fusionnées avec les
+      // modificateurs de maîtrise (canal existant) — healingPower/physicalAttack
+      // d'équipement impactent le montant du skill via calculateSkillEffect.
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedDefinitions),
+      ),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,
@@ -426,7 +432,13 @@ export class SkillCastService {
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+      // V5-F : stats secondaires d'équipement (flat) fusionnées avec les
+      // modificateurs de maîtrise (canal existant) — healingPower/physicalAttack
+      // d'équipement impactent le montant du skill via calculateSkillEffect.
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.aggregatePermanentModifiers(masteryDefinitions, masteryLevels),
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedDefinitions),
+      ),
     );
     const effect = calculateSkillEffect(skill, {
       primary: stats.final as unknown as Record<string, number>,

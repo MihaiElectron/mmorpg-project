@@ -20,7 +20,7 @@ import { ItemInstance } from '../item-instances/entities/item-instance.entity';
 import { ItemTransferService } from '../item-transfer/item-transfer.service';
 import { ProgressionService } from '../progression/progression.service';
 import { CharacterStatsCalculator, PrimaryStats, DerivedStats } from './character-stats-calculator';
-import { aggregateEquipmentBonuses } from './equipment-stats.helper';
+import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from './equipment-stats.helper';
 import { resolveEffectiveAttackRangeWU } from './attack-range.helper';
 import { AllocateStatsDto } from './dto/allocate-stats.dto';
 import { PreviewStatsDto } from './dto/preview-stats.dto';
@@ -154,7 +154,12 @@ export class CharacterService {
       character,
       derivedStatDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      await this.masteryEffects.getPermanentStatModifiers(character.id),
+      // V5-F : les stats SECONDAIRES d'équipement (flat) rejoignent le canal de
+      // modificateurs dérivés, fusionnées avec les modificateurs de maîtrise.
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(character.id),
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedStatDefinitions),
+      ),
     );
     // Bloc combat séparé de stats.derived : portée effective issue de
     // l'équipement + règles combat (source serveur unique pour l'auto-attaque).
@@ -217,8 +222,10 @@ export class CharacterService {
       });
       const equipmentModifier = aggregateEquipmentBonuses(equipment);
       // Modificateurs de maîtrise permanents — constants pendant l'allocation.
-      const masteryModifiers = await this.masteryEffects.getPermanentStatModifiers(
-        character.id,
+      // V5-F : fusionnés avec les stats secondaires d'équipement (flat), constants aussi.
+      const masteryModifiers = mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(character.id),
+        aggregateEquipmentDerivedModifiers(equipment, derivedStatDefinitions),
       );
 
       // Dérivées AVANT application (pour les deltas de max).
@@ -322,7 +329,10 @@ export class CharacterService {
       tempChar,
       definitions,
       aggregateEquipmentBonuses(tempChar.equipment),
-      await this.masteryEffects.getPermanentStatModifiers(tempChar.id),
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(tempChar.id),
+        aggregateEquipmentDerivedModifiers(tempChar.equipment, definitions),
+      ),
     );
     return { primary: stats.final, derived: stats.derived };
   }

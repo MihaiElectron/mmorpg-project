@@ -173,6 +173,25 @@ describe("SkillCastService", () => {
     expect(r.success).toBe(true);
   });
 
+  it("V5-F : statBonuses d'item alimentent le montant et la pénétration du skill damage", async () => {
+    // Skill qui scale sur physicalAttack (dérivée) ; item = +10 physicalAttack + 25 armorPen.
+    currentSkill = makeSkill({ scaling: { derivedCoefficients: { physicalAttack: 1 } } });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    currentCharacter = makeCharacter({
+      equipment: [
+        { slot: "right-hand", item: { type: "weapon", statBonuses: { physicalAttack: 10, armorPenetrationPercent: 25 } } },
+      ] as unknown as Character["equipment"],
+    });
+    charRepo.findOne.mockResolvedValue(currentCharacter);
+    await cast();
+    expect(creatures.applySkillDamage).toHaveBeenCalled();
+    const args = creatures.applySkillDamage.mock.calls[0];
+    // arg[3] = montant du skill : physicalAttack base 20 (strength 10 × 2) + 10 (item) = 30.
+    expect(args[3]).toBe(30);
+    // arg[5] = armorPenetrationPercent du lanceur = 25 (item).
+    expect(args[5]).toBe(25);
+  });
+
   it("rejette targetMode != creature", async () => {
     currentSkill = makeSkill({ targetMode: "self" });
     activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
@@ -572,6 +591,24 @@ describe("SkillCastService", () => {
       const r = await castSelf();
       expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 100 });
       if (r.success) expect(r.heal).toBe(10);
+    });
+
+    it("V5-F : le healingPower d'un item équipé augmente le soin (via calculateSkillEffect)", async () => {
+      // Skill qui scale sur la dérivée healingPower (base 0 : wisdom/spirit à 0).
+      useSkill(makeHealSkill({ scaling: { derivedCoefficients: { healingPower: 1 } } }));
+      useCharacter(makeCharacter({
+        health: 50,
+        maxHealth: 100,
+        equipment: [
+          { slot: EquipmentSlot.RIGHT_HAND, item: { id: "w", type: "weapon", statBonuses: { healingPower: 20 } } },
+        ] as unknown as Character["equipment"],
+      }));
+      const r = await castSelf();
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.heal).toBe(20); // healingPower 0 (base) + 20 (item)
+        expect(r.health).toBe(70);
+      }
     });
 
     it("rejette un heal passive (non actif) et n'écrit rien", async () => {
