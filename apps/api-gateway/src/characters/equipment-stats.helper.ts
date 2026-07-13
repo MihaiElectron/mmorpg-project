@@ -3,6 +3,36 @@ import { Character } from './entities/character.entity';
 import { CharacterEquipment } from './entities/character-equipment.entity';
 import { CharacterStatsCalculator, DerivedStatModifiers, PRIMARY_STAT_KEYS, PrimaryStats } from './character-stats-calculator';
 import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
+import { MASTERY_IMPLEMENTED_DERIVED_KEYS } from '../derived-stats/derived-stats.constants';
+
+/** Ensemble des clés primaires (lookup O(1)) — jamais des stats secondaires. */
+const PRIMARY_STAT_KEY_SET: ReadonlySet<string> = new Set(PRIMARY_STAT_KEYS as readonly string[]);
+
+/**
+ * Clés de stats SECONDAIRES (dérivées) autorisées dans `item.statBonuses`.
+ * Source de vérité = les `DerivedStatDefinition` fournies : une stat est
+ * autorisée ssi `enabled` ET `runtimeStatus === 'implemented'` (réellement
+ * consommée par un hook gameplay). Fallback sur la constante statique
+ * `MASTERY_IMPLEMENTED_DERIVED_KEYS` si aucune définition n'est fournie
+ * (même pattern défensif que `computeDerivedFromDefinitions`). Les clés
+ * primaires sont toujours exclues (elles relèvent du chemin primaire).
+ */
+export function resolveAllowedSecondaryStatKeys(
+  definitions?: DerivedStatDefinition[] | null,
+): ReadonlySet<string> {
+  if (definitions && definitions.length > 0) {
+    const out = new Set<string>();
+    for (const d of definitions) {
+      if (d.enabled && d.runtimeStatus === 'implemented' && !PRIMARY_STAT_KEY_SET.has(d.key)) {
+        out.add(d.key);
+      }
+    }
+    return out;
+  }
+  return new Set(
+    (MASTERY_IMPLEMENTED_DERIVED_KEYS as readonly string[]).filter((k) => !PRIMARY_STAT_KEY_SET.has(k)),
+  );
+}
 
 /** PrimaryStats à zéro (clone local — évite tout cycle d'import runtime). */
 function zeroPrimaryStats(): PrimaryStats {
@@ -40,6 +70,31 @@ export function sanitizeStatBonuses(
 }
 
 /**
+ * Nettoie un `statBonuses` brut d'item en conservant, dans un SEUL bag JSONB,
+ * les clés PRIMAIRES connues (via `sanitizeStatBonuses`) ET les clés
+ * SECONDAIRES autorisées (dérivées `implemented`, cf.
+ * `resolveAllowedSecondaryStatKeys`). Valeurs numériques finies uniquement
+ * (négatifs autorisés = malus). Toute clé inconnue est REJETÉE. Aucune I/O.
+ *
+ * Ne calcule aucune stat : c'est uniquement la whitelist de persistance côté
+ * serveur (le Studio propose, le serveur reste autoritaire).
+ */
+export function sanitizeItemStatBonuses(
+  raw: unknown,
+  definitions?: DerivedStatDefinition[] | null,
+): Record<string, number> {
+  const out: Record<string, number> = { ...sanitizeStatBonuses(raw) };
+  if (!raw || typeof raw !== 'object') return out;
+  const record = raw as Record<string, unknown>;
+  const allowedSecondary = resolveAllowedSecondaryStatKeys(definitions);
+  for (const key of allowedSecondary) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Agrège les bonus de stats PRIMAIRES des items équipés (Équipement V1-A).
  * PURE : ne fait AUCUNE I/O — reçoit les `CharacterEquipment` déjà chargés
  * (relation `item`). Point d'agrégation UNIQUE réutilisé par tous les
@@ -58,6 +113,61 @@ export function aggregateEquipmentBonuses(
     }
   }
   return total;
+}
+
+/**
+ * Agrège les bonus de stats SECONDAIRES (dérivées) des items équipés en
+ * `DerivedStatModifiers` — **`flat` uniquement**, `percent` toujours vide.
+ * PURE (aucune I/O). Ne lit que les clés secondaires AUTORISÉES
+ * (`resolveAllowedSecondaryStatKeys`) : primaires et clés inconnues ignorées.
+ *
+ * Le résultat est destiné à être fusionné (via `mergeDerivedStatModifiers`)
+ * avec les modificateurs de maîtrise puis passé à
+ * `CharacterStatsCalculator.compute` — MÊME canal existant, aucune formule
+ * combat modifiée. NON encore branché aux consommateurs (lot 2).
+ */
+export function aggregateEquipmentDerivedModifiers(
+  equipment: CharacterEquipment[] | undefined | null,
+  definitions?: DerivedStatDefinition[] | null,
+): DerivedStatModifiers {
+  const flat: Record<string, number> = {};
+  if (!equipment || equipment.length === 0) return { percent: {}, flat };
+  const allowedSecondary = resolveAllowedSecondaryStatKeys(definitions);
+  for (const eq of equipment) {
+    const raw = eq.item?.statBonuses;
+    if (!raw || typeof raw !== 'object') continue;
+    const record = raw as Record<string, unknown>;
+    for (const key of allowedSecondary) {
+      const value = record[key];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        flat[key] = (flat[key] ?? 0) + value;
+      }
+    }
+  }
+  return { percent: {}, flat };
+}
+
+/**
+ * Fusionne plusieurs `DerivedStatModifiers` en un seul (somme par clé sur
+ * `percent` ET `flat`). PURE et défensive : entrées null/undefined ignorées,
+ * valeurs non finies ignorées. Utilisée pour combiner modificateurs de
+ * maîtrise + modificateurs d'équipement avant `compute`.
+ */
+export function mergeDerivedStatModifiers(
+  ...mods: (DerivedStatModifiers | null | undefined)[]
+): DerivedStatModifiers {
+  const percent: Record<string, number> = {};
+  const flat: Record<string, number> = {};
+  for (const m of mods) {
+    if (!m) continue;
+    for (const [key, value] of Object.entries(m.percent ?? {})) {
+      if (typeof value === 'number' && Number.isFinite(value)) percent[key] = (percent[key] ?? 0) + value;
+    }
+    for (const [key, value] of Object.entries(m.flat ?? {})) {
+      if (typeof value === 'number' && Number.isFinite(value)) flat[key] = (flat[key] ?? 0) + value;
+    }
+  }
+  return { percent, flat };
 }
 
 /**

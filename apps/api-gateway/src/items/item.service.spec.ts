@@ -1004,6 +1004,29 @@ describe('ItemService', () => {
       expect(saved.statBonuses).toEqual({ wisdom: 2 });
     });
 
+    it('V5-F : create persiste primaires + secondaires autorisées dans le même bag', async () => {
+      await service.create({
+        ...baseDto,
+        statBonuses: { strength: 5, parryChance: 15, counterAttackPower: 8 } as any,
+      });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.statBonuses).toEqual({ strength: 5, parryChance: 15, counterAttackPower: 8 });
+    });
+
+    it('V5-F : rejette une clé secondaire non implemented selon les définitions DB', async () => {
+      // Allowlist pilotée par la DB : parryChance implemented, dodgeChance calculatedOnly.
+      (service as any).derivedStats.getDefinitions.mockResolvedValueOnce([
+        { key: 'parryChance', enabled: true, runtimeStatus: 'implemented' },
+        { key: 'dodgeChance', enabled: true, runtimeStatus: 'calculatedOnly' },
+      ]);
+      await service.create({
+        ...baseDto,
+        statBonuses: { parryChance: 12, dodgeChance: 9, foo: 1 } as any,
+      });
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.statBonuses).toEqual({ parryChance: 12 });
+    });
+
     it('recalcule les stats plates des porteurs quand un item équipé est modifié', async () => {
       repo.findOne.mockResolvedValue({ id: 'sword-1', objectMode: 'INSTANCE' });
       const updateMock = jest.fn().mockResolvedValue(undefined);

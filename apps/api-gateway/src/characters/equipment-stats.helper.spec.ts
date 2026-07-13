@@ -6,7 +6,17 @@ import {
   recalculateEquipmentStats,
   aggregateEquipmentBonuses,
   sanitizeStatBonuses,
+  sanitizeItemStatBonuses,
+  aggregateEquipmentDerivedModifiers,
+  mergeDerivedStatModifiers,
+  resolveAllowedSecondaryStatKeys,
 } from './equipment-stats.helper';
+import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
+
+/** Définition minimale pour piloter l'allowlist secondaire dans les tests. */
+function makeDef(key: string, enabled: boolean, runtimeStatus: string): DerivedStatDefinition {
+  return { key, enabled, runtimeStatus } as unknown as DerivedStatDefinition;
+}
 
 function makeItem(attack: number | null, defense: number | null): Item {
   return { id: "item-x", attack, defense } as Item;
@@ -183,5 +193,109 @@ describe("aggregateEquipmentBonuses (Équipement V1-A)", () => {
       { characterId: "c", slot: "s", item: {} } as never,
     ]);
     expect(Object.values(total).every((v) => v === 0)).toBe(true);
+  });
+});
+
+// ─── V5-F lot 1 : stats secondaires items ─────────────────────────────────────
+
+describe("resolveAllowedSecondaryStatKeys (V5-F)", () => {
+  it("définitions fournies : ne garde que enabled + runtimeStatus implemented", () => {
+    const defs = [
+      makeDef("parryChance", true, "implemented"),
+      makeDef("dodgeChance", false, "implemented"), // désactivée → exclue
+      makeDef("magicResist", true, "calculatedOnly"), // non branchée → exclue
+    ];
+    const allowed = resolveAllowedSecondaryStatKeys(defs);
+    expect(allowed.has("parryChance")).toBe(true);
+    expect(allowed.has("dodgeChance")).toBe(false);
+    expect(allowed.has("magicResist")).toBe(false);
+  });
+
+  it("exclut toujours les clés primaires", () => {
+    const allowed = resolveAllowedSecondaryStatKeys([
+      makeDef("strength", true, "implemented"),
+      makeDef("parryChance", true, "implemented"),
+    ]);
+    expect(allowed.has("strength")).toBe(false);
+    expect(allowed.has("parryChance")).toBe(true);
+  });
+
+  it("sans définitions : fallback constante (contient les dérivées implemented)", () => {
+    const allowed = resolveAllowedSecondaryStatKeys(undefined);
+    expect(allowed.has("parryChance")).toBe(true);
+    expect(allowed.has("counterAttackPower")).toBe(true);
+    expect(allowed.has("strength")).toBe(false); // primaire jamais autorisée
+  });
+});
+
+describe("sanitizeItemStatBonuses (V5-F)", () => {
+  const defs = [makeDef("parryChance", true, "implemented"), makeDef("counterAttackPower", true, "implemented")];
+
+  it("conserve primaires ET secondaires autorisées dans un seul bag", () => {
+    const out = sanitizeItemStatBonuses({ strength: 5, parryChance: 15, counterAttackPower: 8 }, defs);
+    expect(out).toEqual({ strength: 5, parryChance: 15, counterAttackPower: 8 });
+  });
+
+  it("rejette les clés inconnues et non finies", () => {
+    const out = sanitizeItemStatBonuses(
+      { strength: 5, foo: 9, parryChance: Number.NaN, dodgeChance: 3 } as Record<string, unknown>,
+      defs, // dodgeChance non listée ici → rejetée
+    );
+    expect(out).toEqual({ strength: 5 });
+  });
+
+  it("autorise les malus (valeurs négatives)", () => {
+    expect(sanitizeItemStatBonuses({ parryChance: -5 }, defs)).toEqual({ parryChance: -5 });
+  });
+
+  it("entrée non-objet → {}", () => {
+    expect(sanitizeItemStatBonuses(null, defs)).toEqual({});
+    expect(sanitizeItemStatBonuses(42, defs)).toEqual({});
+  });
+});
+
+describe("aggregateEquipmentDerivedModifiers (V5-F)", () => {
+  const defs = [makeDef("parryChance", true, "implemented"), makeDef("counterAttackPower", true, "implemented")];
+
+  it("agrège en flat uniquement (percent vide), somme sur plusieurs items", () => {
+    const mods = aggregateEquipmentDerivedModifiers(
+      [makeBonusEquip({ parryChance: 15, strength: 5 }), makeBonusEquip({ parryChance: 10, counterAttackPower: 8 })],
+      defs,
+    );
+    expect(mods.percent).toEqual({});
+    expect(mods.flat).toEqual({ parryChance: 25, counterAttackPower: 8 });
+  });
+
+  it("ignore primaires, clés inconnues et non finies", () => {
+    const mods = aggregateEquipmentDerivedModifiers(
+      [makeBonusEquip({ strength: 5, foo: 100, parryChance: Number.POSITIVE_INFINITY, counterAttackPower: 4 })],
+      defs,
+    );
+    expect(mods.flat).toEqual({ counterAttackPower: 4 });
+  });
+
+  it("équipement vide → modificateurs vides", () => {
+    expect(aggregateEquipmentDerivedModifiers([], defs)).toEqual({ percent: {}, flat: {} });
+    expect(aggregateEquipmentDerivedModifiers(null, defs)).toEqual({ percent: {}, flat: {} });
+  });
+});
+
+describe("mergeDerivedStatModifiers (V5-F)", () => {
+  it("somme flat ET percent par clé sur plusieurs sources", () => {
+    const merged = mergeDerivedStatModifiers(
+      { percent: { physicalAttack: 10 }, flat: { parryChance: 5 } },
+      { percent: { physicalAttack: 5 }, flat: { parryChance: 15, counterAttackPower: 8 } },
+    );
+    expect(merged.percent).toEqual({ physicalAttack: 15 });
+    expect(merged.flat).toEqual({ parryChance: 20, counterAttackPower: 8 });
+  });
+
+  it("ignore les entrées null/undefined et valeurs non finies", () => {
+    const merged = mergeDerivedStatModifiers(
+      null,
+      undefined,
+      { percent: {}, flat: { parryChance: Number.NaN, dodgeChance: 3 } },
+    );
+    expect(merged.flat).toEqual({ dodgeChance: 3 });
   });
 });

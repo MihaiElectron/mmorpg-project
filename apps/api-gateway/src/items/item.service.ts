@@ -5,7 +5,7 @@ import { Item, ObjectMode } from './entities/item.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
-import { sanitizeStatBonuses, recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
+import { sanitizeItemStatBonuses, recalculateEquipmentStats, clampCharacterResourcesToDerivedMax } from '../characters/equipment-stats.helper';
 import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { Inventory } from '../inventory/entities/inventory.entity';
@@ -325,10 +325,14 @@ export class ItemService implements OnModuleInit {
    * vide, entier > 0), `requiredClass` vide → null. Ne touche QUE les champs
    * présents dans le DTO (partial patch), les autres restent inchangés.
    */
-  private sanitizeEquipmentFields<T extends CreateItemDto | UpdateItemDto>(dto: T): T {
+  private async sanitizeEquipmentFields<T extends CreateItemDto | UpdateItemDto>(dto: T): Promise<T> {
     const out: T = { ...dto };
     if (dto.statBonuses !== undefined) {
-      out.statBonuses = sanitizeStatBonuses(dto.statBonuses);
+      // statBonuses = bag JSONB unique : primaires + secondaires autorisées
+      // (dérivées `implemented`). L'allowlist secondaire vient des définitions
+      // DB (source de vérité). Toute clé inconnue est rejetée.
+      const definitions = await this.derivedStats.getDefinitions();
+      out.statBonuses = sanitizeItemStatBonuses(dto.statBonuses, definitions);
     }
     if (dto.requiredMasteries !== undefined) {
       out.requiredMasteries = this.sanitizeRequiredMasteries(dto.requiredMasteries);
@@ -358,7 +362,7 @@ export class ItemService implements OnModuleInit {
   }
 
   async create(dto: CreateItemDto): Promise<Item> {
-    const entity = this.repo.create(this.sanitizeEquipmentFields(dto));
+    const entity = this.repo.create(await this.sanitizeEquipmentFields(dto));
     return this.repo.save(entity);
   }
 
@@ -379,7 +383,7 @@ export class ItemService implements OnModuleInit {
     if (dto.objectMode !== undefined && dto.objectMode !== entity.objectMode) {
       await this.assertObjectModeChangeable(id);
     }
-    Object.assign(entity, this.sanitizeEquipmentFields(dto));
+    Object.assign(entity, await this.sanitizeEquipmentFields(dto));
     return this.repo.manager.transaction(async (manager) => {
       const saved = await manager.save(Item, entity);
       // Équipement V1-C-B : les stats PLATES `attack`/`defense` sont persistées
