@@ -135,6 +135,12 @@ function buildGroupedSectionConfigs(masteryKeys: string[]): GroupedSectionConfig
       { key: "fleeThresholdPct",       label: "Fuite%",          min: 0 },
       { key: "respawnDelayMs",         label: "Respawn (ms)",    min: 1, step: 1000 },
       { key: "killCharacterXpReward",  label: "XP perso (kill)", min: 0 },
+      // Stats de combat avancées (V5-D2-A). healingPower 0 = fallback ATK runtime.
+      { key: "healingPower",            label: "HEAL (0=ATK)",    min: 0 },
+      { key: "criticalChance",          label: "CRIT %",          min: 0 },
+      { key: "criticalDamage",          label: "CRIT DMG %",      min: 0 },
+      { key: "accuracy",                label: "ACC",             min: 0 },
+      { key: "armorPenetrationPercent", label: "PEN ARM %",       min: 0 },
     ],
     groupSaveEvent: "admin:update_template",
     getGroupSavePayload: (t, fields) => ({ key: t.key, fields }),

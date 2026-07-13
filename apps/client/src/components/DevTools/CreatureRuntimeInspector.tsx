@@ -45,6 +45,12 @@ interface CreatureRuntimeCombat {
   canDodge: boolean;
   canBlock: boolean;
   canParry: boolean;
+  // Stats de combat avancées (V5-D2-A) — valeurs effectives serveur, lecture seule.
+  healingPower: number;
+  criticalChance: number;
+  criticalDamage: number;
+  accuracy: number;
+  armorPenetrationPercent: number;
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
@@ -204,6 +210,19 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             <Row label="lootPool">
               {data.hasLootPool ? `${data.lootPoolSize} entrée(s)` : "aucune"}
             </Row>
+          </dl>
+
+          {/* E-bis. Stats de combat avancées (V5-D2-A) — valeurs effectives serveur, lecture seule. */}
+          <p className="creature-runtime__title">Stats avancées</p>
+          <dl className="creature-runtime__grid">
+            <Row label="soin">
+              {data.healingPower}
+              <span className="creature-runtime__hint"> (effectif · fallback ATK si 0)</span>
+            </Row>
+            <Row label="critique">{data.criticalChance} %</Row>
+            <Row label="dégâts crit">{data.criticalDamage} %</Row>
+            <Row label="précision">{data.accuracy}</Row>
+            <Row label="pénétration armure">{data.armorPenetrationPercent} %</Row>
           </dl>
 
           {/* F. Capacités runtime + cooldowns live (V5-C1) — lecture seule serveur. */}

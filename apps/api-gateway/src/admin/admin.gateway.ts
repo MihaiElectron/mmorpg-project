@@ -206,7 +206,7 @@ export class AdminGateway implements OnGatewayConnection {
       return { success: false, message: 'Payload invalide : key et fields requis.' };
     }
 
-    const numericAllowed = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs', 'killCharacterXpReward'];
+    const numericAllowed = ['baseHealth', 'aggroRadius', 'baseAttack', 'baseArmor', 'fleeThresholdPct', 'patrolRadius', 'respawnDelayMs', 'killCharacterXpReward', 'healingPower', 'criticalChance', 'criticalDamage', 'accuracy', 'armorPenetrationPercent'];
     const stringAllowed = ['name', 'textureKey'];
     const allAllowed = [...numericAllowed, ...stringAllowed];
     const safeFields: Record<string, number | string> = {};
