@@ -2261,7 +2261,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     // NOTE : l'auto-attaque créature n'applique PAS esquive/blocage/parade
     // (chemin legacy `max(baseAttack−défense,1)`, inchangé V5-B) — seuls la
     // riposte (V4-I) et les skills (V5-B, resolver) portent le contrat défensif.
-    it("fallback HORS PORTÉE → auto-attaque legacy (pas de skillName, pas d'esquive)", async () => {
+    it("fallback HORS PORTÉE → auto-attaque (no skillName) ; V5-G : esquive joueur appliquée", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
       (service as any).combatAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
       const player = makePlayer(6080 + 800, 12480); // 800 > skill 500, <= MELEE
@@ -2270,16 +2270,16 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         update: jest.fn().mockResolvedValue({}),
       };
       (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
-      mockDefenderDerived({ defense: 0, dodgeChance: 100 }); // ignorée par l'auto-attaque
+      mockDefenderDerived({ defense: 0, dodgeChance: 100 }); // V5-G : désormais prise en compte
       const emits: { event: string; payload: any }[] = [];
       await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
       const ev = combatOf(emits).payload;
-      expect(ev.skillName).toBeUndefined();
-      expect(ev.isDodged).toBeUndefined(); // auto-attaque legacy : pas d'esquive
-      expect(ev.amount).toBe(5); // baseAttack 5 − défense 0
+      expect(ev.skillName).toBeUndefined(); // toujours le chemin auto-attaque
+      expect(ev.isDodged).toBe(true); // V5-G : l'esquive s'applique maintenant
+      expect(ev.amount).toBe(0);
     });
 
-    it("fallback COOLDOWN → auto-attaque legacy (pas de skillName)", async () => {
+    it("fallback COOLDOWN → auto-attaque (no skillName) ; V5-G : blocage joueur appliqué", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
       (service as any).combatAbilityCache.set("turkey", [ABILITY]);
       const now = Date.now();
@@ -2290,13 +2290,13 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         update: jest.fn().mockResolvedValue({}),
       };
       (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
-      mockDefenderDerived({ defense: 0, blockChance: 100, blockReductionPercent: 50 }); // ignorée
+      mockDefenderDerived({ defense: 0, blockChance: 100, blockReductionPercent: 50 }); // V5-G : prise en compte
       const emits: { event: string; payload: any }[] = [];
       await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], now, captureServer(emits));
       const ev = combatOf(emits).payload;
-      expect(ev.skillName).toBeUndefined();
-      expect(ev.isBlocked).toBeUndefined(); // auto-attaque legacy : pas de blocage
-      expect(ev.amount).toBe(5);
+      expect(ev.skillName).toBeUndefined(); // toujours le chemin auto-attaque
+      expect(ev.isBlocked).toBe(true); // V5-G : le blocage s'applique maintenant
+      expect(ev.amount).toBe(3); // baseAttack 5 → round(5 × (1 − 0.5)) = 3
     });
 
     it("fallback SANS capacité → auto-attaque legacy (pas de skillName)", async () => {
@@ -2665,9 +2665,9 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       });
 
       // G. Non-régression : l'auto-attaque legacy ne critique jamais, même crit 100.
-      it("G. auto-attaque legacy inchangée (aucun critique) même avec criticalChance 100", async () => {
+      it("G. V5-G : l'auto-attaque passive applique désormais le critique créature", async () => {
         const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: 30 });
-        (service as any).combatAbilityCache.set("turkey", []); // aucune capacité → auto-attaque legacy
+        (service as any).combatAbilityCache.set("turkey", []); // aucune capacité → auto-attaque
         (service as any).characterRepository = {
           findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100000, defense: 0 }),
           update: jest.fn().mockResolvedValue({}),
@@ -2684,9 +2684,9 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
           captureServer(emits),
         );
         const ev = combatOf(emits).payload;
-        expect(ev.skillName).toBeUndefined(); // chemin legacy
-        expect(ev.amount).toBe(5); // baseAttack 5, jamais ×3
-        expect(ev.isCritical).toBeUndefined();
+        expect(ev.skillName).toBeUndefined(); // toujours le chemin auto-attaque (pas un skill)
+        expect(ev.isCritical).toBe(true); // V5-G : critique créature appliqué
+        expect(ev.amount).toBe(15); // baseAttack 5 × criticalDamage 300 %
       });
     });
 
@@ -2727,6 +2727,58 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(ev.skillName).toBe("Boule de feu");
         expect(ev.isDodged).toBe(true); // dodgeChance 100 (item) → esquive via resolver
         expect(ev.amount).toBe(0);
+      });
+    });
+
+    // ─── V5-G : auto-attaque passive via le resolver commun ───────────────────
+    describe("V5-G : auto-attaque passive via resolveCombatHit", () => {
+      // Auto-attaque = aucune capacité → chemin fallback de doFighting.
+      async function autoAttack(
+        id: string,
+        templateOverrides: Partial<CreatureTemplate>,
+        defenderDerived: Record<string, number>,
+      ) {
+        const creature = makeCreature({ id, worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", health: 30 });
+        (service as any).combatAbilityCache.set("turkey", []); // aucune capacité → auto-attaque
+        (service as any).characterRepository = {
+          findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+          update: jest.fn().mockResolvedValue({}),
+        };
+        (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+        mockDefenderDerived(defenderDerived);
+        const emits: { event: string; payload: any }[] = [];
+        await (service as any).doFighting(creature, fightingState(), makeTemplate(templateOverrides), [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
+        return emits;
+      }
+
+      it("accuracy créature réduit l'esquive du joueur (touche malgré dodge 100)", async () => {
+        const ev = combatOf(await autoAttack("v5g-acc", { accuracy: 100 }, { defense: 0, dodgeChance: 100 })).payload;
+        expect(ev.isDodged).toBe(false); // effectiveDodge = clamp(100 − 100) = 0
+        expect(ev.amount).toBe(5); // baseAttack 5, défense 0
+      });
+
+      it("armorPenetrationPercent créature réduit l'armure effective du joueur", async () => {
+        const without = combatOf(await autoAttack("v5g-pen0", { armorPenetrationPercent: 0 }, { defense: 4 })).payload;
+        expect(without.amount).toBe(1); // 5 − 4 = 1
+        const withPen = combatOf(await autoAttack("v5g-pen100", { armorPenetrationPercent: 100 }, { defense: 4 })).payload;
+        expect(withPen.amount).toBe(5); // armure ignorée → 5 − 0 = 5
+      });
+
+      it("minimumDamage conservé : attaque ≤ défense → 1 dégât (plancher legacy)", async () => {
+        const ev = combatOf(await autoAttack("v5g-min", {}, { defense: 100 })).payload;
+        expect(ev.amount).toBe(1); // max(round(5 − 100), 1) = 1
+      });
+
+      it("parade JAMAIS déclenchée sur l'auto-attaque passive (canParry false)", async () => {
+        const ev = combatOf(await autoAttack("v5g-parry", {}, { defense: 0, parryChance: 100 })).payload;
+        expect(ev.isParried).toBeFalsy(); // parryChance joueur ignoré
+        expect(ev.amount).toBe(5); // hit appliqué normalement
+      });
+
+      it("exactement un character_damaged et un combat:event (pas de double)", async () => {
+        const emits = await autoAttack("v5g-single", {}, { defense: 0 });
+        expect(emits.filter((e) => e.event === "character_damaged")).toHaveLength(1);
+        expect(emits.filter((e) => e.event === "combat:event")).toHaveLength(1);
       });
     });
   });

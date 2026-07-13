@@ -692,59 +692,33 @@ export class CreaturesService implements OnModuleInit {
       }
     }
 
-    // Auto-attaque (fallback existant — comportement inchangé)
+    // Auto-attaque (fallback) — V5-G : passe désormais par le resolver commun via
+    // `applyCreatureHitToPlayer`, exactement comme les skills créature. Le joueur
+    // applique son contrat défensif V4 (esquive + blocage, stats serveur incluant
+    // l'équipement) ; la créature applique ses stats offensives avancées (critique,
+    // accuracy, pénétration d'armure). Parade TOUJOURS désactivée (canParry false
+    // côté helper). Cooldown / portée MELEE / exclusivité heal→skill→auto inchangés.
     if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       this.lastCreatureAutoAttackAt.set(creature.id, now);
-      const char = await this.characterRepository.findOne({
-        where: { id: target.characterId },
-        relations: ['equipment', 'equipment.item'],
+      const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+      const debugMods = this.debugRegistry.getModifiers(creature.id);
+      const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+        CREATURE_STAT_KEYS,
+        (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+        debugMods,
+      );
+      await this.applyCreatureHitToPlayer(creature, target, server, state, {
+        attacker: {
+          attackPower: derived.attackPower,
+          minimumAttack: 0,
+          armorPenetrationPercent: base.armorPenetrationPercent,
+          criticalChancePercent: base.criticalChance,
+          criticalDamagePercent: base.criticalDamage,
+          accuracyPercent: base.accuracy,
+        },
+        damageType: 'physical',
+        minimumDamage: 1,
       });
-      if (char && char.health > 0) {
-        // Défense dérivée serveur (Endurance incluse + bonus d'équipement et
-        // modificateurs de maîtrise permanents), jamais la colonne brute.
-        const derivedStatDefinitions = await this.derivedStats.getDefinitions();
-        const charDefense = CharacterStatsCalculator.compute(
-          char,
-          derivedStatDefinitions,
-          aggregateEquipmentBonuses(char.equipment),
-          mergeDerivedStatModifiers(
-            await this.masteryEffects.getPermanentStatModifiers(char.id),
-            aggregateEquipmentDerivedModifiers(char.equipment, derivedStatDefinitions),
-          ),
-        ).derived.defense;
-        // Arrondi entier : `charDefense` (dérivée, ex. bonus d'équipement) peut
-        // être fractionnaire → PV joueur fractionnaires → échec de persistance
-        // (colonne health INTEGER). Invariant entier, pas de changement d'équilibrage.
-        const dmg = Math.max(Math.round(template.baseAttack - charDefense), 1);
-        const newHealth = Math.max(char.health - dmg, 0);
-        await this.characterRepository.update(char.id, { health: newHealth });
-        server.to(target.socketId).emit('character_damaged', {
-          characterId: char.id,
-          damage: dmg,
-          health: newHealth,
-        });
-        // Combat Event V1 : auto-attaque créature → joueur (room map).
-        // Position = état runtime live du joueur (`target`), jamais la ligne DB
-        // (`char`) qui est la position persistée (respawn / dernière sauvegarde).
-        const targetMapId = target.mapId ?? char.mapId ?? DEFAULT_MAP_ID;
-        server.to(getMapRoomId(targetMapId)).emit(COMBAT_EVENT, makeCombatEvent({
-          type: 'damage',
-          amount: dmg,
-          sourceType: 'creature',
-          sourceId: creature.id,
-          targetType: 'player',
-          targetId: char.id,
-          worldX: target.worldX ?? char.worldX ?? 0,
-          worldY: target.worldY ?? char.worldY ?? 0,
-          text: `-${dmg}`,
-        }));
-        if (newHealth === 0) {
-          await this.worldService.respawnCharacter(char.id, server);
-          // Cible tuée → abandon immédiat (évite de chasser le joueur respawné)
-          await this.changeCreatureState(creature, 'alive');
-          state.targetCharacterId = undefined;
-        }
-      }
     }
   }
 
@@ -815,6 +789,8 @@ export class CreaturesService implements OnModuleInit {
       attacker: CombatHitAttacker;
       damageType: DamageType;
       skillName?: string;
+      /** Plancher des dégâts finaux. Défaut 1 (préserve le plancher legacy). */
+      minimumDamage?: number;
     },
   ): Promise<void> {
     const char = await this.characterRepository.findOne({
@@ -845,7 +821,7 @@ export class CreaturesService implements OnModuleInit {
         parryChancePercent: 0,
       },
       damageType: hit.damageType,
-      minimumDamage: 1,
+      minimumDamage: hit.minimumDamage ?? 1,
       hpBefore: char.health,
     });
     const dmg = result.finalDamage;
