@@ -10,6 +10,7 @@ import {
   aggregateEquipmentDerivedModifiers,
   mergeDerivedStatModifiers,
   resolveAllowedSecondaryStatKeys,
+  clampCharacterResourcesToDerivedMax,
 } from './equipment-stats.helper';
 import { DerivedStatDefinition } from '../derived-stats/entities/derived-stat-definition.entity';
 
@@ -297,5 +298,46 @@ describe("mergeDerivedStatModifiers (V5-F)", () => {
       { percent: {}, flat: { parryChance: Number.NaN, dodgeChance: 3 } },
     );
     expect(merged.flat).toEqual({ dodgeChance: 3 });
+  });
+});
+
+describe("clampCharacterResourcesToDerivedMax — stats secondaires d'item (V5-F Tier 2)", () => {
+  function makeClampManager(character: any, equipment: any[]): jest.Mocked<EntityManager> {
+    return {
+      findOne: jest.fn().mockResolvedValue(character),
+      find: jest.fn().mockResolvedValue(equipment),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    } as unknown as jest.Mocked<EntityManager>;
+  }
+
+  it("un item maxHealth secondaire relève le max dérivé → la ressource n'est PAS rognée", async () => {
+    const character = { id: "c1", maxHealth: 100, health: 130, mana: 0, energy: 0, attack: 0, defense: 0 };
+    // defs [] → DEFAULT defs (maxHealth réel) + fallback allowlist (maxHealth autorisé).
+    const manager = makeClampManager(character, [{ item: { statBonuses: { maxHealth: 50 } } }]);
+    await clampCharacterResourcesToDerivedMax(manager, "c1", [], null);
+    // maxHealth dérivé = 100 + 50 (item) = 150 ; health 130 ≤ 150 → aucun clamp.
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it("sans item secondaire : max reste 100 → health rognée à 100 (référence)", async () => {
+    const character = { id: "c1", maxHealth: 100, health: 130, mana: 0, energy: 0, attack: 0, defense: 0 };
+    const manager = makeClampManager(character, []);
+    await clampCharacterResourcesToDerivedMax(manager, "c1", [], null);
+    expect(manager.update).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: "c1" },
+      expect.objectContaining({ health: 100 }),
+    );
+  });
+
+  it("non-régression : une clé inconnue n'élève pas le max (health rognée comme sans item)", async () => {
+    const character = { id: "c1", maxHealth: 100, health: 130, mana: 0, energy: 0, attack: 0, defense: 0 };
+    const manager = makeClampManager(character, [{ item: { statBonuses: { foo: 999 } } }]);
+    await clampCharacterResourcesToDerivedMax(manager, "c1", [], null);
+    expect(manager.update).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: "c1" },
+      expect.objectContaining({ health: 100 }),
+    );
   });
 });

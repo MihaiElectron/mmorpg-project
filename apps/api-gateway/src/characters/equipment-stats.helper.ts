@@ -245,7 +245,10 @@ export async function clampCharacterResourcesToDerivedMax(
     character,
     definitions,
     aggregateEquipmentBonuses(equipment),
-    derivedModifiers,
+    // V5-F : les stats secondaires d'équipement (flat, ex. maxHealth) rejoignent
+    // les modificateurs fournis par l'appelant — le clamp respecte les max réels
+    // équipés et ne rogne pas une ressource légitimement augmentée par un item.
+    mergeDerivedStatModifiers(derivedModifiers, aggregateEquipmentDerivedModifiers(equipment, definitions)),
   ).derived;
   const maxHealth = Math.max(1, Math.round(derived.maxHealth));
   const maxMana = Math.max(0, Math.round(derived.maxMana));

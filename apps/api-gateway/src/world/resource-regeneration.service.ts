@@ -4,7 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Server } from 'socket.io';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
-import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
+import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { WorldService } from './world.service';
@@ -190,7 +190,12 @@ export class ResourceRegenerationService implements OnApplicationShutdown {
         character,
         definitions,
         aggregateEquipmentBonuses(character.equipment),
-        await this.masteryEffects.getPermanentStatModifiers(character.id),
+        // V5-F : regens/max dérivés incluent les stats secondaires d'équipement
+        // (flat) fusionnées avec les modificateurs de maîtrise permanents.
+        mergeDerivedStatModifiers(
+          await this.masteryEffects.getPermanentStatModifiers(character.id),
+          aggregateEquipmentDerivedModifiers(character.equipment, definitions),
+        ),
       ).derived;
       const maxHealth = Math.max(1, Math.round(derived.maxHealth));
       const maxMana = Math.max(0, Math.round(derived.maxMana));

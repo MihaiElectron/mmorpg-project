@@ -152,6 +152,25 @@ describe("ResourceRegenerationService.tick", () => {
     service.stop();
   });
 
+  it("V5-F : un item avec healthRegen secondaire augmente la regen de PV", async () => {
+    // healthRegen implemented + enabled → autorisé comme stat secondaire d'item.
+    const defsRegen = [
+      { key: "maxHealth", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {}, runtimeStatus: "implemented" },
+      { key: "healthRegen", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {}, runtimeStatus: "implemented" },
+      { key: "maxMana", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {}, runtimeStatus: "implemented" },
+      { key: "maxEnergy", enabled: true, rawStatSource: null, baseValue: 0, minValue: null, maxValue: null, primaryCoefficients: {}, runtimeStatus: "implemented" },
+    ] as any;
+    const { service, charRepo } = makeService({
+      players: [{ characterId: "c1", socketId: "sock-1" }],
+      // healthRegen base 0 + item 3 = 3/s ; dt 1s → +3 ; health 50 → 53.
+      characters: [makeChar({ health: 50, mana: 0, energy: 0, equipment: [{ item: { statBonuses: { healthRegen: 3 } } }] })],
+      defs: defsRegen,
+    });
+    await service.tick();
+    expect(charRepo.update).toHaveBeenCalledWith("c1", { health: 53 });
+    service.stop();
+  });
+
   it("ne régénère jamais les PV au-dessus de maxHealth", async () => {
     const defsHp = [
       { key: "maxHealth", enabled: true, rawStatSource: null, baseValue: 100, minValue: null, maxValue: null, primaryCoefficients: {} },

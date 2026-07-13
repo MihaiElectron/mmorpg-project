@@ -624,6 +624,25 @@ describe('WorldService.respawnCharacter', () => {
     expect(resEvt!.payload.energy).toBe(resEvt!.payload.maxEnergy);
   });
 
+  it("V5-F : un item avec maxHealth secondaire augmente les PV de respawn", async () => {
+    // defs [] → DEFAULT defs (maxHealth = char.maxHealth + vitalité×10) + fallback
+    // allowlist (maxHealth autorisé). Item +50 maxHealth via le canal flat.
+    const svc = makeRespawnService(
+      {
+        id: 'char-1', maxHealth: 100, worldX: 1600, worldY: 8000, mapId: 1, positionX: 600, positionY: 300,
+        equipment: [{ item: { statBonuses: { maxHealth: 50 } } }],
+      } as any,
+      { worldX: 0, worldY: 0, mapId: 1, radius: 0 },
+    );
+    const socket = makeSocket();
+    injectPlayer(svc, socket, makePlayer({ worldX: 1600, worldY: 8000 }));
+    const { server, emitted } = makeRespawnServer();
+    await svc.respawnCharacter('char-1', server);
+    const respawnEvt = emitted.find((e) => e.event === 'character_respawn');
+    expect(respawnEvt).toBeDefined();
+    expect(respawnEvt!.payload.health).toBe(150); // 100 base + 50 (item, canal flat)
+  });
+
   it("ne fait rien si le personnage est introuvable", async () => {
     const charRepo = {
       find: jest.fn(), findOne: jest.fn().mockResolvedValue(null),

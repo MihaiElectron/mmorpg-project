@@ -16,7 +16,7 @@ export type AdminCharacterDirtyReason =
   | 'unknown';
 import { Character } from '../characters/entities/character.entity';
 import { CharacterStatsCalculator } from '../characters/character-stats-calculator';
-import { aggregateEquipmentBonuses } from '../characters/equipment-stats.helper';
+import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from '../characters/equipment-stats.helper';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { RespawnPoint } from './entities/respawn-point.entity';
@@ -274,7 +274,12 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
       character,
       derivedStatDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      await this.masteryEffects.getPermanentStatModifiers(character.id),
+      // V5-F : stats secondaires d'équipement (flat) fusionnées avec les
+      // modificateurs de maîtrise — max PV/mana/énergie cohérents avec l'équipement.
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(character.id),
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedStatDefinitions),
+      ),
     ).derived;
     const derivedMaxHealth = derived.maxHealth;
     const newHealth = derivedMaxHealth;
@@ -418,7 +423,11 @@ export class WorldService implements OnModuleInit, OnApplicationShutdown {
       character,
       derivedDefinitions,
       aggregateEquipmentBonuses(character.equipment),
-      await this.masteryEffects.getPermanentStatModifiers(character.id),
+      // V5-F : stats secondaires d'équipement (flat) + modificateurs de maîtrise.
+      mergeDerivedStatModifiers(
+        await this.masteryEffects.getPermanentStatModifiers(character.id),
+        aggregateEquipmentDerivedModifiers(character.equipment, derivedDefinitions),
+      ),
     );
 
     const maxHealth = Math.max(1, Math.round(stats.derived.maxHealth));
