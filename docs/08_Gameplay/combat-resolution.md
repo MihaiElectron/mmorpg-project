@@ -2,21 +2,30 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G)
 - Owner: Project
-- Last updated: 2026-07-12
+- Last updated: 2026-07-13
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
 ## Scope
 
-Ce document fige **l'ordre de résolution** d'un hit de combat, AVANT d'ajouter
-block, esquive, résistances ou curses. Il décrit un contrat cible : une partie
-est **implémentée** aujourd'hui (stats finales serveur, armure +
-`armorPenetrationPercent`, `damageType` physical/raw, **critique**) ; le reste
-(flat/percent damage, curses, block/esquive/résistances) est **Planned** et
-documenté ici pour que les ajouts futurs se branchent au bon endroit sans
-casser l'existant.
+Ce document fige **l'ordre de résolution** d'un hit de combat. Il décrit un
+contrat cible : une partie est **implémentée** aujourd'hui (stats finales
+serveur, armure + `armorPenetrationPercent`, `damageType` physical/raw,
+**critique**, **esquive**, **blocage**) ; le reste (flat/percent damage, curses,
+résistances) est **Planned** et documenté ici pour que les ajouts futurs se
+branchent au bon endroit sans casser l'existant.
+
+Depuis **V5-F**, les **stats secondaires d'équipement** (esquive, blocage,
+critique, précision, pénétration d'armure, etc.) alimentent le pipeline via le
+canal de modificateurs dérivés (`DerivedStatModifiers`), au même titre que les
+maîtrises — voir `docs/…` (équipement) et le calculateur de stats.
+
+Depuis **V5-G**, **tous** les chemins de hit créature → joueur passent par le
+resolver commun (`resolveCombatHit`), y compris l'**auto-attaque passive** de la
+créature (auparavant un calcul legacy `max(baseAttack − defense, 1)` qui
+ignorait esquive/blocage/critique) — voir la section « Chemins de hit ».
 
 Règle transverse : **le serveur est autoritaire**. Le client et le Studio ne
 calculent jamais les dégâts finaux — ils configurent et affichent.
@@ -160,6 +169,59 @@ Branchées dans le **bloc attaque** (étape 2), jamais dans la défense.
 - Se branchera dans le **bloc défense** AVANT la pénétration (étape 3).
 - Hors scope actuel.
 
+## 8. Chemins de hit actuels (Implemented)
+
+Tous les chemins ci-dessous passent par le **même resolver** (`resolveCombatHit`
+→ `calculateCombatDamage`). Aucun chemin de dégâts spécial.
+
+| Chemin | Attaquant | Défenseur (stats appliquées) | Parade |
+|---|---|---|---|
+| Joueur → créature | stats finales joueur (physicalAttack, critique, `armorPenetrationPercent`, accuracy) | créature (`defenseTotal`) — pas d'esquive/blocage créature | — |
+| Skill joueur → créature | montant du skill (+ critique/pénétration joueur) | créature (`defenseTotal`) | — |
+| Skill créature → joueur | montant du skill + stats avancées créature (critique/accuracy/pénétration) | joueur : `defense`, `dodgeChance`, `blockChance`/`blockReductionPercent` | `canParry: false` |
+| **Auto-attaque passive créature → joueur** | `attackPower` créature + stats avancées (critique/accuracy/pénétration) | joueur : `defense`, `dodgeChance`, `blockChance`/`blockReductionPercent` | `canParry: false` |
+| Riposte créature → joueur | `attackPower` créature | joueur : `defense`, `dodgeChance`, `blockChance`, **`parryChance`** | `canParry` **selon reach mêlée** (`resolveMeleeWeaponReachWU`) |
+| Contre-attaque joueur → créature | `counterAttackPower` joueur (+ critique/pénétration) | créature (`defenseTotal`) | `canParry: false` |
+
+- L'application concrète créature → joueur (résolution + PV + events + mort) est
+  centralisée dans `applyCreatureHitToPlayer` (skill damage **et** auto-attaque
+  passive l'utilisent). L'auto-attaque passive passe `minimumDamage: 1`
+  (préserve le plancher legacy) et `damageType: 'physical'`.
+- Cooldown (`AUTO_ATTACK_COOLDOWN_MS`), portée (`MELEE_RANGE_WU`) et priorité
+  d'action (heal → skill damage → auto-attaque) **inchangés** par V5-G.
+
+### Parade sur l'auto-attaque passive — hors périmètre
+
+La parade reste **volontairement désactivée** sur l'auto-attaque passive
+créature → joueur (comme sur les skills créature) :
+
+- `canParry: false` ;
+- `parryChance` du joueur **ignoré** sur ce chemin (jamais `isParried`, jamais de
+  contre-attaque déclenchée) ;
+- seule la **riposte** (déclenchée quand le joueur attaque une créature en mêlée)
+  évalue la parade, via une éligibilité de reach mêlée entrant/sortant.
+
+Activer la parade en défense passive supposerait une règle dédiée de défense
+active / reach entrant — **sujet futur séparé**, non décidé ici.
+
+## 9. Invariant — dégâts et PV entiers (Implemented)
+
+Les colonnes `health` (`creature`, `character`) sont **`INTEGER`** en base.
+Le pipeline garantit donc :
+
+- `finalDamage` **entier** ;
+- `hpAfter` **entier** (arrondi de `hpBefore − finalDamage`, jamais négatif) ;
+- **aucun PV fractionnaire n'est jamais persisté**.
+
+Contexte : une valeur d'attaque dérivée fractionnaire (ex. `counterAttackPower`
+non entier) produisait auparavant un `hpAfter` fractionnaire → rejet Postgres
+(`22P02` sur colonne `INTEGER`) → l'écriture échouait, la créature/le joueur
+restait sur une valeur fractionnaire en mémoire et **chaque hit suivant
+ré-échouait** (symptômes « créature muette / combat muet »). L'arrondi entier
+dans `calculateCombatDamage` (et sur `hpBefore`) supprime la cause et
+auto-guérit un état déjà corrompu au hit suivant. Ce n'est **pas** un changement
+d'équilibrage (sub-unité), mais l'invariant entier attendu par le schéma.
+
 ## État d'implémentation
 
 | Élément | État |
@@ -168,13 +230,20 @@ Branchées dans le **bloc attaque** (étape 2), jamais dans la défense.
 | Bloc défense : armure de base + `armorPenetrationPercent` (en dernier) | Implemented |
 | `damageType` physical/raw (auto-attaque + skills) | Implemented |
 | Bloc attaque : critique (`criticalChance`/`criticalDamage`, auto-attaque + skills) | Implemented |
+| Défense : esquive (`dodgeChance`, `accuracy` la réduit), blocage (`blockChance`/`blockReductionPercent`) | Implemented |
+| Auto-attaque passive créature → joueur via `resolveCombatHit` (V5-G) | Implemented |
+| Stats secondaires d'équipement alimentant le pipeline (V5-F) | Implemented |
+| Invariant entier : `finalDamage` / `hpAfter` entiers, aucun PV fractionnaire persisté | Implemented |
+| Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
-| Résistances, block, esquive, dégâts magical/elemental/poison | Planned |
+| Résistances, dégâts magical/elemental/poison | Planned |
 
 ## Références
 
-- `apps/api-gateway/src/creatures/combat-damage.calculator.ts` (calculateur pur).
-- `apps/api-gateway/src/characters/character-stats-calculator.ts` (stats finales).
+- `apps/api-gateway/src/creatures/combat-damage.calculator.ts` (calculateur pur, arrondi entier).
+- `apps/api-gateway/src/creatures/combat-hit.resolver.ts` (mapping attaquant/défenseur → hit).
+- `apps/api-gateway/src/creatures/creatures.service.ts` (`applyCreatureHitToPlayer`, `doFighting` : skill + auto-attaque passive via resolver).
+- `apps/api-gateway/src/characters/character-stats-calculator.ts` (stats finales + modificateurs dérivés équipement/maîtrises).
 - docs/08_Gameplay/masteries.md (Mastery Effects, `armorPenetrationPercent`).
 - STATUS.md (blocs V4-B0 / V4-C / V4-D0).
