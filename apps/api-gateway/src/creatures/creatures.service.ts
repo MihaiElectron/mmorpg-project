@@ -19,6 +19,7 @@ import { resolveCombatHit } from './combat-hit.resolver';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
+import { SkillEffectType } from '../active-skills/active-skills.constants';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -72,12 +73,14 @@ function findNearestPlayer(
 
 
 /**
- * Capacité damage d'une créature résolue (V5-B) : association + skill enabled,
- * `effectType: 'damage'`, prête à être castée via le resolver commun.
+ * Capacité combat d'une créature résolue (V5-B / V5-D1-A) : association + skill
+ * enabled, tout `effectType` (damage OU heal). Sert l'affichage runtime ; le cast
+ * combat filtre lui-même `effectType === 'damage'` (le heal n'est pas encore casté).
  */
-type ResolvedCreatureDamageAbility = {
+type ResolvedCreatureAbility = {
   skillKey: string;
   skillName: string;
+  effectType: SkillEffectType;
   displayOrder: number;
   rangeWU: number;
   cooldownMs: number;
@@ -171,9 +174,10 @@ export class CreaturesService implements OnModuleInit {
 
   // V5-B : cooldown de capacité par créature puis par skillKey (epoch ms du dernier cast).
   private readonly creatureSkillCooldowns = new Map<string, Map<string, number>>();
-  // V5-B : cache des capacités damage résolues par templateKey (config, pas d'état live),
-  // invalidé après édition Studio (admin PUT → invalidateAbilitiesCache).
-  private readonly damageAbilityCache = new Map<string, ResolvedCreatureDamageAbility[]>();
+  // V5-B/V5-D1-A : cache des capacités combat résolues (damage + heal) par
+  // templateKey (config, pas d'état live), invalidé après édition Studio
+  // (admin PUT → invalidateAbilitiesCache). NE contient JAMAIS les cooldowns live.
+  private readonly combatAbilityCache = new Map<string, ResolvedCreatureAbility[]>();
 
   constructor(
     @InjectRepository(Creature)
@@ -314,18 +318,20 @@ export class CreaturesService implements OnModuleInit {
     const lastAtk = this.lastCreatureAutoAttackAt.get(id) ?? null;
 
     // V5-C1 : capacités damage configurées + cooldown LIVE (lecture seule).
-    // Croise la config (getDamageAbilities, caché) et le runtime
+    // Croise la config (getCombatAbilities, caché) et le runtime
     // (creatureSkillCooldowns). Aucune mutation, ne déclenche aucun cast.
     const now = Date.now();
     const cooldowns = this.creatureSkillCooldowns.get(id);
-    const damageAbilities = await this.getDamageAbilities(t.id, t.key);
-    const abilities = damageAbilities.map((a) => {
+    // V5-D1-A : damage + heal (le cast heal viendra en V5-D1-B ; ici affichage seul).
+    const combatAbilities = await this.getCombatAbilities(t.id, t.key);
+    const abilities = combatAbilities.map((a) => {
       const lastCastAt = cooldowns?.get(a.skillKey) ?? null;
       const nextCastAt = lastCastAt != null ? lastCastAt + a.cooldownMs : null;
       const cooldownRemainingMs = nextCastAt != null ? Math.max(0, nextCastAt - now) : 0;
       return {
         skillKey: a.skillKey,
         skillName: a.skillName,
+        effectType: a.effectType,
         rangeWU: a.rangeWU,
         cooldownMs: a.cooldownMs,
         lastCastAt,
@@ -380,27 +386,28 @@ export class CreaturesService implements OnModuleInit {
    * une édition Studio. Lecture seule côté combat : force juste un reload.
    */
   invalidateAbilitiesCache(templateKey?: string): void {
-    if (templateKey) this.damageAbilityCache.delete(templateKey);
-    else this.damageAbilityCache.clear();
+    if (templateKey) this.combatAbilityCache.delete(templateKey);
+    else this.combatAbilityCache.clear();
   }
 
   /**
-   * V5-B : capacités damage utilisables d'un template (association enabled ET
-   * skill enabled, `effectType: 'damage'`), triées par displayOrder puis skillKey.
-   * Résultat caché par templateKey (config, pas d'état live). Ne caste rien.
+   * V5-D1-A : capacités combat d'un template (association enabled ET skill
+   * enabled), TOUS effectType confondus (damage + heal), triées par displayOrder
+   * puis skillKey. Résultat caché par templateKey (config, pas d'état live).
+   * Ne caste rien ; la sélection combat filtre ensuite `effectType === 'damage'`.
    */
-  private async getDamageAbilities(
+  private async getCombatAbilities(
     templateId: number,
     templateKey: string,
-  ): Promise<ResolvedCreatureDamageAbility[]> {
-    const cached = this.damageAbilityCache.get(templateKey);
+  ): Promise<ResolvedCreatureAbility[]> {
+    const cached = this.combatAbilityCache.get(templateKey);
     if (cached) return cached;
 
     const links = await this.creatureTemplateSkillRepository.find({
       where: { creatureTemplateId: templateId, enabled: true },
       order: { displayOrder: 'ASC', skillKey: 'ASC' },
     });
-    let resolved: ResolvedCreatureDamageAbility[] = [];
+    let resolved: ResolvedCreatureAbility[] = [];
     if (links.length > 0) {
       const skills = await this.skillDefinitionRepository.find({
         where: { key: In(links.map((l) => l.skillKey)) },
@@ -409,36 +416,39 @@ export class CreaturesService implements OnModuleInit {
       resolved = links
         .map((link) => {
           const skill = byKey.get(link.skillKey);
-          if (!skill || !skill.enabled || skill.effectType !== 'damage') return null;
+          if (!skill || !skill.enabled) return null;
           return {
             skillKey: skill.key,
             skillName: skill.name,
+            effectType: skill.effectType,
             displayOrder: link.displayOrder,
             rangeWU: skill.rangeWU > 0 ? skill.rangeWU : MELEE_RANGE_WU,
             cooldownMs: skill.cooldownMs,
             damageType: skill.damageType === 'raw' ? 'raw' : 'physical',
             scaling: (skill.scaling ?? {}) as Record<string, unknown>,
-          } as ResolvedCreatureDamageAbility;
+          } as ResolvedCreatureAbility;
         })
-        .filter((a): a is ResolvedCreatureDamageAbility => a !== null);
+        .filter((a): a is ResolvedCreatureAbility => a !== null);
     }
-    this.damageAbilityCache.set(templateKey, resolved);
+    this.combatAbilityCache.set(templateKey, resolved);
     return resolved;
   }
 
   /**
-   * V5-B : première capacité damage utilisable (portée couverte + cooldown skill
-   * expiré), dans l'ordre déjà trié. null si aucune.
+   * V5-B : première capacité DAMAGE utilisable (effectType damage + portée couverte
+   * + cooldown skill expiré), dans l'ordre déjà trié. null si aucune. Le heal n'est
+   * PAS sélectionné ici (V5-D1-A : affichage seulement, cast heal en V5-D1-B).
    */
   private pickCreatureDamageAbility(
     creatureId: string,
-    abilities: ResolvedCreatureDamageAbility[],
+    abilities: ResolvedCreatureAbility[],
     distWU: number,
     now: number,
-  ): ResolvedCreatureDamageAbility | null {
+  ): ResolvedCreatureAbility | null {
     if (abilities.length === 0) return null;
     const cd = this.creatureSkillCooldowns.get(creatureId);
     for (const ability of abilities) {
+      if (ability.effectType !== 'damage') continue; // heal non casté (V5-D1-A)
       if (distWU > ability.rangeWU) continue; // hors portée
       const lastCast = cd?.get(ability.skillKey) ?? 0;
       if (now - lastCast < ability.cooldownMs) continue; // cooldown non expiré
@@ -456,7 +466,7 @@ export class CreaturesService implements OnModuleInit {
   private computeCreatureSkillAmount(
     creature: Creature,
     template: CreatureTemplate,
-    ability: ResolvedCreatureDamageAbility,
+    ability: ResolvedCreatureAbility,
   ): number {
     const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
     const debugMods = this.debugRegistry.getModifiers(creature.id);
@@ -632,7 +642,7 @@ export class CreaturesService implements OnModuleInit {
     // Sinon, on retombe EXACTEMENT sur l'auto-attaque existante (ci-dessous).
     const lastAtk = this.lastCreatureAutoAttackAt.get(creature.id) ?? 0;
     if (now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
-      const abilities = await this.getDamageAbilities(template.id, template.key);
+      const abilities = await this.getCombatAbilities(template.id, template.key);
       const chosen = this.pickCreatureDamageAbility(creature.id, abilities, dist, now);
       if (chosen) {
         await this.castCreatureDamageSkill(creature, template, chosen, target, server, state, now);
@@ -701,7 +711,7 @@ export class CreaturesService implements OnModuleInit {
   private async castCreatureDamageSkill(
     creature: Creature,
     template: CreatureTemplate,
-    ability: ResolvedCreatureDamageAbility,
+    ability: ResolvedCreatureAbility,
     target: ConnectedPlayer,
     server: Server,
     state: PatrolState,

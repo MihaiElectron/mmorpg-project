@@ -11,6 +11,7 @@ const POLL_INTERVAL_MS = 1000;
 interface CreatureRuntimeAbility {
   skillKey: string;
   skillName: string;
+  effectType: string;
   rangeWU: number;
   cooldownMs: number;
   lastCastAt: number | null;
@@ -219,7 +220,7 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                   <span
                     className={`creature-runtime__ability-status${a.onCooldown ? "" : " creature-runtime__ability-status--ready"}`}
                   >
-                    {a.rangeWU} WU · {a.cooldownMs} ms · {abilityStatus(a)}
+                    {a.effectType} · {a.rangeWU} WU · {a.cooldownMs} ms · {abilityStatus(a)}
                   </span>
                 </div>
               ))}

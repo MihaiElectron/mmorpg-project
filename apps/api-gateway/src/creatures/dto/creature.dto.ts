@@ -21,6 +21,8 @@ export type CreatureRuntimeStats = {
 export type CreatureRuntimeAbilityDto = {
   skillKey: string;
   skillName: string;
+  /** V5-D1-A : `damage` ou `heal` (le heal n'est pas encore casté). */
+  effectType: string;
   rangeWU: number;
   cooldownMs: number;
   /** Epoch ms du dernier cast de ce skill par cette créature, ou null si jamais. */

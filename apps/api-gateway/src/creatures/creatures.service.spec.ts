@@ -277,9 +277,9 @@ describe('CreaturesService', () => {
       (service as any).liveCreatures.set(creature.id, creature);
       const now = Date.now();
       // Cache de capacités (config) pré-seedé + cooldown live d'une seule.
-      (service as any).damageAbilityCache.set('turkey', [
-        { skillKey: 'fireball', skillName: 'Boule de feu', displayOrder: 0, rangeWU: 5000, cooldownMs: 3000, damageType: 'physical', scaling: {} },
-        { skillKey: 'ice', skillName: 'Glace', displayOrder: 1, rangeWU: 2000, cooldownMs: 1000, damageType: 'raw', scaling: {} },
+      (service as any).combatAbilityCache.set('turkey', [
+        { skillKey: 'fireball', skillName: 'Boule de feu', effectType: 'damage', displayOrder: 0, rangeWU: 5000, cooldownMs: 3000, damageType: 'physical', scaling: {} },
+        { skillKey: 'ice', skillName: 'Glace', effectType: 'heal', displayOrder: 1, rangeWU: 2000, cooldownMs: 1000, damageType: 'raw', scaling: {} },
       ]);
       (service as any).creatureSkillCooldowns.set(creature.id, new Map([['fireball', now]]));
 
@@ -289,8 +289,10 @@ describe('CreaturesService', () => {
       expect(abilities).toHaveLength(2);
 
       const fb = abilities.find((a) => a.skillKey === 'fireball')!;
-      expect(fb).toMatchObject({ skillName: 'Boule de feu', rangeWU: 5000, cooldownMs: 3000, lastCastAt: now, nextCastAt: now + 3000, onCooldown: true });
+      expect(fb).toMatchObject({ skillName: 'Boule de feu', effectType: 'damage', rangeWU: 5000, cooldownMs: 3000, lastCastAt: now, nextCastAt: now + 3000, onCooldown: true });
       expect(fb.cooldownRemainingMs).toBeGreaterThan(0);
+      // V5-D1-A : le heal apparaît aussi dans le runtime (affichage, pas casté).
+      expect(abilities.find((a) => a.skillKey === 'ice')!.effectType).toBe('heal');
 
       const ice = abilities.find((a) => a.skillKey === 'ice')!;
       expect(ice).toMatchObject({ lastCastAt: null, nextCastAt: null, cooldownRemainingMs: 0, onCooldown: false });
@@ -299,7 +301,7 @@ describe('CreaturesService', () => {
     it('renvoie un tableau abilities vide si aucune capacité configurée', async () => {
       const creature = makeCreature({ state: 'alive' });
       (service as any).liveCreatures.set(creature.id, creature);
-      (service as any).damageAbilityCache.set('turkey', []);
+      (service as any).combatAbilityCache.set('turkey', []);
       const info = await service.getRuntimeCombatInfo(creature.id);
       expect(info!.abilities).toEqual([]);
     });
@@ -2013,6 +2015,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     const ABILITY = {
       skillKey: "fireball",
       skillName: "Boule de feu",
+      effectType: "damage" as const,
       displayOrder: 0,
       rangeWU: 5000,
       cooldownMs: 3000,
@@ -2036,7 +2039,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
 
     it("capacité en portée (au-delà de la mêlée) → cast via resolver, combat:event skillName", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      (service as any).combatAbilityCache.set("turkey", [ABILITY]);
       const player = makePlayer(6080 + 2000, 12480); // dist 2000 > MELEE, <= rangeWU
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2054,7 +2057,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
 
     it("hors portée du skill mais cible en mêlée → fallback auto-attaque (aucun skillName)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
+      (service as any).combatAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
       const player = makePlayer(6080 + 800, 12480); // 800 > skill range 500, <= MELEE
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2072,7 +2075,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
 
     it("skill créature passe par le contrat défensif joueur (esquive via resolver)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      (service as any).combatAbilityCache.set("turkey", [ABILITY]);
       const player = makePlayer(6080 + 1000, 12480);
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2106,7 +2109,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect((service as any).pickCreatureDamageAbility("c1", [ABILITY], 1000, now)?.skillKey).toBe("fireball");
     });
 
-    it("getDamageAbilities filtre heal/désactivé, fallback range, cache + invalidation", async () => {
+    it("getCombatAbilities inclut damage + heal, exclut désactivé, fallback range, cache + invalidation", async () => {
       const abilityRepo = {
         find: jest.fn().mockResolvedValue([
           { skillKey: "heal", enabled: true, displayOrder: 0 },
@@ -2124,22 +2127,45 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       (service as any).creatureTemplateSkillRepository = abilityRepo;
       (service as any).skillDefinitionRepository = skillRepo;
 
-      const out = await (service as any).getDamageAbilities(1, "goblin");
-      expect(out).toHaveLength(1);
-      expect(out[0]).toMatchObject({ skillKey: "fireball", damageType: "raw", rangeWU: 1280 });
+      const out = await (service as any).getCombatAbilities(1, "goblin");
+      // V5-D1-A : heal + fireball conservés (tri displayOrder), off (désactivé) exclu.
+      expect(out).toHaveLength(2);
+      expect(out.map((a: any) => a.skillKey)).toEqual(["heal", "fireball"]);
+      expect(out.find((a: any) => a.skillKey === "heal")).toMatchObject({ effectType: "heal" });
+      expect(out.find((a: any) => a.skillKey === "fireball")).toMatchObject({ effectType: "damage", damageType: "raw", rangeWU: 1280 });
 
-      await (service as any).getDamageAbilities(1, "goblin");
+      await (service as any).getCombatAbilities(1, "goblin");
       expect(abilityRepo.find).toHaveBeenCalledTimes(1); // cache
 
       service.invalidateAbilitiesCache("goblin");
-      await (service as any).getDamageAbilities(1, "goblin");
+      await (service as any).getCombatAbilities(1, "goblin");
       expect(abilityRepo.find).toHaveBeenCalledTimes(2); // reload
+    });
+
+    it("V5-D1-A : une capacité heal n'est PAS castée en combat (fallback auto-attaque)", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      // Seule capacité = heal, en portée → ne doit pas être castée ; auto-attaque prend le relais.
+      (service as any).combatAbilityCache.set("turkey", [
+        { skillKey: "heal", skillName: "Soin", effectType: "heal", displayOrder: 0, rangeWU: 5000, cooldownMs: 1000, damageType: "physical", scaling: {} },
+      ]);
+      const player = makePlayer(6080 + 800, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ defense: 0 });
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined(); // heal non casté
+      expect(ev.amount).toBe(5); // auto-attaque legacy
     });
 
     // Helper : lance un cast de skill (créature en portée) et renvoie l'event dmg.
     async function castSkillAndCapture(ability: any, derived: Record<string, number>) {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [ability]);
+      (service as any).combatAbilityCache.set("turkey", [ability]);
       const player = makePlayer(6080 + 1000, 12480); // en portée skill, > pas requis
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2199,7 +2225,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     // riposte (V4-I) et les skills (V5-B, resolver) portent le contrat défensif.
     it("fallback HORS PORTÉE → auto-attaque legacy (pas de skillName, pas d'esquive)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
+      (service as any).combatAbilityCache.set("turkey", [{ ...ABILITY, rangeWU: 500 }]);
       const player = makePlayer(6080 + 800, 12480); // 800 > skill 500, <= MELEE
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2217,7 +2243,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
 
     it("fallback COOLDOWN → auto-attaque legacy (pas de skillName)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", [ABILITY]);
+      (service as any).combatAbilityCache.set("turkey", [ABILITY]);
       const now = Date.now();
       (service as any).creatureSkillCooldowns.set(creature.id, new Map([["fireball", now]])); // vient de caster
       const player = makePlayer(6080 + 800, 12480); // en portée MELEE
@@ -2237,7 +2263,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
 
     it("fallback SANS capacité → auto-attaque legacy (pas de skillName)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
-      (service as any).damageAbilityCache.set("turkey", []); // aucune capacité
+      (service as any).combatAbilityCache.set("turkey", []); // aucune capacité
       const player = makePlayer(6080 + 800, 12480);
       (service as any).characterRepository = {
         findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
@@ -2256,6 +2282,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     const SHORT = {
       skillKey: "fireball",
       skillName: "Boule de feu",
+      effectType: "damage" as const,
       displayOrder: 0,
       rangeWU: 5000,
       cooldownMs: 1000,
@@ -2279,7 +2306,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     // Cas A/D : le skill est relancé après expiration du cooldown (pas 1 seule fois).
     it("Cas A/D : recast après expiration du cooldown sur plusieurs fenêtres d'action", async () => {
       const creature = combatSetup();
-      (service as any).damageAbilityCache.set("turkey", [SHORT]);
+      (service as any).combatAbilityCache.set("turkey", [SHORT]);
       const emits: { event: string; payload: any }[] = [];
       const server = captureServer(emits);
       const T = 1_000_000;
@@ -2302,7 +2329,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     it("Cas A : skill sauté pendant le cooldown (fenêtre ouverte mais cd non expiré)", async () => {
       const creature = combatSetup();
       // cd long (5000) → à la 2e fenêtre (1500) le skill est encore en cooldown.
-      (service as any).damageAbilityCache.set("turkey", [{ ...SHORT, cooldownMs: 5000 }]);
+      (service as any).combatAbilityCache.set("turkey", [{ ...SHORT, cooldownMs: 5000 }]);
       const emits: { event: string; payload: any }[] = [];
       const server = captureServer(emits);
       const T = 2_000_000;
@@ -2329,7 +2356,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
     it("Cas B : cooldownRemainingMs décrémente et onCooldown repasse à false", async () => {
       const creature = makeCreature({ state: "fighting", health: 20 });
       (service as any).liveCreatures.set(creature.id, creature);
-      (service as any).damageAbilityCache.set("turkey", [SHORT]); // cooldownMs 1000
+      (service as any).combatAbilityCache.set("turkey", [SHORT]); // cooldownMs 1000
 
       // Vient de caster (lastCast = maintenant) → onCooldown true, remaining ~1000.
       (service as any).creatureSkillCooldowns.set(creature.id, new Map([["fireball", Date.now()]]));
