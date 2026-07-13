@@ -189,6 +189,10 @@ Tous les chemins ci-dessous passent par le **même resolver** (`resolveCombatHit
   (préserve le plancher legacy) et `damageType: 'physical'`.
 - Cooldown (`AUTO_ATTACK_COOLDOWN_MS`), portée (`MELEE_RANGE_WU`) et priorité
   d'action (heal → skill damage → auto-attaque) **inchangés** par V5-G.
+- V5-G réutilise les **stats offensives créature déjà disponibles** (V5-D2) :
+  `attackPower`, `criticalChance`, `criticalDamage`, `accuracy`,
+  `armorPenetrationPercent`. Le **défenseur joueur** applique ses stats
+  défensives : `defense`, `dodgeChance`, `blockChance`, `blockReductionPercent`.
 
 ### Parade sur l'auto-attaque passive — hors périmètre
 
@@ -222,6 +226,48 @@ dans `calculateCombatDamage` (et sur `hpBefore`) supprime la cause et
 auto-guérit un état déjà corrompu au hit suivant. Ce n'est **pas** un changement
 d'équilibrage (sub-unité), mais l'invariant entier attendu par le schéma.
 
+## 10. Stats de combat créature (Implemented / objectif)
+
+### Stats avancées créature (Implemented — V5-D2)
+
+Les `CreatureTemplate` peuvent porter des stats de combat avancées côté serveur,
+en plus des stats de base (`baseHealth`/`baseAttack`/`baseArmor`) :
+
+- `attackPower` / `defenseTotal` (dérivées runtime de `baseAttack`/`baseArmor`) ;
+- `healingPower` ;
+- `criticalChance` ;
+- `criticalDamage` ;
+- `accuracy` ;
+- `armorPenetrationPercent`.
+
+Ces stats sont **configurées dans le Studio** (Creature Editor) mais
+**calculées et appliquées côté serveur** (runtime créature + `resolveCombatHit`).
+Le client et le Studio ne calculent jamais les valeurs de combat : le Studio
+configure et inspecte, le serveur reste autoritaire.
+
+### Objectif d'architecture (direction)
+
+L'objectif est de **rapprocher progressivement les créatures du modèle de
+résolution des joueurs** :
+
+- même resolver combat (`resolveCombatHit`) — déjà le cas pour tous les hits ;
+- mêmes notions de stats offensives/défensives **quand elles sont pertinentes** ;
+- même contrat **serveur-authoritative** ;
+- Studio = configuration / inspection, jamais de calcul gameplay.
+
+### Limites actuelles (à ne pas surinterpréter)
+
+- Les créatures **n'ont pas encore** le modèle complet des joueurs : la symétrie
+  des stats n'est **pas** garantie.
+- Côté **défense créature**, `dodgeChance` / `blockChance` / `parryChance` sont
+  **non supportés / hors périmètre** aujourd'hui (une créature ne peut ni
+  esquiver, ni bloquer, ni parer un hit entrant). Les hits joueur → créature
+  n'appliquent donc que `defenseTotal` + pénétration.
+- La **parade passive du joueur** contre l'auto-attaque créature reste
+  **désactivée** (voir §8).
+- Aucune promesse que toutes les stats joueur soient déjà symétriques côté
+  créature : l'extension se fait au rythme des hooks gameplay réels.
+
 ## État d'implémentation
 
 | Élément | État |
@@ -234,6 +280,8 @@ d'équilibrage (sub-unité), mais l'invariant entier attendu par le schéma.
 | Auto-attaque passive créature → joueur via `resolveCombatHit` (V5-G) | Implemented |
 | Stats secondaires d'équipement alimentant le pipeline (V5-F) | Implemented |
 | Invariant entier : `finalDamage` / `hpAfter` entiers, aucun PV fractionnaire persisté | Implemented |
+| Stats avancées créature (`healingPower`/`criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`) configurables Studio, appliquées serveur (V5-D2) | Implemented |
+| Défense créature : esquive / blocage / parade (créature défenseur) | Planned (hors périmètre) |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
