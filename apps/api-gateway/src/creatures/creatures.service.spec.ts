@@ -1004,9 +1004,31 @@ describe('CreaturesService', () => {
       expect(result.success && result.damage).toBe(3);
     });
 
-    it('V6-B2 : Agilité créature élevée → ne dodge PAS encore en défense (canDodge false)', async () => {
-      // agility 1000 → dodgeChance dérivée (cap 40) mais canDodge false : hit plein.
-      const template = makeTemplate({ agility: 1000 });
+    it('V6-B3 : créature avec dodge 100 esquive l\'auto-attaque joueur (dégâts 0, PV inchangés)', async () => {
+      // Coefficients poussés → dodgeChance = agility 1 × 100, cap 100 = 100 → esquive
+      // certaine (accuracy joueur 0). Déterministe sans mocker Math.random.
+      coefficientsServiceMock.getCoefficients.mockReturnValue({
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        dodgePerAgility: 100,
+        secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 1 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isDodged).toBe(true);
+        expect(result.damage).toBe(0);
+      }
+      expect(creature.health).toBe(30); // PV créature inchangés
+    });
+
+    it('V6-B3 : créature dodge 0 (agility 0) → comportement identique (aucune esquive)', async () => {
+      const template = makeTemplate({ agility: 0 });
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
@@ -1016,7 +1038,7 @@ describe('CreaturesService', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.isDodged).toBe(false);
-        expect(result.damage).toBe(8); // 10 − defenseTotal 2, aucune esquive
+        expect(result.damage).toBe(8); // 10 − defenseTotal 2
       }
     });
 
@@ -1744,30 +1766,78 @@ describe('CreaturesService', () => {
       expect(result.success && result.damage).toBe(3);
     });
 
-    it("coefficients dodge/parry custom : valeurs calculées mais défense TOUJOURS inactive", async () => {
-      setCoeffs({ dodgePerAgility: 1, parryPerStrength: 1, parryPerDexterity: 1, secondaryChanceCap: 100 });
-      const template = makeTemplate({ agility: 30, strength: 20, dexterity: 20 });
+    it("coefficients block/parry custom : calculés mais TOUJOURS inactifs en défense (canBlock/canParry false)", async () => {
+      // agility 0 → dodgeChance 0 (pas d'esquive parasite) ; endurance 0 pour ne pas
+      // gonfler defenseTotal. block/parry pilotés par strength/dexterity uniquement.
+      setCoeffs({ blockPerStrength: 1, parryPerStrength: 1, parryPerDexterity: 1, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 20, dexterity: 20 });
       const creature = makeCreature({ id: "cc-4", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       (service as any).combatAbilityCache.set(template.key, []);
 
       const dto = await service.getRuntimeCombatInfo(creature.id);
       // Secondaires calculées avec les coefficients custom.
-      expect(dto!.derivedSecondaryStats.dodgeChance).toBe(30); // agility 30 × 1
+      expect(dto!.derivedSecondaryStats.blockChance).toBe(20); // strength 20 × 1
       expect(dto!.derivedSecondaryStats.parryChance).toBe(40); // 20×1 + 20×1 = 40
-      // Défense toujours non active.
+      // dodge inactif ici (agility 0) ; block/parade non actifs.
       expect(dto!.canDodge).toBe(false);
       expect(dto!.canBlock).toBe(false);
       expect(dto!.canParry).toBe(false);
 
-      // Et le joueur qui attaque cette créature n'est ni esquivé ni paré.
+      // Le joueur qui attaque n'est ni bloqué ni paré (dodge 0 → pas d'esquive non plus).
       (service as any).liveCreatures.set("cc-5", makeCreature({ id: "cc-5", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any }));
       characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
       const atk = await service.attack("cc-5", "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
       expect(atk.success).toBe(true);
       if (atk.success) {
         expect(atk.isDodged).toBe(false);
+        expect(atk.isBlocked).toBe(false);
         expect((atk as any).isParried ?? false).toBe(false);
+        expect(atk.damage).toBe(8); // dégâts pleins : 10 − defenseTotal 2
+      }
+    });
+
+    it("V6-B3 : canDodge devient true dans getRuntimeCombatInfo quand dodgeChance > 0", async () => {
+      setCoeffs({ dodgePerAgility: 1, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 20 });
+      const creature = makeCreature({ id: "cc-6", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).combatAbilityCache.set(template.key, []);
+
+      const dto = await service.getRuntimeCombatInfo(creature.id);
+      expect(dto!.derivedSecondaryStats.dodgeChance).toBe(20);
+      expect(dto!.canDodge).toBe(true);
+      expect(dto!.canBlock).toBe(false);
+      expect(dto!.canParry).toBe(false);
+    });
+
+    it("V6-B3 : skill damage joueur → créature peut être esquivé (dodge 100)", async () => {
+      setCoeffs({ dodgePerAgility: 100, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1 }); // dodgeChance 100
+      const creature = makeCreature({ id: "cc-7", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // accuracy attaquant 0 → effectiveDodge 100 → esquive certaine.
+      const res = await service.applySkillDamage("cc-7", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0);
+      expect(res.success).toBe(true);
+      if (res.success) expect(res.isDodged).toBe(true);
+      expect(creature.health).toBe(100); // PV inchangés
+    });
+
+    it("V6-B3 : accuracy joueur 100 annule l'esquive créature d'un skill (dodge 100)", async () => {
+      setCoeffs({ dodgePerAgility: 100, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1, baseArmor: 0 }); // dodgeChance 100, armure 0
+      const creature = makeCreature({ id: "cc-8", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // accuracy attaquant 100 → effectiveDodge = clamp(100 − 100) = 0 → jamais esquivé.
+      const res = await service.applySkillDamage("cc-8", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 100);
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isDodged).toBe(false);
+        expect(res.damage).toBe(50); // dégâts appliqués (armure 0)
       }
     });
   });
@@ -2786,8 +2856,8 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(dto!.defenseTotal).toBe(2 + 5); // 7
         // maxHealth NON dérivé (vitality non activé runtime) : reste baseHealth.
         expect(dto!.maxHealth).toBe(30);
-        // Défenseur créature toujours incapable d'esquiver/bloquer/parer.
-        expect(dto!.canDodge).toBe(false);
+        // V6-B3 : agility 8 → dodgeChance > 0 → canDodge true ; block/parry inactifs.
+        expect(dto!.canDodge).toBe(true);
         expect(dto!.canBlock).toBe(false);
         expect(dto!.canParry).toBe(false);
       });
@@ -2823,8 +2893,8 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         // maxHealthDerived exposé SÉPARÉMENT ; le PV max actif reste baseHealth.
         expect(dto!.derivedSecondaryStats.maxHealthDerived).toBe(30 + 20 * 10); // 230
         expect(dto!.maxHealth).toBe(30);
-        // Les secondaires défensives restent NON actives.
-        expect(dto!.canDodge).toBe(false);
+        // V6-B3 : agility 8 → dodgeChance > 0 → canDodge true. block/parry restent inactifs.
+        expect(dto!.canDodge).toBe(true);
         expect(dto!.canBlock).toBe(false);
         expect(dto!.canParry).toBe(false);
       });

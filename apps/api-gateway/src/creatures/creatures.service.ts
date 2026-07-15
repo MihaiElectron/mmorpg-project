@@ -1103,12 +1103,14 @@ export class CreaturesService implements OnModuleInit {
         // V4-D : critique (bloc attaque) — stats dérivées serveur. 0 % → jamais.
         criticalChancePercent: charStats.derived.criticalChance ?? 0,
         criticalDamagePercent: charStats.derived.criticalDamage ?? 100,
-        // V4-G : précision du joueur. Défenseur = créature (pas d'esquive) → sans effet.
+        // V4-G : précision du joueur — réduit l'esquive effective de la créature
+        // (V6-B3 : effectiveDodge = clamp(dodgeChance − accuracy, 0, 100)).
         accuracyPercent: charStats.derived.accuracy ?? 0,
       },
       defender: {
         defense: creatureStats.defenseTotal,
-        dodgeChancePercent: 0,
+        // V6-B3 : la créature peut esquiver (dodgeChance dérivé/configuré).
+        dodgeChancePercent: creatureStats.dodgeChance,
       },
       damageType: 'physical',
       minimumDamage: 1,
@@ -1253,9 +1255,9 @@ export class CreaturesService implements OnModuleInit {
             accuracyPercent: charStats.derived.accuracy ?? 0,
           },
           defender: {
-            // Créature défenseur : pas d'esquive, pas de blocage, JAMAIS de parade.
+            // Créature défenseur : V6-B3 esquive active ; blocage/parade toujours off.
             defense: creatureStats.defenseTotal,
-            dodgeChancePercent: 0,
+            dodgeChancePercent: creatureStats.dodgeChance,
             canParry: false,
             parryChancePercent: 0,
           },
@@ -1347,8 +1349,8 @@ export class CreaturesService implements OnModuleInit {
     // 0 % → jamais de critique. Roll serveur par défaut (Math.random).
     criticalChancePercent = 0,
     criticalDamagePercent = 100,
-    // V4-G : précision du lanceur (réduit l'esquive du défenseur). Le défenseur
-    // est la créature (pas de dodgeChance) → sans effet aujourd'hui. Défaut 0.
+    // V4-G : précision du lanceur — réduit l'esquive effective de la créature
+    // (V6-B3 : effectiveDodge = clamp(dodgeChance − accuracy, 0, 100)). Défaut 0.
     attackerAccuracyPercent = 0,
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
@@ -1384,7 +1386,8 @@ export class CreaturesService implements OnModuleInit {
       },
       defender: {
         defense: creatureStats.defenseTotal,
-        dodgeChancePercent: 0,
+        // V6-B3 : la créature peut esquiver le skill (dodgeChance dérivé/configuré).
+        dodgeChancePercent: creatureStats.dodgeChance,
       },
       damageType,
       minimumDamage: 1,

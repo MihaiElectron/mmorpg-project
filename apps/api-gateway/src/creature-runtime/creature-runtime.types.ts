@@ -99,11 +99,11 @@ export interface CreatureDerivedStats {
  *     `armorPenetrationPercent`) : lues brutes du template (hors RuntimeModifier) ;
  *   - `healingPowerEffective` : fallback centralisé `raw > 0 ? raw : attackPower`.
  *
- * `canDodge`/`canBlock`/`canParry` sont figés à `false` : une créature ne peut
- * pas esquiver/bloquer/parer un hit entrant (limite actuelle). Les secondaires
- * défensives (`dodgeChance`/`blockChance`/`parryChance`/…) sont CALCULÉES depuis
- * les primaires (V6-B2) mais NE sont PAS passées au défenseur tant que les
- * `canX` restent `false` — elles servent l'affichage/inspection uniquement.
+ * `canDodge` (V6-B3) vaut `dodgeChance > 0` : une créature PEUT désormais esquiver
+ * un hit entrant (l'esquive effective reste `clamp(dodgeChance − accuracy, 0, 100)`
+ * côté calculateur). `canBlock`/`canParry` restent figés à `false` : blocage et
+ * parade créature ne sont pas encore actifs — `blockChance`/`parryChance` sont
+ * CALCULÉES (V6-B2) mais NON passées au défenseur (affichage/inspection seul).
  * Ne change AUCUNE formule offensive existante hors activation primaires.
  */
 export interface CreatureCombatStats {
@@ -138,7 +138,8 @@ export interface CreatureCombatStats {
    */
   maxHealthDerived: number;
 
-  readonly canDodge: false;
+  /** V6-B3 : true si `dodgeChance > 0` — la créature peut esquiver un hit entrant. */
+  canDodge: boolean;
   readonly canBlock: false;
   readonly canParry: false;
 }

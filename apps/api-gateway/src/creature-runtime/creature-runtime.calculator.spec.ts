@@ -167,10 +167,10 @@ describe('CreatureRuntimeCalculator — dérivation primaires → secondaires (V
     expect(s.healingPowerEffective).toBe(25);
   });
 
-  it('agility calcule dodgeChance (× 0.3) mais canDodge reste false', () => {
+  it('agility calcule dodgeChance (× 0.3) et canDodge devient true (V6-B3)', () => {
     const s = resolve({ agility: 50 });
     expect(s.dodgeChance).toBe(50 * 0.3); // 15
-    expect(s.canDodge).toBe(false);
+    expect(s.canDodge).toBe(true); // dodgeChance > 0
   });
 
   it('endurance + strength calculent blockChance mais canBlock reste false', () => {
@@ -323,14 +323,26 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
     expect(s.parryChance).toBe(10);
   });
 
-  it('coefficients custom ne rendent PAS dodge/block/parry actifs (canX false)', () => {
+  it('V6-B3 : dodgeChance > 0 → canDodge true ; block/parry restent inactifs (canX false)', () => {
     const s = CreatureRuntimeCalculator.resolveCombatStats(
       makeCreature(), makeTemplate(PRIMS), [],
       withCoeffs({ dodgePerAgility: 5, blockPerEndurance: 5, parryPerStrength: 5, secondaryChanceCap: 100 }),
     );
-    expect(s.canDodge).toBe(false);
+    expect(s.dodgeChance).toBeGreaterThan(0);
+    expect(s.canDodge).toBe(true);
+    // Blocage/parade calculés mais toujours non actifs.
+    expect(s.blockChance).toBeGreaterThan(0);
+    expect(s.parryChance).toBeGreaterThan(0);
     expect(s.canBlock).toBe(false);
     expect(s.canParry).toBe(false);
+  });
+
+  it('V6-B3 : dodgeChance = 0 → canDodge false', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate({ agility: 0 }), [], DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    );
+    expect(s.dodgeChance).toBe(0);
+    expect(s.canDodge).toBe(false);
   });
 
   it('maxHealthDerived custom reste informatif : maxHealth actif = baseHealth', () => {

@@ -254,7 +254,10 @@ export class CreatureRuntimeCalculator {
       parryChance,
       counterAttackPower,
       maxHealthDerived,
-      canDodge: false,
+      // V6-B3 : l'esquive créature est active (défenseur). canDodge sert
+      // l'inspector ; l'esquive effective est gérée par le resolver via
+      // dodgeChancePercent. block/parry restent inactifs.
+      canDodge: dodgeChance > 0,
       canBlock: false,
       canParry: false,
     };
