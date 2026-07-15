@@ -505,26 +505,18 @@ export class CreaturesService implements OnModuleInit {
     template: CreatureTemplate,
     ability: ResolvedCreatureAbility,
   ): number {
-    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
-    const debugMods = this.debugRegistry.getModifiers(creature.id);
-    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
-      CREATURE_STAT_KEYS,
-      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
-      debugMods,
-    );
+    const stats = this.creatureCombatStats(creature, template);
     return calculateSkillEffect(
       { effectType: ability.effectType, scaling: ability.scaling },
       {
         primary: {},
         derived: {
-          attackPower: derived.attackPower,
-          physicalAttack: derived.attackPower,
-          // V5-D2-A : healingPower devient une vraie stat template. Fallback sur
-          // attackPower quand elle vaut 0 (préserve exactement le comportement
-          // V5-D1 pour les créatures non configurées).
-          healingPower: base.healingPower > 0 ? base.healingPower : derived.attackPower,
-          defenseTotal: derived.defenseTotal,
-          maxHp: derived.maxHp,
+          attackPower: stats.attackPower,
+          physicalAttack: stats.attackPower,
+          // healingPower effective (fallback attackPower si 0) centralisé dans le helper.
+          healingPower: stats.healingPowerEffective,
+          defenseTotal: stats.defenseTotal,
+          maxHp: stats.maxHealth,
         },
         masteryLevels: {},
       },
@@ -708,21 +700,15 @@ export class CreaturesService implements OnModuleInit {
     // côté helper). Cooldown / portée MELEE / exclusivité heal→skill→auto inchangés.
     if (dist <= MELEE_RANGE_WU && now - lastAtk >= AUTO_ATTACK_COOLDOWN_MS) {
       this.lastCreatureAutoAttackAt.set(creature.id, now);
-      const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
-      const debugMods = this.debugRegistry.getModifiers(creature.id);
-      const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
-        CREATURE_STAT_KEYS,
-        (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
-        debugMods,
-      );
+      const stats = this.creatureCombatStats(creature, template);
       await this.applyCreatureHitToPlayer(creature, target, server, state, {
         attacker: {
-          attackPower: derived.attackPower,
+          attackPower: stats.attackPower,
           minimumAttack: 0,
-          armorPenetrationPercent: base.armorPenetrationPercent,
-          criticalChancePercent: base.criticalChance,
-          criticalDamagePercent: base.criticalDamage,
-          accuracyPercent: base.accuracy,
+          armorPenetrationPercent: stats.armorPenetrationPercent,
+          criticalChancePercent: stats.criticalChance,
+          criticalDamagePercent: stats.criticalDamage,
+          accuracyPercent: stats.accuracy,
         },
         damageType: 'physical',
         minimumDamage: 1,
@@ -756,19 +742,19 @@ export class CreaturesService implements OnModuleInit {
     }
     cd.set(ability.skillKey, now);
 
-    // V5-D2-A : stats offensives avancées de la créature (config template, lues
-    // via CreatureBaseStats). Défauts 0 → comportement V5-B inchangé. `raw`
-    // ignore armure + pénétration côté calculateur (inchangé).
+    // V5-D2-A : stats offensives avancées de la créature (point unique V6-A Lot 2).
+    // Défauts 0 → comportement V5-B inchangé. `raw` ignore armure + pénétration
+    // côté calculateur (inchangé).
     const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
-    const attackerBase = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
+    const stats = this.creatureCombatStats(creature, template);
     await this.applyCreatureHitToPlayer(creature, target, server, state, {
       attacker: {
         attackPower: rawAmount,
         minimumAttack: 0,
-        armorPenetrationPercent: attackerBase.armorPenetrationPercent,
-        criticalChancePercent: attackerBase.criticalChance,
-        criticalDamagePercent: attackerBase.criticalDamage,
-        accuracyPercent: attackerBase.accuracy,
+        armorPenetrationPercent: stats.armorPenetrationPercent,
+        criticalChancePercent: stats.criticalChance,
+        criticalDamagePercent: stats.criticalDamage,
+        accuracyPercent: stats.accuracy,
       },
       damageType: ability.damageType,
       skillName: ability.skillName,
@@ -1042,15 +1028,10 @@ export class CreaturesService implements OnModuleInit {
 
     const { template } = creature.spawn;
 
-    // Calcul runtime synchrone depuis la mémoire — aucun appel DB, aucun async.
-    // debugMods=[] par défaut (pas de registre debug creature en production).
-    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
-    const debugMods = this.debugRegistry.getModifiers(creature.id);
-    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
-      CREATURE_STAT_KEYS,
-      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
-      debugMods,
-    );
+    // Stats de combat effectives de la créature (point unique V6-A Lot 2) :
+    // defenseTotal (créature défenseur du hit principal + contre-attaque) et
+    // attackPower (créature attaquant de la riposte). Debug modifiers appliqués.
+    const creatureStats = this.creatureCombatStats(creature, template);
 
     // Progression V1 : le combat lit les stats DÉRIVÉES serveur, jamais les
     // colonnes brutes. Force → physicalAttack, Endurance → defense. Critique /
@@ -1096,7 +1077,7 @@ export class CreaturesService implements OnModuleInit {
         accuracyPercent: charStats.derived.accuracy ?? 0,
       },
       defender: {
-        defense: derived.defenseTotal,
+        defense: creatureStats.defenseTotal,
         dodgeChancePercent: 0,
       },
       damageType: 'physical',
@@ -1194,7 +1175,7 @@ export class CreaturesService implements OnModuleInit {
 
       const riposteResult = resolveCombatHit({
         attacker: {
-          attackPower: derived.attackPower,
+          attackPower: creatureStats.attackPower,
           minimumAttack: 0,
           // V4-G : la créature (attaquant de la riposte) n'a pas de précision → 0.
           accuracyPercent: 0,
@@ -1243,7 +1224,7 @@ export class CreaturesService implements OnModuleInit {
           },
           defender: {
             // Créature défenseur : pas d'esquive, pas de blocage, JAMAIS de parade.
-            defense: derived.defenseTotal,
+            defense: creatureStats.defenseTotal,
             dodgeChancePercent: 0,
             canParry: false,
             parryChancePercent: 0,
@@ -1359,13 +1340,8 @@ export class CreaturesService implements OnModuleInit {
 
     // Défense créature dérivée (même source que le combat), appliquée au montant
     // de skill déjà calculé serveur.
-    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, template);
-    const debugMods = this.debugRegistry.getModifiers(creature.id);
-    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
-      CREATURE_STAT_KEYS,
-      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
-      debugMods,
-    );
+    // Créature défenseur (point unique V6-A Lot 2) : seule defenseTotal s'applique.
+    const creatureStats = this.creatureCombatStats(creature, template);
 
     const damageResult = resolveCombatHit({
       attacker: {
@@ -1377,7 +1353,7 @@ export class CreaturesService implements OnModuleInit {
         accuracyPercent: attackerAccuracyPercent,
       },
       defender: {
-        defense: derived.defenseTotal,
+        defense: creatureStats.defenseTotal,
         dodgeChancePercent: 0,
       },
       damageType,
