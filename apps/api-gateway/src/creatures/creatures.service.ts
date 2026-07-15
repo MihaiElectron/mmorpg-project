@@ -16,6 +16,7 @@ import {
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { DamageType } from './combat-damage.calculator';
 import { resolveCombatHit, CombatHitAttacker } from './combat-hit.resolver';
+import { isAttackParryable } from './combat-parryability.helper';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
@@ -1205,8 +1206,13 @@ export class CreaturesService implements OnModuleInit {
       // à distance seule ne pare pas.
       const defenderMeleeReachWU = resolveMeleeWeaponReachWU(character.equipment);
       const incomingAttackReachWU = MELEE_RANGE_WU; // attaque créature = mêlée
+      // V6-B5 : parabilité de l'attaque entrante = nature défensive. La riposte
+      // créature est physique (mêlée) → parable ; le gate reach reste la
+      // condition côté défenseur. `existingCanParry && isAttackParryable(...)`.
       const defenderCanParry =
-        defenderMeleeReachWU !== null && defenderMeleeReachWU >= incomingAttackReachWU;
+        defenderMeleeReachWU !== null &&
+        defenderMeleeReachWU >= incomingAttackReachWU &&
+        isAttackParryable({ attackDefenseKind: 'physical', damageType: 'physical' });
 
       const riposteResult = resolveCombatHit({
         attacker: {
