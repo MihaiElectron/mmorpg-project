@@ -3,6 +3,7 @@ import AssetPicker from "../../AssetPicker";
 import KeyValueRowsEditor from "./KeyValueRowsEditor";
 import { hasFormChanges } from "../../shared/formDirty";
 import {
+  SKILL_ATTACK_DEFENSE_KINDS,
   SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
@@ -10,6 +11,7 @@ import {
   SKILL_TARGET_MODES,
   PRIMARY_STAT_KEYS,
   WEAPON_TYPE_SUGGESTIONS,
+  type SkillAttackDefenseKind,
   type SkillDamageType,
   type SkillDefinitionDto,
   type SkillEffectType,
@@ -48,6 +50,7 @@ interface Draft {
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
   damageType: SkillDamageType;
+  attackDefenseKind: SkillAttackDefenseKind;
   requiredLevel: string;
   resourceCost: string;
   cooldownMs: string;
@@ -75,6 +78,7 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     targetMode: skill?.targetMode ?? "creature",
     effectType: skill?.effectType ?? "damage",
     damageType: skill?.damageType ?? "physical",
+    attackDefenseKind: skill?.attackDefenseKind ?? "physical",
     requiredLevel: String(skill?.requiredLevel ?? 1),
     resourceCost: String(skill?.resourceCost ?? 0),
     cooldownMs: String(skill?.cooldownMs ?? 1000),
@@ -220,6 +224,7 @@ export default function SkillEditorForm({
       targetMode: draft.targetMode,
       effectType: draft.effectType,
       damageType: draft.damageType,
+      attackDefenseKind: draft.attackDefenseKind,
       scaling: buildScaling(),
     };
     const key = mode === "create" ? payload.key : (skill?.key ?? "");
@@ -435,6 +440,24 @@ export default function SkillEditorForm({
               {SKILL_DAMAGE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="skills-editor__field">
+            <span className="skills-editor__label">Nature défensive</span>
+            <select
+              className="skills-editor__input"
+              value={draft.attackDefenseKind}
+              onChange={(e) =>
+                setField("attackDefenseKind", e.target.value as SkillAttackDefenseKind)
+              }
+              disabled={draft.effectType !== "damage"}
+              title="Détermine si l'attaque peut être parée ou suivra un futur pipeline magique. Ne remplace pas le type de dégâts."
+            >
+              {SKILL_ATTACK_DEFENSE_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k === "physical" ? "Physique" : "Magique"}
                 </option>
               ))}
             </select>

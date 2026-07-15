@@ -16,6 +16,12 @@ export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 export const SKILL_DAMAGE_TYPES = ["physical", "raw"] as const;
 export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
 
+// Nature défensive (V6-B5) — AXE DISTINCT de damageType. physical = parable ;
+// magic = sort pur non parable (futur pipeline résistances magiques, non actif).
+// Défaut physical. Ne remplace pas damageType (mitigation d'armure).
+export const SKILL_ATTACK_DEFENSE_KINDS = ["physical", "magic"] as const;
+export type SkillAttackDefenseKind = (typeof SKILL_ATTACK_DEFENSE_KINDS)[number];
+
 // Nature du skill (V1-H) : seuls les `active` sont lançables ; passive/aura sont
 // configurables/déverrouillables mais non implémentés en runtime.
 export const SKILL_KINDS = ["active", "passive", "aura"] as const;
@@ -74,6 +80,8 @@ export interface SkillDefinitionDto {
   effectType: SkillEffectType;
   /** Type de dégâts (V4-B). physical par défaut ; raw ignore armure + pénétration. */
   damageType: SkillDamageType;
+  /** Nature défensive (V6-B5). physical par défaut ; magic = sort pur non parable. */
+  attackDefenseKind: SkillAttackDefenseKind;
   scaling: SkillScaling;
   createdAt: string;
   updatedAt: string;
@@ -101,6 +109,7 @@ export interface CreateSkillDefinitionPayload {
   targetMode?: SkillTargetMode;
   effectType?: SkillEffectType;
   damageType?: SkillDamageType;
+  attackDefenseKind?: SkillAttackDefenseKind;
   scaling?: SkillScaling;
 }
 
