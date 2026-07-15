@@ -551,6 +551,34 @@ describe('AdminService resources', () => {
       expect((updated as any)?.baseAttack).toBe(5); // inchangé
       expect((updated as any)?.armorPenetrationPercent).toBe(30); // inchangé
     });
+
+    // V6-B1 Lot 2 : édition des stats primaires créature.
+    it.each([
+      ['strength', 10],
+      ['vitality', 20],
+      ['endurance', 5],
+      ['agility', 8],
+      ['dexterity', 12],
+      ['intelligence', 3],
+      ['wisdom', 7],
+    ] as const)('updateTemplate modifie la primaire %s', async (field, value) => {
+      creatureTemplateRepo.findOne.mockResolvedValue({ key: 'turkey', name: 'Turkey', lootPool: null });
+      const updated = await service.updateTemplate('turkey', { [field]: value } as any);
+      expect((updated as any)?.[field]).toBe(value);
+    });
+
+    it('V6-B1 : updateTemplate laisse les primaires non fournies inchangées', async () => {
+      creatureTemplateRepo.findOne.mockResolvedValue({ key: 'turkey', name: 'Turkey', strength: 4, agility: 6, lootPool: null });
+      const updated = await service.updateTemplate('turkey', { strength: 15 });
+      expect((updated as any)?.strength).toBe(15); // modifié
+      expect((updated as any)?.agility).toBe(6); // inchangé
+    });
+
+    it('V6-B1 : updateTemplate ignore une primaire non finie (valeur existante conservée)', async () => {
+      creatureTemplateRepo.findOne.mockResolvedValue({ key: 'turkey', name: 'Turkey', strength: 4, lootPool: null });
+      const updated = await service.updateTemplate('turkey', { strength: Number.NaN } as any);
+      expect((updated as any)?.strength).toBe(4); // NaN ignoré, valeur existante conservée
+    });
   });
 
   it('createResource WU-only : écrit worldX/worldY/mapId sans cache pixel', async () => {
@@ -1300,6 +1328,40 @@ describe('createCreatureTemplate', () => {
     } as any);
     expect(result.criticalChance).toBe(0);
     expect(result.criticalDamage).toBe(150);
+  });
+
+  it('V6-B1 : primaires absentes → défaut 0', async () => {
+    const result = await service.createCreatureTemplate({ key: 'plain_prim', name: 'Plain' });
+    expect(result.strength).toBe(0);
+    expect(result.vitality).toBe(0);
+    expect(result.endurance).toBe(0);
+    expect(result.agility).toBe(0);
+    expect(result.dexterity).toBe(0);
+    expect(result.intelligence).toBe(0);
+    expect(result.wisdom).toBe(0);
+  });
+
+  it('V6-B1 : primaires fournies → persistées dès la création', async () => {
+    const result = await service.createCreatureTemplate({
+      key: 'strong_mob',
+      name: 'Strong Mob',
+      strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3, wisdom: 7,
+    } as any);
+    expect(result.strength).toBe(10);
+    expect(result.vitality).toBe(20);
+    expect(result.endurance).toBe(5);
+    expect(result.agility).toBe(8);
+    expect(result.dexterity).toBe(12);
+    expect(result.intelligence).toBe(3);
+    expect(result.wisdom).toBe(7);
+  });
+
+  it('V6-B1 : primaire non finie → défaut 0 (sanitize)', async () => {
+    const result = await service.createCreatureTemplate({
+      key: 'nan_prim', name: 'NaN Prim', strength: Number.NaN, agility: undefined,
+    } as any);
+    expect(result.strength).toBe(0);
+    expect(result.agility).toBe(0);
   });
 
   it('refuse une key non snake_case', async () => {

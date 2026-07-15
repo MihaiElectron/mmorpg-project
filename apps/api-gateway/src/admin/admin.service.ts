@@ -201,6 +201,11 @@ interface RecipeResultPatch {
   chance: number;
 }
 
+/** Stats primaires créature éditables (V6-B1). Aucun effet combat en V6-B1. */
+const CREATURE_PRIMARY_STAT_KEYS = [
+  'strength', 'vitality', 'endurance', 'agility', 'dexterity', 'intelligence', 'wisdom',
+] as const;
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -545,7 +550,7 @@ export class AdminService {
 
   async createCreatureTemplate(
     fields: Pick<CreatureTemplate, 'key' | 'name'> &
-      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent'>>,
+      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom'>>,
   ): Promise<CreatureTemplate> {
     if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
     AdminService.validateSnakeCase(fields.key, 'key');
@@ -584,16 +589,33 @@ export class AdminService {
       criticalDamage: numOr(fields.criticalDamage, 150),
       accuracy: numOr(fields.accuracy, 0),
       armorPenetrationPercent: numOr(fields.armorPenetrationPercent, 0),
+      // V6-B1 Lot 2 : stats primaires configurables dès la création (défaut 0 =
+      // entity ; aucune dérivation/effet combat — brancher en V6-B2).
+      strength: numOr(fields.strength, 0),
+      vitality: numOr(fields.vitality, 0),
+      endurance: numOr(fields.endurance, 0),
+      agility: numOr(fields.agility, 0),
+      dexterity: numOr(fields.dexterity, 0),
+      intelligence: numOr(fields.intelligence, 0),
+      wisdom: numOr(fields.wisdom, 0),
     }));
   }
 
   async updateTemplate(
     key: string,
-    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent'>> & { lootPool?: unknown },
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom'>> & { lootPool?: unknown },
   ): Promise<CreatureTemplate | null> {
     const template = await this.templateRepo.findOne({ where: { key } });
     if (!template) return null;
     const { lootPool, ...scalarFields } = fields;
+    // V6-B1 Lot 2 : une primaire fournie non finie (NaN/Infinity) est ignorée
+    // (la valeur existante reste inchangée) — jamais persistée telle quelle.
+    for (const primary of CREATURE_PRIMARY_STAT_KEYS) {
+      const v = (scalarFields as Record<string, unknown>)[primary];
+      if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v))) {
+        delete (scalarFields as Record<string, unknown>)[primary];
+      }
+    }
     Object.assign(template, scalarFields);
     if (lootPool !== undefined) {
       template.lootPool = await this.validateLootPool(lootPool);
