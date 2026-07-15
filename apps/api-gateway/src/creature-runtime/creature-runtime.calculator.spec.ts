@@ -173,10 +173,11 @@ describe('CreatureRuntimeCalculator — dérivation primaires → secondaires (V
     expect(s.canDodge).toBe(true); // dodgeChance > 0
   });
 
-  it('endurance + strength calculent blockChance mais canBlock reste false', () => {
+  it('endurance + strength calculent blockChance et canBlock devient true (V6-B4)', () => {
     const s = resolve({ endurance: 30, strength: 20 });
     expect(s.blockChance).toBe(30 * 0.2 + 20 * 0.1); // 8
-    expect(s.canBlock).toBe(false);
+    // blockChance > 0 et blockReductionPercent (25) > 0 → canBlock true.
+    expect(s.canBlock).toBe(true);
   });
 
   it('blockReductionPercent vaut 25', () => {
@@ -323,18 +324,37 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
     expect(s.parryChance).toBe(10);
   });
 
-  it('V6-B3 : dodgeChance > 0 → canDodge true ; block/parry restent inactifs (canX false)', () => {
+  it('V6-B3/V6-B4 : dodgeChance/blockChance > 0 → canDodge/canBlock true ; parade inactive', () => {
     const s = CreatureRuntimeCalculator.resolveCombatStats(
       makeCreature(), makeTemplate(PRIMS), [],
       withCoeffs({ dodgePerAgility: 5, blockPerEndurance: 5, parryPerStrength: 5, secondaryChanceCap: 100 }),
     );
     expect(s.dodgeChance).toBeGreaterThan(0);
     expect(s.canDodge).toBe(true);
-    // Blocage/parade calculés mais toujours non actifs.
+    // V6-B4 : blocage actif (blockChance > 0 et réduction 25 > 0).
     expect(s.blockChance).toBeGreaterThan(0);
+    expect(s.canBlock).toBe(true);
+    // Parade calculée mais toujours non active.
     expect(s.parryChance).toBeGreaterThan(0);
-    expect(s.canBlock).toBe(false);
     expect(s.canParry).toBe(false);
+  });
+
+  it('V6-B4 : canBlock false si blockChance = 0', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate({ endurance: 0, strength: 0 }), [], DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    );
+    expect(s.blockChance).toBe(0);
+    expect(s.canBlock).toBe(false);
+  });
+
+  it('V6-B4 : canBlock false si blockReductionPercent = 0 (même si blockChance > 0)', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate({ endurance: 30 }), [],
+      withCoeffs({ blockReductionPercent: 0 }),
+    );
+    expect(s.blockChance).toBeGreaterThan(0);
+    expect(s.blockReductionPercent).toBe(0);
+    expect(s.canBlock).toBe(false);
   });
 
   it('V6-B3 : dodgeChance = 0 → canDodge false', () => {

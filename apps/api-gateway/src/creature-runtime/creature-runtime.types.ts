@@ -99,11 +99,13 @@ export interface CreatureDerivedStats {
  *     `armorPenetrationPercent`) : lues brutes du template (hors RuntimeModifier) ;
  *   - `healingPowerEffective` : fallback centralisé `raw > 0 ? raw : attackPower`.
  *
- * `canDodge` (V6-B3) vaut `dodgeChance > 0` : une créature PEUT désormais esquiver
- * un hit entrant (l'esquive effective reste `clamp(dodgeChance − accuracy, 0, 100)`
- * côté calculateur). `canBlock`/`canParry` restent figés à `false` : blocage et
- * parade créature ne sont pas encore actifs — `blockChance`/`parryChance` sont
- * CALCULÉES (V6-B2) mais NON passées au défenseur (affichage/inspection seul).
+ * `canDodge` (V6-B3) vaut `dodgeChance > 0` et `canBlock` (V6-B4) vaut
+ * `blockChance > 0 && blockReductionPercent > 0` : une créature PEUT désormais
+ * esquiver puis bloquer un hit physique entrant (esquive effective
+ * `clamp(dodgeChance − accuracy, 0, 100)`, blocage `physical` uniquement après
+ * l'armure — géré par le calculateur). `canParry` reste figé à `false` : la
+ * parade créature n'est pas encore active — `parryChance` est CALCULÉE (V6-B2)
+ * mais NON passée au défenseur (affichage/inspection seul).
  * Ne change AUCUNE formule offensive existante hors activation primaires.
  */
 export interface CreatureCombatStats {
@@ -140,7 +142,8 @@ export interface CreatureCombatStats {
 
   /** V6-B3 : true si `dodgeChance > 0` — la créature peut esquiver un hit entrant. */
   canDodge: boolean;
-  readonly canBlock: false;
+  /** V6-B4 : true si `blockChance > 0 && blockReductionPercent > 0` — blocage physique actif. */
+  canBlock: boolean;
   readonly canParry: false;
 }
 

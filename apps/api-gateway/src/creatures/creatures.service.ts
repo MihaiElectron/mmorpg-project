@@ -1111,6 +1111,9 @@ export class CreaturesService implements OnModuleInit {
         defense: creatureStats.defenseTotal,
         // V6-B3 : la créature peut esquiver (dodgeChance dérivé/configuré).
         dodgeChancePercent: creatureStats.dodgeChance,
+        // V6-B4 : blocage physique (après esquive/armure, géré par le calculateur).
+        blockChancePercent: creatureStats.blockChance,
+        blockReductionPercent: creatureStats.blockReductionPercent,
       },
       damageType: 'physical',
       minimumDamage: 1,
@@ -1255,9 +1258,11 @@ export class CreaturesService implements OnModuleInit {
             accuracyPercent: charStats.derived.accuracy ?? 0,
           },
           defender: {
-            // Créature défenseur : V6-B3 esquive active ; blocage/parade toujours off.
+            // Créature défenseur : V6-B3 esquive + V6-B4 blocage actifs ; parade off.
             defense: creatureStats.defenseTotal,
             dodgeChancePercent: creatureStats.dodgeChance,
+            blockChancePercent: creatureStats.blockChance,
+            blockReductionPercent: creatureStats.blockReductionPercent,
             canParry: false,
             parryChancePercent: 0,
           },
@@ -1388,6 +1393,9 @@ export class CreaturesService implements OnModuleInit {
         defense: creatureStats.defenseTotal,
         // V6-B3 : la créature peut esquiver le skill (dodgeChance dérivé/configuré).
         dodgeChancePercent: creatureStats.dodgeChance,
+        // V6-B4 : blocage physique (raw ignoré côté calculateur).
+        blockChancePercent: creatureStats.blockChance,
+        blockReductionPercent: creatureStats.blockReductionPercent,
       },
       damageType,
       minimumDamage: 1,
