@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B modèle de combat créature)
 - Owner: Project
-- Last updated: 2026-07-13
+- Last updated: 2026-07-15
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -268,6 +268,113 @@ résolution des joueurs** :
 - Aucune promesse que toutes les stats joueur soient déjà symétriques côté
   créature : l'extension se fait au rythme des hooks gameplay réels.
 
+## 11. Contrat V6-B — modèle de combat créature (Planned, non implémenté)
+
+Cette section **fige la direction cible** du modèle de combat créature. Elle ne
+code rien : ni skills/primaires/secondaires créature, ni esquive/blocage/parade,
+ni stat DB, ni migration, ni formule, ni IA, ni frontend. Elle sert de référence
+pour brancher V6-B au bon endroit sans casser l'existant.
+
+### 11.1 État actuel (exact)
+
+- Quand une créature **attaque**, elle passe par `resolveCombatHit` (auto-attaque
+  passive, skill, riposte) — comme le joueur (§8).
+- Quand une créature **défend** (joueur → créature, skill joueur → créature,
+  contre-attaque), seule **`defenseTotal`** s'applique (+ `armorPenetrationPercent`
+  de l'attaquant). C'est la **seule défense active** côté créature défenseur.
+- `canDodge` / `canBlock` / `canParry` créature sont figés à **`false`**
+  (`CreatureRuntimeCalculator.resolveCombatStats`, exposé par l'inspector).
+- Les créatures **n'ont pas encore de stats primaires**.
+- Les créatures **n'ont pas encore de vraies stats secondaires défensives**
+  (dodge/block/parry). Les stats avancées **offensives** existent déjà (V5-D2 :
+  `criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`/`healingPower`),
+  lues brutes du template.
+- Les **skills créature existent déjà** via les capacités de template
+  (`CreatureTemplateSkill` + catalogue skills) ; mais le **modèle de stats complet
+  reste à construire**.
+- La **parade passive du joueur** contre l'auto-attaque créature reste
+  **désactivée** (`canParry: false` dans `applyCreatureHitToPlayer`, §8).
+
+### 11.2 Décision cible (produit)
+
+**Objectif** : rapprocher le modèle de combat créature de celui du joueur. À terme,
+les créatures auront :
+
+- leurs **propres skills** configurables (extension du modèle de capacités existant) ;
+- des **stats primaires** créature ;
+- des **stats secondaires** créature (dérivées des primaires) ;
+- des **stats défensives** créature futures :
+  - `dodgeChance` ;
+  - `blockChance` ;
+  - `blockReductionPercent` ;
+  - `parryChance` ;
+  - éventuellement `counterAttackPower` (si validé plus tard).
+
+**Invariants** :
+- Réutiliser le **même pipeline** `resolveCombatHit` (mapping défenseur créature ↔
+  défenseur joueur) — pas de chemin de dégâts parallèle.
+- Le **serveur reste seul responsable** des calculs gameplay ; le client ne calcule
+  jamais ces valeurs.
+- Le **Studio** permet de **configurer et inspecter** ces skills/stats — jamais de calcul.
+- Point d'insertion : le bloc `defender` fourni à `resolveCombatHit` pour les hits
+  **joueur → créature** (aujourd'hui `{ defense: defenseTotal, dodgeChancePercent: 0 }`),
+  alimenté par `resolveCombatStats` (aujourd'hui `canDodge/canBlock/canParry: false`).
+
+### 11.3 Questions ouvertes (le « comment », pas le « si »)
+
+La décision d'AVOIR ces stats est prise (§11.2). Restent à trancher les modalités :
+
+1. **Stockage** : colonnes `CreatureTemplate`, un champ JSON de stats, ou un
+   **catalogue** type `DerivedStatDefinition` (comme le joueur) ? Impacte migrations,
+   Studio et le canal RuntimeModifier.
+2. **Dérivation** : comment calculer les **secondaires à partir des primaires**
+   créature (coefficients façon joueur ? table propre aux créatures ?).
+3. **Formules** : quelles formules pour dodge/block/parry créature (réutiliser
+   `calculateCombatDamage`/`resolveCombatHit` tel quel, en alimentant le `defender`).
+4. **Limites / caps** : quels clamps appliquer (ex. cap d'esquive/blocage/parade)
+   pour éviter l'invulnérabilité.
+5. **Équilibrage** : comment équilibrer dodge/block/parry côté créature (par famille
+   de créature ? par niveau ?).
+6. **Conditions de parade** : arme, type d'attaque entrant, reach — sachant que les
+   créatures **n'ont pas d'équipement** : quelle règle d'éligibilité ?
+7. **Types d'attaque** : faut-il introduire `melee` / `ranged` / `magic` **avant** la
+   parade (la parade a du sens surtout en mêlée) ?
+8. **Studio** : comment exposer proprement skills + primaires + secondaires +
+   défenses créature (édition/inspection) sans surcharger l'UI ?
+
+> Règle transverse : aucune de ces modalités ne doit introduire un **client**
+> calculant une défense/stat, ni un chemin de dégâts spécial hors `resolveCombatHit`.
+
+### 11.4 Séquence prudente proposée (petits lots)
+
+- **V6-B1 — modèle de stats PRIMAIRES créature** : définir les primaires (stockage,
+  Studio config/inspection) ; aucun effet combat tant que non dérivé.
+- **V6-B2 — stats SECONDAIRES créature dérivées** : dérivation primaires → secondaires
+  (offensives déjà là ; poser le canal défensif) ; Studio inspection.
+- **V6-B3 — esquive créature défenseur** (`dodgeChance`) : branchée dans le `defender`
+  de `resolveCombatHit` (hits joueur → créature) ; `canDodge` devient configurable ;
+  tests symétriques aux tests joueur.
+- **V6-B4 — blocage créature défenseur** (`blockChance` / `blockReductionPercent`) :
+  après décision sur l'équivalent « bouclier » créature.
+- **V6-B5 — types d'attaque** `melee` / `ranged` / `magic` : prérequis d'une parade
+  cohérente et d'éventuelles résistances futures.
+- **V6-B6 — parade** créature (`parryChance`) et/ou **parade passive joueur** :
+  uniquement APRÈS un contrat clair de **reach** / **type d'attaque entrant**
+  (V6-B5). Lot le plus sensible (défense active) — à ne pas anticiper.
+
+Chaque lot : périmètre unique, branché via `resolveCombatStats` / le `defender` de
+`resolveCombatHit`, sans changer les formules du calculateur pur, avec tests de
+non-régression + tests de la nouvelle capacité.
+
+### 11.5 Hors périmètre de CE document
+
+Ce contrat **ne code rien** : pas de skills/primaires/secondaires créature, pas
+d'esquive/blocage/parade créature, pas de nouvelle migration, pas de nouvelle stat
+DB, pas de changement de formule, pas de changement d'IA, pas de changement
+frontend obligatoire, aucune activation immédiate de dodge/block/parry. Il fixe
+uniquement la **direction produit** et les points d'insertion. **Documentation
+seulement.**
+
 ## État d'implémentation
 
 | Élément | État |
@@ -281,7 +388,7 @@ résolution des joueurs** :
 | Stats secondaires d'équipement alimentant le pipeline (V5-F) | Implemented |
 | Invariant entier : `finalDamage` / `hpAfter` entiers, aucun PV fractionnaire persisté | Implemented |
 | Stats avancées créature (`healingPower`/`criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`) configurables Studio, appliquées serveur (V5-D2) | Implemented |
-| Défense créature : esquive / blocage / parade (créature défenseur) | Planned (hors périmètre) |
+| Modèle créature proche du joueur : skills + primaires + secondaires + défenses (dodge/block/parry) | Planned — contrat V6-B (§11), décision produit prise |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
