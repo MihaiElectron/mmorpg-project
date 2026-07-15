@@ -561,6 +561,9 @@ describe('AdminService resources', () => {
       ['dexterity', 12],
       ['intelligence', 3],
       ['wisdom', 7],
+      ['spirit', 4],
+      ['willpower', 6],
+      ['charisma', 9],
     ] as const)('updateTemplate modifie la primaire %s', async (field, value) => {
       creatureTemplateRepo.findOne.mockResolvedValue({ key: 'turkey', name: 'Turkey', lootPool: null });
       const updated = await service.updateTemplate('turkey', { [field]: value } as any);
@@ -1330,30 +1333,26 @@ describe('createCreatureTemplate', () => {
     expect(result.criticalDamage).toBe(150);
   });
 
-  it('V6-B1 : primaires absentes → défaut 0', async () => {
+  it('V6-B1 : les 10 primaires absentes → défaut 0', async () => {
     const result = await service.createCreatureTemplate({ key: 'plain_prim', name: 'Plain' });
-    expect(result.strength).toBe(0);
-    expect(result.vitality).toBe(0);
-    expect(result.endurance).toBe(0);
-    expect(result.agility).toBe(0);
-    expect(result.dexterity).toBe(0);
-    expect(result.intelligence).toBe(0);
-    expect(result.wisdom).toBe(0);
+    for (const p of ['strength', 'vitality', 'endurance', 'agility', 'dexterity', 'intelligence', 'wisdom', 'spirit', 'willpower', 'charisma'] as const) {
+      expect((result as any)[p]).toBe(0);
+    }
   });
 
-  it('V6-B1 : primaires fournies → persistées dès la création', async () => {
+  it('V6-B1 : les 10 primaires fournies → persistées dès la création', async () => {
     const result = await service.createCreatureTemplate({
       key: 'strong_mob',
       name: 'Strong Mob',
       strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3, wisdom: 7,
+      spirit: 4, willpower: 6, charisma: 9,
     } as any);
     expect(result.strength).toBe(10);
     expect(result.vitality).toBe(20);
-    expect(result.endurance).toBe(5);
-    expect(result.agility).toBe(8);
-    expect(result.dexterity).toBe(12);
-    expect(result.intelligence).toBe(3);
     expect(result.wisdom).toBe(7);
+    expect(result.spirit).toBe(4);
+    expect(result.willpower).toBe(6);
+    expect(result.charisma).toBe(9);
   });
 
   it('V6-B1 : primaire non finie → défaut 0 (sanitize)', async () => {

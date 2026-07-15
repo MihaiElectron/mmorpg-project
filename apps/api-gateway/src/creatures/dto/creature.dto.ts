@@ -47,6 +47,9 @@ export type CreaturePrimaryStatsDto = {
   dexterity: number;
   intelligence: number;
   wisdom: number;
+  spirit: number;
+  willpower: number;
+  charisma: number;
 };
 
 export type CreatureRuntimeCombatDto = {

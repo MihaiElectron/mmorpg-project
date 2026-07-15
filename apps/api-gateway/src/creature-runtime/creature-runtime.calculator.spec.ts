@@ -35,6 +35,9 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     dexterity: 0,
     intelligence: 0,
     wisdom: 0,
+    spirit: 0,
+    willpower: 0,
+    charisma: 0,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -110,7 +113,7 @@ describe('CreatureRuntimeCalculator.resolveCombatStats (V6-A Lot 2)', () => {
     const baseline = CreatureRuntimeCalculator.resolveCombatStats(makeCreature(), makeTemplate());
     const withPrimaries = CreatureRuntimeCalculator.resolveCombatStats(
       makeCreature(),
-      makeTemplate({ strength: 100, vitality: 100, endurance: 100, agility: 100, dexterity: 100, intelligence: 100, wisdom: 100 }),
+      makeTemplate({ strength: 100, vitality: 100, endurance: 100, agility: 100, dexterity: 100, intelligence: 100, wisdom: 100, spirit: 100, willpower: 100, charisma: 100 }),
     );
     // attackPower/defenseTotal/maxHealth restent dérivés de baseAttack/baseArmor/baseHealth uniquement.
     expect(withPrimaries.attackPower).toBe(baseline.attackPower);

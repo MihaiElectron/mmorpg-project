@@ -103,4 +103,13 @@ export class CreatureTemplate {
 
   @Column('int', { default: 0 })
   wisdom: number;
+
+  @Column('int', { default: 0 })
+  spirit: number;
+
+  @Column('int', { default: 0 })
+  willpower: number;
+
+  @Column('int', { default: 0 })
+  charisma: number;
 }

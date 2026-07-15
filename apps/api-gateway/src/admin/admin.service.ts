@@ -201,9 +201,10 @@ interface RecipeResultPatch {
   chance: number;
 }
 
-/** Stats primaires créature éditables (V6-B1). Aucun effet combat en V6-B1. */
+/** Les 10 stats primaires créature éditables (alignées joueur). Aucun effet combat en V6-B1. */
 const CREATURE_PRIMARY_STAT_KEYS = [
   'strength', 'vitality', 'endurance', 'agility', 'dexterity', 'intelligence', 'wisdom',
+  'spirit', 'willpower', 'charisma',
 ] as const;
 
 @Injectable()
@@ -550,7 +551,7 @@ export class AdminService {
 
   async createCreatureTemplate(
     fields: Pick<CreatureTemplate, 'key' | 'name'> &
-      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom'>>,
+      Partial<Pick<CreatureTemplate, 'textureKey' | 'baseHealth' | 'baseAttack' | 'baseArmor' | 'aggroRadius' | 'fleeThresholdPct' | 'patrolRadius' | 'speedMin' | 'speedMax' | 'respawnDelayMs' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom' | 'spirit' | 'willpower' | 'charisma'>>,
   ): Promise<CreatureTemplate> {
     if (!fields.key || typeof fields.key !== 'string') throw new BadRequestException('key est requis.');
     AdminService.validateSnakeCase(fields.key, 'key');
@@ -598,12 +599,15 @@ export class AdminService {
       dexterity: numOr(fields.dexterity, 0),
       intelligence: numOr(fields.intelligence, 0),
       wisdom: numOr(fields.wisdom, 0),
+      spirit: numOr(fields.spirit, 0),
+      willpower: numOr(fields.willpower, 0),
+      charisma: numOr(fields.charisma, 0),
     }));
   }
 
   async updateTemplate(
     key: string,
-    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom'>> & { lootPool?: unknown },
+    fields: Partial<Pick<CreatureTemplate, 'baseHealth' | 'aggroRadius' | 'baseAttack' | 'baseArmor' | 'fleeThresholdPct' | 'patrolRadius' | 'respawnDelayMs' | 'killCharacterXpReward' | 'name' | 'textureKey' | 'healingPower' | 'criticalChance' | 'criticalDamage' | 'accuracy' | 'armorPenetrationPercent' | 'strength' | 'vitality' | 'endurance' | 'agility' | 'dexterity' | 'intelligence' | 'wisdom' | 'spirit' | 'willpower' | 'charisma'>> & { lootPool?: unknown },
   ): Promise<CreatureTemplate | null> {
     const template = await this.templateRepo.findOne({ where: { key } });
     if (!template) return null;

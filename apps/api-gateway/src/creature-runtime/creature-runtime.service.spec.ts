@@ -44,6 +44,9 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     dexterity: 0,
     intelligence: 0,
     wisdom: 0,
+    spirit: 0,
+    willpower: 0,
+    charisma: 0,
     ...overrides,
   };
 }
