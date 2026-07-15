@@ -23,6 +23,8 @@ describe('AdminController — movement metrics', () => {
         invalidCoordinates: 0,
         mapMismatch: 0,
       }),
+      getCreatureSecondaryCoefficients: jest.fn().mockReturnValue({ attackPowerPerStrength: 2 }),
+      updateCreatureSecondaryCoefficients: jest.fn().mockResolvedValue({ attackPowerPerStrength: 4 }),
     };
 
     return {
@@ -93,6 +95,25 @@ describe('AdminController — movement metrics', () => {
       runtimeStatus: 'implemented',
       description: expect.any(String),
     });
+  });
+
+  it('GET creatures/secondary-coefficients délègue à AdminService', () => {
+    const { adminService, controller } = makeController();
+
+    const result = controller.getCreatureSecondaryCoefficients();
+
+    expect(adminService.getCreatureSecondaryCoefficients).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ attackPowerPerStrength: 2 });
+  });
+
+  it('PATCH creatures/secondary-coefficients délègue le DTO et renvoie la config effective', async () => {
+    const { adminService, controller } = makeController();
+    const dto = { attackPowerPerStrength: 4 };
+
+    const result = await controller.updateCreatureSecondaryCoefficients(dto as any);
+
+    expect(adminService.updateCreatureSecondaryCoefficients).toHaveBeenCalledWith(dto);
+    expect(result).toEqual({ attackPowerPerStrength: 4 });
   });
 
   it('reste protégé par les guards et le rôle admin', () => {

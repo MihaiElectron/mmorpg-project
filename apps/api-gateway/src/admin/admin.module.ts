@@ -29,6 +29,7 @@ import { ItemTransferModule } from '../item-transfer/item-transfer.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { MasteriesModule } from '../masteries/masteries.module';
 import { GameConfigModule } from '../game-config/game-config.module';
+import { CreatureConfigModule } from '../creature-config/creature-config.module';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
 import { ActiveSkillsModule } from '../active-skills/active-skills.module';
 
@@ -54,6 +55,7 @@ import { ActiveSkillsModule } from '../active-skills/active-skills.module';
     InventoryModule,
     MasteriesModule,
     GameConfigModule,
+    CreatureConfigModule,
     DerivedStatsModule,
     ActiveSkillsModule,
   ],

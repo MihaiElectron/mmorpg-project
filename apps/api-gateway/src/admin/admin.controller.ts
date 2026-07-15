@@ -11,6 +11,7 @@ import { Roles } from '../common/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
 import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
+import { UpdateCreatureSecondaryCoefficientsDto } from '../creature-config/dto/update-creature-secondary-coefficients.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { UpdateDerivedStatDefinitionDto } from '../derived-stats/dto/update-derived-stat-definition.dto';
 import { CreateDerivedStatDefinitionDto } from '../derived-stats/dto/create-derived-stat-definition.dto';
@@ -64,6 +65,21 @@ export class AdminController {
   /** Passerelle temporaire vers le futur Studio SDK — lecture seule. */
   @Get('creatures/world-objects')
   getCreatureWorldObjects() { return this.adminService.getCreatureWorldObjects(); }
+
+  /**
+   * Coefficients de dérivation des secondaires créature (V6-B2.5 Lot 3).
+   * GET = config effective (serveur) ; PATCH = patch partiel validé, renvoie la
+   * config effective après application. Aucune logique métier ici (délégation).
+   */
+  @Get('creatures/secondary-coefficients')
+  getCreatureSecondaryCoefficients() {
+    return this.adminService.getCreatureSecondaryCoefficients();
+  }
+
+  @Patch('creatures/secondary-coefficients')
+  updateCreatureSecondaryCoefficients(@Body() dto: UpdateCreatureSecondaryCoefficientsDto) {
+    return this.adminService.updateCreatureSecondaryCoefficients(dto);
+  }
 
   /**
    * Inspection combat runtime d'une créature vivante (Studio DevTools).

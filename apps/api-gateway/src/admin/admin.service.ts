@@ -36,6 +36,9 @@ import { PlayerMastery } from '../masteries/entities/player-mastery.entity';
 import { toMasteryDefinitionWorldObject, MasteryDefinitionWorldObject } from '../masteries/adapters/mastery-definition-world-object.adapter';
 import { type MovementMetrics, WorldService } from '../world/world.service';
 import { GameConfigService } from '../game-config/game-config.service';
+import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
+import { CreatureSecondaryCoefficients } from '../creature-runtime/creature-runtime.calculator';
+import { UpdateCreatureSecondaryCoefficientsDto } from '../creature-config/dto/update-creature-secondary-coefficients.dto';
 import { GameConfig } from '../game-config/game-config.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
 import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
@@ -243,6 +246,7 @@ export class AdminService {
     private readonly masteriesService: MasteriesService,
     private readonly economyService: EconomyService,
     private readonly gameConfigService: GameConfigService,
+    private readonly creatureSecondaryCoefficientsService: CreatureSecondaryCoefficientsService,
     private readonly derivedStatsService: DerivedStatsService,
     private readonly dataSource: DataSource,
   ) {}
@@ -260,6 +264,24 @@ export class AdminService {
    */
   async updateGameConfig(dto: UpdateGameConfigDto): Promise<GameConfig> {
     return this.gameConfigService.updateConfig(dto);
+  }
+
+  // ── Coefficients secondaires créature (V6-B2.5 Lot 3) ───────────────────────
+
+  /** Coefficients de dérivation créature effectifs (cache serveur, lecture seule). */
+  getCreatureSecondaryCoefficients(): CreatureSecondaryCoefficients {
+    return this.creatureSecondaryCoefficientsService.getCoefficients();
+  }
+
+  /**
+   * Applique un patch partiel (déjà validé par le DTO) et renvoie la config
+   * effective. Champs absents préservés ; le service sanitize/merge garde la
+   * sécurité serveur. Aucune lecture DB directe ici.
+   */
+  async updateCreatureSecondaryCoefficients(
+    dto: UpdateCreatureSecondaryCoefficientsDto,
+  ): Promise<CreatureSecondaryCoefficients> {
+    return this.creatureSecondaryCoefficientsService.updateCoefficients(dto);
   }
 
   /**

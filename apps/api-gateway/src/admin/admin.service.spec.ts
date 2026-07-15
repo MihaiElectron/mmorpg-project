@@ -22,6 +22,7 @@ import { InventoryProjectionService } from '../inventory/projection/inventory-pr
 import { MasteriesService } from '../masteries/masteries.service';
 import { EconomyService } from '../economy/economy.service';
 import { GameConfigService } from '../game-config/game-config.service';
+import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
@@ -111,6 +112,7 @@ describe('AdminService resources', () => {
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -278,6 +280,43 @@ describe('AdminService resources', () => {
       expect(result!.experience).toBe(40);
       // gameConfigService jamais interroge (aucun cout inutile).
       expect((service as any).gameConfigService.getConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Coefficients secondaires créature (V6-B2.5 Lot 3) ────────────────────────
+
+  describe('coefficients secondaires créature', () => {
+    const EFFECTIVE = {
+      attackPowerPerStrength: 2, defenseTotalPerEndurance: 1, accuracyPerDexterity: 0.5,
+      dodgePerAgility: 0.3, blockPerEndurance: 0.2, blockPerStrength: 0.1, blockReductionPercent: 25,
+      parryPerStrength: 0.15, parryPerDexterity: 0.15,
+      counterPerDexterity: 0.4, counterPerAgility: 0.3, counterPerIntelligence: 0.2,
+      maxHealthPerVitality: 10, secondaryChanceCap: 40,
+    };
+
+    it('getCreatureSecondaryCoefficients retourne la config effective du service', () => {
+      const getCoefficients = jest.fn().mockReturnValue(EFFECTIVE);
+      (service as any).creatureSecondaryCoefficientsService = { getCoefficients };
+
+      const result = service.getCreatureSecondaryCoefficients();
+
+      expect(result).toEqual(EFFECTIVE);
+      expect(getCoefficients).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateCreatureSecondaryCoefficients délègue le patch et renvoie la config effective', async () => {
+      const patch = { attackPowerPerStrength: 4, secondaryChanceCap: 30 };
+      const merged = { ...EFFECTIVE, ...patch };
+      const updateCoefficients = jest.fn().mockResolvedValue(merged);
+      (service as any).creatureSecondaryCoefficientsService = { updateCoefficients };
+
+      const result = await service.updateCreatureSecondaryCoefficients(patch);
+
+      expect(updateCoefficients).toHaveBeenCalledWith(patch);
+      // Config effective renvoyée : champs patchés appliqués, absents préservés.
+      expect(result.attackPowerPerStrength).toBe(4);
+      expect(result.secondaryChanceCap).toBe(30);
+      expect(result.defenseTotalPerEndurance).toBe(EFFECTIVE.defenseTotalPerEndurance);
     });
   });
 
@@ -679,6 +718,7 @@ describe('AdminService — createMasteryDefinition', () => {
         { provide: MasteriesService, useValue: masteriesServiceMock },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -804,6 +844,7 @@ describe('AdminService — updateMasteryDefinition', () => {
         { provide: MasteriesService, useValue: masteriesServiceMock },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -907,6 +948,7 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
       { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
       { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+      { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
       { provide: DataSource, useValue: makeFakeDataSource() },
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1258,6 +1300,7 @@ describe('createCreatureTemplate', () => {
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1409,6 +1452,7 @@ describe('createResourceTemplate', () => {
         { provide: MasteriesService, useValue: { getCharacterMasteries: jest.fn().mockResolvedValue([]) } },
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1676,6 +1720,7 @@ describe('AdminService — recalculateCharacterProgression', () => {
         { provide: MasteriesService, useValue: {} },
         { provide: EconomyService, useValue: {} },
         { provide: GameConfigService, useValue: gameConfigService },
+        { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
         { provide: DataSource, useValue: fakeDataSource },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
