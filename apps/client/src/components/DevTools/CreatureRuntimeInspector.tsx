@@ -51,6 +51,16 @@ interface CreatureRuntimeCombat {
   criticalDamage: number;
   accuracy: number;
   armorPenetrationPercent: number;
+  // V6-B1 : primaires informatives (aucun effet combat aujourd'hui).
+  primaryStats?: {
+    strength: number;
+    vitality: number;
+    endurance: number;
+    agility: number;
+    dexterity: number;
+    intelligence: number;
+    wisdom: number;
+  };
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
@@ -225,6 +235,25 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             <Row label="précision">{data.accuracy}</Row>
             <Row label="pénétration armure">{data.armorPenetrationPercent} %</Row>
           </dl>
+
+          {/* E-ter. Stats primaires (V6-B1) — informatif seulement, aucun effet combat. */}
+          {data.primaryStats && (
+            <>
+              <p className="creature-runtime__title">Primaires</p>
+              <dl className="creature-runtime__grid">
+                <Row label="force (STR)">{data.primaryStats.strength}</Row>
+                <Row label="vitalité (VIT)">{data.primaryStats.vitality}</Row>
+                <Row label="endurance (END)">{data.primaryStats.endurance}</Row>
+                <Row label="agilité (AGI)">{data.primaryStats.agility}</Row>
+                <Row label="dextérité (DEX)">{data.primaryStats.dexterity}</Row>
+                <Row label="intelligence (INT)">{data.primaryStats.intelligence}</Row>
+                <Row label="sagesse (WIS)">{data.primaryStats.wisdom}</Row>
+              </dl>
+              <p className="creature-runtime__hint">
+                Actuellement informatif : dérivation secondaire prévue en V6-B2.
+              </p>
+            </>
+          )}
 
           {/* F. Capacités runtime + cooldowns live (V5-C1) — lecture seule serveur. */}
           <p className="creature-runtime__title">Capacités runtime</p>

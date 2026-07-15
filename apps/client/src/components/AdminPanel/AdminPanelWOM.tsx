@@ -133,6 +133,14 @@ function buildGroupedSectionConfigs(masteryKeys: string[]): GroupedSectionConfig
       { key: "baseHealth",       label: "PV",           min: 1, group: "Base" },
       { key: "baseAttack",       label: "ATK",          min: 0, group: "Base" },
       { key: "baseArmor",        label: "ARM",          min: 0, group: "Base" },
+      // Primaires (V6-B1) — informatif, aucune dérivation combat avant V6-B2.
+      { key: "strength",      label: "STR", min: 0, group: "Primaires" },
+      { key: "vitality",      label: "VIT", min: 0, group: "Primaires" },
+      { key: "endurance",     label: "END", min: 0, group: "Primaires" },
+      { key: "agility",       label: "AGI", min: 0, group: "Primaires" },
+      { key: "dexterity",     label: "DEX", min: 0, group: "Primaires" },
+      { key: "intelligence",  label: "INT", min: 0, group: "Primaires" },
+      { key: "wisdom",        label: "WIS", min: 0, group: "Primaires" },
       // Offensif (V5-D2-A)
       { key: "criticalChance",          label: "CRIT %",          min: 0, group: "Offensif" },
       { key: "criticalDamage",          label: "CRIT DMG %",      min: 0, group: "Offensif" },
@@ -610,7 +618,7 @@ function formatRespawnAt(raw: string | Date | null | undefined): string | null {
 
 // ── AdminPanelWOM ─────────────────────────────────────────────────────────────
 
-const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000, healingPower: 0, criticalChance: 0, criticalDamage: 150, accuracy: 0, armorPenetrationPercent: 0 };
+const NEW_CREATURE_DEFAULT = { key: "", name: "", textureKey: "turkey", baseHealth: 30, baseAttack: 3, baseArmor: 0, aggroRadius: 0, fleeThresholdPct: 0, respawnDelayMs: 20000, healingPower: 0, criticalChance: 0, criticalDamage: 150, accuracy: 0, armorPenetrationPercent: 0, strength: 0, vitality: 0, endurance: 0, agility: 0, dexterity: 0, intelligence: 0, wisdom: 0 };
 const NEW_RESOURCE_TEMPLATE_DEFAULT = { type: "", textureKey: "dead_tree", defaultRemainingLoots: 4, respawnDelayMs: 30000, gatherCharacterXpReward: 0, gatheringDifficulty: 0, lootPool: [] as Array<{ itemId: string; minQty: number; maxQty: number; probability: number }> };
 const NEW_STATION_TEMPLATE_DEFAULT = {
   key: "",
@@ -1668,8 +1676,22 @@ export default function AdminPanelWOM() {
                     onChange={(e) => setNewCreature((prev) => ({ ...prev, armorPenetrationPercent: Number(e.target.value) }))}
                     {...kbHandlers} />
                 </label>
+                {/* V6-B1 : stats primaires (informatives, pas de dérivation avant V6-B2). */}
+                {([
+                  ["strength", "STR"], ["vitality", "VIT"], ["endurance", "END"], ["agility", "AGI"],
+                  ["dexterity", "DEX"], ["intelligence", "INT"], ["wisdom", "WIS"],
+                ] as const).map(([key, label]) => (
+                  <label className="admin-panel__template-stat" key={key}>
+                    <span className="admin-panel__template-stat-label">{label}</span>
+                    <input className="admin-panel__template-stat-input" type="number" min={0}
+                      value={(newCreature as Record<string, number>)[key]}
+                      onChange={(e) => setNewCreature((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                      {...kbHandlers} />
+                  </label>
+                ))}
               </div>
               <p className="admin-panel__hint">HEAL = 0 → utilise l'attaque (attackPower) comme soin.</p>
+              <p className="admin-panel__hint">Les primaires créature sont configurées ici mais ne dérivent pas encore de secondaires avant V6-B2.</p>
               <button className="admin-panel__apply-btn" disabled={creating}
                 onClick={async () => {
                   const socket = getSocket();

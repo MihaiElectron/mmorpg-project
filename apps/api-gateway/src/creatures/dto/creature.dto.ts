@@ -35,6 +35,20 @@ export type CreatureRuntimeAbilityDto = {
   onCooldown: boolean;
 };
 
+/**
+ * Stats primaires créature (V6-B1) — informatif seulement. Aucune dérivation ni
+ * effet combat aujourd'hui (prévu V6-B2). Valeurs brutes du template.
+ */
+export type CreaturePrimaryStatsDto = {
+  strength: number;
+  vitality: number;
+  endurance: number;
+  agility: number;
+  dexterity: number;
+  intelligence: number;
+  wisdom: number;
+};
+
 export type CreatureRuntimeCombatDto = {
   // A. Identité / état
   id: string;
@@ -76,6 +90,10 @@ export type CreatureRuntimeCombatDto = {
   criticalDamage: number;
   accuracy: number;
   armorPenetrationPercent: number;
+  // D-ter. Stats primaires (V6-B1) — informatif SEULEMENT : aucune dérivation ni
+  // effet combat aujourd'hui (prévu V6-B2). Bloc séparé pour ne pas suggérer un
+  // impact sur attackPower/defenseTotal/maxHealth.
+  primaryStats: CreaturePrimaryStatsDto;
   // E. Loot / XP (facts du template ; le loot restant n'est pas tracké par instance)
   killCharacterXpReward: number;
   hasLootPool: boolean;

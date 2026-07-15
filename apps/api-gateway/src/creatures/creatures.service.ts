@@ -376,6 +376,16 @@ export class CreaturesService implements OnModuleInit {
       criticalDamage: stats.criticalDamage,
       accuracy: stats.accuracy,
       armorPenetrationPercent: stats.armorPenetrationPercent,
+      // V6-B1 : primaires informatives (valeurs brutes du template ; aucun effet combat).
+      primaryStats: {
+        strength: t.strength,
+        vitality: t.vitality,
+        endurance: t.endurance,
+        agility: t.agility,
+        dexterity: t.dexterity,
+        intelligence: t.intelligence,
+        wisdom: t.wisdom,
+      },
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,

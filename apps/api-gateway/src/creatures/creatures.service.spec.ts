@@ -42,6 +42,7 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     fleeThresholdPct: 75,
     lootPool: null,
     killCharacterXpReward: 0,
+    strength: 0, vitality: 0, endurance: 0, agility: 0, dexterity: 0, intelligence: 0, wisdom: 0,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -2598,6 +2599,29 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
           canBlock: false,
           canParry: false,
         });
+      });
+
+      it("V6-B1 : getRuntimeCombatInfo expose les primaires (informatif) sans effet combat", async () => {
+        const template = makeTemplate({
+          key: "prim",
+          baseAttack: 5, baseArmor: 2, baseHealth: 30,
+          strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3, wisdom: 7,
+        });
+        const creature = makeCreature({ id: "prim-1", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("prim", []);
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        // Primaires exposées = valeurs template.
+        expect(dto!.primaryStats).toEqual({
+          strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3, wisdom: 7,
+        });
+        // Aucun effet combat : attackPower/defenseTotal/maxHealth restent dérivés de base*.
+        expect(dto!.attackPower).toBe(5);
+        expect(dto!.defenseTotal).toBe(2);
+        expect(dto!.maxHealth).toBe(30);
+        expect(dto!.canDodge).toBe(false);
+        expect(dto!.canBlock).toBe(false);
+        expect(dto!.canParry).toBe(false);
       });
 
       it("B-bis. healingPower non configurée → getRuntimeCombatInfo retombe sur attackPower", async () => {
