@@ -60,6 +60,9 @@ interface CreatureRuntimeCombat {
     dexterity: number;
     intelligence: number;
     wisdom: number;
+    spirit: number;
+    willpower: number;
+    charisma: number;
   };
   killCharacterXpReward: number;
   hasLootPool: boolean;
@@ -248,6 +251,9 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 <Row label="dextérité (DEX)">{data.primaryStats.dexterity}</Row>
                 <Row label="intelligence (INT)">{data.primaryStats.intelligence}</Row>
                 <Row label="sagesse (WIS)">{data.primaryStats.wisdom}</Row>
+                <Row label="esprit (ESP)">{data.primaryStats.spirit}</Row>
+                <Row label="volonté (VOL)">{data.primaryStats.willpower}</Row>
+                <Row label="charisme (CHA)">{data.primaryStats.charisma}</Row>
               </dl>
               <p className="creature-runtime__hint">
                 Actuellement informatif : dérivation secondaire prévue en V6-B2.
