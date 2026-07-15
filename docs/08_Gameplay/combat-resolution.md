@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B modèle de combat créature)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B modèle de combat créature ; contrat de parade posé — pré-V6-B5)
 - Owner: Project
-- Last updated: 2026-07-15
+- Last updated: 2026-07-16
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -351,16 +351,19 @@ La décision d'AVOIR ces stats est prise (§11.2). Restent à trancher les modal
   Studio config/inspection) ; aucun effet combat tant que non dérivé.
 - **V6-B2 — stats SECONDAIRES créature dérivées** : dérivation primaires → secondaires
   (offensives déjà là ; poser le canal défensif) ; Studio inspection.
-- **V6-B3 — esquive créature défenseur** (`dodgeChance`) : branchée dans le `defender`
-  de `resolveCombatHit` (hits joueur → créature) ; `canDodge` devient configurable ;
-  tests symétriques aux tests joueur.
+- **V6-B3 — esquive créature défenseur** (`dodgeChance`) : **Implemented** — branchée
+  dans le `defender` de `resolveCombatHit` (hits joueur → créature), `canDodge` = `dodgeChance > 0`,
+  esquive effective `clamp(dodgeChance − accuracy, 0, 100)` ; tests symétriques aux tests joueur.
 - **V6-B4 — blocage créature défenseur** (`blockChance` / `blockReductionPercent`) :
-  après décision sur l'équivalent « bouclier » créature.
-- **V6-B5 — types d'attaque** `melee` / `ranged` / `magic` : prérequis d'une parade
-  cohérente et d'éventuelles résistances futures.
+  **Implemented** — `canBlock` = `blockChance > 0 && blockReductionPercent > 0`, blocage
+  `physical` uniquement après l'armure, `raw` non bloqué, esquive prioritaire.
+- **V6-B5 — types d'attaque** (portée + **nature défensive**) : prérequis d'une parade
+  cohérente et d'éventuelles résistances futures. Le **contrat fonctionnel** de parade
+  (ranged physique parable, sort magique pur non parable, enchantement annulé si support
+  physique paré) est figé en **§11.6** avant l'implémentation.
 - **V6-B6 — parade** créature (`parryChance`) et/ou **parade passive joueur** :
-  uniquement APRÈS un contrat clair de **reach** / **type d'attaque entrant**
-  (V6-B5). Lot le plus sensible (défense active) — à ne pas anticiper.
+  uniquement APRÈS le contrat de type d'attaque / nature (V6-B5, §11.6). Lot le plus
+  sensible (défense active) — à ne pas anticiper.
 
 Chaque lot : périmètre unique, branché via `resolveCombatStats` / le `defender` de
 `resolveCombatHit`, sans changer les formules du calculateur pur, avec tests de
@@ -375,6 +378,90 @@ frontend obligatoire, aucune activation immédiate de dodge/block/parry. Il fixe
 uniquement la **direction produit** et les points d'insertion. **Documentation
 seulement.**
 
+### 11.6 Contrat de parade — nature d'attaque, ranged, magie, enchantements (Planned, pré-V6-B5)
+
+**Statut : Planned.** Cette section **fige le contrat fonctionnel** de la parade
+avant tout code (V6-B5/V6-B6). Aucune activation, aucun type runtime, aucune
+migration ici : elle existe pour éviter toute divergence d'interprétation.
+
+#### 11.6.1 Ce que la parade pare
+
+La parade s'applique aux **attaques physiques**, quelle que soit la **portée** :
+
+- attaque physique de **mêlée** — parable ;
+- attaque physique à **distance** (projectile physique : flèche, carreau, lame de
+  lancer) — **parable**.
+
+> **Règle « ranged physique parable ».** Une attaque à distance n'est **pas**
+> automatiquement non parable. Ce qui décide de la parabilité n'est **pas la
+> portée** (melee/ranged) mais la **nature défensive** de l'attaque : un
+> projectile **physique** peut être paré ; seul un **sort magique pur** ne l'est
+> pas (§11.6.2).
+
+#### 11.6.2 Ce que la parade NE pare pas — le sort magique pur
+
+Un **sort magique pur** :
+
+- **ignore complètement** le calcul de parade (jamais `isParried`) ;
+- ne peut **pas** être paré par une arme ;
+- relève d'un **pipeline défensif distinct**, à traiter plus tard :
+  - résistance magique générale ;
+  - résistance de l'**école magique** correspondante ;
+  - futurs **boucliers magiques / divins / paladin** ;
+  - autres défenses spécialisées.
+
+> **Règle « sort magique pur non parable ».** Une arme ne pare jamais un sort
+> magique pur. La parade et les défenses magiques sont deux pipelines séparés.
+
+#### 11.6.3 Attaque physique enchantée — l'enchantement suit l'impact
+
+Une attaque physique (mêlée **ou** ranged) peut porter un **enchantement magique**
+attaché (proc de feu, dégât magique additionnel, poison magique, etc.). Cet effet
+est **dépendant de l'impact physique** :
+
+- si l'attaque physique **touche** → l'impact physique s'applique, **puis**
+  l'enchantement attaché s'applique ;
+- si l'attaque physique est **parée** → l'impact physique est **annulé** **et**
+  l'enchantement magique attaché **ne s'applique pas**.
+
+> **Règle « enchantement annulé si support physique paré ».** Parer le support
+> physique annule **tout** ce qui dépend de cet impact — y compris l'enchantement
+> magique porté. Vaut identiquement pour mêlée enchantée et ranged enchanté.
+>
+> Distinction clé : un **enchantement porté par une attaque physique** dépend de
+> l'impact (donc annulable par parade) ; un **sort magique pur** est une attaque
+> magique autonome (non parable, §11.6.2). Ce n'est pas la présence de magie qui
+> décide, mais **le support** qui la transporte.
+
+#### 11.6.4 Séparation conceptuelle (3 axes indépendants)
+
+Trois notions **distinctes**, à ne pas confondre dans le futur modèle :
+
+1. **Portée** : `melee` / `ranged` — *où* l'attaque atteint sa cible. N'influence
+   **pas** seule la parabilité.
+2. **Nature défensive** : `physical weapon` / `physical projectile` / `magic spell`
+   (pur) / futures `divine` / etc. — *contre quel pipeline défensif* l'attaque est
+   résolue. **C'est cet axe qui décide de la parabilité** (physique ⇒ parable ;
+   magie pure ⇒ non parable).
+3. **Effets attachés** : enchantement, poison, proc magique, saignement… — *quoi
+   d'autre* s'applique **après** un impact réussi. Dépendent de l'impact du support.
+
+#### 11.6.5 Ordre conceptuel de résolution (futur)
+
+1. La **parade** est évaluée **avant** les effets attachés, sur les attaques de
+   nature **physique** (mêlée ou ranged).
+2. Si la **parade réussit** : l'impact physique est annulé ; **tous les effets
+   attachés dépendants de cet impact** (enchantement magique, poison, proc…) **ne
+   s'appliquent pas**.
+3. Les **sorts magiques purs** ne passent **jamais** par ce point : ils suivent un
+   **pipeline défensif magique** distinct (résistances / boucliers magiques),
+   spécifié ultérieurement.
+
+> Cohérence avec l'ordre actuel du calculateur (`calculateCombatDamage`) : parade
+> → esquive → critique → armure → blocage. La parade reste la **première** barrière
+> défensive ; ce contrat précise seulement **quelles attaques** y sont éligibles
+> (physique, toute portée) et **ce qui tombe avec elle** (effets attachés à l'impact).
+
 ## État d'implémentation
 
 | Élément | État |
@@ -388,7 +475,10 @@ seulement.**
 | Stats secondaires d'équipement alimentant le pipeline (V5-F) | Implemented |
 | Invariant entier : `finalDamage` / `hpAfter` entiers, aucun PV fractionnaire persisté | Implemented |
 | Stats avancées créature (`healingPower`/`criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`) configurables Studio, appliquées serveur (V5-D2) | Implemented |
-| Modèle créature proche du joueur : skills + primaires + secondaires + défenses (dodge/block/parry) | Planned — contrat V6-B (§11), décision produit prise |
+| Défense créature : esquive (`dodgeChance`, V6-B3) et blocage (`blockChance`/`blockReductionPercent`, V6-B4) en défenseur (hits joueur → créature) | Implemented |
+| Défense créature : parade (`parryChance`) | Planned — contrat de nature d'attaque figé (§11.6), implémentation V6-B5/V6-B6 |
+| Contrat de parade (ranged physique parable, sort magique pur non parable, enchantement annulé si support physique paré) | Planned (documenté §11.6) |
+| Modèle créature proche du joueur : skills + primaires + secondaires + défenses restantes | Planned — contrat V6-B (§11), esquive/blocage livrés |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
