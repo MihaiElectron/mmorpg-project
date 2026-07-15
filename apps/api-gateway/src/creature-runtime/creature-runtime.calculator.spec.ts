@@ -1,4 +1,8 @@
-import { CreatureRuntimeCalculator } from './creature-runtime.calculator';
+import {
+  CreatureRuntimeCalculator,
+  DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+  CreatureSecondaryCoefficients,
+} from './creature-runtime.calculator';
 import { Creature } from '../creatures/entities/creature.entity';
 import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { RuntimeModifier } from '../player-runtime/player-runtime.types';
@@ -235,5 +239,112 @@ describe('CreatureRuntimeCalculator — dérivation primaires → secondaires (V
     expect(s.blockChance).toBe(baseline.blockChance);
     expect(s.parryChance).toBe(baseline.parryChance);
     expect(s.maxHealth).toBe(baseline.maxHealth);
+  });
+});
+
+describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)', () => {
+  // Primaires non nulles pour exercer chaque coefficient.
+  const PRIMS: Partial<CreatureTemplate> = {
+    strength: 10, vitality: 5, endurance: 7, agility: 8, dexterity: 12, intelligence: 6,
+  };
+
+  /** Coefficients custom = défauts + overrides ponctuels. */
+  const withCoeffs = (over: Partial<CreatureSecondaryCoefficients>): CreatureSecondaryCoefficients => ({
+    ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    ...over,
+  });
+
+  it('sans coefficients explicites → résultats identiques aux valeurs par défaut', () => {
+    const withoutArg = CreatureRuntimeCalculator.resolveCombatStats(makeCreature(), makeTemplate(PRIMS));
+    const withDefault = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(),
+      makeTemplate(PRIMS),
+      [],
+      DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    );
+    expect(withoutArg).toEqual(withDefault);
+    // Valeurs de référence (équilibrage V6-B2 inchangé).
+    expect(withoutArg.attackPower).toBe(12 + 10 * 2); // baseAttack 12 + strength 10 × 2 = 32
+    expect(withoutArg.defenseTotal).toBe(5 + 7 * 1); // baseArmor 5 + endurance 7 × 1 = 12
+    expect(withoutArg.accuracy).toBe(0 + 12 * 0.5); // 6
+  });
+
+  it('attackPowerPerStrength custom → attackPower change comme attendu', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate(PRIMS), [], withCoeffs({ attackPowerPerStrength: 5 }),
+    );
+    expect(s.attackPower).toBe(12 + 10 * 5); // 62
+  });
+
+  it('defenseTotalPerEndurance custom → defenseTotal change comme attendu', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate(PRIMS), [], withCoeffs({ defenseTotalPerEndurance: 3 }),
+    );
+    expect(s.defenseTotal).toBe(5 + 7 * 3); // 26
+  });
+
+  it('accuracyPerDexterity custom → accuracy change comme attendu', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate({ ...PRIMS, accuracy: 4 }), [], withCoeffs({ accuracyPerDexterity: 2 }),
+    );
+    expect(s.accuracy).toBe(4 + 12 * 2); // 28
+  });
+
+  it('dodge/block/parry/counter/maxHealth custom → valeurs calculées changent comme attendu', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate(PRIMS), [],
+      withCoeffs({
+        dodgePerAgility: 1,
+        blockPerEndurance: 1, blockPerStrength: 0.5,
+        parryPerStrength: 1, parryPerDexterity: 0.5,
+        counterPerDexterity: 1, counterPerAgility: 0.5, counterPerIntelligence: 0.25,
+        blockReductionPercent: 40,
+        maxHealthPerVitality: 20,
+        secondaryChanceCap: 100, // pour ne pas capper ces valeurs custom
+      }),
+    );
+    expect(s.dodgeChance).toBe(8 * 1); // agility 8
+    expect(s.blockChance).toBe(7 * 1 + 10 * 0.5); // 12
+    expect(s.parryChance).toBe(10 * 1 + 12 * 0.5); // 16
+    expect(s.counterAttackPower).toBeCloseTo(12 * 1 + 8 * 0.5 + 6 * 0.25); // 17.5
+    expect(s.blockReductionPercent).toBe(40);
+    expect(s.maxHealthDerived).toBe(80 + 5 * 20); // 180
+  });
+
+  it('secondaryChanceCap custom est respecté (dodge/block/parry cappés)', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(),
+      makeTemplate({ strength: 1000, endurance: 1000, agility: 1000, dexterity: 1000 }),
+      [],
+      withCoeffs({ secondaryChanceCap: 10 }),
+    );
+    expect(s.dodgeChance).toBe(10);
+    expect(s.blockChance).toBe(10);
+    expect(s.parryChance).toBe(10);
+  });
+
+  it('coefficients custom ne rendent PAS dodge/block/parry actifs (canX false)', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate(PRIMS), [],
+      withCoeffs({ dodgePerAgility: 5, blockPerEndurance: 5, parryPerStrength: 5, secondaryChanceCap: 100 }),
+    );
+    expect(s.canDodge).toBe(false);
+    expect(s.canBlock).toBe(false);
+    expect(s.canParry).toBe(false);
+  });
+
+  it('maxHealthDerived custom reste informatif : maxHealth actif = baseHealth', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate({ vitality: 50 }), [], withCoeffs({ maxHealthPerVitality: 30 }),
+    );
+    expect(s.maxHealthDerived).toBe(80 + 50 * 30); // 1580
+    expect(s.maxHealth).toBe(80); // PV max runtime NON rebranché
+  });
+
+  it('debug modifiers restent appliqués APRÈS la dérivation par coefficients', () => {
+    const s = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(), makeTemplate(PRIMS), [flatMod('attackPower', 8)], withCoeffs({ attackPowerPerStrength: 5 }),
+    );
+    expect(s.attackPower).toBe(12 + 10 * 5 + 8); // 70
   });
 });
