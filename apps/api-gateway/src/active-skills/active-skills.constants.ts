@@ -43,6 +43,17 @@ export const SKILL_DAMAGE_TYPES = ['physical', 'raw'] as const;
 export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
 
 /**
+ * Nature défensive d'une attaque (V6-B5) — AXE INDÉPENDANT de `damageType`.
+ * `damageType` (physical/raw) décrit la mitigation d'armure ; `attackDefenseKind`
+ * décrit contre quel pipeline défensif l'attaque se résout, et sert de base à la
+ * parabilité future (V6-B6) : `physical` = parable (mêlée ou distance),
+ * `magic` = sort pur non parable (futur pipeline résistances magiques). Défaut
+ * `physical` (rétrocompatible). Aucun effet combat en V6-B5 Lot 1.
+ */
+export const SKILL_ATTACK_DEFENSE_KINDS = ['physical', 'magic'] as const;
+export type SkillAttackDefenseKind = (typeof SKILL_ATTACK_DEFENSE_KINDS)[number];
+
+/**
  * Nature du skill (V1-H). Le modèle de déverrouillage est kind-agnostique, mais
  * seuls les `active` sont lançables (`skill:cast`, /active-skills) :
  *   - active  : déclenché volontairement par le joueur ;

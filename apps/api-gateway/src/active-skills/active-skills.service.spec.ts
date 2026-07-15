@@ -32,6 +32,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     targetMode: "creature",
     effectType: "damage",
     damageType: "physical",
+    attackDefenseKind: "physical",
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -220,6 +221,43 @@ describe("ActiveSkillsService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(repo.save).not.toHaveBeenCalled();
     });
+
+    // ── attackDefenseKind (V6-B5) ───────────────────────────────────────────
+    it("create sans attackDefenseKind → défaut physical (colonne)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const saved = await service.createDefinition({ key: "k", name: "N" });
+      // Non fourni → non transmis à repo.create ; le défaut de colonne 'physical'
+      // s'applique à l'insert (fixture makeSkill reflète ce défaut).
+      const created = repo.create.mock.calls[0][0] as Record<string, unknown>;
+      expect(created).not.toHaveProperty("attackDefenseKind");
+      expect(saved.attackDefenseKind).toBe("physical");
+    });
+
+    it("create avec attackDefenseKind magic → persiste magic", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const saved = await service.createDefinition({
+        key: "fireball",
+        name: "Fireball",
+        attackDefenseKind: "magic",
+      });
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attackDefenseKind: "magic" }),
+      );
+      expect(saved.attackDefenseKind).toBe("magic");
+    });
+
+    it("create avec attackDefenseKind explicite physical → persiste physical (damageType intact)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const saved = await service.createDefinition({
+        key: "smash",
+        name: "Smash",
+        attackDefenseKind: "physical",
+        damageType: "raw",
+      });
+      expect(saved.attackDefenseKind).toBe("physical");
+      // Axe distinct : damageType reste ce qui est fourni (raw).
+      expect(saved.damageType).toBe("raw");
+    });
   });
 
   describe("updateDefinition", () => {
@@ -292,6 +330,49 @@ describe("ActiveSkillsService", () => {
       repo.findOne.mockResolvedValue(makeSkill({ damageType: "physical" }));
       const updated = await service.updateDefinition("power_strike", { damageType: "raw" });
       expect(updated.damageType).toBe("raw");
+    });
+  });
+
+  describe("attackDefenseKind (V6-B5)", () => {
+    it("création sans attackDefenseKind → physical par défaut", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({ key: "k", name: "N" });
+      expect(created.attackDefenseKind).toBe("physical");
+    });
+
+    it("création avec magic persiste magic", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "k",
+        name: "N",
+        attackDefenseKind: "magic",
+      });
+      expect(created.attackDefenseKind).toBe("magic");
+    });
+
+    it("update physical → magic", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ attackDefenseKind: "physical" }));
+      const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "magic" });
+      expect(updated.attackDefenseKind).toBe("magic");
+    });
+
+    it("update magic → physical", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ attackDefenseKind: "magic" }));
+      const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "physical" });
+      expect(updated.attackDefenseKind).toBe("physical");
+    });
+
+    it("update sans attackDefenseKind conserve la valeur existante", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ attackDefenseKind: "magic" }));
+      const updated = await service.updateDefinition("power_strike", { name: "Renamed" });
+      expect(updated.attackDefenseKind).toBe("magic");
+    });
+
+    it("attackDefenseKind est un axe distinct de damageType (aucun couplage)", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ damageType: "raw", attackDefenseKind: "physical" }));
+      const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "magic" });
+      expect(updated.attackDefenseKind).toBe("magic");
+      expect(updated.damageType).toBe("raw"); // inchangé
     });
   });
 

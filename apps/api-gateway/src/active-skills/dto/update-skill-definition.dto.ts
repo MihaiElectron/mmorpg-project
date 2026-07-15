@@ -9,11 +9,13 @@ import {
   Min,
 } from 'class-validator';
 import {
+  SKILL_ATTACK_DEFENSE_KINDS,
   SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
+  SkillAttackDefenseKind,
   SkillDamageType,
   SkillEffectType,
   SkillKind,
@@ -121,6 +123,14 @@ export class UpdateSkillDefinitionDto {
   @IsOptional()
   @IsIn(SKILL_DAMAGE_TYPES)
   damageType?: SkillDamageType;
+
+  /**
+   * Nature défensive (V6-B5) : `physical` (défaut, parable) ou `magic` (sort pur
+   * non parable). Axe distinct de `damageType`. Aucun effet combat en Lot 1.
+   */
+  @IsOptional()
+  @IsIn(SKILL_ATTACK_DEFENSE_KINDS)
+  attackDefenseKind?: SkillAttackDefenseKind;
 
   @IsOptional()
   @IsObject()

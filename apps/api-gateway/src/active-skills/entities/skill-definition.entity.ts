@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import {
+  SkillAttackDefenseKind,
   SkillDamageType,
   SkillEffectType,
   SkillKind,
@@ -131,6 +132,15 @@ export class SkillDefinition {
    */
   @Column({ type: 'varchar', length: 16, default: 'physical' })
   damageType: SkillDamageType;
+
+  /**
+   * Nature défensive de l'attaque (V6-B5) : `physical` (parable — mêlée ou
+   * distance) ou `magic` (sort pur non parable, futur pipeline résistances).
+   * AXE DISTINCT de `damageType` (mitigation d'armure). Défaut `physical`.
+   * Aucun effet combat en Lot 1 : donnée seule, base de la parade V6-B6.
+   */
+  @Column({ type: 'varchar', length: 16, default: 'physical' })
+  attackDefenseKind: SkillAttackDefenseKind;
 
   /**
    * Coefficients de scaling serveur, ex :
