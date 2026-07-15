@@ -18,6 +18,7 @@ import { WorldItemsModule } from '../world-items/world-items.module';
 import { ItemMaterializationModule } from '../item-materialization/item-materialization.module';
 import { MasteriesModule } from '../masteries/masteries.module';
 import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
+import { CreatureConfigModule } from '../creature-config/creature-config.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { DerivedStatsModule } from '../derived-stats/derived-stats.module';
     WorldItemsModule,
     ItemMaterializationModule,
     DerivedStatsModule,
+    CreatureConfigModule,
   ],
   providers: [CreaturesGateway, CreaturesService, CreatureAbilitiesService, LootService],
   exports: [CreaturesService, CreatureAbilitiesService],

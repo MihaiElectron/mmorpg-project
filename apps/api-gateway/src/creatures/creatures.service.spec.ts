@@ -18,7 +18,13 @@ import { DEFAULT_MAP_ID } from '../common/world-coordinates';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
-import { CreatureRuntimeCalculator } from '../creature-runtime/creature-runtime.calculator';
+import { CreatureRuntimeCalculator, DEFAULT_CREATURE_SECONDARY_COEFFICIENTS, CreatureSecondaryCoefficients } from '../creature-runtime/creature-runtime.calculator';
+import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
+
+/** Mock du service de coefficients renvoyant une config effective donnée (défauts par défaut). */
+function makeCoefficientsServiceMock(coeffs: CreatureSecondaryCoefficients = DEFAULT_CREATURE_SECONDARY_COEFFICIENTS) {
+  return { getCoefficients: jest.fn().mockReturnValue({ ...coeffs }) };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,8 +105,10 @@ describe('CreaturesService', () => {
   let masteriesService: Record<string, jest.Mock>;
   let masteryEffectsService: Record<string, jest.Mock>;
   let mockDataSource: { transaction: jest.Mock };
+  let coefficientsServiceMock: { getCoefficients: jest.Mock };
 
   beforeEach(async () => {
+    coefficientsServiceMock = makeCoefficientsServiceMock();
     creatureRepository = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
@@ -160,6 +168,7 @@ describe('CreaturesService', () => {
         { provide: MasteriesService, useValue: masteriesService },
         { provide: MasteryEffectsService, useValue: masteryEffectsService },
         { provide: DataSource, useValue: mockDataSource },
+        { provide: CreatureSecondaryCoefficientsService, useValue: coefficientsServiceMock },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -1680,6 +1689,89 @@ describe('CreaturesService', () => {
     });
   });
 
+  // ── V6-B2.5 : coefficients effectifs injectés depuis le service de config ──
+  describe("coefficients effectifs (V6-B2.5 Lot 2)", () => {
+    const setCoeffs = (over: Partial<CreatureSecondaryCoefficients>) =>
+      coefficientsServiceMock.getCoefficients.mockReturnValue({
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        ...over,
+      });
+
+    function localPlayer(worldX: number, worldY: number): any {
+      return { characterId: "char-1", socketId: "sock-1", worldX, worldY, mapId: 1, name: "T", direction: "down" };
+    }
+
+    it("creatureCombatStats lit les coefficients du service (defaults → comportement inchangé)", async () => {
+      // Défaut : attackPowerPerStrength=2 → attackPower = baseAttack 5 + strength 10×2 = 25.
+      const template = makeTemplate({ strength: 10 });
+      const creature = makeCreature({ id: "cc-1", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).combatAbilityCache.set(template.key, []);
+      const dto = await service.getRuntimeCombatInfo(creature.id);
+      expect(coefficientsServiceMock.getCoefficients).toHaveBeenCalled();
+      expect(dto!.attackPower).toBe(25);
+    });
+
+    it("auto-attaque créature utilise attackPowerPerStrength effectif (custom)", async () => {
+      setCoeffs({ attackPowerPerStrength: 5 }); // attackPower = 5 + 10×5 = 55
+      const template = makeTemplate({ strength: 10 });
+      const creature = makeCreature({ id: "cc-2", worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", spawn: makeSpawn(template) as any });
+      const state = { dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0, targetCharacterId: "char-1" };
+      const player = localPlayer(6080, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0, worldX: 6080, worldY: 12480, mapId: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const emits: { event: string; payload: any }[] = [];
+      const mockServer = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, state, template, [player], Date.now(), mockServer);
+
+      const dmg = emits.find((e) => e.event === "character_damaged");
+      expect(dmg!.payload.damage).toBe(55);
+    });
+
+    it("créature défenseur : defenseTotalPerEndurance effectif réduit les dégâts reçus", async () => {
+      setCoeffs({ defenseTotalPerEndurance: 3 }); // defenseTotal = baseArmor 2 + endurance 5×3 = 17
+      const template = makeTemplate({ endurance: 5 });
+      const creature = makeCreature({ id: "cc-3", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 20, defense: 3 }));
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      // 20 − 17 = 3 (vs 20 − 12 = 8 avec le coefficient par défaut de 1).
+      expect(result.success && result.damage).toBe(3);
+    });
+
+    it("coefficients dodge/parry custom : valeurs calculées mais défense TOUJOURS inactive", async () => {
+      setCoeffs({ dodgePerAgility: 1, parryPerStrength: 1, parryPerDexterity: 1, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 30, strength: 20, dexterity: 20 });
+      const creature = makeCreature({ id: "cc-4", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).combatAbilityCache.set(template.key, []);
+
+      const dto = await service.getRuntimeCombatInfo(creature.id);
+      // Secondaires calculées avec les coefficients custom.
+      expect(dto!.derivedSecondaryStats.dodgeChance).toBe(30); // agility 30 × 1
+      expect(dto!.derivedSecondaryStats.parryChance).toBe(40); // 20×1 + 20×1 = 40
+      // Défense toujours non active.
+      expect(dto!.canDodge).toBe(false);
+      expect(dto!.canBlock).toBe(false);
+      expect(dto!.canParry).toBe(false);
+
+      // Et le joueur qui attaque cette créature n'est ni esquivé ni paré.
+      (service as any).liveCreatures.set("cc-5", makeCreature({ id: "cc-5", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any }));
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+      const atk = await service.attack("cc-5", "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+      expect(atk.success).toBe(true);
+      if (atk.success) {
+        expect(atk.isDodged).toBe(false);
+        expect((atk as any).isParried ?? false).toBe(false);
+      }
+    });
+  });
+
   // ── V4-B : applySkillDamage — damageType physical/raw + pénétration ────────
   describe('applySkillDamage — damageType (V4-B)', () => {
     const POS = { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID };
@@ -1797,6 +1889,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
         { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: makeCoefficientsServiceMock() },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -1950,6 +2043,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: MasteriesService, useValue: { applyMasteryXpInTx: jest.fn() } },
         { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
+        { provide: CreatureSecondaryCoefficientsService, useValue: makeCoefficientsServiceMock() },
         RuntimeDebugRegistry,
         LootService,
       ],

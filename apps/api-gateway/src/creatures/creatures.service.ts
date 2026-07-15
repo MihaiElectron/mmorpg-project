@@ -35,6 +35,7 @@ import { getMapRoomId } from '../common/socket-rooms';
 import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 import { LootService, LootEntry } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
+import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureCombatStats, CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
@@ -200,6 +201,7 @@ export class CreaturesService implements OnModuleInit {
     private readonly debugRegistry: RuntimeDebugRegistry,
     private readonly loot: LootService,
     private readonly derivedStats: DerivedStatsService,
+    private readonly creatureSecondaryCoefficients: CreatureSecondaryCoefficientsService,
   ) {}
 
   async onModuleInit() {
@@ -418,6 +420,10 @@ export class CreaturesService implements OnModuleInit {
       creature,
       template,
       this.debugRegistry.getModifiers(creature.id),
+      // V6-B2.5 : coefficients effectifs (config serveur, cache mémoire, fallback
+      // code). Defaults → comportement inchangé ; attackPower/defenseTotal/accuracy
+      // suivent la config. dodge/block/parry restent calculés mais non actifs.
+      this.creatureSecondaryCoefficients.getCoefficients(),
     );
   }
 
