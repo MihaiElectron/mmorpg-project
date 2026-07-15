@@ -389,6 +389,17 @@ export class CreaturesService implements OnModuleInit {
         willpower: t.willpower,
         charisma: t.charisma,
       },
+      // V6-B2 : secondaires CALCULÉES depuis les primaires (informatif). Dérivées
+      // serveur mais NON actives en défense (canDodge/canBlock/canParry false) ;
+      // maxHealthDerived ne remplace pas maxHealth (PV max actif = baseHealth).
+      derivedSecondaryStats: {
+        dodgeChance: stats.dodgeChance,
+        blockChance: stats.blockChance,
+        blockReductionPercent: stats.blockReductionPercent,
+        parryChance: stats.parryChance,
+        counterAttackPower: stats.counterAttackPower,
+        maxHealthDerived: stats.maxHealthDerived,
+      },
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,

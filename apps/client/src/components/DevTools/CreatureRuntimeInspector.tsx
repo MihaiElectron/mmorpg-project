@@ -64,6 +64,16 @@ interface CreatureRuntimeCombat {
     willpower: number;
     charisma: number;
   };
+  // V6-B2 : secondaires CALCULÉES depuis les primaires — informatif seulement,
+  // non actives en défense (canDodge/canBlock/canParry restent false).
+  derivedSecondaryStats?: {
+    dodgeChance: number;
+    blockChance: number;
+    blockReductionPercent: number;
+    parryChance: number;
+    counterAttackPower: number;
+    maxHealthDerived: number;
+  };
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
@@ -255,8 +265,28 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 <Row label="volonté (VOL)">{data.primaryStats.willpower}</Row>
                 <Row label="charisme (CHA)">{data.primaryStats.charisma}</Row>
               </dl>
+            </>
+          )}
+
+          {/* E-quater. Secondaires CALCULÉES depuis les primaires (V6-B2) —
+              informatif seulement. Les défenses ne sont PAS actives : la créature
+              n'esquive/bloque/pare toujours pas (voir bloc défensif ci-dessus). */}
+          {data.derivedSecondaryStats && (
+            <>
+              <p className="creature-runtime__title">Secondaires calculées</p>
+              <dl className="creature-runtime__grid">
+                <Row label="esquive %">{data.derivedSecondaryStats.dodgeChance}</Row>
+                <Row label="blocage %">{data.derivedSecondaryStats.blockChance}</Row>
+                <Row label="réduction blocage %">{data.derivedSecondaryStats.blockReductionPercent}</Row>
+                <Row label="parade %">{data.derivedSecondaryStats.parryChance}</Row>
+                <Row label="puissance contre-attaque">{data.derivedSecondaryStats.counterAttackPower}</Row>
+                <Row label="PV max dérivés">
+                  {data.derivedSecondaryStats.maxHealthDerived}
+                  <span className="creature-runtime__hint"> (PV max actif {data.maxHealth})</span>
+                </Row>
+              </dl>
               <p className="creature-runtime__hint">
-                Actuellement informatif : dérivation secondaire prévue en V6-B2.
+                Calculées depuis les primaires. Défenses non actives avant V6-B3/V6-B4/V6-B6.
               </p>
             </>
           )}

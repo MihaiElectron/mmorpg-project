@@ -2698,6 +2698,43 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(dto!.canParry).toBe(false);
       });
 
+      it("V6-B2 : getRuntimeCombatInfo expose les secondaires calculées (informatif, non actives)", async () => {
+        const template = makeTemplate({
+          key: "sec",
+          baseAttack: 5, baseArmor: 2, baseHealth: 30,
+          strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3,
+        });
+        const creature = makeCreature({ id: "sec-1", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("sec", []);
+
+        // Référence : les valeurs exposées doivent correspondre à resolveCombatStats.
+        const ref = CreatureRuntimeCalculator.resolveCombatStats(creature, template);
+
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        expect(dto!.derivedSecondaryStats).toEqual({
+          dodgeChance: ref.dodgeChance,
+          blockChance: ref.blockChance,
+          blockReductionPercent: ref.blockReductionPercent,
+          parryChance: ref.parryChance,
+          counterAttackPower: ref.counterAttackPower,
+          maxHealthDerived: ref.maxHealthDerived,
+        });
+        // Valeurs numériques attendues (dérivation V6-B2).
+        expect(dto!.derivedSecondaryStats.dodgeChance).toBeCloseTo(8 * 0.3); // 2.4
+        expect(dto!.derivedSecondaryStats.blockChance).toBeCloseTo(5 * 0.2 + 10 * 0.1); // 2
+        expect(dto!.derivedSecondaryStats.blockReductionPercent).toBe(25);
+        expect(dto!.derivedSecondaryStats.parryChance).toBeCloseTo(10 * 0.15 + 12 * 0.15); // 3.3
+        expect(dto!.derivedSecondaryStats.counterAttackPower).toBeCloseTo(12 * 0.4 + 8 * 0.3 + 3 * 0.2); // 7.8
+        // maxHealthDerived exposé SÉPARÉMENT ; le PV max actif reste baseHealth.
+        expect(dto!.derivedSecondaryStats.maxHealthDerived).toBe(30 + 20 * 10); // 230
+        expect(dto!.maxHealth).toBe(30);
+        // Les secondaires défensives restent NON actives.
+        expect(dto!.canDodge).toBe(false);
+        expect(dto!.canBlock).toBe(false);
+        expect(dto!.canParry).toBe(false);
+      });
+
       it("B-bis. healingPower non configurée → getRuntimeCombatInfo retombe sur attackPower", async () => {
         const template = makeTemplate({ key: "adv2", baseAttack: 5, healingPower: 0 });
         const creature = makeCreature({ id: "adv-2", state: "fighting", health: 20, spawn: makeSpawn(template) as any });

@@ -52,6 +52,30 @@ export type CreaturePrimaryStatsDto = {
   charisma: number;
 };
 
+/**
+ * Stats secondaires CALCULÉES depuis les primaires (V6-B2) — informatif SEULEMENT.
+ *
+ * Ces valeurs sont dérivées côté serveur (`resolveCombatStats`) mais NE sont PAS
+ * actives en défense : la créature n'esquive/bloque/pare toujours pas
+ * (`canDodge`/`canBlock`/`canParry` restent `false`). `maxHealthDerived` est le PV
+ * max théorique dérivé de la vitalité — il ne remplace PAS `maxHealth` (PV max
+ * actif = `baseHealth`). Bloc séparé pour ne jamais suggérer une activation combat.
+ */
+export type CreatureDerivedSecondaryStatsDto = {
+  /** Chance d'esquive dérivée (%). Non active (canDodge false). */
+  dodgeChance: number;
+  /** Chance de blocage dérivée (%). Non active (canBlock false). */
+  blockChance: number;
+  /** Réduction d'un blocage réussi (%). Non active. */
+  blockReductionPercent: number;
+  /** Chance de parade dérivée (%). Non active (canParry false). */
+  parryChance: number;
+  /** Puissance de contre-attaque dérivée. Non active. */
+  counterAttackPower: number;
+  /** PV max dérivé (baseHealth + vitality × coeff) — informatif, PAS le PV max actif. */
+  maxHealthDerived: number;
+};
+
 export type CreatureRuntimeCombatDto = {
   // A. Identité / état
   id: string;
@@ -97,6 +121,10 @@ export type CreatureRuntimeCombatDto = {
   // effet combat aujourd'hui (prévu V6-B2). Bloc séparé pour ne pas suggérer un
   // impact sur attackPower/defenseTotal/maxHealth.
   primaryStats: CreaturePrimaryStatsDto;
+  // D-quater. Stats secondaires CALCULÉES depuis les primaires (V6-B2) — informatif
+  // SEULEMENT. Dérivées serveur mais NON actives en défense (canDodge/canBlock/
+  // canParry restent false). `maxHealthDerived` ne remplace pas `maxHealth`.
+  derivedSecondaryStats: CreatureDerivedSecondaryStatsDto;
   // E. Loot / XP (facts du template ; le loot restant n'est pas tracké par instance)
   killCharacterXpReward: number;
   hasLootPool: boolean;
