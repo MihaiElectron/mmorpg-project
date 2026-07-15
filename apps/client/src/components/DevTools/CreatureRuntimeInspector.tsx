@@ -64,8 +64,9 @@ interface CreatureRuntimeCombat {
     willpower: number;
     charisma: number;
   };
-  // V6-B2 : secondaires CALCULÉES depuis les primaires — informatif seulement,
-  // non actives en défense (canDodge/canBlock/canParry restent false).
+  // V6-B2/V6-B3 : secondaires CALCULÉES depuis les primaires. dodgeChance est
+  // désormais actif en défense (canDodge = dodgeChance > 0) ; blocage/parade
+  // restent informatifs (canBlock/canParry false).
   derivedSecondaryStats?: {
     dodgeChance: number;
     blockChance: number;
@@ -223,9 +224,21 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
               )}
             </Row>
 
-            {/* D. Combat défensif — non supporté côté créature aujourd'hui : une
-                créature ne peut ni esquiver, ni bloquer, ni parer un hit entrant. */}
-            <Row label="esquive"><Unsupported /></Row>
+            {/* D. Combat défensif — V6-B3 : l'esquive créature est active (dodgeChance
+                dérivé/configuré, réduit par l'accuracy attaquant). Blocage et parade
+                restent non supportés côté créature. */}
+            <Row label="esquive">
+              {data.canDodge ? (
+                <span className="creature-runtime__hint">
+                  Active
+                  {data.derivedSecondaryStats
+                    ? ` (${data.derivedSecondaryStats.dodgeChance} %)`
+                    : ""}
+                </span>
+              ) : (
+                <span className="creature-runtime__hint">Inactive (0 %)</span>
+              )}
+            </Row>
             <Row label="blocage"><Unsupported /></Row>
             <Row label="parade"><Unsupported /></Row>
 
@@ -286,7 +299,8 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 </Row>
               </dl>
               <p className="creature-runtime__hint">
-                Calculées depuis les primaires. Défenses non actives avant V6-B3/V6-B4/V6-B6.
+                Calculées depuis les primaires. Esquive active (V6-B3) ; blocage et
+                parade non actifs avant V6-B4/V6-B6.
               </p>
             </>
           )}
