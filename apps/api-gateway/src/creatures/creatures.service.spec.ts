@@ -983,6 +983,51 @@ describe('CreaturesService', () => {
       expect(result.success && result.damage).toBe(8);
     });
 
+    it('V6-B2 : Endurance créature réduit les dégâts reçus (defenseTotal dérivé)', async () => {
+      // endurance 5 → defenseTotal = baseArmor 2 + 5 = 7. Attaque joueur 10 → 10 − 7 = 3.
+      const template = makeTemplate({ endurance: 5 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success && result.damage).toBe(3);
+    });
+
+    it('V6-B2 : Agilité créature élevée → ne dodge PAS encore en défense (canDodge false)', async () => {
+      // agility 1000 → dodgeChance dérivée (cap 40) mais canDodge false : hit plein.
+      const template = makeTemplate({ agility: 1000 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isDodged).toBe(false);
+        expect(result.damage).toBe(8); // 10 − defenseTotal 2, aucune esquive
+      }
+    });
+
+    it('V6-B2 : strength + dexterity créature → parryChance calculée mais ne pare PAS (canParry false)', async () => {
+      // strength/dexterity élevés → parryChance dérivée mais canParry false : hit plein.
+      // strength n'alimente PAS defenseTotal (endurance seule) → dégâts inchangés.
+      const template = makeTemplate({ strength: 40, dexterity: 40 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+
+      const result = await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect((result as any).isParried ?? false).toBe(false);
+        expect(result.damage).toBe(8); // 10 − defenseTotal 2, aucune parade
+      }
+    });
+
     it('conserve le minimum de dégâts (1) même avec une attaque faible', async () => {
       const template = makeTemplate({ baseArmor: 100 });
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
@@ -2033,6 +2078,30 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(emits.some((e) => e.event === "character_damaged")).toBe(true);
     });
 
+    it("V6-B2 : auto-attaque créature — strength augmente les dégâts infligés au joueur", async () => {
+      // strength 10 → attackPower = baseAttack 5 + 10×2 = 25. Joueur defense 0 → dégâts 25.
+      const template = makeTemplate({ strength: 10 });
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting", spawn: makeSpawn(template) as any });
+      const state = {
+        dirX: 0, dirY: 0, speed: 0, moveUntil: 0, pauseUntil: 0,
+        targetCharacterId: "char-1",
+      };
+      const player = makePlayer(6080, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0, worldX: 6080, worldY: 12480, mapId: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const emits: { event: string; payload: any }[] = [];
+      const mockServer = { to: () => ({ emit: (event: string, payload: any) => emits.push({ event, payload }) }) };
+
+      await (service as any).doFighting(creature, state, template, [player], Date.now(), mockServer);
+
+      const dmgEvent = emits.find((e) => e.event === "character_damaged");
+      expect(dmgEvent).toBeDefined();
+      expect(dmgEvent!.payload.damage).toBe(25);
+      expect(dmgEvent!.payload.health).toBe(75);
+    });
+
     it("auto-attack tue le joueur → état alive, targetCharacterId undefined, respawnCharacter appelé", async () => {
       // creature et joueur au même point → dist=0 ≤ MELEE_RANGE_WU → auto-attack
       // char defense=0, template baseAttack=5 → dmg=5 > char.health=1 → kill
@@ -2602,7 +2671,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         });
       });
 
-      it("V6-B1 : getRuntimeCombatInfo expose les primaires (informatif) sans effet combat", async () => {
+      it("V6-B2 : getRuntimeCombatInfo expose les primaires et dérive attackPower/defenseTotal", async () => {
         const template = makeTemplate({
           key: "prim",
           baseAttack: 5, baseArmor: 2, baseHealth: 30,
@@ -2618,10 +2687,12 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
           strength: 10, vitality: 20, endurance: 5, agility: 8, dexterity: 12, intelligence: 3, wisdom: 7,
           spirit: 4, willpower: 6, charisma: 9,
         });
-        // Aucun effet combat : attackPower/defenseTotal/maxHealth restent dérivés de base*.
-        expect(dto!.attackPower).toBe(5);
-        expect(dto!.defenseTotal).toBe(2);
+        // V6-B2 : strength (×2) et endurance (×1) dérivent attackPower/defenseTotal.
+        expect(dto!.attackPower).toBe(5 + 10 * 2); // 25
+        expect(dto!.defenseTotal).toBe(2 + 5); // 7
+        // maxHealth NON dérivé (vitality non activé runtime) : reste baseHealth.
         expect(dto!.maxHealth).toBe(30);
+        // Défenseur créature toujours incapable d'esquiver/bloquer/parer.
         expect(dto!.canDodge).toBe(false);
         expect(dto!.canBlock).toBe(false);
         expect(dto!.canParry).toBe(false);

@@ -40,12 +40,52 @@ export type CreatureStatKey = Extract<
  *                  pas encore exposée dans CreatureTemplate
  */
 export const CREATURE_DERIVED_BASE: Record<CreatureStatKey, (b: CreatureBaseStats) => number> = {
+  // V6-B2 : attackPower/defenseTotal intègrent les primaires (strength/endurance)
+  // AVANT l'application des RuntimeModifier, comme une valeur de base composite.
+  // maxHp reste = baseHealth : le PV max dérivé (vitality) est CALCULÉ mais NON
+  // activé dans ce lot (voir resolveCombatStats.maxHealthDerived).
   maxHp:        (b) => b.baseHealth,
-  attackPower:  (b) => b.baseAttack,
-  defenseTotal: (b) => b.baseArmor,
+  attackPower:  (b) => b.baseAttack + b.strength * CREATURE_SECONDARY_COEFFICIENTS.attackPowerPerStrength,
+  defenseTotal: (b) => b.baseArmor + b.endurance * CREATURE_SECONDARY_COEFFICIENTS.defenseTotalPerEndurance,
   speed:        (b) => b.speedMax,
   attackRange:  () => 0,
 };
+
+/**
+ * Coefficients de dérivation primaires → secondaires, PROPRES à la créature
+ * (V6-B2 Lot 1). Volontairement isolés du catalogue joueur
+ * (`DerivedStatDefinition`) : les créatures ne branchent pas le catalogue.
+ * Les valeurs reprennent le point de départ joueur mais restent indépendantes.
+ *
+ * Activation combat de ce lot : `attackPower`/`defenseTotal`/`accuracy`.
+ * Calculées mais NON actives en défense : dodge/block/parry/counter, maxHealth.
+ */
+export const CREATURE_SECONDARY_COEFFICIENTS = {
+  /** attackPower += strength × 2 */
+  attackPowerPerStrength: 2,
+  /** defenseTotal += endurance × 1 */
+  defenseTotalPerEndurance: 1,
+  /** accuracy += dexterity × 0.5 (additif au flat template) */
+  accuracyPerDexterity: 0.5,
+  /** dodgeChance = agility × 0.3 (cap) */
+  dodgePerAgility: 0.3,
+  /** blockChance = endurance × 0.2 + strength × 0.1 (cap) */
+  blockPerEndurance: 0.2,
+  blockPerStrength: 0.1,
+  /** blockReductionPercent constant */
+  blockReductionPercent: 25,
+  /** parryChance = strength × 0.15 + dexterity × 0.15 (cap) */
+  parryPerStrength: 0.15,
+  parryPerDexterity: 0.15,
+  /** counterAttackPower = dexterity × 0.4 + agility × 0.3 + intelligence × 0.2 */
+  counterPerDexterity: 0.4,
+  counterPerAgility: 0.3,
+  counterPerIntelligence: 0.2,
+  /** maxHealthDerived = baseHealth + vitality × 10 (calculé, non activé) */
+  maxHealthPerVitality: 10,
+  /** Cap commun des chances secondaires (dodge/block/parry) en %. */
+  secondaryChanceCap: 40,
+} as const;
 
 /**
  * Calculateur du Creature Runtime.
@@ -77,6 +117,17 @@ export class CreatureRuntimeCalculator {
       criticalDamage:          template.criticalDamage ?? 150,
       accuracy:                template.accuracy ?? 0,
       armorPenetrationPercent: template.armorPenetrationPercent ?? 0,
+      // Primaires (V6-B1) — défaut 0 si colonne absente (base non migrée).
+      strength:     template.strength ?? 0,
+      vitality:     template.vitality ?? 0,
+      endurance:    template.endurance ?? 0,
+      agility:      template.agility ?? 0,
+      dexterity:    template.dexterity ?? 0,
+      intelligence: template.intelligence ?? 0,
+      wisdom:       template.wisdom ?? 0,
+      spirit:       template.spirit ?? 0,
+      willpower:    template.willpower ?? 0,
+      charisma:     template.charisma ?? 0,
     };
   }
 
@@ -123,6 +174,25 @@ export class CreatureRuntimeCalculator {
       debugModifiers,
     );
     const healingPowerRaw = base.healingPower;
+    const c = CREATURE_SECONDARY_COEFFICIENTS;
+
+    // Précision : flat template + dérivation dexterity (activée en combat via
+    // creatureCombatStats — réduit l'esquive du joueur défenseur).
+    const accuracy = base.accuracy + base.dexterity * c.accuracyPerDexterity;
+
+    // Secondaires défensives : CALCULÉES mais NON actives (canX false).
+    const cap = (v: number) => Math.min(v, c.secondaryChanceCap);
+    const dodgeChance = cap(base.agility * c.dodgePerAgility);
+    const blockChance = cap(base.endurance * c.blockPerEndurance + base.strength * c.blockPerStrength);
+    const parryChance = cap(base.strength * c.parryPerStrength + base.dexterity * c.parryPerDexterity);
+    const counterAttackPower =
+      base.dexterity * c.counterPerDexterity +
+      base.agility * c.counterPerAgility +
+      base.intelligence * c.counterPerIntelligence;
+
+    // PV max dérivé : calculé pour l'inspection, PAS activé comme PV max runtime.
+    const maxHealthDerived = base.baseHealth + base.vitality * c.maxHealthPerVitality;
+
     return {
       maxHealth: derived.maxHp,
       attackPower: derived.attackPower,
@@ -131,8 +201,14 @@ export class CreatureRuntimeCalculator {
       healingPowerEffective: healingPowerRaw > 0 ? healingPowerRaw : derived.attackPower,
       criticalChance: base.criticalChance,
       criticalDamage: base.criticalDamage,
-      accuracy: base.accuracy,
+      accuracy,
       armorPenetrationPercent: base.armorPenetrationPercent,
+      dodgeChance,
+      blockChance,
+      blockReductionPercent: c.blockReductionPercent,
+      parryChance,
+      counterAttackPower,
+      maxHealthDerived,
       canDodge: false,
       canBlock: false,
       canParry: false,

@@ -19,6 +19,8 @@ function makeSnapshot(overrides: Partial<CreatureRuntimeSnapshot> = {}): Creatur
       baseHealth: 30, baseArmor: 2, baseAttack: 5,
       currentHealth: 30, speedMin: 25, speedMax: 60,
       healingPower: 0, criticalChance: 0, criticalDamage: 150, accuracy: 0, armorPenetrationPercent: 0,
+      strength: 0, vitality: 0, endurance: 0, agility: 0, dexterity: 0,
+      intelligence: 0, wisdom: 0, spirit: 0, willpower: 0, charisma: 0,
     },
     derivedStats: {
       maxHp: 30, attackPower: 5, defenseTotal: 2, speed: 60, attackRange: 0,

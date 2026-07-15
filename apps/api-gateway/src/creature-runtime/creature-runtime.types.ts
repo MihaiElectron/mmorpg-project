@@ -44,6 +44,20 @@ export interface CreatureBaseStats {
   accuracy: number;
   /** Pénétration d'armure en % (0–100), appliquée aux dégâts physiques. 0 = aucune. */
   armorPenetrationPercent: number;
+
+  // ── Stats primaires (V6-B1) ────────────────────────────────────────────────
+  // Les 10 primaires alignées sur le joueur. Fondation de données ; leur
+  // dérivation vers les secondaires est faite dans le calculateur (V6-B2).
+  strength: number;
+  vitality: number;
+  endurance: number;
+  agility: number;
+  dexterity: number;
+  intelligence: number;
+  wisdom: number;
+  spirit: number;
+  willpower: number;
+  charisma: number;
 }
 
 // ─── Stats dérivées ───────────────────────────────────────────────────────────
@@ -86,8 +100,11 @@ export interface CreatureDerivedStats {
  *   - `healingPowerEffective` : fallback centralisé `raw > 0 ? raw : attackPower`.
  *
  * `canDodge`/`canBlock`/`canParry` sont figés à `false` : une créature ne peut
- * pas esquiver/bloquer/parer un hit entrant (limite actuelle, V6-B éventuel).
- * Ne change AUCUNE formule ni le contrat DTO existant.
+ * pas esquiver/bloquer/parer un hit entrant (limite actuelle). Les secondaires
+ * défensives (`dodgeChance`/`blockChance`/`parryChance`/…) sont CALCULÉES depuis
+ * les primaires (V6-B2) mais NE sont PAS passées au défenseur tant que les
+ * `canX` restent `false` — elles servent l'affichage/inspection uniquement.
+ * Ne change AUCUNE formule offensive existante hors activation primaires.
  */
 export interface CreatureCombatStats {
   maxHealth: number;
@@ -101,6 +118,26 @@ export interface CreatureCombatStats {
   criticalDamage: number;
   accuracy: number;
   armorPenetrationPercent: number;
+
+  // ── Secondaires défensives dérivées (V6-B2) — calculées, NON actives ────────
+  // Dérivées des primaires mais jamais passées au défenseur tant que
+  // canDodge/canBlock/canParry = false. Exposition/inspection uniquement.
+  /** Chance d'esquive dérivée (%), cap 40. Non active (canDodge false). */
+  dodgeChance: number;
+  /** Chance de blocage dérivée (%), cap 40. Non active (canBlock false). */
+  blockChance: number;
+  /** Réduction de dégâts d'un blocage réussi (%). Constante actuelle 25. */
+  blockReductionPercent: number;
+  /** Chance de parade dérivée (%), cap 40. Non active (canParry false). */
+  parryChance: number;
+  /** Puissance de contre-attaque dérivée. Non active (canParry false). */
+  counterAttackPower: number;
+  /**
+   * PV max dérivé des primaires (`baseHealth + vitality × coeff`). CALCULÉ mais
+   * NON activé comme PV max runtime (V6-B2 Lot 1) : `maxHealth` reste `baseHealth`.
+   */
+  maxHealthDerived: number;
+
   readonly canDodge: false;
   readonly canBlock: false;
   readonly canParry: false;
