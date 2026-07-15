@@ -99,6 +99,7 @@ describe("SkillCastService", () => {
         isDodged: false,
         isBlocked: false,
         blockedDamage: 0,
+        isParried: false,
         loot: undefined,
         characterXpUpdate: undefined,
       })),
@@ -305,6 +306,7 @@ describe("SkillCastService", () => {
       0, // V4-D : criticalChance (0 par défaut)
       150, // V4-D : criticalDamage (défaut 150)
       0, // V4-G : accuracy (0 par défaut)
+      "physical", // V6-B6 : attackDefenseKind du skill (défaut)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -334,6 +336,7 @@ describe("SkillCastService", () => {
       0, // criticalChance
       150, // criticalDamage
       0, // accuracy
+      "physical", // V6-B6 : attackDefenseKind
     );
   });
 
@@ -354,7 +357,36 @@ describe("SkillCastService", () => {
       0, // criticalChance
       150, // criticalDamage
       0, // accuracy
+      "physical", // V6-B6 : attackDefenseKind
     );
+  });
+
+  it("V6-B6 : transmet skill.attackDefenseKind 'magic' au hook applySkillDamage (11e arg)", async () => {
+    currentSkill = makeSkill({ attackDefenseKind: "magic" });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    const r = await cast();
+    expect(r.success).toBe(true);
+    const args = creatures.applySkillDamage.mock.calls[0];
+    expect(args[10]).toBe("magic"); // attackDefenseKind en 11e position
+    expect(args[6]).toBe("physical"); // damageType reste séparé
+  });
+
+  it("V6-B6 : propage isParried depuis applySkillDamage dans le résultat de cast", async () => {
+    creatures.applySkillDamage.mockResolvedValueOnce({
+      success: true,
+      dto: { id: TARGET_ID, state: "alive", worldX: 1, worldY: 1, mapId: 1 },
+      damage: 0,
+      attackerId: "c1",
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      isParried: true,
+    });
+    const r = await cast();
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.isParried).toBe(true);
   });
 
   it("transmet criticalChance/criticalDamage dérivés au hook applySkillDamage (V4-D)", async () => {
@@ -378,6 +410,7 @@ describe("SkillCastService", () => {
       100, // criticalChance dérivé (0 + flat 100)
       150, // criticalDamage (défaut)
       0, // accuracy
+      "physical", // V6-B6 : attackDefenseKind
     );
   });
 
@@ -443,6 +476,7 @@ describe("SkillCastService", () => {
         0, // criticalChance
         150, // criticalDamage
         0, // accuracy
+        "physical", // V6-B6 : attackDefenseKind
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -461,7 +495,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -475,7 +509,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -488,7 +522,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -502,7 +536,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
       );
     });
 

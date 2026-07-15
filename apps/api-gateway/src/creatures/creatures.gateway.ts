@@ -98,6 +98,8 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
       isDodged: result.isDodged,
       isBlocked: result.isBlocked,
       blockedDamage: result.blockedDamage,
+      // V6-B6 : parade créature → "Parade" côté client (hit annulé, dégâts 0).
+      isParried: result.isParried,
     }));
     if (result.killed) {
       this.server.to(creatureRoom).emit(COMBAT_EVENT, makeCombatEvent({

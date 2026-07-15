@@ -45,10 +45,12 @@ export interface SkillCastSuccess {
   killed: boolean;
   /** V4-F : true si la créature a esquivé (toujours false — pas de dodge créature). */
   isDodged: boolean;
-  /** V4-H : true si la créature a bloqué (toujours false — pas de block créature). */
+  /** V4-H : true si la créature a bloqué (réduction des dégâts). */
   isBlocked: boolean;
   /** V4-H : dégâts absorbés par le blocage (0 si non bloqué). */
   blockedDamage: number;
+  /** V6-B6 : true si la créature a PARÉ le skill (physical non-raw ; dégâts 0). */
+  isParried: boolean;
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -303,6 +305,8 @@ export class SkillCastService {
       stats.derived.criticalDamage ?? 100,
       // V4-G : précision du lanceur (réduit l'esquive du défenseur).
       stats.derived.accuracy ?? 0,
+      // V6-B6 : nature défensive du skill (décide la parabilité côté créature).
+      skill.attackDefenseKind ?? 'physical',
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };
@@ -355,6 +359,7 @@ export class SkillCastService {
       isDodged: result.isDodged,
       isBlocked: result.isBlocked,
       blockedDamage: result.blockedDamage,
+      isParried: result.isParried,
       cooldownMs: skill.cooldownMs,
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,

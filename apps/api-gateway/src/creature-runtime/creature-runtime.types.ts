@@ -99,14 +99,14 @@ export interface CreatureDerivedStats {
  *     `armorPenetrationPercent`) : lues brutes du template (hors RuntimeModifier) ;
  *   - `healingPowerEffective` : fallback centralisé `raw > 0 ? raw : attackPower`.
  *
- * `canDodge` (V6-B3) vaut `dodgeChance > 0` et `canBlock` (V6-B4) vaut
- * `blockChance > 0 && blockReductionPercent > 0` : une créature PEUT désormais
- * esquiver puis bloquer un hit physique entrant (esquive effective
- * `clamp(dodgeChance − accuracy, 0, 100)`, blocage `physical` uniquement après
- * l'armure — géré par le calculateur). `canParry` reste figé à `false` : la
- * parade créature n'est pas encore active — `parryChance` est CALCULÉE (V6-B2)
- * mais NON passée au défenseur (affichage/inspection seul).
- * Ne change AUCUNE formule offensive existante hors activation primaires.
+ * `canDodge` (V6-B3) = `dodgeChance > 0`, `canBlock` (V6-B4) =
+ * `blockChance > 0 && blockReductionPercent > 0`, `canParry` (V6-B6) =
+ * `parryChance > 0` : une créature PEUT parer (en premier), esquiver, puis
+ * bloquer un hit physique entrant. La PARABILITÉ de l'attaque (physical non-raw)
+ * est décidée par le service (`isAttackParryable`) et combinée à `canParry`.
+ * Esquive effective `clamp(dodgeChance − accuracy, 0, 100)`, blocage `physical`
+ * après l'armure — tout géré par le calculateur (ordre : parade → esquive →
+ * critique → armure → blocage). Ne change AUCUNE formule offensive.
  */
 export interface CreatureCombatStats {
   maxHealth: number;
@@ -144,7 +144,8 @@ export interface CreatureCombatStats {
   canDodge: boolean;
   /** V6-B4 : true si `blockChance > 0 && blockReductionPercent > 0` — blocage physique actif. */
   canBlock: boolean;
-  readonly canParry: false;
+  /** V6-B6 : true si `parryChance > 0` — parade active (combinée à la parabilité de l'attaque côté service). */
+  canParry: boolean;
 }
 
 // ─── Snapshot ─────────────────────────────────────────────────────────────────

@@ -185,9 +185,15 @@ describe('CreatureRuntimeCalculator — dérivation primaires → secondaires (V
     expect(resolve().blockReductionPercent).toBe(25);
   });
 
-  it('strength + dexterity calculent parryChance mais canParry reste false', () => {
+  it('strength + dexterity calculent parryChance et canParry devient true (V6-B6)', () => {
     const s = resolve({ strength: 40, dexterity: 40 });
     expect(s.parryChance).toBe(40 * 0.15 + 40 * 0.15); // 12
+    expect(s.canParry).toBe(true); // parryChance > 0
+  });
+
+  it('V6-B6 : canParry false si parryChance = 0', () => {
+    const s = resolve({ strength: 0, dexterity: 0 });
+    expect(s.parryChance).toBe(0);
     expect(s.canParry).toBe(false);
   });
 
@@ -324,7 +330,7 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
     expect(s.parryChance).toBe(10);
   });
 
-  it('V6-B3/V6-B4 : dodgeChance/blockChance > 0 → canDodge/canBlock true ; parade inactive', () => {
+  it('V6-B3/V6-B4/V6-B6 : dodge/block/parry > 0 → canDodge/canBlock/canParry true', () => {
     const s = CreatureRuntimeCalculator.resolveCombatStats(
       makeCreature(), makeTemplate(PRIMS), [],
       withCoeffs({ dodgePerAgility: 5, blockPerEndurance: 5, parryPerStrength: 5, secondaryChanceCap: 100 }),
@@ -334,9 +340,9 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
     // V6-B4 : blocage actif (blockChance > 0 et réduction 25 > 0).
     expect(s.blockChance).toBeGreaterThan(0);
     expect(s.canBlock).toBe(true);
-    // Parade calculée mais toujours non active.
+    // V6-B6 : parade active (parryChance > 0).
     expect(s.parryChance).toBeGreaterThan(0);
-    expect(s.canParry).toBe(false);
+    expect(s.canParry).toBe(true);
   });
 
   it('V6-B4 : canBlock false si blockChance = 0', () => {

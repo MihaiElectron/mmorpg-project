@@ -254,13 +254,13 @@ export class CreatureRuntimeCalculator {
       parryChance,
       counterAttackPower,
       maxHealthDerived,
-      // V6-B3/V6-B4 : esquive puis blocage créature actifs (défenseur). canDodge/
-      // canBlock servent l'inspector ; l'esquive et le blocage effectifs sont
-      // gérés par le resolver via dodgeChancePercent/blockChancePercent. La parade
-      // reste inactive.
+      // V6-B3/V6-B4/V6-B6 : parade, esquive puis blocage créature actifs (défenseur).
+      // canDodge/canBlock/canParry servent l'inspector ; les effets réels sont gérés
+      // par le resolver via dodge/block/parryChancePercent. La parabilité de l'attaque
+      // (physical non-raw) est combinée à canParry côté service (isAttackParryable).
       canDodge: dodgeChance > 0,
       canBlock: blockChance > 0 && c.blockReductionPercent > 0,
-      canParry: false,
+      canParry: parryChance > 0,
     };
   }
 }

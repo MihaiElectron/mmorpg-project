@@ -139,6 +139,8 @@ export class SkillsGateway implements OnGatewayConnection {
         isDodged: result.isDodged,
         isBlocked: result.isBlocked,
         blockedDamage: result.blockedDamage,
+        // V6-B6 : parade créature du skill → "Parade" côté client.
+        isParried: result.isParried,
       }),
     );
     if (result.killed) {

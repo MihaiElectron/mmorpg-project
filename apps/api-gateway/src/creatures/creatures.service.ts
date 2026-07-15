@@ -20,7 +20,7 @@ import { isAttackParryable } from './combat-parryability.helper';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
-import { SkillEffectType } from '../active-skills/active-skills.constants';
+import { SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active-skills.constants';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -120,6 +120,11 @@ export type AttackSuccess = {
   isBlocked: boolean;
   /** V4-H : dégâts absorbés par le blocage (0 si non bloqué). */
   blockedDamage: number;
+  /**
+   * V6-B6 : true si la créature a PARÉ le hit joueur (parade résolue en premier,
+   * dégâts 0, ni esquive ni blocage). false tant que la créature ne pare pas.
+   */
+  isParried: boolean;
   riposte?: {
     damage: number;
     characterHealth: number;
@@ -1115,6 +1120,12 @@ export class CreaturesService implements OnModuleInit {
         // V6-B4 : blocage physique (après esquive/armure, géré par le calculateur).
         blockChancePercent: creatureStats.blockChance,
         blockReductionPercent: creatureStats.blockReductionPercent,
+        // V6-B6 : parade (résolue en premier). Auto-attaque joueur = physique →
+        // parable ; combinée à canParry créature (parryChance > 0).
+        canParry:
+          creatureStats.canParry &&
+          isAttackParryable({ attackDefenseKind: 'physical', damageType: 'physical' }),
+        parryChancePercent: creatureStats.parryChance,
       },
       damageType: 'physical',
       minimumDamage: 1,
@@ -1264,13 +1275,16 @@ export class CreaturesService implements OnModuleInit {
             accuracyPercent: charStats.derived.accuracy ?? 0,
           },
           defender: {
-            // Créature défenseur : V6-B3 esquive + V6-B4 blocage actifs ; parade off.
+            // Créature défenseur : V6-B3 esquive + V6-B4 blocage + V6-B6 parade actifs.
             defense: creatureStats.defenseTotal,
             dodgeChancePercent: creatureStats.dodgeChance,
             blockChancePercent: creatureStats.blockChance,
             blockReductionPercent: creatureStats.blockReductionPercent,
-            canParry: false,
-            parryChancePercent: 0,
+            // Contre-attaque joueur = physique → parable ; combinée à canParry créature.
+            canParry:
+              creatureStats.canParry &&
+              isAttackParryable({ attackDefenseKind: 'physical', damageType: 'physical' }),
+            parryChancePercent: creatureStats.parryChance,
           },
           damageType: 'physical',
           minimumDamage: 1,
@@ -1321,7 +1335,7 @@ export class CreaturesService implements OnModuleInit {
     // `killed` = la mort causée par le HIT PRINCIPAL uniquement (jamais par la
     // contre-attaque, qui a son propre `counterAttack.killed`). On lit donc
     // `damageResult.hpAfter` et non `creature.health` (modifiée par la contre-attaque).
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: damageResult.hpAfter === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, riposte, counterAttack, loot, characterXpUpdate, masteryUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: damageResult.hpAfter === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, isParried: damageResult.isParried, riposte, counterAttack, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**
@@ -1363,6 +1377,9 @@ export class CreaturesService implements OnModuleInit {
     // V4-G : précision du lanceur — réduit l'esquive effective de la créature
     // (V6-B3 : effectiveDodge = clamp(dodgeChance − accuracy, 0, 100)). Défaut 0.
     attackerAccuracyPercent = 0,
+    // V6-B6 : nature défensive du skill (`skill.attackDefenseKind`) — décide la
+    // parabilité avec `damageType`. Défaut 'physical' (rétrocompatible).
+    attackerAttackDefenseKind: SkillAttackDefenseKind = 'physical',
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -1402,6 +1419,11 @@ export class CreaturesService implements OnModuleInit {
         // V6-B4 : blocage physique (raw ignoré côté calculateur).
         blockChancePercent: creatureStats.blockChance,
         blockReductionPercent: creatureStats.blockReductionPercent,
+        // V6-B6 : parade selon la nature du skill (magic/raw non parables).
+        canParry:
+          creatureStats.canParry &&
+          isAttackParryable({ attackDefenseKind: attackerAttackDefenseKind, damageType }),
+        parryChancePercent: creatureStats.parryChance,
       },
       damageType,
       minimumDamage: 1,
@@ -1442,7 +1464,7 @@ export class CreaturesService implements OnModuleInit {
       if (generated.length > 0) loot = generated;
     }
 
-    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, loot, characterXpUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: characterId, isCritical: damageResult.isCritical, killed: creature.health === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, isParried: damageResult.isParried, loot, characterXpUpdate };
   }
 
   private resolveCombatMasteryKey(character: Character): string | null {
