@@ -77,4 +77,30 @@ export class CreatureTemplate {
   /** Pénétration d'armure en % (0–100) appliquée aux dégâts physiques. 0 = aucune. */
   @Column('int', { default: 0, name: 'armor_penetration_percent' })
   armorPenetrationPercent: number;
+
+  // ── Stats primaires (V6-B1) ────────────────────────────────────────────────
+  // Fondation de données uniquement : ces primaires ne sont PAS branchées au
+  // combat (aucune dérivation active en V6-B1). Défaut 0 → créatures existantes
+  // strictement inchangées. La dérivation primaires → secondaires viendra en V6-B2.
+
+  @Column('int', { default: 0 })
+  strength: number;
+
+  @Column('int', { default: 0 })
+  vitality: number;
+
+  @Column('int', { default: 0 })
+  endurance: number;
+
+  @Column('int', { default: 0 })
+  agility: number;
+
+  @Column('int', { default: 0 })
+  dexterity: number;
+
+  @Column('int', { default: 0 })
+  intelligence: number;
+
+  @Column('int', { default: 0 })
+  wisdom: number;
 }

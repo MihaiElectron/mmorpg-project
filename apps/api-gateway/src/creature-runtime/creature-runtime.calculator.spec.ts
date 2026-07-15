@@ -27,6 +27,14 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     criticalDamage: 150,
     accuracy: 0,
     armorPenetrationPercent: 0,
+    // V6-B1 : primaires (fondation de données, non branchées au combat).
+    strength: 0,
+    vitality: 0,
+    endurance: 0,
+    agility: 0,
+    dexterity: 0,
+    intelligence: 0,
+    wisdom: 0,
     ...overrides,
   } as CreatureTemplate;
 }
@@ -96,6 +104,20 @@ describe('CreatureRuntimeCalculator.resolveCombatStats (V6-A Lot 2)', () => {
   it('debug modifier flat sur defenseTotal modifie defenseTotal', () => {
     const s = CreatureRuntimeCalculator.resolveCombatStats(makeCreature(), makeTemplate(), [flatMod('defenseTotal', 3)]);
     expect(s.defenseTotal).toBe(8); // 5 + 3
+  });
+
+  it('V6-B1 : les stats primaires ne changent PAS les stats de combat (non branchées)', () => {
+    const baseline = CreatureRuntimeCalculator.resolveCombatStats(makeCreature(), makeTemplate());
+    const withPrimaries = CreatureRuntimeCalculator.resolveCombatStats(
+      makeCreature(),
+      makeTemplate({ strength: 100, vitality: 100, endurance: 100, agility: 100, dexterity: 100, intelligence: 100, wisdom: 100 }),
+    );
+    // attackPower/defenseTotal/maxHealth restent dérivés de baseAttack/baseArmor/baseHealth uniquement.
+    expect(withPrimaries.attackPower).toBe(baseline.attackPower);
+    expect(withPrimaries.defenseTotal).toBe(baseline.defenseTotal);
+    expect(withPrimaries.maxHealth).toBe(baseline.maxHealth);
+    expect(withPrimaries.criticalChance).toBe(baseline.criticalChance);
+    expect(withPrimaries.canDodge).toBe(false);
   });
 
   it('fallback healingPower tient compte de l\'attackPower modifié par debug', () => {

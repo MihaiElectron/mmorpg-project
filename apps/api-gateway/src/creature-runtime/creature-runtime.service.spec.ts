@@ -36,6 +36,14 @@ function makeTemplate(overrides: Partial<CreatureTemplate> = {}): CreatureTempla
     criticalDamage: 150,
     accuracy: 0,
     armorPenetrationPercent: 0,
+    // V6-B1 : primaires (fondation de données, non branchées au combat).
+    strength: 0,
+    vitality: 0,
+    endurance: 0,
+    agility: 0,
+    dexterity: 0,
+    intelligence: 0,
+    wisdom: 0,
     ...overrides,
   };
 }
