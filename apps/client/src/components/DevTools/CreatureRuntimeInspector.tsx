@@ -64,9 +64,10 @@ interface CreatureRuntimeCombat {
     willpower: number;
     charisma: number;
   };
-  // V6-B2/V6-B3/V6-B4 : secondaires CALCULÉES depuis les primaires. dodgeChance
-  // (canDodge) et blockChance/blockReductionPercent (canBlock) sont actifs en
-  // défense ; parade reste informative (canParry false).
+  // V6-B2→V6-B6 : secondaires CALCULÉES depuis les primaires. dodgeChance
+  // (canDodge), blockChance/blockReductionPercent (canBlock) et parryChance
+  // (canParry) sont actifs en défense ; counterAttackPower/maxHealthDerived
+  // restent informatifs.
   derivedSecondaryStats?: {
     dodgeChance: number;
     blockChance: number;
@@ -104,11 +105,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <dd className="creature-runtime__value">{children}</dd>
     </>
   );
-}
-
-/** Étiquette explicite pour une capacité défensive non supportée côté créature. */
-function Unsupported() {
-  return <span className="creature-runtime__hint">Non supporté runtime</span>;
 }
 
 export default function CreatureRuntimeInspector({ creatureId }: { creatureId: string }) {
@@ -224,8 +220,9 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
               )}
             </Row>
 
-            {/* D. Combat défensif — V6-B3 esquive + V6-B4 blocage actifs (dégâts
-                physical, après l'armure). La parade reste non supportée côté créature. */}
+            {/* D. Combat défensif — V6-B3 esquive + V6-B4 blocage + V6-B6 parade actifs.
+                Parade résolue en premier (attaques physical non-raw ; magic/raw non
+                parables) ; esquive/blocage ensuite. */}
             <Row label="esquive">
               {data.canDodge ? (
                 <span className="creature-runtime__hint">
@@ -250,7 +247,18 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 <span className="creature-runtime__hint">Inactive (0 %)</span>
               )}
             </Row>
-            <Row label="parade"><Unsupported /></Row>
+            <Row label="parade">
+              {data.canParry ? (
+                <span className="creature-runtime__hint">
+                  Active
+                  {data.derivedSecondaryStats
+                    ? ` (${data.derivedSecondaryStats.parryChance} %)`
+                    : ""}
+                </span>
+              ) : (
+                <span className="creature-runtime__hint">Inactive (0 %)</span>
+              )}
+            </Row>
 
             {/* E. Loot / XP */}
             <Row label="XP au kill">{data.killCharacterXpReward}</Row>
@@ -309,8 +317,8 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 </Row>
               </dl>
               <p className="creature-runtime__hint">
-                Calculées depuis les primaires. Esquive et blocage actifs ; parade
-                non active avant V6-B6. PV max dérivés restent informatifs.
+                Calculées depuis les primaires. Esquive, blocage et parade actifs.
+                PV max dérivés et puissance de contre-attaque restent informatifs.
               </p>
             </>
           )}
