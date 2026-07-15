@@ -37,7 +37,7 @@ import { LootService, LootEntry } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
-import { CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
+import { CreatureCombatStats, CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 // Portée mêlée par défaut en WU (distance Chebyshev) — source unique dans le
@@ -306,14 +306,8 @@ export class CreaturesService implements OnModuleInit {
     const t = creature.spawn?.template;
     if (!t) return null;
 
-    // Stats effectives (mêmes formules que toDto/combat) — pas de recalcul client.
-    const base = CreatureRuntimeCalculator.calculateBaseStats(creature, t);
-    const debugMods = this.debugRegistry.getModifiers(creature.id);
-    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
-      CREATURE_STAT_KEYS,
-      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
-      debugMods,
-    );
+    // Stats effectives — point unique (V6-A Lot 2). Mêmes valeurs qu'avant.
+    const stats = this.creatureCombatStats(creature, t);
 
     const lastAtk = this.lastCreatureAutoAttackAt.get(id) ?? null;
 
@@ -359,34 +353,48 @@ export class CreaturesService implements OnModuleInit {
       mapId: creature.mapId ?? null,
       currentHealth: creature.health,
       maxHealth: t.baseHealth,
-      defenseTotal: derived.defenseTotal,
+      defenseTotal: stats.defenseTotal,
       baseArmor: t.baseArmor,
       alive: creature.state !== 'dead',
       respawnAt: creature.respawnAt ?? null,
       baseAttack: t.baseAttack,
-      attackPower: derived.attackPower,
+      attackPower: stats.attackPower,
       // Portée réellement utilisée par la créature en combat (auto-attaque/riposte).
       attackRangeWU: MELEE_RANGE_WU,
       autoAttackCooldownMs: AUTO_ATTACK_COOLDOWN_MS,
       lastAutoAttackAt: lastAtk,
       nextAutoAttackAt: lastAtk != null ? lastAtk + AUTO_ATTACK_COOLDOWN_MS : null,
       // Les créatures n'ont pas encore de stats défensives dédiées (runtime).
-      canDodge: false,
-      canBlock: false,
-      canParry: false,
+      canDodge: stats.canDodge,
+      canBlock: stats.canBlock,
+      canParry: stats.canParry,
       // V5-D2-A : stats de combat avancées (lecture seule). healingPower expose
       // la valeur effective (fallback attackPower si non configurée, cohérent avec
       // le cast heal). Les 4 autres sont la config brute du template.
-      healingPower: base.healingPower > 0 ? base.healingPower : derived.attackPower,
-      criticalChance: base.criticalChance,
-      criticalDamage: base.criticalDamage,
-      accuracy: base.accuracy,
-      armorPenetrationPercent: base.armorPenetrationPercent,
+      healingPower: stats.healingPowerEffective,
+      criticalChance: stats.criticalChance,
+      criticalDamage: stats.criticalDamage,
+      accuracy: stats.accuracy,
+      armorPenetrationPercent: stats.armorPenetrationPercent,
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,
       abilities,
     };
+  }
+
+  /**
+   * Stats de combat effectives d'une créature (V6-A Lot 2) — wrapper qui injecte
+   * les debug modifiers courants dans le helper PUR `resolveCombatStats`. Point
+   * unique réutilisable par les consommateurs (branché ici uniquement sur
+   * `getRuntimeCombatInfo` ; les chemins combat suivront en Lot 2B).
+   */
+  private creatureCombatStats(creature: Creature, template: CreatureTemplate): CreatureCombatStats {
+    return CreatureRuntimeCalculator.resolveCombatStats(
+      creature,
+      template,
+      this.debugRegistry.getModifiers(creature.id),
+    );
   }
 
   /**

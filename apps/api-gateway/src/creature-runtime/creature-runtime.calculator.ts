@@ -11,7 +11,7 @@ import {
   StatKey,
 } from '../player-runtime/player-runtime.types';
 import { RuntimeComputeEngine, BaseValueExtractor } from '../player-runtime/runtime-compute';
-import { CreatureBaseStats, CreatureDerivedStats } from './creature-runtime.types';
+import { CreatureBaseStats, CreatureCombatStats, CreatureDerivedStats } from './creature-runtime.types';
 
 // Stats dérivées calculées pour une créature (sous-ensemble de StatKey).
 // gatheringRange est exclu — les créatures ne récoltent pas.
@@ -96,5 +96,46 @@ export class CreatureRuntimeCalculator {
       extract,
       modifiers,
     );
+  }
+
+  /**
+   * Point UNIQUE des stats de combat effectives d'une créature (V6-A Lot 2).
+   * PUR : `debugModifiers` injecté par l'appelant (jamais d'accès registre ici).
+   *
+   * Reproduit EXACTEMENT le comportement existant, sans changer aucune formule :
+   *   - `maxHealth`/`attackPower`/`defenseTotal` via RuntimeComputeEngine
+   *     (debug modifiers appliqués comme aujourd'hui) ;
+   *   - stats avancées lues brutes du template (via `calculateBaseStats`),
+   *     hors canal RuntimeModifier ;
+   *   - `healingPowerEffective = raw > 0 ? raw : attackPower` (fallback centralisé,
+   *     cohérent avec le cast heal et l'inspector) ;
+   *   - `canDodge/canBlock/canParry = false` (limite actuelle figée).
+   */
+  static resolveCombatStats(
+    creature: Creature,
+    template: CreatureTemplate,
+    debugModifiers: RuntimeModifier[] = [],
+  ): CreatureCombatStats {
+    const base = this.calculateBaseStats(creature, template);
+    const derived = RuntimeComputeEngine.compute<CreatureDerivedStats>(
+      CREATURE_STAT_KEYS,
+      (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
+      debugModifiers,
+    );
+    const healingPowerRaw = base.healingPower;
+    return {
+      maxHealth: derived.maxHp,
+      attackPower: derived.attackPower,
+      defenseTotal: derived.defenseTotal,
+      healingPowerRaw,
+      healingPowerEffective: healingPowerRaw > 0 ? healingPowerRaw : derived.attackPower,
+      criticalChance: base.criticalChance,
+      criticalDamage: base.criticalDamage,
+      accuracy: base.accuracy,
+      armorPenetrationPercent: base.armorPenetrationPercent,
+      canDodge: false,
+      canBlock: false,
+      canParry: false,
+    };
   }
 }

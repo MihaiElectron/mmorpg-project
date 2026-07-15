@@ -73,6 +73,39 @@ export interface CreatureDerivedStats {
   attackRange: number;
 }
 
+// ─── Stats de combat effectives (V6-A Lot 2) ──────────────────────────────────
+
+/**
+ * Point unique des stats de combat EFFECTIVES d'une créature (lecture seule),
+ * assemblées par `CreatureRuntimeCalculator.resolveCombatStats`. Centralise ce
+ * qui était recalculé/dupliqué par les consommateurs (inspector, combat) :
+ *   - `maxHealth`/`attackPower`/`defenseTotal` : dérivées via RuntimeComputeEngine
+ *     (debug modifiers appliqués, comme aujourd'hui) ;
+ *   - stats avancées (`criticalChance`/`criticalDamage`/`accuracy`/
+ *     `armorPenetrationPercent`) : lues brutes du template (hors RuntimeModifier) ;
+ *   - `healingPowerEffective` : fallback centralisé `raw > 0 ? raw : attackPower`.
+ *
+ * `canDodge`/`canBlock`/`canParry` sont figés à `false` : une créature ne peut
+ * pas esquiver/bloquer/parer un hit entrant (limite actuelle, V6-B éventuel).
+ * Ne change AUCUNE formule ni le contrat DTO existant.
+ */
+export interface CreatureCombatStats {
+  maxHealth: number;
+  attackPower: number;
+  defenseTotal: number;
+  /** Valeur brute du template (0 = non configurée). */
+  healingPowerRaw: number;
+  /** Valeur appliquée en soin : `healingPowerRaw > 0 ? healingPowerRaw : attackPower`. */
+  healingPowerEffective: number;
+  criticalChance: number;
+  criticalDamage: number;
+  accuracy: number;
+  armorPenetrationPercent: number;
+  readonly canDodge: false;
+  readonly canBlock: false;
+  readonly canParry: false;
+}
+
 // ─── Snapshot ─────────────────────────────────────────────────────────────────
 
 /**
