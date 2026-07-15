@@ -6,6 +6,7 @@ import { CharacterProgressionModule } from "./modules/CharacterProgression";
 import { SkillsModule } from "./modules/Skills";
 import { MasteryEffectsModule } from "./modules/MasteryEffects";
 import { DerivedStatsModule } from "./modules/DerivedStats";
+import { CreatureCoefficientsModule } from "./modules/CreatureCoefficients";
 import OverlayControls from "./OverlayControls";
 import LotsInspector from "./LotsInspector";
 import "./DevToolsPanel.scss";
@@ -20,6 +21,7 @@ export default function DevToolsPanel() {
       <SkillsModule />
       <MasteryEffectsModule />
       <DerivedStatsModule />
+      <CreatureCoefficientsModule />
       <LotsInspector />
       <OverlayControls />
       <AdminPanelWOM />
