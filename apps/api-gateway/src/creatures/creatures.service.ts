@@ -145,6 +145,24 @@ export type AttackSuccess = {
     killed: boolean;
     isCritical: boolean;
   };
+  /**
+   * V6-B7 : contre-attaque CRÉATURE → joueur déclenchée quand la créature PARE le
+   * hit principal joueur (auto-attaque). Remplace la riposte de ce tour. Absente si
+   * pas de parade ou `counterAttackPower <= 0`. Le joueur ne peut PAS parer cette
+   * contre-attaque (`canParry: false`) → aucune chaîne. `isCounterAttack` toujours true.
+   */
+  creatureCounterAttack?: {
+    amount: number;
+    currentHealth: number;
+    maxHealth: number;
+    killed: boolean;
+    isCritical: boolean;
+    isDodged: boolean;
+    isBlocked: boolean;
+    isParried: boolean;
+    blockedDamage: number;
+    isCounterAttack: true;
+  };
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
   masteryUpdate?: MasteryUpdatePayload;
@@ -1205,7 +1223,77 @@ export class CreaturesService implements OnModuleInit {
     let counterAttack:
       | { damage: number; creatureHealth: number; killed: boolean; isCritical: boolean }
       | undefined;
-    if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
+    let creatureCounterAttack:
+      | {
+          amount: number;
+          currentHealth: number;
+          maxHealth: number;
+          killed: boolean;
+          isCritical: boolean;
+          isDodged: boolean;
+          isBlocked: boolean;
+          isParried: boolean;
+          blockedDamage: number;
+          isCounterAttack: true;
+        }
+      | undefined;
+    if (damageResult.isParried) {
+      // V6-B7 : la créature a PARÉ le hit principal joueur → hit annulé (dégâts 0),
+      // et la créature déclenche une CONTRE-ATTAQUE créature → joueur. Cette
+      // réaction REMPLACE la riposte normale de ce tour (pas de double hit).
+      // Conditions : créature encore vivante (une parade ne la tue pas), joueur
+      // encore vivant, et puissance de contre-attaque dérivée > 0.
+      if (
+        (creature.state === 'alive' || creature.state === 'fighting') &&
+        character.health > 0 &&
+        creatureStats.counterAttackPower > 0
+      ) {
+        const ccResult = resolveCombatHit({
+          attacker: {
+            attackPower: creatureStats.counterAttackPower,
+            minimumAttack: 0,
+            armorPenetrationPercent: creatureStats.armorPenetrationPercent,
+            criticalChancePercent: creatureStats.criticalChance,
+            criticalDamagePercent: creatureStats.criticalDamage,
+            accuracyPercent: creatureStats.accuracy,
+          },
+          defender: {
+            // Joueur défenseur : contrat V4 (esquive + blocage). ANTI-RÉCURSION :
+            // le joueur ne PARE JAMAIS la contre-attaque créature (`canParry: false`)
+            // → aucune parade → aucune contre-contre-attaque, aucune chaîne.
+            defense: charStats.derived.defense,
+            dodgeChancePercent: charStats.derived.dodgeChance ?? 0,
+            blockChancePercent: charStats.derived.blockChance ?? 0,
+            blockReductionPercent: charStats.derived.blockReductionPercent ?? 0,
+            canParry: false,
+            parryChancePercent: 0,
+          },
+          // Attaque physique (attackDefenseKind physical) ; damageType physical.
+          damageType: 'physical',
+          minimumDamage: 1,
+          hpBefore: character.health,
+        });
+        const ccHealth = ccResult.hpAfter;
+        await this.characterRepository.update(characterId, { health: ccHealth });
+        const ccKilled = ccHealth === 0;
+        // Mort joueur : un seul respawn (pas de riposte en parallèle → pas de double mort).
+        if (ccKilled && this.server) {
+          await this.worldService.respawnCharacter(characterId, this.server);
+        }
+        creatureCounterAttack = {
+          amount: ccResult.finalDamage,
+          currentHealth: ccHealth,
+          maxHealth: Math.round(charStats.derived.maxHealth),
+          killed: ccKilled,
+          isCritical: ccResult.isCritical,
+          isDodged: ccResult.isDodged,
+          isBlocked: ccResult.isBlocked,
+          isParried: ccResult.isParried,
+          blockedDamage: ccResult.blockedDamage,
+          isCounterAttack: true,
+        };
+      }
+    } else if ((creature.state === 'alive' || creature.state === 'fighting') && distance <= MELEE_RANGE_WU) {
       // Riposte : aucun plancher d'attaque (minimumAttack = 0), plancher dégâts 1.
       // V4-F : le joueur est le DÉFENSEUR → sa `dodgeChance` peut esquiver la
       // riposte (0 dégât, pas de mort). Roll serveur (Math.random).
@@ -1335,7 +1423,7 @@ export class CreaturesService implements OnModuleInit {
     // `killed` = la mort causée par le HIT PRINCIPAL uniquement (jamais par la
     // contre-attaque, qui a son propre `counterAttack.killed`). On lit donc
     // `damageResult.hpAfter` et non `creature.health` (modifiée par la contre-attaque).
-    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: damageResult.hpAfter === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, isParried: damageResult.isParried, riposte, counterAttack, loot, characterXpUpdate, masteryUpdate };
+    return { success: true, dto: this.toDto(creature), damage, attackerId: character.id, isCritical: damageResult.isCritical, killed: damageResult.hpAfter === 0, isDodged: damageResult.isDodged, isBlocked: damageResult.isBlocked, blockedDamage: damageResult.blockedDamage, isParried: damageResult.isParried, riposte, counterAttack, creatureCounterAttack, loot, characterXpUpdate, masteryUpdate };
   }
 
   /**

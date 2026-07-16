@@ -1820,6 +1820,126 @@ describe('CreaturesService', () => {
       }
     });
 
+    // ── V6-B7 : contre-attaque créature sur parade du hit principal ──────────
+    it("V6-B7 : créature pare le hit principal + counterAttackPower > 0 → contre-attaque créature (riposte remplacée)", async () => {
+      // parry 100 (strength) ; counterAttackPower = dex 10 × 1 = 10 ; dodge/block off.
+      setCoeffs({
+        parryPerStrength: 100, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0,
+        counterPerDexterity: 1, counterPerAgility: 0, counterPerIntelligence: 0, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, intelligence: 0 });
+      const creature = makeCreature({ id: "cc-b7", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 0, health: 100 }));
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isParried).toBe(true); // hit principal paré
+        expect(result.damage).toBe(0);
+        expect(result.riposte).toBeUndefined(); // riposte REMPLACÉE par la contre-attaque
+        expect(result.creatureCounterAttack).toBeDefined();
+        const cc = result.creatureCounterAttack!;
+        expect(cc.isCounterAttack).toBe(true);
+        expect(cc.amount).toBe(10); // counterAttackPower 10 − defense joueur 0
+        expect(cc.currentHealth).toBe(90); // 100 − 10
+        expect(cc.killed).toBe(false);
+        expect(cc.isParried).toBe(false); // ANTI-RÉCURSION : le joueur ne pare pas la contre-attaque
+        expect(cc.isDodged).toBe(false);
+        expect(cc.isBlocked).toBe(false);
+        expect(typeof cc.maxHealth).toBe("number");
+      }
+      expect(creature.health).toBe(30); // créature inchangée (parade = 0 dégât)
+    });
+
+    it("V6-B7 : counterAttackPower <= 0 → parade valide mais AUCUNE contre-attaque", async () => {
+      setCoeffs({
+        parryPerStrength: 100, counterPerDexterity: 0, counterPerAgility: 0, counterPerIntelligence: 0,
+        dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 0 });
+      const creature = makeCreature({ id: "cc-b7b", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 0, health: 100 }));
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isParried).toBe(true); // parade OK
+        expect(result.damage).toBe(0);
+        expect(result.creatureCounterAttack).toBeUndefined(); // pas de contre (counter 0)
+        expect(result.riposte).toBeUndefined(); // ni riposte (remplacée)
+      }
+    });
+
+    it("V6-B7 : esquive (pas de parade) → aucune contre-attaque créature", async () => {
+      setCoeffs({
+        dodgePerAgility: 100, parryPerStrength: 0, counterPerDexterity: 1,
+        blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 1, endurance: 0, strength: 0, dexterity: 10 });
+      const creature = makeCreature({ id: "cc-b7c", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 0, health: 100 }));
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isDodged).toBe(true);
+        expect(result.isParried).toBe(false);
+        expect(result.creatureCounterAttack).toBeUndefined(); // contre seulement sur parade
+      }
+    });
+
+    it("V6-B7 : blocage (pas de parade) → aucune contre-attaque créature", async () => {
+      setCoeffs({
+        blockPerStrength: 100, blockReductionPercent: 50, parryPerStrength: 0, dodgePerAgility: 0,
+        counterPerDexterity: 1, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7d", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 0, health: 100 }));
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.isBlocked).toBe(true);
+        expect(result.isParried).toBe(false);
+        expect(result.creatureCounterAttack).toBeUndefined();
+      }
+    });
+
+    it("V6-B7 : joueur tué par la contre-attaque → respawnCharacter appelé une seule fois", async () => {
+      setCoeffs({
+        parryPerStrength: 100, counterPerDexterity: 10, counterPerAgility: 0, counterPerIntelligence: 0,
+        dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10 }); // counter = 10×10 = 100
+      const creature = makeCreature({ id: "cc-b7e", worldX: 6080, worldY: 12480, mapId: 1, health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 0, health: 5 }));
+      const respawnCharacter = jest.fn().mockResolvedValue(undefined);
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+      (service as any).worldService = { getAllConnectedPlayers: jest.fn().mockReturnValue([]), respawnCharacter };
+      (service as any).server = mockServer;
+
+      const result = await service.attack(creature.id, "char-1", { worldX: 6080, worldY: 12480, mapId: 1 });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.creatureCounterAttack).toBeDefined();
+        expect(result.creatureCounterAttack!.killed).toBe(true);
+        expect(result.creatureCounterAttack!.currentHealth).toBe(0);
+      }
+      expect(respawnCharacter).toHaveBeenCalledTimes(1);
+      expect(respawnCharacter).toHaveBeenCalledWith("char-1", mockServer);
+    });
+
     it("V6-B6 : skill physical non-raw joueur → créature peut être paré", async () => {
       setCoeffs({ parryPerStrength: 100, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
       const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, baseArmor: 0 });
