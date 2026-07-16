@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature esquive/blocage/parade livrées — V6-B3→V6-B6 Implemented)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented)
 - Owner: Project
 - Last updated: 2026-07-16
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
@@ -542,6 +542,51 @@ selon `canDodge`/`canBlock`/`canParry`.
 **Encore Planned** : résistances magiques, boucliers magiques/divins/paladin,
 enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
 
+### 11.8 Flags défensifs par skill — Implemented (Lot A/B/C)
+
+Chaque `SkillDefinition` porte **3 flags serveur** qui décident si le défenseur
+(créature) peut esquiver / bloquer / parer **ce skill précis**. Commits :
+`08e498a` (modèle + migration + DTO), `f84f04d` (pipeline combat), `74ca25e` (Studio).
+
+**Décision gameplay** : les skills ne sont **pas parables par défaut** — la parade
+**annule** le hit (0 dégât, pas de réduction) et peut déclencher une contre-attaque ;
+la rendre systématique nuirait à l'impact (visuel/sonore) des skills et à la lisibilité.
+La parade d'un skill est donc **opt-in**. Esquive et blocage restent **actifs par
+défaut** pour les skills de dégâts. Les **soins** ne sont pas concernés.
+
+| Flag | Défaut | Effet si `false` |
+|---|---|---|
+| `canBeDodged` | **true** | le skill ne peut **pas** être esquivé (`dodgeChancePercent → 0`) |
+| `canBeBlocked` | **true** | le skill ne peut **pas** être bloqué (`blockChancePercent → 0`) |
+| `canBeParried` | **false** | le skill ne peut **pas** être paré (`canParry → false`) |
+
+**Règle de parabilité effective d'un skill** (defender de `applySkillDamage`) :
+```
+canParry = canBeParried
+           && creatureStats.canParry            (parryChance créature > 0)
+           && isAttackParryable({ attackDefenseKind, damageType })
+```
+- `canBeParried: false` → **jamais paré**, même `physical`.
+- `canBeParried: true` → parade soumise à la **nature** : `physical` parable ; `magic`
+  **non parable** ; `raw` ne change **pas** la parabilité (c'est une mitigation).
+- **`physical` + `raw`** : parable **seulement si `canBeParried: true`**, non parable
+  si `false` ; `raw` reste une règle de **mitigation** quand l'attaque touche (ignore
+  armure/résistances/blocage), sans effet sur parade/esquive.
+
+**Contre-attaque créature sur skill** (`creatureCounterAttack`) : déclenchée
+**uniquement si le skill est réellement paré** (`damageResult.isParried === true`).
+Donc **jamais** sur esquive, **jamais** sur blocage, **jamais** sur skill non parable
+(`canBeParried: false`), **jamais** sur `magic`. Gatée aussi par `counterAttackPower > 0`.
+
+**Serveur autoritaire** : les 3 flags sont lus depuis le `SkillDefinition` **en base**
+(`SkillCastService`). Le payload runtime `skill:cast` **ne peut pas** les fournir ni
+les override (`parseSkillCastPayload` strict) ; ils ne se configurent que via l'**admin
+Studio** (Skill Editor, désactivés pour les soins). `applySkillDamage` applique des
+defaults sûrs (dodge/block true, parry false) si appelé sans flags.
+
+**Encore Planned** : modèle hybride `physical` + `raw` parallèle (§11.7), résistances
+magiques, boucliers magiques/divins/paladin, équilibrage fin des valeurs.
+
 ## État d'implémentation
 
 | Élément | État |
@@ -561,7 +606,9 @@ enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
 | Nature défensive d'attaque : `SkillDefinition.attackDefenseKind` (physical/magic) + `isAttackParryable` + Studio (V6-B5) | Implemented |
 | Défense créature : parade (`parryChance`, parabilité pilotée par `attackDefenseKind` nature physical/magic, prioritaire, `isParried` propagé, V6-B6) | Implemented |
 | Contrat de parade : parabilité par nature défensive (physical parable même si raw ; magic non parable ; ranged physique parable ; §11.6/§11.7) | Implemented (`isAttackParryable` aligné, `d81ea80`) — modèle hybride physical+raw parallèle reste Planned (§11.7) |
-| Créature : `counterAttackPower` actif, `maxHealthDerived` actif en défense | Planned (restent informatifs, §11.7) |
+| Contre-attaque créature sur parade (`creatureCounterAttack`, auto-attaque + skill, `counterAttackPower`, gatée `isParried`, joueur `canParry:false` anti-récursion, V6-B7) | Implemented |
+| Flags défensifs par skill : `canBeDodged`/`canBeBlocked` (défaut true) + `canBeParried` (défaut false, opt-in) — serveur autoritaire, Studio, §11.8 | Implemented |
+| Créature : `counterAttackPower` actif, `maxHealthDerived` actif en défense | Planned (`counterAttackPower` désormais actif via contre-attaque V6-B7 ; `maxHealthDerived` reste informatif, §11.7) |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
