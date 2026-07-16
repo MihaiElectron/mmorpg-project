@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B modèle de combat créature ; contrat de parade posé — pré-V6-B5)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature esquive/blocage/parade livrées — V6-B3→V6-B6 Implemented)
 - Owner: Project
 - Last updated: 2026-07-16
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
@@ -268,32 +268,33 @@ résolution des joueurs** :
 - Aucune promesse que toutes les stats joueur soient déjà symétriques côté
   créature : l'extension se fait au rythme des hooks gameplay réels.
 
-## 11. Contrat V6-B — modèle de combat créature (Planned, non implémenté)
+## 11. Contrat V6-B — modèle de combat créature (défenses livrées V6-B3→V6-B6)
 
-Cette section **fige la direction cible** du modèle de combat créature. Elle ne
-code rien : ni skills/primaires/secondaires créature, ni esquive/blocage/parade,
-ni stat DB, ni migration, ni formule, ni IA, ni frontend. Elle sert de référence
-pour brancher V6-B au bon endroit sans casser l'existant.
+Cette section **fige la direction cible** du modèle de combat créature. Le **socle
+défensif** (primaires, secondaires dérivées, esquive/blocage/parade créature,
+typage de nature d'attaque) est désormais **Implemented** (V6-B1→V6-B6, détail
+§11.7). Les points restants (`counterAttackPower` actif, `maxHealthDerived` actif,
+résistances/boucliers magiques) restent **Planned**.
 
-### 11.1 État actuel (exact)
+### 11.1 État actuel (exact — mis à jour V6-B6)
 
 - Quand une créature **attaque**, elle passe par `resolveCombatHit` (auto-attaque
   passive, skill, riposte) — comme le joueur (§8).
 - Quand une créature **défend** (joueur → créature, skill joueur → créature,
-  contre-attaque), seule **`defenseTotal`** s'applique (+ `armorPenetrationPercent`
-  de l'attaquant). C'est la **seule défense active** côté créature défenseur.
-- `canDodge` / `canBlock` / `canParry` créature sont figés à **`false`**
-  (`CreatureRuntimeCalculator.resolveCombatStats`, exposé par l'inspector).
-- Les créatures **n'ont pas encore de stats primaires**.
-- Les créatures **n'ont pas encore de vraies stats secondaires défensives**
-  (dodge/block/parry). Les stats avancées **offensives** existent déjà (V5-D2 :
-  `criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`/`healingPower`),
-  lues brutes du template.
-- Les **skills créature existent déjà** via les capacités de template
-  (`CreatureTemplateSkill` + catalogue skills) ; mais le **modèle de stats complet
-  reste à construire**.
+  contre-attaque), le bloc `defender` applique désormais **`defenseTotal`**
+  (+ `armorPenetrationPercent` attaquant) **ET** les secondaires défensives
+  dérivées : **parade** puis **esquive** puis **blocage** (détail §11.7).
+- `canDodge` = `dodgeChance > 0`, `canBlock` = `blockChance > 0 && blockReductionPercent > 0`,
+  `canParry` = `parryChance > 0` (`CreatureRuntimeCalculator.resolveCombatStats`,
+  exposé par l'inspector). **Ne sont plus figés à `false`.**
+- Les créatures ont **10 stats primaires** (V6-B1) et leurs **secondaires dérivées**
+  (V6-B2, coefficients configurables Studio V6-B2.5). Les stats avancées offensives
+  existent depuis V5-D2 (`criticalChance`/`criticalDamage`/`accuracy`/
+  `armorPenetrationPercent`/`healingPower`).
+- Les **skills créature** existent via `CreatureTemplateSkill` + catalogue skills.
 - La **parade passive du joueur** contre l'auto-attaque créature reste
-  **désactivée** (`canParry: false` dans `applyCreatureHitToPlayer`, §8).
+  **désactivée** (`canParry: false` dans `applyCreatureHitToPlayer`, §8) — inchangé
+  (V6-B6 active la parade **créature défenseur**, pas la parade passive joueur).
 
 ### 11.2 Décision cible (produit)
 
@@ -347,23 +348,23 @@ La décision d'AVOIR ces stats est prise (§11.2). Restent à trancher les modal
 
 ### 11.4 Séquence prudente proposée (petits lots)
 
-- **V6-B1 — modèle de stats PRIMAIRES créature** : définir les primaires (stockage,
-  Studio config/inspection) ; aucun effet combat tant que non dérivé.
-- **V6-B2 — stats SECONDAIRES créature dérivées** : dérivation primaires → secondaires
-  (offensives déjà là ; poser le canal défensif) ; Studio inspection.
+- **V6-B1 — modèle de stats PRIMAIRES créature** : **Implemented** — 10 primaires
+  (stockage, Studio config/inspection) ; aucun effet combat tant que non dérivé.
+- **V6-B2 — stats SECONDAIRES créature dérivées** : **Implemented** — dérivation
+  primaires → secondaires ; coefficients configurables Studio (V6-B2.5) ; inspection.
 - **V6-B3 — esquive créature défenseur** (`dodgeChance`) : **Implemented** — branchée
   dans le `defender` de `resolveCombatHit` (hits joueur → créature), `canDodge` = `dodgeChance > 0`,
   esquive effective `clamp(dodgeChance − accuracy, 0, 100)` ; tests symétriques aux tests joueur.
 - **V6-B4 — blocage créature défenseur** (`blockChance` / `blockReductionPercent`) :
   **Implemented** — `canBlock` = `blockChance > 0 && blockReductionPercent > 0`, blocage
   `physical` uniquement après l'armure, `raw` non bloqué, esquive prioritaire.
-- **V6-B5 — types d'attaque** (portée + **nature défensive**) : prérequis d'une parade
-  cohérente et d'éventuelles résistances futures. Le **contrat fonctionnel** de parade
-  (ranged physique parable, sort magique pur non parable, enchantement annulé si support
-  physique paré) est figé en **§11.6** avant l'implémentation.
-- **V6-B6 — parade** créature (`parryChance`) et/ou **parade passive joueur** :
-  uniquement APRÈS le contrat de type d'attaque / nature (V6-B5, §11.6). Lot le plus
-  sensible (défense active) — à ne pas anticiper.
+- **V6-B5 — nature défensive de l'attaque** : **Implemented** — `SkillDefinition.attackDefenseKind`
+  (`physical`/`magic`, défaut physical), helper pur `isAttackParryable`, Studio Skills
+  « Nature défensive ». Contrat fonctionnel figé §11.6.
+- **V6-B6 — parade créature défenseur** (`parryChance`) : **Implemented** — gate
+  `creatureStats.canParry && isAttackParryable({ attackDefenseKind, damageType })`,
+  `parryChancePercent` passé au `defender` ; `isParried` propagé (hit principal + skills).
+  La **parade passive joueur** reste hors périmètre (§8).
 
 Chaque lot : périmètre unique, branché via `resolveCombatStats` / le `defender` de
 `resolveCombatHit`, sans changer les formules du calculateur pur, avec tests de
@@ -378,11 +379,15 @@ frontend obligatoire, aucune activation immédiate de dodge/block/parry. Il fixe
 uniquement la **direction produit** et les points d'insertion. **Documentation
 seulement.**
 
-### 11.6 Contrat de parade — nature d'attaque, ranged, magie, enchantements (Planned, pré-V6-B5)
+### 11.6 Contrat de parade — nature d'attaque, ranged, magie, enchantements
 
-**Statut : Planned.** Cette section **fige le contrat fonctionnel** de la parade
-avant tout code (V6-B5/V6-B6). Aucune activation, aucun type runtime, aucune
-migration ici : elle existe pour éviter toute divergence d'interprétation.
+**Statut : Implemented (V6-B5/V6-B6)** pour la parabilité pilotée par la **nature
+défensive** (`physical` parable / `magic` non parable) et la parade créature.
+**Planned** : alignement de la mitigation `raw` (le code traite encore `raw` comme
+non parable — voir §11.7 « Divergence implémentation ») et pipeline défensif magique
+(résistances/écoles/boucliers), enchantements/procs. Cette section **fige le contrat
+fonctionnel** de la parade et reste la référence. **`raw` n'est PAS une nature
+défensive : il n'empêche jamais la parade ni l'esquive.**
 
 #### 11.6.1 Ce que la parade pare
 
@@ -462,6 +467,78 @@ Trois notions **distinctes**, à ne pas confondre dans le futur modèle :
 > défensive ; ce contrat précise seulement **quelles attaques** y sont éligibles
 > (physique, toute portée) et **ce qui tombe avec elle** (effets attachés à l'impact).
 
+### 11.7 Défenses créature défenseur — Implemented (V6-B3→V6-B6)
+
+Socle défensif créature livré. Les créatures défenseurs (hits **joueur → créature** :
+auto-attaque, skill, contre-attaque) appliquent, via le `defender` de
+`resolveCombatHit`, l'ordre du calculateur **parade → esquive → critique → armure →
+blocage** (inchangé). Aucune modification de `calculateCombatDamage` ni de
+`resolveCombatHit`.
+
+**Esquive (V6-B3)**
+- Active quand `dodgeChance > 0` (`canDodge`).
+- Esquive effective **réduite par l'`accuracy` de l'attaquant** :
+  `clamp(dodgeChance − accuracy, 0, 100)`.
+- Ordre : **après la parade**, **avant** critique/armure/blocage. Esquivé → dégâts 0.
+
+**Blocage (V6-B4)**
+- Actif quand `blockChance > 0` **et** `blockReductionPercent > 0` (`canBlock`).
+- **`physical` uniquement** ; **`raw` ignore le blocage**.
+- Appliqué **après l'armure**, sur les dégâts restants ;
+  `finalDamage = round(dmg × (1 − blockReductionPercent/100))`.
+- **L'esquive reste prioritaire** sur le blocage.
+
+**Parade (V6-B6)**
+- Active quand `parryChance > 0` (`canParry`) **et** l'attaque est **parable**.
+- **La parabilité dépend UNIQUEMENT de `attackDefenseKind`** (jamais de `damageType`) :
+  - `attackDefenseKind: physical` → **parable**, **même si `damageType: raw`** ;
+  - `attackDefenseKind: magic` → **non parable** (sort pur, §11.6.2) ;
+  - la **portée** (melee/ranged) ne change **jamais** la parabilité.
+- `raw` **n'empêche pas** la parade : `raw` est une règle de **mitigation** (voir
+  « Typage d'attaque »), pas une nature défensive.
+- **Prioritaire sur esquive, critique, armure, blocage** (résolue en premier).
+- Parée → **dégâts 0** (physique **et** part `raw` éventuelle), et **aucun effet
+  attaché dépendant de l'impact** (procs : quand ils existeront).
+- `isParried` propagé jusqu'au client (`COMBAT_EVENT`, hit principal + skills) →
+  affichage « Parade ».
+
+**Typage d'attaque (V6-B5) — deux axes indépendants**
+- **`attackDefenseKind`** = **nature défensive** (`physical` / `magic`) → **seul axe
+  décidant la parabilité** (`physical` parable, `magic` non parable). La portée
+  n'entre jamais en jeu : « ranged » ne veut **pas** dire « non parable ».
+- **`damageType`** = **mitigation des dégâts** (`physical` / `raw`). `raw` = *true
+  damage* : **quand l'attaque touche**, les dégâts `raw` **ignorent l'armure, les
+  résistances aux dégâts et le blocage**. `raw` **n'a aucun effet** sur la parade ni
+  sur l'esquive : une attaque `physical`+`raw` peut être **parée ou esquivée**
+  (auquel cas **rien** ne s'applique).
+- **Ne pas confondre les deux axes.** `physical`/`magic` = *contre quoi on se
+  défend* ; `physical`/`raw` = *comment les dégâts sont mitigés une fois qu'ils
+  touchent*.
+- `SkillDefinition.attackDefenseKind` éditable au Studio Skills (« Nature défensive »).
+
+**Cas hybride `physical` (nature) + `raw` (mitigation) — modèle cible (Planned)**
+- **Parée** → aucune partie ne s'applique.
+- **Esquivée** → aucune partie ne s'applique.
+- **Touche et bloquée** → la **part physique** est calculée avec armure + blocage ;
+  la **part `raw`** s'applique **en parallèle** comme dégât fixe **non réduit**.
+- **Touche sans blocage** → la part physique suit son calcul normal ; la part `raw`
+  s'**ajoute** comme dégât fixe.
+- ⚠️ **Divergence implémentation (à corriger, code-lot futur)** : le code actuel
+  modélise `damageType` comme un **enum unique** `physical | raw` (pas de part `raw`
+  parallèle à une part physique), et `isAttackParryable` **retourne `false` pour
+  `raw`** — ce qui **contredit** la règle ci-dessus (une attaque de nature `physical`
+  reste parable, quel que soit `damageType`). Cette section fige le **contrat cible** ;
+  l'alignement du code (`isAttackParryable`, modèle hybride) est **Planned**.
+
+**Inspector runtime créature** : Esquive / Blocage / Parade affichés Active(X %)/Inactive
+selon `canDodge`/`canBlock`/`canParry`.
+
+**Restent informatifs (non actifs)** : `counterAttackPower` créature et
+`maxHealthDerived` (exposés par l'inspector, sans effet runtime — activation non décidée).
+
+**Encore Planned** : résistances magiques, boucliers magiques/divins/paladin,
+enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
+
 ## État d'implémentation
 
 | Élément | État |
@@ -475,14 +552,17 @@ Trois notions **distinctes**, à ne pas confondre dans le futur modèle :
 | Stats secondaires d'équipement alimentant le pipeline (V5-F) | Implemented |
 | Invariant entier : `finalDamage` / `hpAfter` entiers, aucun PV fractionnaire persisté | Implemented |
 | Stats avancées créature (`healingPower`/`criticalChance`/`criticalDamage`/`accuracy`/`armorPenetrationPercent`) configurables Studio, appliquées serveur (V5-D2) | Implemented |
-| Défense créature : esquive (`dodgeChance`, V6-B3) et blocage (`blockChance`/`blockReductionPercent`, V6-B4) en défenseur (hits joueur → créature) | Implemented |
-| Défense créature : parade (`parryChance`) | Planned — contrat de nature d'attaque figé (§11.6), implémentation V6-B5/V6-B6 |
-| Contrat de parade (ranged physique parable, sort magique pur non parable, enchantement annulé si support physique paré) | Planned (documenté §11.6) |
-| Modèle créature proche du joueur : skills + primaires + secondaires + défenses restantes | Planned — contrat V6-B (§11), esquive/blocage livrés |
+| Créature : primaires (V6-B1) + secondaires dérivées (V6-B2, coefficients Studio V6-B2.5) | Implemented |
+| Défense créature : esquive (`dodgeChance`, `accuracy` la réduit, V6-B3) en défenseur (hits joueur → créature) | Implemented |
+| Défense créature : blocage (`blockChance`/`blockReductionPercent`, physical, après armure, V6-B4) | Implemented |
+| Nature défensive d'attaque : `SkillDefinition.attackDefenseKind` (physical/magic) + `isAttackParryable` + Studio (V6-B5) | Implemented |
+| Défense créature : parade (`parryChance`, parabilité pilotée par `attackDefenseKind` nature physical/magic, prioritaire, `isParried` propagé, V6-B6) | Implemented |
+| Contrat de parade : parabilité par nature défensive (physical parable même si raw ; magic non parable ; ranged physique parable ; §11.6/§11.7) | Implemented (nature) — alignement `raw` parable + modèle hybride physical+raw Planned (§11.7) |
+| Créature : `counterAttackPower` actif, `maxHealthDerived` actif en défense | Planned (restent informatifs, §11.7) |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
-| Résistances, dégâts magical/elemental/poison | Planned |
+| Résistances magiques / boucliers magiques-divins, dégâts magical/elemental/poison, enchantements/procs | Planned |
 
 ## Références
 
