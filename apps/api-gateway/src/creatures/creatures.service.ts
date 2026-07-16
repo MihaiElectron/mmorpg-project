@@ -512,9 +512,21 @@ export class CreaturesService implements OnModuleInit {
     const ccHealth = ccResult.hpAfter;
     await this.characterRepository.update(characterId, { health: ccHealth });
     const ccKilled = ccHealth === 0;
-    // Mort joueur : un seul respawn (jamais en parallèle d'une riposte → pas de double mort).
-    if (ccKilled && this.server) {
-      await this.worldService.respawnCharacter(characterId, this.server);
+    if (ccKilled) {
+      // Mort du joueur → si ce joueur ÉTAIT la cible de la créature, elle
+      // l'abandonne explicitement AVANT le respawn (symétrie avec le chemin
+      // passif applyCreatureHitToPlayer). Sans ce reset, la créature resterait
+      // en poursuite jusqu'à ce que le repositionnement au respawn / la leash la
+      // rompe (asymétrie de lifecycle). Le garde `=== characterId` évite de
+      // casser une aggro sur un AUTRE joueur. Un seul respawn (jamais en
+      // parallèle d'une riposte → pas de double mort).
+      const patrolState = this.patrolStates.get(creature.id);
+      if (patrolState && patrolState.targetCharacterId === characterId) {
+        patrolState.targetCharacterId = undefined;
+      }
+      if (this.server) {
+        await this.worldService.respawnCharacter(characterId, this.server);
+      }
     }
     return {
       amount: ccResult.finalDamage,
@@ -1367,8 +1379,20 @@ export class CreaturesService implements OnModuleInit {
         blockedDamage: riposteResult.blockedDamage,
         isParried: riposteResult.isParried,
       };
-      if (characterHealth === 0 && this.server) {
-        await this.worldService.respawnCharacter(characterId, this.server);
+      if (characterHealth === 0) {
+        // Mort du joueur pendant la riposte → si ce joueur ÉTAIT la cible de la
+        // créature, elle l'abandonne explicitement AVANT le respawn (symétrie
+        // avec le chemin passif applyCreatureHitToPlayer). Sans ce reset, la
+        // créature resterait en poursuite jusqu'à ce que le repositionnement au
+        // respawn / la leash la rompe (asymétrie de lifecycle). Le garde
+        // `=== characterId` évite de casser une aggro sur un AUTRE joueur.
+        const patrolState = this.patrolStates.get(creature.id);
+        if (patrolState && patrolState.targetCharacterId === characterId) {
+          patrolState.targetCharacterId = undefined;
+        }
+        if (this.server) {
+          await this.worldService.respawnCharacter(characterId, this.server);
+        }
       }
 
       // V4-I : parade réussie → hit entrant annulé (déjà 0 via le calculateur) et

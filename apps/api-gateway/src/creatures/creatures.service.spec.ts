@@ -727,6 +727,155 @@ describe('CreaturesService', () => {
       });
     });
 
+    // ── Symétrie de lifecycle : mort du joueur dans le chemin riposte/contre-
+    // attaque de attack() → la créature ABANDONNE explicitement sa cible, comme
+    // le chemin passif applyCreatureHitToPlayer. Le reset est gardé par
+    // `=== characterId` (n'abandonne que si le joueur mort ÉTAIT la cible). ─────
+    describe("mort du joueur → reset explicite de la cible (symétrie lifecycle)", () => {
+      const CREATURE_WU = { worldX: 6080, worldY: 12480, mapId: 1 };
+      const TILE_SIZE_WU = 1024;
+      const ADJACENT = { worldX: CREATURE_WU.worldX + TILE_SIZE_WU, worldY: CREATURE_WU.worldY, mapId: 1 };
+
+      let respawnCharacter: jest.Mock;
+
+      beforeEach(() => {
+        // Respawn actif : `attack()` ne respawn que si `this.server` est défini.
+        respawnCharacter = jest.fn().mockResolvedValue(undefined);
+        (service as any).server = {} as any;
+        (service as any).worldService.respawnCharacter = respawnCharacter;
+      });
+
+      /** Enregistre un PatrolState avec une cible donnée pour la créature. */
+      function seedTarget(creatureId: string, targetCharacterId = 'char-1') {
+        (service as any).patrolStates.set(creatureId, {
+          dirX: 0,
+          dirY: 0,
+          speed: 0,
+          moveUntil: 0,
+          pauseUntil: 0,
+          targetCharacterId,
+        });
+      }
+
+      function targetOf(creatureId: string): string | undefined {
+        return (service as any).patrolStates.get(creatureId)?.targetCharacterId;
+      }
+
+      // 1) Riposte létale → cible remise à undefined + respawn + aucun 2e dégât.
+      it("riposte létale → targetCharacterId undefined, respawn déclenché, un seul dégât", async () => {
+        // Créature survit au hit joueur (30 − 8 = 22) donc riposte ; joueur à 1 PV
+        // → riposte (≥ 1) le tue. Pas d'arme → pas de parade → riposte normale.
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 1, attack: 10, defense: 3 }));
+        seedTarget(creature.id, 'char-1');
+
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.characterHealth).toBe(0); // joueur mort
+          expect(result.counterAttack).toBeUndefined(); // pas de parade → aucun 2e hit
+        }
+        expect(targetOf(creature.id)).toBeUndefined(); // cible abandonnée explicitement
+        expect(respawnCharacter).toHaveBeenCalledTimes(1);
+        expect(respawnCharacter).toHaveBeenCalledWith('char-1', expect.anything());
+        // Un seul dégât appliqué au joueur (la riposte), aucun après la mort.
+        expect(characterRepository.update).toHaveBeenCalledTimes(1);
+      });
+
+      // 2) Contre-attaque créature létale (parade) → cible undefined + respawn.
+      it("contre-attaque créature létale (parade) → targetCharacterId undefined, respawn déclenché", async () => {
+        // Coefficients poussés : parryChance 100 (créature pare le hit principal),
+        // counterAttackPower 100 (contre-attaque létale sur un joueur à 1 PV).
+        coefficientsServiceMock.getCoefficients.mockReturnValue({
+          ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+          parryPerStrength: 100,
+          counterPerDexterity: 100,
+          secondaryChanceCap: 100,
+        });
+        const template = makeTemplate({ strength: 1, dexterity: 1 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 30, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 1, attack: 10, defense: 3 }));
+        seedTarget(creature.id, 'char-1');
+
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.creatureCounterAttack).toBeDefined();
+          expect(result.creatureCounterAttack?.killed).toBe(true);
+          expect(result.riposte).toBeUndefined(); // contre-attaque remplace la riposte
+        }
+        expect(creature.health).toBe(30); // hit principal paré → créature intacte
+        expect(targetOf(creature.id)).toBeUndefined();
+        expect(respawnCharacter).toHaveBeenCalledTimes(1);
+        expect(respawnCharacter).toHaveBeenCalledWith('char-1', expect.anything());
+      });
+
+      // 5) Riposte NON létale → cible conservée, comportement inchangé, pas de respawn.
+      it("riposte non létale → targetCharacterId conservé, aucun respawn", async () => {
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 100, attack: 10, defense: 3 }));
+        seedTarget(creature.id, 'char-1');
+
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.characterHealth).toBe(98); // 100 − 2, survit
+        }
+        expect(targetOf(creature.id)).toBe('char-1'); // cible inchangée
+        expect(respawnCharacter).not.toHaveBeenCalled();
+      });
+
+      // 6) Contre-attaque NON létale sur parade → cible conservée, règles inchangées.
+      it("contre-attaque créature NON létale (parade) → cible conservée, contre-attaque appliquée", async () => {
+        coefficientsServiceMock.getCoefficients.mockReturnValue({
+          ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+          parryPerStrength: 100,
+          counterPerDexterity: 10, // contre-attaque modérée, non létale
+          secondaryChanceCap: 100,
+        });
+        const template = makeTemplate({ strength: 1, dexterity: 1 });
+        const creature = makeCreature({ ...CREATURE_WU, health: 30, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 100, attack: 10, defense: 3 }));
+        seedTarget(creature.id, 'char-1');
+
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.creatureCounterAttack).toBeDefined();
+          expect(result.creatureCounterAttack?.killed).toBe(false);
+          expect((result.creatureCounterAttack?.amount ?? 0) > 0).toBe(true); // règles contre-attaque intactes
+        }
+        expect(targetOf(creature.id)).toBe('char-1'); // joueur vivant → cible conservée
+        expect(respawnCharacter).not.toHaveBeenCalled();
+      });
+
+      // Garde `=== characterId` : un joueur mort qui n'est PAS la cible ne doit
+      // jamais casser l'aggro de la créature sur un AUTRE joueur.
+      it("riposte létale sur un joueur NON ciblé → aggro sur l'autre joueur préservée", async () => {
+        const creature = makeCreature({ ...CREATURE_WU, health: 30 });
+        (service as any).liveCreatures.set(creature.id, creature);
+        characterRepository.findOne.mockResolvedValue(makeCharacter({ health: 1, attack: 10, defense: 3 }));
+        seedTarget(creature.id, 'char-OTHER'); // la créature cible un autre joueur
+
+        const result = await service.attack(creature.id, 'char-1', ADJACENT);
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.riposte?.characterHealth).toBe(0); // char-1 meurt
+        }
+        expect(targetOf(creature.id)).toBe('char-OTHER'); // aggro préservée
+        expect(respawnCharacter).toHaveBeenCalledWith('char-1', expect.anything());
+      });
+    });
+
     // ── Portée d'arme équipée : fallback sécurisé (range <= 0 / null / NaN) ────
     // resolveAttackRange ne doit JAMAIS produire une portée effective 0.
     describe("portée d'arme équipée (fallback sécurisé)", () => {
