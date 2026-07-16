@@ -32,10 +32,28 @@ export type StatKey =
  *                   sommés avant d'être appliqués une seule fois)
  * - percent_multiply : multiplicateur indépendant (ex. ×1.15 — chaque
  *                   percent_multiply est appliqué séquentiellement)
+ * - override      : remplace la valeur calculée avant caps et arrondi (Lot 1,
+ *                   consommé uniquement par `RuntimeComputeEngine.resolveStat`).
  *
- * Ordre d'application : flat → percent_add → percent_multiply
+ * Convention `value` :
+ * - flat            : delta absolu (ex. `20` = +20, `-10` = −10) ;
+ * - percent_add     : points de pourcentage (ex. `20` = +20 %, `-10` = −10 %) ;
+ * - percent_multiply: points de pourcentage AUTOUR de l'élément neutre 0
+ *                     (ex. `50` = ×1.5, `-20` = ×0.8, `0` = ×1.0) ;
+ * - override        : valeur finale imposée avant caps/arrondi.
+ *
+ * Ordre d'application : flat → percent_add → percent_multiply → override.
+ *
+ * Compatibilité : `compute`/`computeWithTrace` (multi-stat, historique) ne
+ * traitent QUE flat/percent_add/percent_multiply. Un modifier `override` y est
+ * ignoré silencieusement (jamais sélectionné) ; il n'est consommé que par le
+ * resolver mono-stat `resolveStat` (Lot 1).
  */
-export type ModifierOperation = 'flat' | 'percent_add' | 'percent_multiply';
+export type ModifierOperation =
+  | 'flat'
+  | 'percent_add'
+  | 'percent_multiply'
+  | 'override';
 
 /**
  * Origine d'un RuntimeModifier.
@@ -77,6 +95,13 @@ export interface RuntimeModifier {
   priority: number;
   enabled: boolean;
   reason?: string;
+  /**
+   * Étiquettes normalisées (Lot 1) — lues UNIQUEMENT par l'étage de filtres du
+   * resolver `resolveStat`. Optionnel et rétrocompatible : les modifiers
+   * existants (sans `tags`) se comportent comme si `tags = []`. N'a aucun effet
+   * sur `compute`/`computeWithTrace`.
+   */
+  tags?: string[];
 }
 
 /**
@@ -206,4 +231,186 @@ export interface PlayerRuntimeEffect {
   startsAt?: Date;
   expiresAt?: Date;
   reason?: string;
+}
+
+// ─── Resolver mono-stat (Lot 1 — ADR-0021) ────────────────────────────────────
+//
+// Types du pipeline pur de résolution d'UNE statistique, consommé par
+// `RuntimeComputeEngine.resolveStat`. Le resolver ne connaît AUCUNE formule
+// métier : il reçoit une valeur de base + des contributions déjà collectées.
+// Aucune dépendance NestJS / TypeORM / réseau. Déterministe.
+
+/**
+ * Politique d'arrondi FINAL d'une statistique (appliquée une seule fois, après
+ * les caps). `none` conserve les décimales (défaut). Aucun arrondi intermédiaire.
+ */
+export type RoundingPolicy = 'none' | 'floor' | 'round' | 'ceil';
+
+/** Bornes optionnelles appliquées APRÈS l'override et AVANT l'arrondi. */
+export interface StatCaps {
+  /** Borne minimale incluse. Absente = pas de plancher. */
+  min?: number;
+  /** Borne maximale incluse. Absente = pas de plafond. `min > max` = erreur. */
+  max?: number;
+}
+
+/**
+ * Signe EFFECTIF d'une contribution, dérivé de son effet réel (pas seulement du
+ * signe brut de `value`) :
+ * - flat / percent_add / percent_multiply : `positive` si value > 0,
+ *   `negative` si value < 0, `neutral` si value === 0 (pour percent_multiply,
+ *   value 0 = ×1.0 = neutre ; value 50 = ×1.5 = positive ; -20 = ×0.8 = negative) ;
+ * - override : toujours `neutral` (remplacement, ni bonus ni malus) — jamais
+ *   ciblé par un filtre de signe.
+ */
+export type ContributionSign = 'positive' | 'negative' | 'neutral';
+
+/**
+ * Critères de correspondance d'un filtre (combinés en ET). Un critère absent
+ * n'est pas testé. `match` vide correspond à toutes les contributions.
+ */
+export interface StatFilterMatch {
+  sourceType?: ModifierSourceType;
+  sourceId?: string;
+  /** Correspond si la contribution porte ce tag. */
+  tag?: string;
+  /** Correspond selon le signe EFFECTIF (jamais un override, toujours neutre). */
+  sign?: Extract<ContributionSign, 'positive' | 'negative'>;
+}
+
+/**
+ * Filtre / neutralisation appliqué AVANT le calcul, sur les contributions
+ * (jamais sur la valeur finale). `scale` réduit l'écart de la contribution à son
+ * élément neutre :
+ * - `0`   : contribution exclue ;
+ * - `0<scale<1` : réduction partielle (ex. +20 → +10 ; ×1.2 → ×1.1) ;
+ * - `1`   : sans effet.
+ * `scale` doit être fini et ≥ 0 (sinon erreur `INVALID_FILTER_SCALE`).
+ * Pour un `override`, seul `scale === 0` a un sens (exclusion) ; un `scale > 0`
+ * laisse l'override inchangé (pas de neutre pour un remplacement).
+ * Plusieurs filtres correspondants : leurs `scale` sont MULTIPLIÉS (commutatif),
+ * exclusion totale dès qu'un `scale === 0`.
+ */
+export interface StatContributionFilter {
+  /** Identifiant facultatif du filtre (trace). */
+  id?: string;
+  /** Raison lisible, propagée à la trace des contributions filtrées. */
+  reason?: string;
+  match: StatFilterMatch;
+  scale: number;
+}
+
+/** Entrée du resolver mono-stat. */
+export interface StatResolutionInput {
+  /** Clé de la stat (étiquetage de trace ; filtre `targetStat === stat`). */
+  stat: StatKey;
+  /** Valeur de base (déjà collectée : base + contributions dérivées incluses). */
+  baseValue: number;
+  /** Contributions déjà collectées pour cette stat (domaine agnostique). */
+  contributions: RuntimeModifier[];
+  /** Filtres/neutralisations optionnels (défaut : aucun). */
+  filters?: StatContributionFilter[];
+  /** Caps optionnels (défaut : aucun). */
+  caps?: StatCaps;
+  /** Politique d'arrondi final (défaut : `none`). */
+  rounding?: RoundingPolicy;
+}
+
+/** Contribution retenue (post-filtre) et sa participation exacte à la stat. */
+export interface AppliedContribution {
+  modifierId: string;
+  sourceType: ModifierSourceType;
+  sourceId: string;
+  operation: ModifierOperation;
+  /** `value` d'origine du modifier. */
+  originalValue: number;
+  /** `value` après application du facteur de filtre combiné. */
+  effectiveValue: number;
+  /** Facteur de filtre combiné appliqué (1 = aucun filtre). */
+  scale: number;
+  /** Delta EXACT (non arrondi) apporté à la stat par cette contribution. */
+  contribution: number;
+  tags: string[];
+}
+
+/** Contribution filtrée (exclue ou partiellement réduite). */
+export interface FilteredContribution {
+  modifierId: string;
+  sourceType: ModifierSourceType;
+  sourceId: string;
+  operation: ModifierOperation;
+  originalValue: number;
+  /** Facteur combiné (0 = exclue). */
+  scale: number;
+  /** true si la contribution est totalement exclue (`scale === 0`). */
+  excluded: boolean;
+  /** Raisons issues des filtres correspondants. */
+  reasons: string[];
+}
+
+/**
+ * Résultat + trace enrichie de la résolution d'UNE statistique. Sert
+ * directement l'explication Studio (valeurs intermédiaires, filtrés, override,
+ * caps, arrondi) — sans logique de résolution côté client.
+ */
+export interface StatResolutionResult {
+  stat: StatKey;
+  baseValue: number;
+  /** Contributions `enabled` visant cette stat, AVANT filtrage. */
+  received: RuntimeModifier[];
+  /** Contributions retenues (post-filtre) avec leur delta exact. */
+  applied: AppliedContribution[];
+  /** Contributions filtrées (exclues ou réduites) avec raison. */
+  filtered: FilteredContribution[];
+  /** Valeur après les contributions plates. */
+  afterFlat: number;
+  /** Valeur après les pourcentages additifs (sommés puis appliqués une fois). */
+  afterPercentAdd: number;
+  /** Valeur après les multiplicateurs (appliqués séquentiellement). */
+  afterPercentMultiply: number;
+  /** Valeur après l'override retenu (identique à afterPercentMultiply si aucun). */
+  afterOverride: number;
+  /** Valeur avant caps (= afterOverride). */
+  beforeCaps: number;
+  /** Valeur après caps (avant arrondi). */
+  afterCaps: number;
+  /** Valeur finale autoritaire (après arrondi). */
+  finalValue: number;
+  /** Override retenu (priorité la plus élevée), sinon null. */
+  overrideApplied: { modifierId: string; priority: number; value: number } | null;
+  /** Politique d'arrondi effectivement appliquée. */
+  roundingPolicy: RoundingPolicy;
+  /** Bornes effectives (null si absentes). */
+  caps: { min: number | null; max: number | null };
+}
+
+/** Codes d'erreur de CONFIGURATION du resolver (déterministes, traçables). */
+export type StatResolutionErrorCode =
+  | 'NON_FINITE_VALUE'
+  | 'UNKNOWN_OPERATION'
+  | 'DUPLICATE_OVERRIDE_PRIORITY'
+  | 'INVALID_CAPS'
+  | 'INVALID_FILTER_SCALE'
+  | 'INVALID_PRIORITY';
+
+/**
+ * Erreur de configuration du resolver mono-stat. Classe typée PURE (n'étend
+ * aucune exception NestJS). Portée par un `code` machine + un message lisible.
+ */
+export class StatResolutionError extends Error {
+  readonly code: StatResolutionErrorCode;
+  readonly details?: Record<string, unknown>;
+
+  constructor(
+    code: StatResolutionErrorCode,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'StatResolutionError';
+    this.code = code;
+    this.details = details;
+    // Chaîne de prototype correcte pour `instanceof` après compilation TS.
+    Object.setPrototypeOf(this, StatResolutionError.prototype);
+  }
 }

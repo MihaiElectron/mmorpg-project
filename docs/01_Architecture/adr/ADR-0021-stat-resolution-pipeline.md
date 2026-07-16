@@ -336,15 +336,30 @@ versionné, sans migration de schéma ni de contenu.
 - [ ] Human approval recorded.
 - [ ] Related documentation updated.
 
+## Décisions techniques du Lot 1 (précédemment ouvertes)
+
+Tranchées lors de l'implémentation de la fondation pure (Lot 1), au niveau du
+resolver mono-stat `RuntimeComputeEngine.resolveStat` :
+
+- **Politique d'arrondi configurable par statistique** : énumération
+  `none | floor | round | ceil`, défaut `none`, appliquée **une seule fois** et
+  **après les caps** (aucun arrondi intermédiaire). Le domaine choisit la
+  politique par stat au moment de la collecte (ex. `maxHealth` utilisera
+  probablement `floor` en Lot 2 — non implémenté ici).
+- **Conflit d'overrides de même priorité** : l'override de **priorité la plus
+  élevée gagne** ; plusieurs overrides actifs de **même priorité** pour une même
+  statistique constituent une **erreur de configuration explicite et traçable**
+  (`StatResolutionError` code `DUPLICATE_OVERRIDE_PRIORITY`). Aucun choix
+  silencieux selon l'ordre du tableau.
+- **Caps toujours appliqués après l'override** : ordre figé
+  `override → caps → arrondi`. Aucun `bypassCaps` en V1 ; `min > max` rejeté
+  (`INVALID_CAPS`).
+
 ## Open questions
 
 Décisions **volontairement non figées** ici (à trancher par le responsable ou en
 lot ultérieur) :
 
-- Politique exacte d'arrondi : `floor`, `round`, `ceil` ou politique par
-  statistique.
-- Comportement exact de plusieurs overrides de même priorité.
-- Un override contourne-t-il ou non les caps.
 - Règles complexes de stacking (plus fort uniquement, limite de stacks,
   remplacement, rafraîchissement de durée, groupes d'exclusivité).
 - Persistance des buffs/debuffs temporaires après redémarrage (aucune table
@@ -354,7 +369,7 @@ lot ultérieur) :
 - Format définitif des tags.
 
 L'ADR fixe l'**existence** des étapes (filtres, override, caps, trace) sans figer
-ces règles gameplay.
+les règles gameplay restantes.
 
 ## Non-goals
 
