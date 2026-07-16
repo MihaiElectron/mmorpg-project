@@ -382,12 +382,12 @@ seulement.**
 ### 11.6 Contrat de parade — nature d'attaque, ranged, magie, enchantements
 
 **Statut : Implemented (V6-B5/V6-B6)** pour la parabilité pilotée par la **nature
-défensive** (`physical` parable / `magic` non parable) et la parade créature.
-**Planned** : alignement de la mitigation `raw` (le code traite encore `raw` comme
-non parable — voir §11.7 « Divergence implémentation ») et pipeline défensif magique
-(résistances/écoles/boucliers), enchantements/procs. Cette section **fige le contrat
-fonctionnel** de la parade et reste la référence. **`raw` n'est PAS une nature
-défensive : il n'empêche jamais la parade ni l'esquive.**
+défensive** (`physical` parable — même `damageType: raw` — / `magic` non parable)
+et la parade créature (`isAttackParryable` aligné, commit `d81ea80`).
+**Planned** : le **modèle hybride physical + raw parallèle** (§11.7) et le pipeline
+défensif magique (résistances/écoles/boucliers), enchantements/procs. Cette section
+**fige le contrat fonctionnel** de la parade et reste la référence. **`raw` n'est PAS
+une nature défensive : il n'empêche jamais la parade ni l'esquive.**
 
 #### 11.6.1 Ce que la parade pare
 
@@ -523,12 +523,15 @@ blocage** (inchangé). Aucune modification de `calculateCombatDamage` ni de
   la **part `raw`** s'applique **en parallèle** comme dégât fixe **non réduit**.
 - **Touche sans blocage** → la part physique suit son calcul normal ; la part `raw`
   s'**ajoute** comme dégât fixe.
-- ⚠️ **Divergence implémentation (à corriger, code-lot futur)** : le code actuel
-  modélise `damageType` comme un **enum unique** `physical | raw` (pas de part `raw`
-  parallèle à une part physique), et `isAttackParryable` **retourne `false` pour
-  `raw`** — ce qui **contredit** la règle ci-dessus (une attaque de nature `physical`
-  reste parable, quel que soit `damageType`). Cette section fige le **contrat cible** ;
-  l'alignement du code (`isAttackParryable`, modèle hybride) est **Planned**.
+- **État code (Implemented)** : la **parabilité** est alignée sur ce contrat
+  (`isAttackParryable` décide par `attackDefenseKind` seul — `physical` parable même
+  en `raw`, `magic` non parable ; commit `d81ea80`).
+- **Reste Planned** : la **structure hybride** en deux parts. Le code modélise
+  aujourd'hui `damageType` comme un **enum unique** `physical | raw` (une attaque est
+  soit entièrement physique, soit entièrement `raw`), **sans part `raw` parallèle** à
+  une part physique. Le modèle « part physique mitigée + part `raw` fixe simultanées »
+  ci-dessus est le **contrat cible** ; son implémentation (multi-composants) n'est pas
+  encore faite.
 
 **Inspector runtime créature** : Esquive / Blocage / Parade affichés Active(X %)/Inactive
 selon `canDodge`/`canBlock`/`canParry`.
@@ -557,7 +560,7 @@ enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
 | Défense créature : blocage (`blockChance`/`blockReductionPercent`, physical, après armure, V6-B4) | Implemented |
 | Nature défensive d'attaque : `SkillDefinition.attackDefenseKind` (physical/magic) + `isAttackParryable` + Studio (V6-B5) | Implemented |
 | Défense créature : parade (`parryChance`, parabilité pilotée par `attackDefenseKind` nature physical/magic, prioritaire, `isParried` propagé, V6-B6) | Implemented |
-| Contrat de parade : parabilité par nature défensive (physical parable même si raw ; magic non parable ; ranged physique parable ; §11.6/§11.7) | Implemented (nature) — alignement `raw` parable + modèle hybride physical+raw Planned (§11.7) |
+| Contrat de parade : parabilité par nature défensive (physical parable même si raw ; magic non parable ; ranged physique parable ; §11.6/§11.7) | Implemented (`isAttackParryable` aligné, `d81ea80`) — modèle hybride physical+raw parallèle reste Planned (§11.7) |
 | Créature : `counterAttackPower` actif, `maxHealthDerived` actif en défense | Planned (restent informatifs, §11.7) |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
