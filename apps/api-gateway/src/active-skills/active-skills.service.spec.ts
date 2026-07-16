@@ -33,6 +33,9 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     effectType: "damage",
     damageType: "physical",
     attackDefenseKind: "physical",
+    canBeDodged: true,
+    canBeBlocked: true,
+    canBeParried: false,
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -373,6 +376,56 @@ describe("ActiveSkillsService", () => {
       const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "magic" });
       expect(updated.attackDefenseKind).toBe("magic");
       expect(updated.damageType).toBe("raw"); // inchangé
+    });
+  });
+
+  describe("flags défensifs (Lot A)", () => {
+    it("création sans flags → défauts (dodge true, block true, parry false)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({ key: "k", name: "N" });
+      expect(created.canBeDodged).toBe(true);
+      expect(created.canBeBlocked).toBe(true);
+      expect(created.canBeParried).toBe(false); // skills non parables par défaut
+    });
+
+    it("création accepte les 3 flags booléens", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "cleave",
+        name: "Cleave",
+        canBeDodged: false,
+        canBeBlocked: false,
+        canBeParried: true,
+      });
+      expect(created.canBeDodged).toBe(false);
+      expect(created.canBeBlocked).toBe(false);
+      expect(created.canBeParried).toBe(true);
+    });
+
+    it("update canBeParried false → true", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ canBeParried: false }));
+      const updated = await service.updateDefinition("power_strike", { canBeParried: true });
+      expect(updated.canBeParried).toBe(true);
+    });
+
+    it("update canBeDodged true → false", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ canBeDodged: true }));
+      const updated = await service.updateDefinition("power_strike", { canBeDodged: false });
+      expect(updated.canBeDodged).toBe(false);
+    });
+
+    it("update canBeBlocked true → false", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ canBeBlocked: true }));
+      const updated = await service.updateDefinition("power_strike", { canBeBlocked: false });
+      expect(updated.canBeBlocked).toBe(false);
+    });
+
+    it("update sans flags conserve les valeurs existantes", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ canBeDodged: false, canBeBlocked: false, canBeParried: true }));
+      const updated = await service.updateDefinition("power_strike", { name: "Renamed" });
+      expect(updated.canBeDodged).toBe(false);
+      expect(updated.canBeBlocked).toBe(false);
+      expect(updated.canBeParried).toBe(true);
     });
   });
 

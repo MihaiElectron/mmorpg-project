@@ -143,6 +143,23 @@ export class SkillDefinition {
   attackDefenseKind: SkillAttackDefenseKind;
 
   /**
+   * Flags défensifs par skill (Lot A) — serveur-autoritaires, jamais fournis par
+   * le client. Décident si le DÉFENSEUR peut esquiver/bloquer/parer ce skill.
+   * Défauts gameplay : esquive/blocage autorisés, **parade désactivée** (un skill
+   * n'est parable que si `canBeParried: true`, préservant l'impact des skills ;
+   * la parade annule le hit et peut déclencher une contre-attaque).
+   * Aucun effet combat dans ce lot : donnée seule (branchement pipeline = Lot B).
+   */
+  @Column({ type: 'boolean', default: true })
+  canBeDodged: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  canBeBlocked: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  canBeParried: boolean;
+
+  /**
    * Coefficients de scaling serveur, ex :
    * { primaryCoefficients: { strength: 1.2 }, derivedCoefficients: { physicalAttack: 0.5 },
    *   masteryCoefficients: { two_handed: 0.1 } }.

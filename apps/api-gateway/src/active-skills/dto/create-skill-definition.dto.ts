@@ -143,6 +143,22 @@ export class CreateSkillDefinitionDto {
   @IsIn(SKILL_ATTACK_DEFENSE_KINDS)
   attackDefenseKind?: SkillAttackDefenseKind;
 
+  /**
+   * Flags défensifs (Lot A) — serveur-autoritaires. Défauts : esquive/blocage
+   * autorisés, parade désactivée. Un skill n'est parable que si `canBeParried: true`.
+   */
+  @IsOptional()
+  @IsBoolean()
+  canBeDodged?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canBeBlocked?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canBeParried?: boolean;
+
   @IsOptional()
   @IsObject()
   scaling?: Record<string, unknown>;
