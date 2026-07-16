@@ -1853,20 +1853,55 @@ describe('CreaturesService', () => {
       }
     });
 
-    it("V6-B6 : skill raw joueur → créature n'est JAMAIS paré", async () => {
+    it("V6-B6 : skill physical + raw joueur → PARABLE (raw n'empêche pas la parade)", async () => {
       setCoeffs({ parryPerStrength: 100, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
       const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, baseArmor: 0 });
       const creature = makeCreature({ id: "cc-skr", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
       (service as any).liveCreatures.set(creature.id, creature);
       (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
 
-      // physical + raw → non parable même avec parry 100.
+      // attackDefenseKind physical + damageType raw → parable (la nature décide) ; parry 100 → paré.
       const res = await service.applySkillDamage("cc-skr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical");
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(true);
+        expect(res.damage).toBe(0);
+      }
+      expect(creature.health).toBe(100); // parée → aucun dégât, même raw
+    });
+
+    it("V6-B6 : skill magic + raw joueur → NON parable (la nature magic décide)", async () => {
+      setCoeffs({ parryPerStrength: 100, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-skmr", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // attackDefenseKind magic + raw → non parable même avec parry 100.
+      const res = await service.applySkillDamage("cc-skmr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "magic");
       expect(res.success).toBe(true);
       if (res.success) {
         expect(res.isParried).toBe(false);
         expect(res.damage).toBe(50);
       }
+    });
+
+    it("V6-B6 : skill raw joueur → ESQUIVABLE (esquive indépendante du damageType)", async () => {
+      setCoeffs({ dodgePerAgility: 100, parryPerStrength: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1, endurance: 0, strength: 0, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-skrd", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // dodge 100 → esquivé, quel que soit le damageType (raw n'empêche pas l'esquive).
+      const res = await service.applySkillDamage("cc-skrd", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical");
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isDodged).toBe(true);
+        expect(res.isParried).toBe(false); // parry 0
+        expect(res.damage).toBe(0);
+      }
+      expect(creature.health).toBe(100);
     });
 
     it("V6-B4 : créature blockChance 100 + réduction 50 bloque l'auto-attaque physical (après armure)", async () => {

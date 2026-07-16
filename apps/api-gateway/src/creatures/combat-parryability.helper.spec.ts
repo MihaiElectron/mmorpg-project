@@ -1,12 +1,12 @@
 import { isAttackParryable } from "./combat-parryability.helper";
 
-describe("isAttackParryable (V6-B5 Lot 2)", () => {
+describe("isAttackParryable — parabilité par la nature défensive (contrat corrigé)", () => {
   it("physical + physical → parable", () => {
     expect(isAttackParryable({ attackDefenseKind: "physical", damageType: "physical" })).toBe(true);
   });
 
-  it("physical + raw → non parable (true damage contourne la mitigation)", () => {
-    expect(isAttackParryable({ attackDefenseKind: "physical", damageType: "raw" })).toBe(false);
+  it("physical + raw → PARABLE (raw n'est pas une nature défensive)", () => {
+    expect(isAttackParryable({ attackDefenseKind: "physical", damageType: "raw" })).toBe(true);
   });
 
   it("magic + physical → non parable (sort pur)", () => {
@@ -21,8 +21,12 @@ describe("isAttackParryable (V6-B5 Lot 2)", () => {
     expect(isAttackParryable({ damageType: "physical" })).toBe(true);
   });
 
-  it("attackDefenseKind absent + raw → non parable", () => {
-    expect(isAttackParryable({ damageType: "raw" })).toBe(false);
+  it("attackDefenseKind absent + raw → PARABLE (défaut physical, raw ignoré ici)", () => {
+    expect(isAttackParryable({ damageType: "raw" })).toBe(true);
+  });
+
+  it("attackDefenseKind null + raw → parable (null → défaut physical)", () => {
+    expect(isAttackParryable({ attackDefenseKind: null, damageType: "raw" })).toBe(true);
   });
 
   it("attackDefenseKind null + damageType absent → parable (double défaut physical)", () => {
