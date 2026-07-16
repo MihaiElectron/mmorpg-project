@@ -13,6 +13,7 @@ import { MasteryEffectsService } from '../masteries/mastery-effects.service';
 import { resolveEquippedWeaponType } from '../characters/equipped-weapon.helper';
 import { CreaturesService } from '../creatures/creatures.service';
 import { isAttackFailure } from '../creatures/creatures.service';
+import type { CreatureCounterAttack } from '../creatures/creatures.service';
 import type { CreatureDto } from '../creatures/dto/creature.dto';
 import type { CharacterXpResult } from '../progression/progression.service';
 import type { LootEntry } from '../world/loot.service';
@@ -51,6 +52,12 @@ export interface SkillCastSuccess {
   blockedDamage: number;
   /** V6-B6 : true si la créature a PARÉ le skill (physical non-raw ; dégâts 0). */
   isParried: boolean;
+  /**
+   * V6-B7 : contre-attaque CRÉATURE → joueur déclenchée quand la créature a PARÉ le
+   * skill. Calculée/appliquée serveur (helper partagé) ; émise par `skills.gateway`.
+   * Absente si pas de parade ou `counterAttackPower <= 0`.
+   */
+  creatureCounterAttack?: CreatureCounterAttack;
   cooldownMs: number;
   loot?: LootEntry[];
   characterXpUpdate?: CharacterXpResult;
@@ -307,6 +314,14 @@ export class SkillCastService {
       stats.derived.accuracy ?? 0,
       // V6-B6 : nature défensive du skill (décide la parabilité côté créature).
       skill.attackDefenseKind ?? 'physical',
+      // Lot A/B : flags défensifs SERVEUR du skill (lus depuis la définition en base,
+      // JAMAIS du payload client `skill:cast`). Defaults sûrs : dodge/block true,
+      // parade false (skill non parable par défaut).
+      {
+        canBeDodged: skill.canBeDodged ?? true,
+        canBeBlocked: skill.canBeBlocked ?? true,
+        canBeParried: skill.canBeParried ?? false,
+      },
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };
@@ -360,6 +375,8 @@ export class SkillCastService {
       isBlocked: result.isBlocked,
       blockedDamage: result.blockedDamage,
       isParried: result.isParried,
+      // V6-B7 : contre-attaque créature (propagée telle quelle, aucun recalcul).
+      creatureCounterAttack: result.creatureCounterAttack,
       cooldownMs: skill.cooldownMs,
       loot: result.loot,
       characterXpUpdate: result.characterXpUpdate,

@@ -1948,13 +1948,152 @@ describe('CreaturesService', () => {
       (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
 
       // physical + physical → parable ; parry 100 → paré.
-      const res = await service.applySkillDamage("cc-skp", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical");
+      const res = await service.applySkillDamage("cc-skp", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical", { canBeParried: true });
       expect(res.success).toBe(true);
       if (res.success) {
         expect(res.isParried).toBe(true);
         expect(res.damage).toBe(0);
       }
       expect(creature.health).toBe(100);
+    });
+
+    // ── V6-B7 Lot 3 : contre-attaque créature sur skill joueur paré ──────────
+    it("V6-B7 : skill physical paré + counterAttackPower > 0 → contre-attaque créature", async () => {
+      setCoeffs({
+        parryPerStrength: 100, counterPerDexterity: 1, counterPerAgility: 0, counterPerIntelligence: 0,
+        dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100,
+      });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7s", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      const update = jest.fn().mockResolvedValue({});
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue(makeCharacter({ id: "char-1", health: 100, defense: 0 })),
+        update,
+      };
+
+      const res = await service.applySkillDamage("cc-b7s", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical", { canBeParried: true });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(true);
+        expect(res.damage).toBe(0);
+        expect(res.creatureCounterAttack).toBeDefined();
+        const cc = res.creatureCounterAttack!;
+        expect(cc.isCounterAttack).toBe(true);
+        expect(cc.amount).toBe(10); // counterAttackPower (dex 10 × 1) − défense joueur 0
+        expect(cc.currentHealth).toBe(90); // 100 − 10
+        expect(cc.killed).toBe(false);
+        expect(cc.isParried).toBe(false); // ANTI-RÉCURSION : joueur ne pare pas la contre
+      }
+    });
+
+    it("V6-B7 : skill magic → jamais paré → aucune contre-attaque", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 1, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7m", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // magic → non parable MÊME avec canBeParried:true → isParried false → pas de counter.
+      const res = await service.applySkillDamage("cc-b7m", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "magic", { canBeParried: true });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(false);
+        expect(res.creatureCounterAttack).toBeUndefined();
+        expect(res.damage).toBe(50);
+      }
+    });
+
+    it("V6-B7 : skill physical + raw paré → contre-attaque possible (raw parable)", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 1, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7r", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue(makeCharacter({ id: "char-1", health: 100, defense: 0 })),
+        update: jest.fn().mockResolvedValue({}),
+      };
+
+      // damageType raw + nature physical → parable via isParried.
+      const res = await service.applySkillDamage("cc-b7r", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical", { canBeParried: true });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(true);
+        expect(res.creatureCounterAttack).toBeDefined();
+        expect(res.creatureCounterAttack!.amount).toBe(10);
+      }
+    });
+
+    it("V6-B7 : skill paré mais counterAttackPower <= 0 → pas de contre-attaque", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 0, counterPerAgility: 0, counterPerIntelligence: 0, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 0, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7z", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-b7z", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical", { canBeParried: true });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(true);
+        expect(res.creatureCounterAttack).toBeUndefined();
+      }
+    });
+
+    it("V6-B7 : skill esquivé (pas de parade) → aucune contre-attaque", async () => {
+      setCoeffs({ dodgePerAgility: 100, parryPerStrength: 0, parryPerDexterity: 0, counterPerDexterity: 1, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1, endurance: 0, strength: 0, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7dg", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-b7dg", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical");
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isDodged).toBe(true);
+        expect(res.isParried).toBe(false);
+        expect(res.creatureCounterAttack).toBeUndefined();
+      }
+    });
+
+    it("V6-B7 : skill bloqué (pas de parade) → aucune contre-attaque", async () => {
+      setCoeffs({ blockPerStrength: 100, blockReductionPercent: 50, parryPerStrength: 0, parryPerDexterity: 0, dodgePerAgility: 0, counterPerDexterity: 1, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-b7bl", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-b7bl", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 40, 9999, 0, "physical", 0, 100, 0, "physical");
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isBlocked).toBe(true);
+        expect(res.isParried).toBe(false);
+        expect(res.creatureCounterAttack).toBeUndefined();
+      }
+    });
+
+    it("V6-B7 : joueur tué par la contre-attaque de skill → respawnCharacter appelé une seule fois", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 10, counterPerAgility: 0, counterPerIntelligence: 0, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 }); // counter = 10×10 = 100
+      const creature = makeCreature({ id: "cc-b7k", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue(makeCharacter({ id: "char-1", health: 5, defense: 0 })),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      const respawnCharacter = jest.fn().mockResolvedValue(undefined);
+      const mockServer = { to: jest.fn().mockReturnValue({ emit: jest.fn() }) };
+      (service as any).worldService = { getAllConnectedPlayers: jest.fn().mockReturnValue([]), respawnCharacter };
+      (service as any).server = mockServer;
+
+      const res = await service.applySkillDamage("cc-b7k", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical", { canBeParried: true });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.creatureCounterAttack).toBeDefined();
+        expect(res.creatureCounterAttack!.killed).toBe(true);
+        expect(res.creatureCounterAttack!.currentHealth).toBe(0);
+      }
+      expect(respawnCharacter).toHaveBeenCalledTimes(1);
+      expect(respawnCharacter).toHaveBeenCalledWith("char-1", mockServer);
     });
 
     it("V6-B6 : skill magic joueur → créature n'est JAMAIS paré", async () => {
@@ -1981,7 +2120,7 @@ describe('CreaturesService', () => {
       (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
 
       // attackDefenseKind physical + damageType raw → parable (la nature décide) ; parry 100 → paré.
-      const res = await service.applySkillDamage("cc-skr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical");
+      const res = await service.applySkillDamage("cc-skr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical", { canBeParried: true });
       expect(res.success).toBe(true);
       if (res.success) {
         expect(res.isParried).toBe(true);
@@ -1997,12 +2136,76 @@ describe('CreaturesService', () => {
       (service as any).liveCreatures.set(creature.id, creature);
       (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
 
-      // attackDefenseKind magic + raw → non parable même avec parry 100.
-      const res = await service.applySkillDamage("cc-skmr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "magic");
+      // attackDefenseKind magic + raw → non parable même avec parry 100 ET canBeParried:true.
+      const res = await service.applySkillDamage("cc-skmr", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "magic", { canBeParried: true });
       expect(res.success).toBe(true);
       if (res.success) {
         expect(res.isParried).toBe(false);
         expect(res.damage).toBe(50);
+      }
+    });
+
+    // ── Lot A/B : flags défensifs SERVEUR par skill ─────────────────────────
+    it("Lot A/B : skill physical par défaut (canBeParried false) → jamais paré, pas de counter", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 1, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-la1", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      // Aucun flag fourni → canBeParried défaut false → skill physical NON paré.
+      const res = await service.applySkillDamage("cc-la1", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical");
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(false);
+        expect(res.creatureCounterAttack).toBeUndefined();
+        expect(res.damage).toBe(50);
+      }
+    });
+
+    it("Lot A/B : canBeParried false + raw physical → non parable, pas de counter", async () => {
+      setCoeffs({ parryPerStrength: 100, counterPerDexterity: 1, dodgePerAgility: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-la2", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-la2", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "raw", 0, 100, 0, "physical", { canBeParried: false });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isParried).toBe(false);
+        expect(res.creatureCounterAttack).toBeUndefined();
+        expect(res.damage).toBe(50);
+      }
+    });
+
+    it("Lot A/B : canBeDodged false → pas d'esquive même dodge 100", async () => {
+      setCoeffs({ dodgePerAgility: 100, parryPerStrength: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1, endurance: 0, strength: 0, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-la3", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-la3", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 50, 9999, 0, "physical", 0, 100, 0, "physical", { canBeDodged: false });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isDodged).toBe(false); // esquive désactivée par le flag
+        expect(res.damage).toBe(50);
+      }
+    });
+
+    it("Lot A/B : canBeBlocked false → pas de blocage même block 100", async () => {
+      setCoeffs({ blockPerStrength: 100, blockReductionPercent: 50, parryPerStrength: 0, dodgePerAgility: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-la4", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage("cc-la4", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID }, 40, 9999, 0, "physical", 0, 100, 0, "physical", { canBeBlocked: false });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isBlocked).toBe(false); // blocage désactivé par le flag
+        expect(res.damage).toBe(40); // dégâts pleins (armure 0)
       }
     });
 

@@ -12,6 +12,8 @@ import type { SkillDefinition } from "./entities/skill-definition.entity";
 
 const POSITION = { worldX: 0, worldY: 0, mapId: 1 };
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
+// Lot A/B : flags défensifs par défaut passés à applySkillDamage (fixture makeSkill).
+const DEFAULT_FLAGS = { canBeDodged: true, canBeBlocked: true, canBeParried: false };
 
 function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
   return {
@@ -310,6 +312,7 @@ describe("SkillCastService", () => {
       150, // V4-D : criticalDamage (défaut 150)
       0, // V4-G : accuracy (0 par défaut)
       "physical", // V6-B6 : attackDefenseKind du skill (défaut)
+      DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -340,6 +343,7 @@ describe("SkillCastService", () => {
       150, // criticalDamage
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
+      DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
     );
   });
 
@@ -361,6 +365,7 @@ describe("SkillCastService", () => {
       150, // criticalDamage
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
+      DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
     );
   });
 
@@ -372,6 +377,16 @@ describe("SkillCastService", () => {
     const args = creatures.applySkillDamage.mock.calls[0];
     expect(args[10]).toBe("magic"); // attackDefenseKind en 11e position
     expect(args[6]).toBe("physical"); // damageType reste séparé
+  });
+
+  it("Lot A/B : transmet les flags défensifs SERVEUR du skill à applySkillDamage (12e arg)", async () => {
+    currentSkill = makeSkill({ canBeDodged: false, canBeBlocked: false, canBeParried: true });
+    activeSkills.listDefinitions.mockResolvedValue([currentSkill]);
+    const r = await cast();
+    expect(r.success).toBe(true);
+    const args = creatures.applySkillDamage.mock.calls[0];
+    // 12e arg = objet de flags lu depuis la définition serveur (jamais le client).
+    expect(args[11]).toEqual({ canBeDodged: false, canBeBlocked: false, canBeParried: true });
   });
 
   it("V6-B6 : propage isParried depuis applySkillDamage dans le résultat de cast", async () => {
@@ -390,6 +405,30 @@ describe("SkillCastService", () => {
     const r = await cast();
     expect(r.success).toBe(true);
     if (r.success) expect(r.isParried).toBe(true);
+  });
+
+  it("V6-B7 : propage creatureCounterAttack depuis applySkillDamage vers SkillCastResult", async () => {
+    const counter = {
+      amount: 10, currentHealth: 90, maxHealth: 100, killed: false,
+      isCritical: false, isDodged: false, isBlocked: false, isParried: false,
+      blockedDamage: 0, isCounterAttack: true as const,
+    };
+    creatures.applySkillDamage.mockResolvedValueOnce({
+      success: true,
+      dto: { id: TARGET_ID, state: "alive", worldX: 1, worldY: 1, mapId: 1 },
+      damage: 0,
+      attackerId: "c1",
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      isParried: true,
+      creatureCounterAttack: counter,
+    });
+    const r = await cast();
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.creatureCounterAttack).toEqual(counter);
   });
 
   it("transmet criticalChance/criticalDamage dérivés au hook applySkillDamage (V4-D)", async () => {
@@ -414,6 +453,7 @@ describe("SkillCastService", () => {
       150, // criticalDamage (défaut)
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
+      DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
     );
   });
 
@@ -480,6 +520,7 @@ describe("SkillCastService", () => {
         150, // criticalDamage
         0, // accuracy
         "physical", // V6-B6 : attackDefenseKind
+        DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -498,7 +539,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -512,7 +553,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -525,7 +566,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -539,7 +580,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical",
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
       );
     });
 

@@ -163,6 +163,58 @@ export class SkillsGateway implements OnGatewayConnection {
       );
     }
 
+    // V6-B7 : contre-attaque CRÉATURE → joueur (déclenchée quand la créature a PARÉ
+    // le skill). Dégâts déjà calculés/appliqués par le service — la gateway ne fait
+    // que PUBLIER (aucun recalcul, pas de respawn ici). Style identique à la
+    // contre-attaque auto-attaque (creatures.gateway).
+    if (result.creatureCounterAttack) {
+      const cc = result.creatureCounterAttack;
+      client.emit('character_damaged', {
+        characterId: player.characterId,
+        damage: cc.amount,
+        health: cc.currentHealth,
+      });
+      const playerRoom = getMapRoomId(player.mapId ?? DEFAULT_MAP_ID);
+      this.server.to(playerRoom).emit(
+        COMBAT_EVENT,
+        makeCombatEvent({
+          type: 'damage',
+          amount: cc.amount,
+          sourceType: 'creature',
+          sourceId: payload.targetId,
+          targetType: 'player',
+          targetId: player.characterId,
+          worldX: player.worldX ?? 0,
+          worldY: player.worldY ?? 0,
+          text: `-${cc.amount}`,
+          isCounterAttack: true,
+          isCritical: cc.isCritical,
+          isDodged: cc.isDodged,
+          isBlocked: cc.isBlocked,
+          blockedDamage: cc.blockedDamage,
+          isParried: cc.isParried,
+          targetDied: cc.killed,
+        }),
+      );
+      if (cc.killed) {
+        this.server.to(playerRoom).emit(
+          COMBAT_EVENT,
+          makeCombatEvent({
+            type: 'death',
+            amount: cc.amount,
+            sourceType: 'creature',
+            sourceId: payload.targetId,
+            targetType: 'player',
+            targetId: player.characterId,
+            worldX: player.worldX ?? 0,
+            worldY: player.worldY ?? 0,
+            isCounterAttack: true,
+            targetDied: true,
+          }),
+        );
+      }
+    }
+
     // XP personnage (kill) au seul lanceur.
     if (result.characterXpUpdate) {
       client.emit('character_xp_update', result.characterXpUpdate);
