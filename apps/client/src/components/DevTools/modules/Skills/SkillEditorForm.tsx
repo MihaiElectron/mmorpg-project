@@ -51,6 +51,9 @@ interface Draft {
   effectType: SkillEffectType;
   damageType: SkillDamageType;
   attackDefenseKind: SkillAttackDefenseKind;
+  canBeDodged: boolean;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
   requiredLevel: string;
   resourceCost: string;
   cooldownMs: string;
@@ -79,6 +82,9 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     effectType: skill?.effectType ?? "damage",
     damageType: skill?.damageType ?? "physical",
     attackDefenseKind: skill?.attackDefenseKind ?? "physical",
+    canBeDodged: skill?.canBeDodged ?? true,
+    canBeBlocked: skill?.canBeBlocked ?? true,
+    canBeParried: skill?.canBeParried ?? false,
     requiredLevel: String(skill?.requiredLevel ?? 1),
     resourceCost: String(skill?.resourceCost ?? 0),
     cooldownMs: String(skill?.cooldownMs ?? 1000),
@@ -225,6 +231,9 @@ export default function SkillEditorForm({
       effectType: draft.effectType,
       damageType: draft.damageType,
       attackDefenseKind: draft.attackDefenseKind,
+      canBeDodged: draft.canBeDodged,
+      canBeBlocked: draft.canBeBlocked,
+      canBeParried: draft.canBeParried,
       scaling: buildScaling(),
     };
     const key = mode === "create" ? payload.key : (skill?.key ?? "");
@@ -462,6 +471,44 @@ export default function SkillEditorForm({
               ))}
             </select>
           </label>
+          {/* Flags défensifs (Lot A/B) — appliqués côté serveur depuis la
+              définition du skill. Défauts : esquivable/bloquable, non parable. */}
+          <label className="skills-editor__field skills-editor__field--checkbox">
+            <input
+              type="checkbox"
+              checked={draft.canBeDodged}
+              onChange={(e) => setField("canBeDodged", e.target.checked)}
+              disabled={draft.effectType !== "damage"}
+            />
+            <span className="skills-editor__label">Esquivable</span>
+          </label>
+          <label className="skills-editor__field skills-editor__field--checkbox">
+            <input
+              type="checkbox"
+              checked={draft.canBeBlocked}
+              onChange={(e) => setField("canBeBlocked", e.target.checked)}
+              disabled={draft.effectType !== "damage"}
+            />
+            <span className="skills-editor__label">Bloquable</span>
+          </label>
+          <label
+            className="skills-editor__field skills-editor__field--checkbox"
+            title="Une parade annule le skill et peut déclencher une contre-attaque. Désactivé par défaut pour préserver l'impact des skills."
+          >
+            <input
+              type="checkbox"
+              checked={draft.canBeParried}
+              onChange={(e) => setField("canBeParried", e.target.checked)}
+              disabled={draft.effectType !== "damage"}
+            />
+            <span className="skills-editor__label">Parable</span>
+          </label>
+          <p className="skills-editor__hint">
+            Ces règles défensives sont appliquées côté serveur depuis la définition
+            du skill. Parable : une parade annule le skill et peut déclencher une
+            contre-attaque (désactivé par défaut).
+            {draft.effectType !== "damage" && " Ignoré ici : soins non concernés."}
+          </p>
           <label className="skills-editor__field">
             <span className="skills-editor__label">skillKind</span>
             <select

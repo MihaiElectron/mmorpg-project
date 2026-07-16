@@ -82,6 +82,13 @@ export interface SkillDefinitionDto {
   damageType: SkillDamageType;
   /** Nature défensive (V6-B5). physical par défaut ; magic = sort pur non parable. */
   attackDefenseKind: SkillAttackDefenseKind;
+  /**
+   * Flags défensifs serveur (Lot A/B). Contrôlent si le défenseur peut esquiver/
+   * bloquer/parer ce skill. Défauts : dodge/block true, parade false (opt-in).
+   */
+  canBeDodged: boolean;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
   scaling: SkillScaling;
   createdAt: string;
   updatedAt: string;
@@ -110,6 +117,9 @@ export interface CreateSkillDefinitionPayload {
   effectType?: SkillEffectType;
   damageType?: SkillDamageType;
   attackDefenseKind?: SkillAttackDefenseKind;
+  canBeDodged?: boolean;
+  canBeBlocked?: boolean;
+  canBeParried?: boolean;
   scaling?: SkillScaling;
 }
 
