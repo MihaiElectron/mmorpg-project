@@ -149,6 +149,53 @@ export class CreaturesGateway implements OnGatewayInit, OnGatewayConnection {
       }));
     }
 
+    // V6-B7 : contre-attaque CRÉATURE → joueur (déclenchée quand la créature a PARÉ
+    // le hit principal ; remplace la riposte). Dégâts déjà calculés/appliqués par le
+    // service — la gateway ne fait que PUBLIER (aucun recalcul, pas de respawn ici).
+    // Style identique à la riposte (character_damaged + combat:event) + flag
+    // isCounterAttack, et event death sur le modèle de la contre-attaque V4-I.
+    if (result.creatureCounterAttack) {
+      const cc = result.creatureCounterAttack;
+      client.emit('character_damaged', {
+        characterId: player.characterId,
+        damage: cc.amount,
+        health: cc.currentHealth,
+      });
+      const playerRoom = getMapRoomId(player.mapId ?? DEFAULT_MAP_ID);
+      this.server.to(playerRoom).emit(COMBAT_EVENT, makeCombatEvent({
+        type: 'damage',
+        amount: cc.amount,
+        sourceType: 'creature',
+        sourceId: payload.targetId,
+        targetType: 'player',
+        targetId: player.characterId,
+        worldX: player.worldX ?? 0,
+        worldY: player.worldY ?? 0,
+        text: `-${cc.amount}`,
+        isCounterAttack: true,
+        isCritical: cc.isCritical,
+        isDodged: cc.isDodged,
+        isBlocked: cc.isBlocked,
+        blockedDamage: cc.blockedDamage,
+        isParried: cc.isParried,
+        targetDied: cc.killed,
+      }));
+      if (cc.killed) {
+        this.server.to(playerRoom).emit(COMBAT_EVENT, makeCombatEvent({
+          type: 'death',
+          amount: cc.amount,
+          sourceType: 'creature',
+          sourceId: payload.targetId,
+          targetType: 'player',
+          targetId: player.characterId,
+          worldX: player.worldX ?? 0,
+          worldY: player.worldY ?? 0,
+          isCounterAttack: true,
+          targetDied: true,
+        }));
+      }
+    }
+
     // V4-I : contre-attaque déclenchée par une parade — event combat:event SÉPARÉ
     // (source joueur → cible créature). La mort éventuelle est liée à la
     // contre-attaque seulement (jamais au hit paré entrant).

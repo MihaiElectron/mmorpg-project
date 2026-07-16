@@ -172,6 +172,94 @@ describe('CreaturesGateway — combat:event (onAttackCreature)', () => {
     });
   });
 
+  it('V6-B7 : creatureCounterAttack → character_damaged + combat:event creature→player (isCounterAttack)', async () => {
+    const { gw, roomEmits } = makeGateway({
+      success: true,
+      dto: { ...CREATURE_DTO },
+      damage: 0, // hit principal paré
+      attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      isParried: true,
+      creatureCounterAttack: {
+        amount: 10, currentHealth: 90, maxHealth: 100, killed: false,
+        isCritical: false, isDodged: false, isBlocked: false, isParried: false,
+        blockedDamage: 0, isCounterAttack: true,
+      },
+    });
+    const client = makeClient();
+
+    await (gw as any).onAttackCreature(client, { targetId: 'creature-1' });
+
+    // character_damaged vers le joueur attaquant (un seul, contrat riposte).
+    expect(client.emit).toHaveBeenCalledWith(
+      'character_damaged',
+      expect.objectContaining({ characterId: 'char-1', damage: 10, health: 90 }),
+    );
+
+    const ccEvents = roomEmits.filter(
+      (e) =>
+        e.event === COMBAT_EVENT &&
+        e.payload.type === 'damage' &&
+        e.payload.targetType === 'player' &&
+        e.payload.isCounterAttack === true,
+    );
+    expect(ccEvents).toHaveLength(1);
+    expect(ccEvents[0].payload).toMatchObject({
+      sourceType: 'creature',
+      sourceId: 'creature-1',
+      targetType: 'player',
+      targetId: 'char-1',
+      amount: 10,
+      text: '-10',
+      isCounterAttack: true,
+      isParried: false,
+      isDodged: false,
+      isBlocked: false,
+    });
+    // Pas de death event (joueur vivant).
+    expect(roomEmits.some((e) => e.event === COMBAT_EVENT && e.payload.type === 'death')).toBe(false);
+  });
+
+  it('V6-B7 : creatureCounterAttack létale → un seul death event targetType player (pas de double)', async () => {
+    const { gw, roomEmits } = makeGateway({
+      success: true,
+      dto: { ...CREATURE_DTO },
+      damage: 0,
+      attackerId: 'char-1',
+      isCritical: false,
+      killed: false,
+      isDodged: false,
+      isBlocked: false,
+      blockedDamage: 0,
+      isParried: true,
+      creatureCounterAttack: {
+        amount: 100, currentHealth: 0, maxHealth: 100, killed: true,
+        isCritical: false, isDodged: false, isBlocked: false, isParried: false,
+        blockedDamage: 0, isCounterAttack: true,
+      },
+    });
+    const client = makeClient();
+
+    await (gw as any).onAttackCreature(client, { targetId: 'creature-1' });
+
+    const deaths = roomEmits.filter(
+      (e) => e.event === COMBAT_EVENT && e.payload.type === 'death' && e.payload.targetType === 'player',
+    );
+    expect(deaths).toHaveLength(1);
+    expect(deaths[0].payload).toMatchObject({
+      sourceType: 'creature',
+      sourceId: 'creature-1',
+      targetType: 'player',
+      targetId: 'char-1',
+      isCounterAttack: true,
+      targetDied: true,
+    });
+  });
+
   it('propage isBlocked/blockedDamage dans le combat:event de riposte quand le joueur bloque', async () => {
     const { gw, roomEmits } = makeGateway({
       success: true,
