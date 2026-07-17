@@ -72,8 +72,68 @@ export type CreatureDerivedSecondaryStatsDto = {
   parryChance: number;
   /** Puissance de contre-attaque dérivée. Non active. */
   counterAttackPower: number;
-  /** PV max dérivé (baseHealth + vitality × coeff) — informatif, PAS le PV max actif. */
+  /**
+   * @deprecated Lot 2/3 : ALIAS de `maxHealth` (même valeur autoritaire finale).
+   * Conservé pour compatibilité DTO ; ne représente PAS une seconde notion. Le
+   * Studio ne doit plus l'afficher comme une statistique indépendante — il affiche
+   * `maxHealthTrace` (détail du calcul du PV max final).
+   */
   maxHealthDerived: number;
+};
+
+/** Une contribution APPLIQUÉE au calcul du PV max (Lot 3 — trace serveur, lecture seule). */
+export type CreatureMaxHealthContributionDto = {
+  sourceType: string;
+  sourceId: string;
+  operation: string;
+  /** Valeur d'origine du modifier (avant filtres). */
+  originalValue: number;
+  /** Valeur après facteur de filtre combiné. */
+  effectiveValue: number;
+  /** Facteur de filtre combiné (1 = aucun filtre). */
+  scale: number;
+  /** Delta EXACT apporté à la stat (non arrondi). */
+  contribution: number;
+  tags: string[];
+};
+
+/** Une contribution FILTRÉE (exclue ou réduite) du calcul du PV max (Lot 3). */
+export type CreatureMaxHealthFilteredDto = {
+  sourceType: string;
+  sourceId: string;
+  operation: string;
+  originalValue: number;
+  scale: number;
+  excluded: boolean;
+  reasons: string[];
+};
+
+/**
+ * Trace SERVEUR du calcul du PV max autoritaire d'une créature (Lot 3, ADR-0021).
+ * Sérialisation du `StatResolutionResult` mémoïsé + contexte (Vitalité, coefficient).
+ * Lecture seule : le Studio l'affiche tel quel, il ne recalcule JAMAIS la formule.
+ */
+export type CreatureMaxHealthTraceDto = {
+  stat: 'maxHealth';
+  /** Socle configuré = `template.baseHealth`. */
+  baseValue: number;
+  /** Contexte : Vitalité du template (source de la contribution dérivée). */
+  vitality: number;
+  /** Contexte : coefficient global PV/Vitalité. */
+  maxHealthPerVitality: number;
+  appliedContributions: CreatureMaxHealthContributionDto[];
+  filteredContributions: CreatureMaxHealthFilteredDto[];
+  afterFlat: number;
+  afterPercentAdd: number;
+  afterPercentMultiply: number;
+  afterOverride: number;
+  beforeCaps: number;
+  caps: { min: number | null; max: number | null };
+  afterCaps: number;
+  roundingPolicy: string;
+  overrideApplied: { modifierId: string; priority: number; value: number } | null;
+  /** PV max final autoritaire (= `maxHealth`). */
+  finalValue: number;
 };
 
 export type CreatureRuntimeCombatDto = {
@@ -125,6 +185,9 @@ export type CreatureRuntimeCombatDto = {
   // SEULEMENT. Dérivées serveur mais NON actives en défense (canDodge/canBlock/
   // canParry restent false). `maxHealthDerived` ne remplace pas `maxHealth`.
   derivedSecondaryStats: CreatureDerivedSecondaryStatsDto;
+  // D-quinquies. Trace SERVEUR du calcul du PV max final (Lot 3). Le Studio affiche
+  // le détail (socle + contribution Vitalité + caps + arrondi + final) sans recalcul.
+  maxHealthTrace: CreatureMaxHealthTraceDto;
   // E. Loot / XP (facts du template ; le loot restant n'est pas tracké par instance)
   killCharacterXpReward: number;
   hasLootPool: boolean;

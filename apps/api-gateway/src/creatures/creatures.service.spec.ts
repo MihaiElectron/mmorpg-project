@@ -3925,6 +3925,53 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(dto!.healingPower).toBe(5); // fallback attackPower (baseAttack 5)
       });
 
+      // Lot 3 : trace serveur du calcul du PV max (Studio, lecture seule).
+      it("Lot 3 : getRuntimeCombatInfo expose maxHealthTrace (socle + Vitalité + caps + arrondi + final)", async () => {
+        const template = makeTemplate({ key: "trace", baseHealth: 30, vitality: 3 }); // max floor(30+30)=60
+        const creature = makeCreature({ id: "trace-1", state: "fighting", health: 45, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("trace", []);
+
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        const tr = dto!.maxHealthTrace;
+        expect(tr.stat).toBe("maxHealth");
+        expect(tr.baseValue).toBe(30); // socle baseHealth
+        expect(tr.vitality).toBe(3);
+        expect(tr.maxHealthPerVitality).toBe(10); // coefficient (mock défaut)
+        // Contribution Vitalité appliquée avec tags derived/vitality/health.
+        const vit = tr.appliedContributions.find((c) => c.sourceId === "vitality");
+        expect(vit!.operation).toBe("flat");
+        expect(vit!.contribution).toBe(30); // 3 × 10
+        expect(vit!.tags).toEqual(["derived", "vitality", "health"]);
+        expect(tr.filteredContributions).toEqual([]); // aucun filtre
+        expect(tr.beforeCaps).toBe(60);
+        expect(tr.caps).toEqual({ min: 1, max: null }); // cap minimum 1
+        expect(tr.afterCaps).toBe(60);
+        expect(tr.roundingPolicy).toBe("floor");
+        expect(tr.overrideApplied).toBeNull();
+        // finalValue == maxHealth DTO == runtimeStats-équivalent (une seule valeur).
+        expect(tr.finalValue).toBe(60);
+        expect(dto!.maxHealth).toBe(tr.finalValue);
+        expect(dto!.derivedSecondaryStats.maxHealthDerived).toBe(tr.finalValue);
+      });
+
+      it("Lot 3 : coefficient fractionnaire → beforeCaps non arrondi, final floor", async () => {
+        (service as any).creatureSecondaryCoefficients.getCoefficients = jest.fn().mockReturnValue({
+          ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+          maxHealthPerVitality: 2.5,
+        });
+        const template = makeTemplate({ key: "frac", baseHealth: 30, vitality: 3 }); // 30 + 7.5 = 37.5 → 37
+        const creature = makeCreature({ id: "frac-1", state: "fighting", health: 30, spawn: makeSpawn(template) as any });
+        (service as any).liveCreatures.set(creature.id, creature);
+        (service as any).combatAbilityCache.set("frac", []);
+
+        const dto = await service.getRuntimeCombatInfo(creature.id);
+        const tr = dto!.maxHealthTrace;
+        expect(tr.beforeCaps).toBeCloseTo(37.5, 6); // avant arrondi
+        expect(tr.finalValue).toBe(37); // floor
+        expect(dto!.maxHealth).toBe(37);
+      });
+
       // C. Heal : préserve V5-D1 (fallback) et prend la vraie valeur si configurée.
       const HEAL2 = {
         skillKey: "soin",

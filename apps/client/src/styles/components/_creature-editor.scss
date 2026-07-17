@@ -54,8 +54,22 @@
     color: vars.$color-text-primary;
     word-break: break-word;
   }
+  // Lot 3 : valeur finale autoritaire mise en avant (PV max final).
+  &__value--strong {
+    color: vars.$color-text-gold;
+    font-weight: 600;
+  }
   &__hint {
     color: vars.$color-text-muted;
+  }
+
+  // Lot 3 : liste des contributions (appliquées / filtrées) du calcul PV max.
+  &__contributions {
+    @include m.devtools-compact-stack;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: vars.$dt-compact-font-sm;
   }
 
   // Capacités runtime (lecture seule : nom + portée/cd + statut)

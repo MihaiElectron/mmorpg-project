@@ -24,7 +24,7 @@ import { SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
-import { CreatureDto, CreatureRuntimeStats, CreatureRuntimeCombatDto } from './dto/creature.dto';
+import { CreatureDto, CreatureRuntimeStats, CreatureRuntimeCombatDto, CreatureMaxHealthTraceDto } from './dto/creature.dto';
 import { WorldService, ConnectedPlayer } from '../world/world.service';
 import { ProgressionService, ProgressionSource, CharacterXpResult } from '../progression/progression.service';
 import { MasteriesService, MasteryUpdatePayload } from '../masteries/masteries.service';
@@ -38,6 +38,7 @@ import { LootService, LootEntry } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
+import { StatResolutionResult } from '../player-runtime/player-runtime.types';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
 import { CreatureCombatStats, CreatureDerivedStats } from '../creature-runtime/creature-runtime.types';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
@@ -213,13 +214,17 @@ export class CreaturesService implements OnModuleInit {
   // Lot 2 fix : snapshot des PV max EFFECTIFS par templateKey (ADR-0021). Les
   // sources du PV max (`baseHealth`, `vitality`, coefficient `maxHealthPerVitality`)
   // sont STRICTEMENT communes à toutes les instances d'un template (les debug
-  // modifiers ne sont PAS branchés sur le PV max — voir `resolveMaxHealth`), et le
-  // coefficient est session-constant (aucun endpoint live). La granularité par
-  // template est donc correcte et étend le mécanisme existant `combatAbilityCache`.
+  // modifiers ne sont PAS branchés sur le PV max — voir `resolveMaxHealth`).
+  // La granularité par template étend le mécanisme existant `combatAbilityCache`.
   // Évite de reconstruire le pipeline `resolveStat` à chaque tick IA / DTO / hit.
   // Invalidé sur édition de template (`refreshTemplateInMemory` / `invalidateAbilitiesCache`)
-  // et via `invalidateMaxHealthCache` (futur endpoint coefficients, Lot 3).
-  private readonly maxHealthByTemplateKey = new Map<string, number>();
+  // et sur changement du coefficient (`recalculateAllMaxHealthAfterCoefficientChange`).
+  //
+  // Lot 3 : le snapshot conserve le RÉSULTAT COMPLET (`StatResolutionResult`) et non
+  // la seule valeur finale — valeur autoritaire ET trace explicative (Studio) restent
+  // ainsi COHÉRENTES et sont invalidées ENSEMBLE. Les consommateurs runtime lisent
+  // uniquement `.finalValue` ; seul le Studio lit la trace.
+  private readonly maxHealthByTemplateKey = new Map<string, StatResolutionResult>();
 
   constructor(
     @InjectRepository(Creature)
@@ -365,6 +370,8 @@ export class CreaturesService implements OnModuleInit {
 
     // Stats effectives — point unique (V6-A Lot 2). Mêmes valeurs qu'avant.
     const stats = this.creatureCombatStats(creature, t);
+    // Lot 3 : trace du calcul du PV max (MÊME snapshot que la valeur autoritaire).
+    const maxHealthTrace = this.buildMaxHealthTrace(t);
 
     const lastAtk = this.lastCreatureAutoAttackAt.get(id) ?? null;
 
@@ -459,6 +466,7 @@ export class CreaturesService implements OnModuleInit {
         counterAttackPower: stats.counterAttackPower,
         maxHealthDerived: stats.maxHealthDerived,
       },
+      maxHealthTrace,
       killCharacterXpReward: t.killCharacterXpReward,
       hasLootPool: lootPoolSize > 0,
       lootPoolSize,
@@ -498,19 +506,72 @@ export class CreaturesService implements OnModuleInit {
    * `CreatureRuntimeService.getRuntimeSnapshot`). Tous les chemins PV créature
    * (spawn/respawn/soin/fuite/admin/DTO/combat) lisent cette valeur.
    */
-  private resolveCreatureMaxHealth(template: CreatureTemplate): number {
-    // Snapshot mémoïsé par templateKey : le resolver générique n'est appelé
-    // qu'au premier accès (ou après invalidation). Les lectures répétées (tick de
-    // fuite, DTO broadcast, hits combat, soins, inspection) lisent la valeur en
-    // cache — aucune reconstruction du pipeline par tick.
+  /**
+   * Résultat COMPLET de résolution des PV max (valeur finale + trace) mémoïsé par
+   * templateKey. Le resolver générique n'est appelé qu'au premier accès (ou après
+   * invalidation) ; les lectures répétées (tick de fuite, DTO broadcast, hits
+   * combat, soins, inspection Studio) lisent le snapshot — aucune reconstruction
+   * du pipeline par tick. Valeur autoritaire et trace proviennent du MÊME résultat.
+   */
+  private resolveCreatureMaxHealthResult(template: CreatureTemplate): StatResolutionResult {
     const cached = this.maxHealthByTemplateKey.get(template.key);
     if (cached !== undefined) return cached;
-    const value = CreatureRuntimeCalculator.resolveMaxHealth(
+    const result = CreatureRuntimeCalculator.resolveMaxHealth(
       template,
       this.creatureSecondaryCoefficients.getCoefficients(),
-    ).finalValue;
-    this.maxHealthByTemplateKey.set(template.key, value);
-    return value;
+    );
+    this.maxHealthByTemplateKey.set(template.key, result);
+    return result;
+  }
+
+  /** PV max EFFECTIF (valeur finale autoritaire) — lecture unique des consommateurs runtime. */
+  private resolveCreatureMaxHealth(template: CreatureTemplate): number {
+    return this.resolveCreatureMaxHealthResult(template).finalValue;
+  }
+
+  /**
+   * Lot 3 : sérialise la trace du calcul du PV max pour le Studio (lecture seule),
+   * depuis le MÊME snapshot mémoïsé que la valeur autoritaire (jamais un recalcul
+   * séparé → aucune divergence possible entre valeur et trace). Ajoute le contexte
+   * (Vitalité du template, coefficient global) que le resolver générique ne porte pas.
+   */
+  private buildMaxHealthTrace(template: CreatureTemplate): CreatureMaxHealthTraceDto {
+    const result = this.resolveCreatureMaxHealthResult(template);
+    return {
+      stat: 'maxHealth',
+      baseValue: result.baseValue,
+      vitality: template.vitality ?? 0,
+      maxHealthPerVitality: this.creatureSecondaryCoefficients.getCoefficients().maxHealthPerVitality,
+      appliedContributions: result.applied.map((a) => ({
+        sourceType: a.sourceType,
+        sourceId: a.sourceId,
+        operation: a.operation,
+        originalValue: a.originalValue,
+        effectiveValue: a.effectiveValue,
+        scale: a.scale,
+        contribution: a.contribution,
+        tags: a.tags,
+      })),
+      filteredContributions: result.filtered.map((f) => ({
+        sourceType: f.sourceType,
+        sourceId: f.sourceId,
+        operation: f.operation,
+        originalValue: f.originalValue,
+        scale: f.scale,
+        excluded: f.excluded,
+        reasons: f.reasons,
+      })),
+      afterFlat: result.afterFlat,
+      afterPercentAdd: result.afterPercentAdd,
+      afterPercentMultiply: result.afterPercentMultiply,
+      afterOverride: result.afterOverride,
+      beforeCaps: result.beforeCaps,
+      caps: { min: result.caps.min, max: result.caps.max },
+      afterCaps: result.afterCaps,
+      roundingPolicy: result.roundingPolicy,
+      overrideApplied: result.overrideApplied,
+      finalValue: result.finalValue,
+    };
   }
 
   /**
@@ -553,7 +614,7 @@ export class CreaturesService implements OnModuleInit {
     for (const creature of this.liveCreatures.values()) {
       if (creature.state === 'dead' || !creature.spawn?.template) continue;
       const template = creature.spawn.template;
-      const oldMax = oldByTemplate.get(template.key);
+      const oldMax = oldByTemplate.get(template.key)?.finalValue;
       const newMax = this.resolveCreatureMaxHealth(template); // recompute + re-mémoïse
       if (oldMax !== undefined && oldMax === newMax) continue; // max inchangé → skip
 

@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { useDevToolsStore } from "../../store/devtools.store";
+import {
+  buildMaxHealthRows,
+  formatAppliedContribution,
+  formatFilteredContribution,
+  MaxHealthTrace,
+} from "./creatureMaxHealthTrace";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -74,8 +80,11 @@ interface CreatureRuntimeCombat {
     blockReductionPercent: number;
     parryChance: number;
     counterAttackPower: number;
+    /** @deprecated alias de maxHealth (voir maxHealthTrace). */
     maxHealthDerived: number;
   };
+  /** Lot 3 : trace serveur du calcul du PV max final (optionnel : compat ancien payload). */
+  maxHealthTrace?: MaxHealthTrace;
   killCharacterXpReward: number;
   hasLootPool: boolean;
   lootPoolSize: number;
@@ -267,6 +276,49 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             </Row>
           </dl>
 
+          {/* B-bis. PV maximum — trace SERVEUR du calcul (Lot 3). Aucun calcul
+              client : on affiche les lignes produites depuis la trace serveur.
+              `baseHealth` = socle configuré, la valeur finale est mise en avant. */}
+          <p className="creature-runtime__title">PV maximum</p>
+          <dl className="creature-runtime__grid">
+            {buildMaxHealthRows(data.maxHealthTrace, {
+              currentHealth: data.currentHealth,
+              fallbackFinal: data.maxHealth,
+            }).map((r) => (
+              <Row key={r.key} label={r.label}>
+                {r.strong ? (
+                  <strong className="creature-runtime__value--strong">{r.value}</strong>
+                ) : (
+                  r.value
+                )}
+              </Row>
+            ))}
+          </dl>
+          {data.maxHealthTrace &&
+            data.maxHealthTrace.appliedContributions.length > 0 && (
+              <ul className="creature-runtime__contributions">
+                {data.maxHealthTrace.appliedContributions.map((c, i) => (
+                  <li key={`app-${i}`} className="creature-runtime__hint">
+                    {formatAppliedContribution(c)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          {data.maxHealthTrace &&
+            data.maxHealthTrace.filteredContributions.length > 0 && (
+              <ul className="creature-runtime__contributions">
+                {data.maxHealthTrace.filteredContributions.map((f, i) => (
+                  <li key={`filt-${i}`} className="creature-runtime__hint">
+                    {formatFilteredContribution(f)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          <p className="creature-runtime__hint">
+            Base = socle configuré ; PV max = valeur finale serveur. Filtres et
+            modificateurs futurs encore non branchés au gameplay.
+          </p>
+
           {/* E-bis. Stats de combat avancées (V5-D2-A) — valeurs effectives serveur, lecture seule. */}
           <p className="creature-runtime__title">Stats avancées</p>
           <dl className="creature-runtime__grid">
@@ -311,14 +363,11 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
                 <Row label="réduction blocage %">{data.derivedSecondaryStats.blockReductionPercent}</Row>
                 <Row label="parade %">{data.derivedSecondaryStats.parryChance}</Row>
                 <Row label="puissance contre-attaque">{data.derivedSecondaryStats.counterAttackPower}</Row>
-                <Row label="PV max dérivés">
-                  {data.derivedSecondaryStats.maxHealthDerived}
-                  <span className="creature-runtime__hint"> (PV max actif {data.maxHealth})</span>
-                </Row>
               </dl>
               <p className="creature-runtime__hint">
                 Calculées depuis les primaires. Esquive, blocage et parade actifs.
-                PV max dérivés et puissance de contre-attaque restent informatifs.
+                Puissance de contre-attaque informative. Le PV max final et son
+                détail sont dans la section « PV maximum » ci-dessus.
               </p>
             </>
           )}

@@ -571,9 +571,21 @@ arrondi       = floor (une seule fois, après cap)
 - **DTO/réseau** : `maxHealth`, `runtimeStats.maxHp` et `CreatureCombatStats.maxHealth`
   portent la **même** valeur finale. Le **client et le Studio ne recalculent
   jamais** les PV max — ils affichent la valeur serveur.
-- **Snapshot mémoïsé (pas de recalcul par tick)** : le résultat de `resolveStat`
-  est **mémoïsé par `templateKey`** dans `CreaturesService` (étend le mécanisme
-  per-template `combatAbilityCache`). Le pipeline n'est reconstruit **qu'au premier
+- **Trace Studio (Lot 3)** : `getRuntimeCombatInfo`
+  (`GET /admin/creatures/:id/runtime-combat`, admin-guardé) expose
+  `maxHealthTrace` — sérialisation du **même `StatResolutionResult` mémoïsé** que
+  la valeur autoritaire (jamais un recalcul séparé) : socle `baseValue`
+  (= `baseHealth`), contexte (`vitality`, `maxHealthPerVitality`), contributions
+  **appliquées** et **filtrées**, `afterFlat/afterPercentAdd/afterPercentMultiply/
+  afterOverride`, `beforeCaps`, `caps` (min 1 / max), `afterCaps`, `roundingPolicy`
+  (`floor`), `overrideApplied`, `finalValue`. Le Studio (`CreatureRuntimeInspector`)
+  **affiche** ces valeurs (helper pur `creatureMaxHealthTrace`, aucun recalcul de
+  formule) et ne présente plus `maxHealthDerived` comme une statistique
+  indépendante (alias déprécié = `maxHealth`). Valeur et trace sont **invalidées
+  ensemble** (même snapshot). Filtres/buffs/équipement encore non branchés.
+- **Snapshot mémoïsé (pas de recalcul par tick)** : le résultat COMPLET de
+  `resolveStat` (`StatResolutionResult`) est **mémoïsé par `templateKey`** dans
+  `CreaturesService` (étend le mécanisme per-template `combatAbilityCache`). Le pipeline n'est reconstruit **qu'au premier
   accès ou après invalidation** — le tick IA de fuite, le DTO broadcast, les hits
   combat et les soins lisent le snapshot. Le combat reçoit la valeur mémoïsée
   (`resolveCombatStats(..., precomputedMaxHealth)`), il ne la recalcule pas.
