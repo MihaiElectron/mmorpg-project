@@ -4,7 +4,7 @@
 
 - Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9 ; effets périodiques/immunités/lifecycle cadrés Planned, §12 / ADR-0022)
 - Owner: Project
-- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.28 cleanse/purge, bundles, limites DoT globales, transfert de zone autoritaire + timeout/retries, batch réseau `combat:events` + `eventAt` + fragmentation, dissipation de zone, lifecycle butin personnel → mailbox, suppression/sanctions, `PersonalLootEntitlement` + canal mailbox système + anti-dupe transactionnel, coordinateur de transfert `stateVersion`/CAS — cadrage Planned)
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.28 cleanse/purge, bundles, limites DoT globales, transfert de zone autoritaire + timeout/retries, batch réseau `combat:events` + `eventAt` + fragmentation, dissipation de zone, lifecycle butin personnel → mailbox, suppression/sanctions, `PersonalLootEntitlement` + canal mailbox système + anti-dupe transactionnel, coordinateur de transfert `stateVersion`/CAS ; §12.29–12.30 états administratifs objet `disabledForNewDrops`/`quarantined`, objet non réclamé + expiration 30 j, relation entitlement↔courrier, canal système paginé, notifications groupées — cadrage Planned)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -860,10 +860,13 @@ transféré entre zones, ordre des ticks, récompense obtenue, menace, **`transf
 `tickIndex`, `eventAt`, `batchSequence`, `batchCount`, entitlement, date d'expiration,
 destination mailbox, état de sanction, attribution finale, `status` d'entitlement,
 `rewardRollId` autoritaire, décision de transfert mailbox, `stateVersion` de
-transfert**. Le serveur **produit et valide** : définitions persistées, source/cible
-autoritaires, snapshots runtime, timers autoritaires, rencontres, droits de
-récompense, transitions d'entitlement, autorité de transfert. Le frontend **affiche**
-les événements reçus. (ADR-0022.)
+transfert, **état administratif d'un objet (actif/désactivé/quarantaine), levée de
+quarantaine, décision de compensation, autorité du courrier, fusion de droits par
+regroupement de notification, durée restante, état `claimed`**. Le serveur **produit
+et valide** : définitions persistées, source/cible autoritaires, snapshots runtime,
+timers autoritaires, rencontres, droits de récompense, transitions d'entitlement,
+autorité de transfert, **états administratifs d'objet**. Le frontend **affiche** les
+événements reçus. (ADR-0022.)
 
 ### 12.17 Polarité des effets — cleanse & purge (Planned)
 
@@ -1293,6 +1296,93 @@ adaptée à l'architecture future ; **aucun Redis / microservice / Rust imposé*
   tous les retries gardent le **même `transferId`** ; `expiresAt` évite un transfert
   bloqué indéfiniment ; chaque changement d'autorité est **audité**.
 
+### 12.29 États administratifs d'un objet & récompenses (Planned)
+
+Distinction **explicite** entre désactivation d'équilibrage et quarantaine de
+sécurité. Le serveur est **seul autoritaire** sur l'état administratif d'un objet.
+
+- **`disabledForNewDrops`** : bloque **uniquement** la génération de **nouveaux
+  drops** — aucune table de loot/récompense ne génère plus l'objet. **Ne bloque pas**
+  les entitlements déjà créés ; les **récompenses déjà gagnées restent
+  récupérables** ; les objets déjà possédés ne sont **pas** supprimés. Un réglage
+  d'équilibrage normal **ne retire jamais rétroactivement** une récompense gagnée.
+- **`quarantined`** (situations critiques : exploit, duplication, corruption, objet
+  dangereux/invalide, incident) : bloque les **nouveaux drops** **ET** bloque
+  **temporairement la récupération** des entitlements existants. Pendant la
+  quarantaine : **aucune récupération**, **aucun objet créé** en inventaire,
+  l'entitlement **reste présent**, l'**expiration de rétention est en pause** (durée
+  restante reprend à la levée, cf. `remainingRetentionMs`, §12.27) ; **aucun
+  remplacement décidé par le client** ; toute compensation/annulation est **serveur,
+  idempotente, auditée, décidée par une opération admin autorisée**. Une quarantaine
+  **ne transforme jamais silencieusement** l'entitlement en `expired`/`cancelled`.
+
+**Conservation des définitions référencées** : une définition d'objet référencée par
+un entitlement, un inventaire, un courrier système ou une transaction historique **ne
+doit pas être supprimée physiquement** de façon destructive. Préférer des états
+(`active`, `disabledForNewDrops`, `quarantined`, `archived` — noms à aligner sur les
+conventions) tels que : **toute référence historique existante reste résoluble ou
+archivable, aucune référence cassée silencieusement**.
+
+### 12.30 Compléments loot personnel : objet non réclamé, courrier, canal, notifications (Planned)
+
+Complète §12.26/§12.27 (ne réécrit pas le modèle).
+
+- **Objet jamais matérialisé avant claim** : un objet personnel **n'est pas créé
+  définitivement en inventaire** tant que le joueur ne l'a pas **réclamé avec
+  succès**. Lifecycle : `ground` = **représentation temporaire `WorldItem`** ; non
+  ramassé après la durée au sol → **suppression atomique du `WorldItem`** +
+  `ground → mailed` + **création du courrier système** ; réclamation réussie →
+  **création de l'objet en inventaire** + `mailed → claimed`. Le courrier **ne
+  contient pas** une seconde copie autonome : il **représente l'accès** au droit
+  autoritaire (l'entitlement).
+- **Inventaire plein à la réclamation** : **aucune** création d'objet, **aucune**
+  transition `claimed`, l'entitlement **reste `mailed`**, le joueur **réessaye**
+  (aucune perte, aucune création partielle, aucun dépôt automatique ailleurs, aucune
+  duplication après retry ; l'expiration continue normalement sauf suspension/quarantaine).
+- **Expiration définitive** : `mailed` non réclamé après **30 jours effectifs** →
+  `mailed → expired` (aucun objet créé, droit **définitivement clôturé**). Après :
+  courrier **inaccessible/archivé** selon le modèle futur, **aucune** récupération,
+  **aucune** transition `expired → claimed`, **aucune** recréation après reconnexion,
+  données d'audit conservées. La rétention **démarre à la création effective** du
+  courrier ; **suspension** de compte/personnage et **quarantaine** d'objet **ne
+  consomment pas** la rétention.
+- **Relation entitlement ↔ courrier système** : `1 PersonalLootEntitlement → 0 ou 1
+  courrier système`. `ground` → **aucun** courrier ; `mailed` → **exactement un** ;
+  `claimed | expired | cancelled` → relation **historique conservable** (audit). Un
+  courrier système de loot référence **un seul** entitlement ; un entitlement **ne
+  crée jamais deux** courriers ; la liaison est créée **atomiquement** à
+  `ground → mailed` ; l'identifiant conceptuel (ex. `systemMailMessageId`) est
+  **nullable et unique** côté entitlement (ou garanti par une contrainte
+  équivalente). Noms/relations TypeORM exacts = implémentation future.
+- **Le courrier n'est pas l'autorité** : masquer/archiver le courrier **ne supprime
+  pas** l'entitlement ; une récupération **relit et verrouille toujours**
+  l'entitlement ; la simple présence d'une pièce jointe **ne suffit pas** à créer
+  l'objet ; l'état du courrier **ne peut pas contourner** un entitlement `claimed`/
+  `expired`/`cancelled` ; le client ne fournit **jamais** le statut final.
+- **Canal système sans capacité bloquante** : **aucune capacité bloquante**,
+  stockage **persistant**, **pagination** côté lecture/interface, **expiration
+  individuelle** par entitlement. La capacité ordinaire des courriers entre joueurs
+  **ne s'applique pas** ; **aucun** entitlement légitime supprimé pour libérer une
+  place ; **aucun** nouveau droit refusé au seul motif d'un grand volume de courriers
+  système ; les règles de rétention évitent un stockage illimité des droits **actifs**.
+  **Protection anti-génération anormale** (sans seuil chiffré figé) : détection de
+  volume anormal, audit, métriques, **suspension éventuelle de la source fautive**,
+  limitation admin de nouvelles générations — **jamais** de suppression automatique
+  d'entitlements légitimes ni d'annulation collective sans décision autorisée/auditée.
+- **Notifications groupées** : plusieurs entitlements d'un **même kill** peuvent
+  partager une **notification récapitulative** — **regroupement uniquement visuel**
+  (critères `killId + characterId`, origine de rencontre affichable). **Une entrée par
+  récompense** ; chaque entitlement conserve **identité, statut, expiration et
+  `notifiedAt` propres** ; réclamer une récompense **ne réclame pas** les autres ; un
+  échec sur l'une **ne bloque pas** les autres ; **aucun** courrier autoritaire
+  partagé, **aucun** statut collectif remplaçant les statuts individuels.
+- **Sémantique de `notifiedAt`** : indique que l'entitlement a **déjà été présenté**
+  dans une notification — **ni `mailed`, ni `claimed`**. Chaque entitlement inclus
+  dans un récapitulatif réussi peut recevoir son propre `notifiedAt` ; un **retry** de
+  notification **ne génère pas de spam** ; un entitlement non marqué peut être notifié
+  **ultérieurement** ; un échec de notification **n'affecte pas** le courrier ni la
+  récompense.
+
 ## État d'implémentation
 
 | Élément | État |
@@ -1345,6 +1435,11 @@ adaptée à l'architecture future ; **aucun Redis / microservice / Rust imposé*
 | Granularité loot personnel groupe/raid (entitlement par personnage) (§12.27) | Planned |
 | Pause de rétention pendant suspension (`remainingRetentionMs`) + bannissement (§12.27) | Planned |
 | Coordinateur de transfert (`stateVersion`, compare-and-swap) & panne de zone (§12.28) | Planned |
+| États administratifs objet : `disabledForNewDrops` vs `quarantined` (pause rétention), conservation des définitions référencées (§12.29) | Planned |
+| Objet non réclamé (ground/mailed/claimed/expired), inventaire plein → reste `mailed`, expiration 30 j (§12.30) | Planned |
+| Relation entitlement ↔ courrier système (0/1, liaison atomique), courrier ≠ autorité (§12.30) | Planned |
+| Canal mailbox système paginé sans capacité bloquante + protection anti-génération anormale (§12.30) | Planned |
+| Notifications groupées (visuel par kill/personnage) + sémantique `notifiedAt` (§12.30) | Planned |
 
 ## Références
 

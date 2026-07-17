@@ -498,22 +498,26 @@ tant que `magicSchool`/mitigation magique ne sont pas branchés (défauts `physi
 Décisions **non encore validées** (à trancher par le responsable / lot ultérieur).
 Actés et retirés (voir `combat-resolution.md` §12) : minimum hybride, soins, sources
 d'immunité, DoT, lifecycle effets, cleanse/purge/bundles/dispel, transfert de zone +
-timeout/retries, batch réseau + `eventAt` + fragmentation, limites DoT (20/100),
-dissipation de zone ; **canal mailbox système réservé**, **notification** du loot,
-**granularité groupe/raid** (entitlement par personnage), **`PersonalLootEntitlement`**
-(source d'autorité, états/transitions, clé `killId+characterId+rewardRollId`),
-**garanties transactionnelles anti-dupe** (course ramassage/expiration), **panne
-définitive de zone** + coordinateur `stateVersion`/CAS, **pause de rétention** pendant
-suspension (§12.27/§12.28).
+timeout/retries + coordinateur (panne définitive), batch réseau + `eventAt` +
+fragmentation, limites DoT (20/100), dissipation de zone ; canal mailbox système,
+notification, granularité groupe/raid, `PersonalLootEntitlement`, anti-dupe, pause de
+rétention (§12.27/§12.28) ; **désactivation `disabledForNewDrops` vs quarantaine**
+(pause de rétention en quarantaine), **conservation des définitions référencées**,
+**objet non réclamé** (ground/mailed/claimed/expired) + **expiration 30 j**, **relation
+entitlement ↔ courrier** (0/1), **canal système paginé sans capacité bloquante** +
+protection anti-génération anormale, **notifications groupées** + sémantique
+`notifiedAt` (§12.29/§12.30).
 
-- **Schéma TypeORM exact** de l'entitlement ; **relation précise** entre entitlement
-  et message mailbox existant ; **stratégie de restauration** depuis le dernier état
+- **Schéma TypeORM exact** de l'entitlement ; **sens de la clé étrangère** entre
+  entitlement et courrier ; **stratégie de restauration** depuis le dernier état
   durable sûr ; **emplacement concret** du coordinateur de transfert.
-- **Politique de nettoyage** des historiques d'audit.
-- Comportement si une **récompense est retirée du catalogue** avant récupération, ou
-  si l'**objet référencé est désactivé** administrativement.
-- **Limites éventuelles** du canal mailbox système ; **présentation UX** des
-  notifications groupées.
+- **Noms exacts** des états administratifs de l'objet ; **outil Studio** et
+  **permissions** pour activer/lever une quarantaine ; **politique de compensation**
+  admin éventuelle.
+- **Comportement UX précis** d'un courrier archivé/expiré ; **mécanisme concret** de
+  notification et de **pagination**.
+- **Rétention/nettoyage** des journaux d'audit ; **seuils/métriques** de détection
+  d'une génération anormale.
 - Interaction future entre **immunité spécifique au bleed** et **dispel `bleed`**.
 - Réconciliation des 4 résistances élémentaires existantes avec les 6 écoles
   (renommage / mapping / sémantique points vs %).
