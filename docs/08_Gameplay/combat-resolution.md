@@ -4,7 +4,7 @@
 
 - Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9 ; effets périodiques/immunités/lifecycle cadrés Planned, §12 / ADR-0022)
 - Owner: Project
-- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned)
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.24 cleanse/purge, bundles, limites DoT, zones, récompenses différées, menace, réseau des ticks — cadrage Planned)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -854,9 +854,169 @@ pas** les DoT actifs sur d'autres cibles.
 
 Le client **ne fournit jamais** : puissance snapshotée, résistance effective,
 immunité, résultats des ticks, cadence/prochain tick, état de stacking, attribution
-du kill, dégâts finaux. Le serveur lit : définition de l'effet, source/cible
-autoritaires, snapshots runtime, timers autoritaires. Le frontend **affiche** les
-événements reçus. (ADR-0022.)
+du kill, dégâts finaux, **liste des effets dissipables, effet sélectionné par la
+dissipation, priorité de dispel, résultat cleanse/purge, limite d'instances, état
+transféré entre zones, ordre des ticks, récompense obtenue, menace**. Le serveur lit
+et résout : définition de l'effet, source/cible autoritaires, snapshots runtime,
+timers autoritaires, **rencontres, droits de récompense**. Le frontend **affiche**
+les événements reçus. (ADR-0022.)
+
+### 12.17 Polarité des effets — cleanse & purge (Planned)
+
+Chaque effet porte : `polarity = beneficial | harmful`, `isDispellable = true|false`,
+`dispelCategory = magic | poison | bleed | curse | none`. Deux mécaniques distinctes,
+**aucune dissipation universelle implicite** :
+
+```text
+cleanse (défensif) → cible UNIQUEMENT les effets harmful
+purge  (offensive) → cible UNIQUEMENT les effets beneficial
+```
+
+Les **résistances magiques n'interviennent jamais** dans la réussite d'une
+dissipation (celle-ci est déterministe, §12.19).
+
+### 12.18 Bundles `buff + curse` liés (Planned)
+
+Un objet/effet accordant un avantage **contre** une malédiction produit **deux effets
+distincts** (un `beneficial`, un `harmful`) partageant `effectBundleId`,
+`sourceItemId`/`sourceDefinitionId` et `linkPolicy = remove_bundle` :
+
+```text
+suppression de l'une des composantes → suppression de TOUT le bundle
+```
+
+Cela interdit le « prendre le bonus → cleanse la malédiction → garder le bonus
+gratuitement ». **Équipement passif** : buff + curse actifs tant que l'objet est
+équipé, **non dissipables individuellement** ; **déséquiper retire tout le bundle**.
+**Temporaire/consommable** : purge ou cleanse selon la composante ciblée retire le
+bundle complet. Les deux composantes **restent séparées** dans le resolver et la
+trace Studio (ADR-0021).
+
+### 12.19 Dissipation — sélection, déterminisme, résultat (Planned)
+
+**Sélection** parmi les effets compatibles, dans l'ordre :
+
+```text
+1. polarité compatible
+2. dispelCategory compatible
+3. isDispellable = true
+4. dispelPriority la plus élevée
+5. à priorité égale → effet le plus ANCIEN (appliedAt)
+```
+
+(Empêche un petit effet récent de servir de bouclier à un effet majeur.)
+**Déterminisme** : aucun jet aléatoire — un effet compatible et dissipable est
+**retiré à coup sûr**. Aucune stat de résistance magique ni de résistance au dispel
+en V1 ; seul `isDispellable = false` empêche la dissipation (une future
+`dispelProtection` serait une mécanique **distincte**). **Nombre d'effets retirés** :
+`maxEffectsRemoved = 1` par défaut (un **bundle lié** compte comme **une seule
+sélection** même s'il retire plusieurs composantes) ; certains skills pourront porter
+`2`/`3` ; **aucune suppression globale implicite**. **Aucun effet compatible** : cast
+valide → `result = nothing_to_dispel` (aucun effet retiré, **coût et cooldown
+consommés**) — distinct d'un cast invalide (cible inexistante/morte/hors portée,
+refus du contrat normal), qui n'est **pas** `nothing_to_dispel`. Le serveur fournit
+un résultat **explicite**.
+
+### 12.20 Limite d'instances de DoT (Planned)
+
+Chaque définition de DoT porte `maxConcurrentInstancesPerTarget`, **défaut 20**.
+
+```text
+même effet + même lanceur      → rafraîchit son instance existante
+même effet + lanceurs différents → instances indépendantes, jusqu'à la limite
+limite atteinte                → nouvelle application REFUSÉE
+                                 aucune instance existante remplacée
+                                 result = effect_instance_limit_reached
+```
+
+Un effet faible ne remplace **jamais** arbitrairement celui d'un autre joueur.
+**World Boss** : la limite **n'est pas** codée par un type `world_boss` en dur —
+`limite = défaut de la définition d'effet + override optionnel du template de
+créature / de la rencontre` (ex. normal 20, World Boss 50/100 selon config Studio).
+Moteur **générique**.
+
+### 12.21 Téléportation & transfert de zone (Planned)
+
+**Téléportation dans la même autorité runtime** : les DoT du lanceur téléporté
+**continuent** ; les effets d'une cible téléportée **restent sur elle** (aucun
+cleanse gratuit) ; snapshot offensif et identité de source **inchangés**. Seuls
+mort/expiration/dissipation/disparition validée nettoient automatiquement.
+
+**Transfert entre serveurs / instances de zone** : l'état temporaire **suit** la
+cible. État conceptuel minimal transféré : `effectDefinitionId`, `applicationId`,
+`sourceCharacterId`, `sourceEntityId`, snapshot offensif, `expiresAt`/durée restante,
+`nextTickAt`, `stacks`, `stackingGroup`, sources d'immunité, autres effets. Règles :
+conserver durée **restante** et **cadence** ; **ne pas réinitialiser** le prochain
+tick ; **aucun tick dupliqué ni silencieusement perdu** ; **une seule zone** détient
+les timers autoritaires ; la zone source **arrête ses timers uniquement après
+confirmation** de prise en charge par la zone cible ; **transfert échoué →
+téléportation annulée/échouée** ; **aucune suppression silencieuse** ; **aucune
+persistance PostgreSQL** permanente requise en V1.
+
+```text
+zone source prépare l'état → zone cible valide/accepte → autorité confirmée
+→ zone source arrête ses timers → zone cible poursuit les effets
+```
+
+### 12.22 Récompenses différées & idempotence (Planned)
+
+Si un DoT tue une cible **après la disparition** du lanceur : kill attribué au
+**lanceur initial**, contribution/XP/progression conservées, **éligibilité au butin**
+conservée — un DoT ne devient **jamais** un dommage sans propriétaire. Types :
+**XP/progression** → appliquées **transactionnellement** au personnage persistant ;
+**butin personnel** → droit enregistré, récupération ultérieure selon le système de
+loot ; **butin partagé au sol** → règles normales du loot partagé (ne pas inventer
+un objet personnel au sol pour un absent). Les règles de contribution/groupe/
+rencontre/éligibilité restent applicables. **Idempotence** : une clé conceptuelle
+(`killId + characterId + rewardType` ou équivalent) empêche toute **double
+distribution** (reconnexion, retry serveur, transfert de zone, traitement différé).
+**Aucun nouveau système de récompenses différées créé ici** — référence le contrat
+existant.
+
+### 12.23 Menace (aggro) vs contribution (Planned)
+
+**Contribution aux récompenses ≠ menace active** utilisée par l'IA.
+- **Lanceur déconnecté mais vivant** (fenêtre 30 s, §12.13) → **ciblable** ; les ticks
+  ajoutent de la menace normalement. Après disparition (encore vivant) → entrée de
+  menace **conservée** pour la rencontre, identité **non sélectionnable** comme cible
+  active, ticks continuant d'alimenter la **menace historique** ; retour dans la même
+  rencontre avant reset → entrée **redevient ciblable**, menace accumulée conservée
+  (une déconnexion **n'efface pas** l'aggro).
+- **Lanceur mort** → menace **active supprimée** ; contribution/récompenses
+  **conservées** ; les ticks ultérieurs **ne recréent pas** de menace ciblable ; une
+  résurrection ne récupère pas la menace produite pendant la mort.
+- **Nettoyage** du registre de menace : selon les règles existantes (fin de combat,
+  leash/reset, mort de la créature, reset de rencontre). Un DoT ne maintient **jamais**
+  une poursuite vers une entité inexistante.
+
+### 12.24 Réseau des ticks — sous-événements, batch, ordre (Planned)
+
+**Sous-événements autoritaires** : chaque tick reste un événement logique distinct,
+portant au minimum `sourceId`, `targetId`, `effectDefinitionId`, `applicationId`,
+`damage`, `damageType`, `magicSchool`, `periodic = true`, `result`. Le serveur
+conserve attribution, mitigation, immunité et résultat **exacts** ; le client ne
+recalcule rien.
+
+**Batch WebSocket** : les ticks résolus dans un **même cycle** serveur peuvent être
+envoyés groupés (`combat:events = [sous-événement 1, 2, …]`) pour éviter un message
+par instance — **chaque source et chaque résultat préservés** ; le client **regroupe
+uniquement l'affichage, jamais le calcul**. **Ne jamais** envoyer un simple total
+global (perte de source/type/école/effet/attribution/cause d'annulation).
+
+**Ordre déterministe** quand plusieurs ticks sont dus dans un cycle :
+
+```text
+1. nextTickAt le plus ancien
+2. appliedAt le plus ancien
+3. applicationId (départage stable)
+```
+
+Jamais dépendre de l'ordre d'une `Map`, de promesses concurrentes, du batch réseau ni
+d'un ordre non déterministe en mémoire. **Mort pendant un cycle** : ticks résolus
+**séquentiellement** ; un tick qui **tue** → mort résolue immédiatement, **ticks
+suivants du même cycle annulés** (aucun second kill, aucun dégât ni texte flottant
+supplémentaire ; les ticks annulés peuvent rester traçables en interne sans produire
+d'événement visible).
 
 ## État d'implémentation
 
@@ -891,6 +1051,12 @@ autoritaires, snapshots runtime, timers autoritaires. Le frontend **affiche** le
 | Stacking (`stackingGroup`/priorité), dispel complet V1 (§12.10/§12.11) | Planned |
 | Lifecycle effets : redémarrage wipe, déconnexion 30 s, reconnexion même entité, `removeOnDeath=true` (§12.12–12.14) | Planned |
 | Attribution kill/XP/butin & aggro d'un DoT (§12.15) | Planned |
+| Polarité effets, cleanse/purge, bundles buff+curse liés, dispel déterministe (§12.17–12.19) | Planned |
+| Limite d'instances de DoT (défaut 20 + override World Boss) (§12.20) | Planned |
+| Téléportation & transfert de zone autoritaire des effets (§12.21) | Planned |
+| Récompenses différées + idempotence (§12.22) | Planned |
+| Menace historique vs contribution d'un DoT (§12.23) | Planned |
+| Batch réseau des ticks + ordre déterministe + mort en cours de cycle (§12.24) | Planned |
 
 ## Références
 

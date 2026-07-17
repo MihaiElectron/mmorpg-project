@@ -496,20 +496,25 @@ tant que `magicSchool`/mitigation magique ne sont pas branchés (défauts `physi
 ## Open questions
 
 Décisions **non encore validées** (à trancher par le responsable / lot ultérieur).
-Les points suivants ont été **actés** et retirés de cette liste : minimum de 1 sur
-le **total** hybride (§7/§14) ; formule `healingDone × healingReceived` (§13) ;
-modèle de **sources d'immunité** + snapshot runtime (§9) ; comportement DoT vs
-minimum de 1 (`combat-resolution.md` §12) ; `removeOnDeath` par défaut, redémarrage,
-déconnexion/reconnexion, stacking par `stackingGroup`, dispel complet V1 (§12).
+Actés et retirés de cette liste : minimum de 1 sur le **total** hybride (§7/§14) ;
+formule `healingDone × healingReceived` (§13) ; **sources d'immunité** + snapshot
+runtime (§9) ; DoT vs minimum de 1, `removeOnDeath`, redémarrage,
+déconnexion/reconnexion, stacking par `stackingGroup`, dispel complet V1
+(`combat-resolution.md` §12) ; **cleanse/purge par polarité**, **bundles buff+curse
+liés**, sélection déterministe de dissipation, **limite d'instances de DoT (défaut
+20 + override)**, transfert de zone autoritaire, **récompenses différées +
+idempotence**, **menace vs contribution**, **batch réseau des ticks + ordre
+déterministe** (`combat-resolution.md` §12.17–§12.24).
 
-- Règles exactes de **dispel offensif et défensif** (au-delà du retrait complet V1).
-- Limite éventuelle du **nombre d'instances de DoT** provenant de lanceurs différents.
-- Comportement des effets lors d'un **changement de zone / téléportation**.
-- Traitement des **récompenses si le lanceur reste déconnecté longtemps**
-  (au-delà des 30 s) — voir contrat de récompenses existant.
-- **Modèle exact de menace historique** (aggro d'un lanceur absent).
-- Structure de **persistance future** des effets si un jour nécessaire.
-- **Granularité des événements réseau** de tick.
+- Interaction entre un **transfert de zone** et un **tick arrivant exactement pendant
+  la bascule** ; **retry / timeout** du transfert.
+- **Format concret** des événements de tick batchés (`combat:events`).
+- **Rétention** d'un droit au butin **personnel** différé ; traitement d'un joueur
+  **supprimé/banni** avant une récompense différée.
+- **Limite globale** éventuelle de tous les DoT confondus sur une cible (au-delà de
+  la limite par définition).
+- **Dissipation de zone** (AoE dispel/cleanse/purge).
+- Ordre entre plusieurs **bundles de même `dispelPriority`**.
 - Interaction future entre **immunité spécifique au bleed** et **dispel `bleed`**.
 - Réconciliation des 4 résistances élémentaires existantes avec les 6 écoles
   (renommage / mapping / sémantique points vs %).
