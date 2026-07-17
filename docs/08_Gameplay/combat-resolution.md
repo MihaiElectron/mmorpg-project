@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9)
 - Owner: Project
-- Last updated: 2026-07-16
+- Last updated: 2026-07-17
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -273,7 +273,8 @@ résolution des joueurs** :
 Cette section **fige la direction cible** du modèle de combat créature. Le **socle
 défensif** (primaires, secondaires dérivées, esquive/blocage/parade créature,
 typage de nature d'attaque) est désormais **Implemented** (V6-B1→V6-B6, détail
-§11.7). Les points restants (`counterAttackPower` actif, `maxHealthDerived` actif,
+§11.7). Le **PV max dérivé** (`maxHealthDerived`) est désormais **Implemented**
+(Lot 2, ADR-0021 — voir §11.9). Les points restants (`counterAttackPower` actif,
 résistances/boucliers magiques) restent **Planned**.
 
 ### 11.1 État actuel (exact — mis à jour V6-B6)
@@ -536,11 +537,46 @@ blocage** (inchangé). Aucune modification de `calculateCombatDamage` ni de
 **Inspector runtime créature** : Esquive / Blocage / Parade affichés Active(X %)/Inactive
 selon `canDodge`/`canBlock`/`canParry`.
 
-**Restent informatifs (non actifs)** : `counterAttackPower` créature et
-`maxHealthDerived` (exposés par l'inspector, sans effet runtime — activation non décidée).
+**Restent informatifs (non actifs)** : `counterAttackPower` créature (exposé par
+l'inspector, sans effet runtime — activation non décidée). Le **PV max dérivé**
+n'est plus informatif : il est **actif** (Lot 2, §11.9).
 
 **Encore Planned** : résistances magiques, boucliers magiques/divins/paladin,
 enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
+
+### 11.9 PV max dérivé créature — Implemented (Lot 2, ADR-0021)
+
+Les PV maximum EFFECTIFS d'une créature sont résolus par le **pipeline générique
+de résolution des statistiques** (`RuntimeComputeEngine.resolveStat`, Lot 1), via
+le point unique `CreatureRuntimeCalculator.resolveMaxHealth` :
+
+```text
+base          = template.baseHealth  (socle configuré, jamais modifié)
+contribution  = vitality × maxHealthPerVitality  (flat, tags derived/vitality/health)
+cap minimum   = 1
+arrondi       = floor (une seule fois, après cap)
+→ maxHealth autoritaire (serveur)
+```
+
+- **`baseHealth`** reste le **socle configuré** du template ; la **Vitalité**
+  devient une **contribution traçable**. **`maxHealth`** est la **valeur finale
+  autoritaire** — `maxHealthDerived` n'est plus qu'un **alias** de `maxHealth`
+  (plus de seconde notion concurrente de PV max).
+- **Tous** les chemins lisent cette valeur : spawn, seed d'instance, boot serveur,
+  respawn (auto/force-respawn/redémarrage), soin (clamp), modification admin
+  (clamp serveur), seuil de fuite (garde anti-division par zéro), difficulté.
+- **Baisse du max** (baseHealth/Vitalité modifiés) → PV courants **clampés**
+  immédiatement (`refreshTemplateInMemory`) et au redémarrage. **Hausse** → PV
+  courants **inchangés** (jamais de soin automatique).
+- **DTO/réseau** : `maxHealth`, `runtimeStats.maxHp` et `CreatureCombatStats.maxHealth`
+  portent la **même** valeur finale. Le **client et le Studio ne recalculent
+  jamais** les PV max — ils affichent la valeur serveur.
+- **Non branché en V1** : filtres, buffs/debuffs, équipement créature (contributions
+  futures qui s'ajouteront au même `resolveStat`). Le **pipeline joueur n'est PAS
+  migré** (reste `CharacterStatsCalculator`). Les **debug modifiers** n'affectent
+  pas le PV max (une seule valeur autoritaire).
+- **Compatibilité** : Vitalité 0 (seeds turkey/goblin) → `maxHealth = baseHealth`
+  (no-op). Aucune migration de schéma ni de contenu.
 
 ### 11.8 Flags défensifs par skill — Implemented (Lot A/B/C)
 
@@ -608,7 +644,8 @@ magiques, boucliers magiques/divins/paladin, équilibrage fin des valeurs.
 | Contrat de parade : parabilité par nature défensive (physical parable même si raw ; magic non parable ; ranged physique parable ; §11.6/§11.7) | Implemented (`isAttackParryable` aligné, `d81ea80`) — modèle hybride physical+raw parallèle reste Planned (§11.7) |
 | Contre-attaque créature sur parade (`creatureCounterAttack`, auto-attaque + skill, `counterAttackPower`, gatée `isParried`, joueur `canParry:false` anti-récursion, V6-B7) | Implemented |
 | Flags défensifs par skill : `canBeDodged`/`canBeBlocked` (défaut true) + `canBeParried` (défaut false, opt-in) — serveur autoritaire, Studio, §11.8 | Implemented |
-| Créature : `counterAttackPower` actif, `maxHealthDerived` actif en défense | Planned (`counterAttackPower` désormais actif via contre-attaque V6-B7 ; `maxHealthDerived` reste informatif, §11.7) |
+| Créature : PV max dérivé (`maxHealthDerived`) actif comme `maxHealth` autoritaire via `resolveStat` (base + Vitalité, cap 1, floor ; spawn/respawn/soin/fuite/admin/DTO alignés) — Lot 2, ADR-0021, §11.9 | Implemented |
+| Créature : `counterAttackPower` actif en défense | Planned (`counterAttackPower` désormais actif via contre-attaque V6-B7 ; activation défensive dédiée non décidée) |
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |

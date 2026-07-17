@@ -1587,6 +1587,115 @@ describe('CreaturesService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Lot 2 (ADR-0021) : activation des PV max dérivés créature.
+  // Coefficient par défaut maxHealthPerVitality = 10 (coefficientsServiceMock).
+  describe('Lot 2 — PV max dérivés (spawn/respawn/admin/DTO/template)', () => {
+    /** Template baseHealth 30 + vitality → max effectif = floor(30 + vitality×10). */
+    const vitTemplate = (vitality: number, over: Partial<CreatureTemplate> = {}) =>
+      makeTemplate({ baseHealth: 30, vitality, ...over });
+
+    it('10/legacy : Vitalité 0 → maximum = baseHealth (no-op)', async () => {
+      const creature = makeCreature({ state: 'dead', health: 0, spawn: makeSpawn(vitTemplate(0)) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).server = null;
+      await (service as any).respawnCreature(creature.id);
+      expect(creature.health).toBe(30);
+    });
+
+    it('11 : respawn automatique aux PV max dérivés (vitality 3 → 60)', async () => {
+      const creature = makeCreature({ state: 'dead', health: 0, spawn: makeSpawn(vitTemplate(3)) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).server = null;
+      await (service as any).respawnCreature(creature.id);
+      expect(creature.health).toBe(60);
+      expect(creatureRepository.update).toHaveBeenCalledWith(
+        creature.id,
+        expect.objectContaining({ health: 60 }),
+      );
+    });
+
+    it('12 : force-respawn admin aux PV max dérivés', async () => {
+      const creature = makeCreature({ state: 'dead', health: 5, spawn: makeSpawn(vitTemplate(3, { key: 'fr' })) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).server = null;
+      const count = await service.forceRespawnAll('fr');
+      expect(count).toBe(1);
+      expect(creature.health).toBe(60);
+    });
+
+    it('17/19 : adminUpdateCreature clampe la valeur (non fiable) au max dérivé', async () => {
+      const creature = makeCreature({ state: 'alive', health: 10, spawn: makeSpawn(vitTemplate(3)) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      await service.adminUpdateCreature(creature.id, { health: 9999 });
+      expect(creature.health).toBe(60); // clamp serveur au max dérivé
+    });
+
+    it('18 : adminUpdateCreature PV négatifs → clamp à 0', async () => {
+      const creature = makeCreature({ state: 'alive', health: 40, spawn: makeSpawn(vitTemplate(3)) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      await service.adminUpdateCreature(creature.id, { health: -50 });
+      expect(creature.health).toBe(0);
+    });
+
+    it('27/28/29 : DTO maxHealth == runtimeStats.maxHp == max dérivé (une seule valeur)', () => {
+      const creature = makeCreature({ state: 'alive', health: 60, spawn: makeSpawn(vitTemplate(3)) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      const [dto] = service.findAll();
+      expect(dto.maxHealth).toBe(60);
+      expect(dto.runtimeStats?.maxHp).toBe(60);
+      expect(dto.maxHealth).toBe(dto.runtimeStats?.maxHp);
+    });
+
+    it('30 : baseHealth reste la config brute (attack/armor/attaque inchangés)', () => {
+      const creature = makeCreature({ state: 'alive', health: 60, spawn: makeSpawn(vitTemplate(3, { baseArmor: 7, baseAttack: 4 })) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      const [dto] = service.findAll();
+      expect(dto.armor).toBe(7); // baseArmor brut
+      expect(dto.attack).toBe(4); // baseAttack brut
+      expect(dto.maxHealth).toBe(60); // max = dérivé, pas baseHealth
+    });
+
+    it('20/22 : baisse du max (Vitalité réduite) → PV courants clampés', () => {
+      const template = vitTemplate(5, { key: 'shrink' }); // max 30 + 50 = 80
+      const creature = makeCreature({ state: 'alive', health: 80, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      // Vitalité 5 → 1 : nouveau max = 30 + 10 = 40 < 80 courant.
+      service.refreshTemplateInMemory('shrink', { vitality: 1 });
+      expect(creature.health).toBe(40); // clampé au nouveau max
+    });
+
+    it('21/24 : hausse du max (Vitalité augmentée) → PV courants inchangés (pas de soin)', () => {
+      const template = vitTemplate(1, { key: 'grow' }); // max 40
+      const creature = makeCreature({ state: 'alive', health: 15, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      service.refreshTemplateInMemory('grow', { vitality: 10 }); // nouveau max 130
+      expect(creature.health).toBe(15); // inchangé, jamais soigné
+    });
+
+    it('20-bis : baisse via baseHealth → PV courants clampés', () => {
+      const template = vitTemplate(0, { key: 'shrinkbase' }); // max 30
+      const creature = makeCreature({ state: 'alive', health: 30, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      service.refreshTemplateInMemory('shrinkbase', { baseHealth: 12 }); // nouveau max 12
+      expect(creature.health).toBe(12);
+    });
+
+    it('23 : changement de coefficient recalcule le max (paramétré)', () => {
+      const template = vitTemplate(4); // baseHealth 30, vitality 4
+      const low = CreatureRuntimeCalculator.resolveMaxHealth(template, {
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        maxHealthPerVitality: 5,
+      }).finalValue;
+      const high = CreatureRuntimeCalculator.resolveMaxHealth(template, {
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        maxHealthPerVitality: 25,
+      }).finalValue;
+      expect(low).toBe(30 + 4 * 5); // 50
+      expect(high).toBe(30 + 4 * 25); // 130
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('double-écriture WU', () => {
     it('attack() conserve worldX/worldY/mapId lors du save', async () => {
       // creature WU(6080,12480) fourni dès le départ — plus besoin de conversion pixel→WU (A7)
@@ -3429,6 +3538,17 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(healOf(emits).payload.amount).toBe(2); // heal réellement appliqué
     });
 
+    it("Lot 2 (14/16) : soin clampé au max DÉRIVÉ (vitality 3 → max 60)", async () => {
+      const template = makeTemplate({ key: "healvit", baseHealth: 30, vitality: 3 }); // max 60
+      const creature = healSetup(55); // 55 < 60 → heal casté ; +10 → 65 → clampé 60
+      creature.spawn = makeSpawn(template) as any;
+      (service as any).combatAbilityCache.set("healvit", [HEAL]);
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), template, [makePlayer(6880, 12480)], Date.now(), captureServer(emits));
+      expect(creature.health).toBe(60); // clampé au max dérivé, pas 65
+      expect(healOf(emits).payload.amount).toBe(5); // 60 − 55 réellement appliqué
+    });
+
     // ─── V5-D2-A : stats de combat avancées créature ──────────────────────────
     describe("stats de combat avancées (V5-D2-A)", () => {
       // Capacité damage physique : montant = attackPower(baseAttack 5) × coef 2 = 10.
@@ -3537,8 +3657,8 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         // V6-B2 : strength (×2) et endurance (×1) dérivent attackPower/defenseTotal.
         expect(dto!.attackPower).toBe(5 + 10 * 2); // 25
         expect(dto!.defenseTotal).toBe(2 + 5); // 7
-        // maxHealth NON dérivé (vitality non activé runtime) : reste baseHealth.
-        expect(dto!.maxHealth).toBe(30);
+        // Lot 2 : maxHealth = PV max dérivé activé = floor(30 + vitality 20 × 10).
+        expect(dto!.maxHealth).toBe(30 + 20 * 10); // 230
         // V6-B3 : canDodge true. V6-B4 : canBlock true. V6-B6 : parryChance > 0 (dex 12/str 10)
         // → canParry true.
         expect(dto!.canDodge).toBe(true);
@@ -3574,9 +3694,10 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         expect(dto!.derivedSecondaryStats.blockReductionPercent).toBe(25);
         expect(dto!.derivedSecondaryStats.parryChance).toBeCloseTo(10 * 0.15 + 12 * 0.15); // 3.3
         expect(dto!.derivedSecondaryStats.counterAttackPower).toBeCloseTo(12 * 0.4 + 8 * 0.3 + 3 * 0.2); // 7.8
-        // maxHealthDerived exposé SÉPARÉMENT ; le PV max actif reste baseHealth.
+        // Lot 2 : maxHealthDerived est un ALIAS de maxHealth (PV max dérivé activé).
         expect(dto!.derivedSecondaryStats.maxHealthDerived).toBe(30 + 20 * 10); // 230
-        expect(dto!.maxHealth).toBe(30);
+        expect(dto!.maxHealth).toBe(30 + 20 * 10); // 230 — même valeur
+        expect(dto!.maxHealth).toBe(dto!.derivedSecondaryStats.maxHealthDerived);
         // V6-B3 : canDodge true. V6-B4 : canBlock true. V6-B6 : parryChance 3.3 (>0) → canParry true.
         expect(dto!.canDodge).toBe(true);
         expect(dto!.canBlock).toBe(true);

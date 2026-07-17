@@ -1,6 +1,6 @@
 # STATUS — MMORPG Project
 
-_Dernière mise à jour : 2026-07-11_
+_Dernière mise à jour : 2026-07-17_
 _Branche : main — État : développement local_
 
 ---
@@ -32,7 +32,8 @@ Coordonnées monde **WU pur** (migration P0–P7 soldée, `worldX/worldY/mapId` 
 | Domaine | État |
 |---|---|
 | Combat creature | Aggro, fuite, auto-attaque, respawn (20 s) |
-| Défense créature (V6-B3→B7) | Chaîne défensive complète : esquive (`dodgeChance`, réduite par accuracy), blocage (`blockChance`/`blockReductionPercent`, physical après armure), typage `attackDefenseKind` physical/magic (**parabilité par la nature** : physical parable même si `damageType: raw` ; magic non parable ; ranged physique parable), parade (`parryChance`, prioritaire, `isParried` propagé). **Contre-attaque créature sur parade** (`creatureCounterAttack`, auto-attaque + skill, gatée `isParried`, joueur `canParry:false` anti-récursion, V6-B7). `raw` = mitigation (ignore armure/résistance/blocage à l'impact), **pas** une nature défensive (`isAttackParryable` aligné, `d81ea80`). Inspector aligné. `maxHealthDerived` informatif. Modèle hybride physical+raw parallèle reste Planned. Détail : `docs/08_Gameplay/combat-resolution.md` §11.7 |
+| Défense créature (V6-B3→B7) | Chaîne défensive complète : esquive (`dodgeChance`, réduite par accuracy), blocage (`blockChance`/`blockReductionPercent`, physical après armure), typage `attackDefenseKind` physical/magic (**parabilité par la nature** : physical parable même si `damageType: raw` ; magic non parable ; ranged physique parable), parade (`parryChance`, prioritaire, `isParried` propagé). **Contre-attaque créature sur parade** (`creatureCounterAttack`, auto-attaque + skill, gatée `isParried`, joueur `canParry:false` anti-récursion, V6-B7). `raw` = mitigation (ignore armure/résistance/blocage à l'impact), **pas** une nature défensive (`isAttackParryable` aligné, `d81ea80`). Inspector aligné. Modèle hybride physical+raw parallèle reste Planned. Détail : `docs/08_Gameplay/combat-resolution.md` §11.7 |
+| PV max dérivé créature (Lot 2, ADR-0021) | **PV max effectif résolu par le pipeline générique** (`RuntimeComputeEngine.resolveStat`, Lot 1) via le point unique `CreatureRuntimeCalculator.resolveMaxHealth` : `base baseHealth + contribution Vitalité (vitality × maxHealthPerVitality, flat) → cap min 1 → floor → maxHealth autoritaire`. `baseHealth` = socle configuré, `maxHealth` = valeur finale, `maxHealthDerived` = **alias** (plus de notion concurrente). Tous les chemins alignés : spawn/seed/boot/respawn/force-respawn/redémarrage, soin (clamp), admin (clamp serveur), fuite (garde ÷0), difficulté. Baisse du max → PV clampés ; hausse → PV inchangés (pas de soin). DTO `maxHealth` == `runtimeStats.maxHp` == final ; client/Studio ne recalculent rien. Vitalité 0 (seeds turkey/goblin) = no-op. Filtres/buffs/équipement créature non branchés ; pipeline joueur non migré. Détail : `docs/08_Gameplay/combat-resolution.md` §11.9 |
 | Flags défensifs par skill (Lot A/B/C) | `SkillDefinition.canBeDodged`/`canBeBlocked` (défaut **true**) + `canBeParried` (défaut **false** — **parade des skills opt-in** pour préserver leur impact) : esquivable/bloquable/parable configurables, appliqués **serveur autoritaire** (lus en base, jamais via `skill:cast`), Studio Skills aligné (soins non concernés). Modèle hybride physical+raw parallèle toujours Planned. Détail : §11.8 |
 | Récolte | Timer serveur, anti-cheat distance (`WorldService.checkInteraction`) |
 | Loot | Hybrid STACKABLE/INSTANCE — `ItemMaterializationService` 4 chemins |

@@ -9,6 +9,7 @@ import {
   RuntimeModifier,
   RuntimeTrace,
   StatKey,
+  StatResolutionResult,
 } from '../player-runtime/player-runtime.types';
 import { RuntimeComputeEngine, BaseValueExtractor } from '../player-runtime/runtime-compute';
 import { CreatureBaseStats, CreatureCombatStats, CreatureDerivedStats } from './creature-runtime.types';
@@ -235,11 +236,15 @@ export class CreatureRuntimeCalculator {
       base.agility * c.counterPerAgility +
       base.intelligence * c.counterPerIntelligence;
 
-    // PV max dérivé : calculé pour l'inspection, PAS activé comme PV max runtime.
-    const maxHealthDerived = base.baseHealth + base.vitality * c.maxHealthPerVitality;
+    // PV max EFFECTIF (Lot 2 — ADR-0021) : résolu par le pipeline générique
+    // `resolveStat` (base baseHealth + contribution Vitalité, cap min 1, floor).
+    // `maxHealthDerived` devient un ALIAS de `maxHealth` (même valeur) : il n'y a
+    // plus qu'UNE seule notion de PV max. Point UNIQUE de résolution.
+    const maxHealthResult = CreatureRuntimeCalculator.resolveMaxHealth(template, c);
+    const maxHealth = maxHealthResult.finalValue;
 
     return {
-      maxHealth: derived.maxHp,
+      maxHealth,
       attackPower: derived.attackPower,
       defenseTotal: derived.defenseTotal,
       healingPowerRaw,
@@ -253,7 +258,9 @@ export class CreatureRuntimeCalculator {
       blockReductionPercent: c.blockReductionPercent,
       parryChance,
       counterAttackPower,
-      maxHealthDerived,
+      // Alias déprécié (Lot 2) : identique à `maxHealth`. Conservé pour l'inspector
+      // et les DTO existants ; ne représente PAS une seconde notion concurrente.
+      maxHealthDerived: maxHealth,
       // V6-B3/V6-B4/V6-B6 : parade, esquive puis blocage créature actifs (défenseur).
       // canDodge/canBlock/canParry servent l'inspector ; les effets réels sont gérés
       // par le resolver via dodge/block/parryChancePercent. La parabilité de l'attaque
@@ -262,5 +269,58 @@ export class CreatureRuntimeCalculator {
       canBlock: blockChance > 0 && c.blockReductionPercent > 0,
       canParry: parryChance > 0,
     };
+  }
+
+  /**
+   * Point UNIQUE de résolution des PV maximum EFFECTIFS d'une créature (Lot 2 —
+   * ADR-0021). PUR : délègue au pipeline générique `RuntimeComputeEngine.resolveStat`.
+   *
+   *   base          = template.baseHealth (socle configuré)
+   *   contribution  = vitality × maxHealthPerVitality (flat, tags derived/vitality/health)
+   *   cap minimum   = 1
+   *   arrondi       = floor (une seule fois, après cap)
+   *   → maxHealth autoritaire
+   *
+   * Aucune formule dupliquée ailleurs : tous les consommateurs (spawn, respawn,
+   * soin, fuite, admin, DTO) passent par cette valeur. Les futurs modificateurs
+   * (buffs/debuffs/équipement) s'ajouteront comme contributions supplémentaires
+   * (non branchés en V1). Les debug modifiers n'affectent PAS le PV max (une seule
+   * valeur autoritaire ; ils restent actifs sur attackPower/defenseTotal).
+   *
+   * Le résultat COMPLET (`StatResolutionResult`) est retourné pour conserver la
+   * trace (base, contribution Vitalité, valeur avant cap, cap, politique floor,
+   * valeur finale) — prête pour le Studio (Lot 3), sans logique côté client.
+   */
+  static resolveMaxHealth(
+    template: CreatureTemplate,
+    coefficients: CreatureSecondaryCoefficients = DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+  ): StatResolutionResult {
+    const baseHealth = template.baseHealth;
+    const vitality = template.vitality ?? 0;
+    const vitalityBonus = vitality * coefficients.maxHealthPerVitality;
+
+    const contributions: RuntimeModifier[] = [
+      {
+        id: 'creature:vitality:maxHp',
+        sourceType: 'base',
+        sourceId: 'vitality',
+        sourceLabel: 'Vitalité',
+        targetStat: 'maxHp',
+        operation: 'flat',
+        value: vitalityBonus,
+        priority: 0,
+        enabled: true,
+        tags: ['derived', 'vitality', 'health'],
+        reason: `vitality ${vitality} × maxHealthPerVitality ${coefficients.maxHealthPerVitality}`,
+      },
+    ];
+
+    return RuntimeComputeEngine.resolveStat({
+      stat: 'maxHp',
+      baseValue: baseHealth,
+      contributions,
+      caps: { min: 1 },
+      rounding: 'floor',
+    });
   }
 }

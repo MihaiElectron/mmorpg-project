@@ -230,10 +230,10 @@ describe('CreatureRuntimeCalculator — dérivation primaires → secondaires (V
     expect(s.armorPenetrationPercent).toBe(40);
   });
 
-  it('maxHealthDerived est calculé (baseHealth + vitality × 10) sans activer maxHealth runtime', () => {
+  it('Lot 2 : maxHealth = baseHealth + vitality × coef (dérivé ACTIVÉ) ; maxHealthDerived aliasé', () => {
     const s = resolve({ vitality: 5 });
-    expect(s.maxHealthDerived).toBe(80 + 5 * 10); // 130
-    expect(s.maxHealth).toBe(80); // PV max runtime NON rebranché
+    expect(s.maxHealth).toBe(80 + 5 * 10); // 130 — PV max dérivé activé (floor)
+    expect(s.maxHealthDerived).toBe(s.maxHealth); // alias, jamais une 2e valeur
   });
 
   it('spirit/willpower/charisma/wisdom n\'ont aucun effet combat (non branchées)', () => {
@@ -371,12 +371,12 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
     expect(s.canDodge).toBe(false);
   });
 
-  it('maxHealthDerived custom reste informatif : maxHealth actif = baseHealth', () => {
+  it('Lot 2 : maxHealth suit le coefficient (vitality 50 × 30) ; maxHealthDerived aliasé', () => {
     const s = CreatureRuntimeCalculator.resolveCombatStats(
       makeCreature(), makeTemplate({ vitality: 50 }), [], withCoeffs({ maxHealthPerVitality: 30 }),
     );
-    expect(s.maxHealthDerived).toBe(80 + 50 * 30); // 1580
-    expect(s.maxHealth).toBe(80); // PV max runtime NON rebranché
+    expect(s.maxHealth).toBe(80 + 50 * 30); // 1580 — dérivé activé
+    expect(s.maxHealthDerived).toBe(s.maxHealth); // alias
   });
 
   it('debug modifiers restent appliqués APRÈS la dérivation par coefficients', () => {
@@ -384,5 +384,71 @@ describe('CreatureRuntimeCalculator — coefficients injectables (V6-B2.5 Lot 1)
       makeCreature(), makeTemplate(PRIMS), [flatMod('attackPower', 8)], withCoeffs({ attackPowerPerStrength: 5 }),
     );
     expect(s.attackPower).toBe(12 + 10 * 5 + 8); // 70
+  });
+});
+
+// ─── resolveMaxHealth : point unique PV max effectif (Lot 2 — ADR-0021) ────────
+
+describe('CreatureRuntimeCalculator.resolveMaxHealth (Lot 2)', () => {
+  const withCoeffs = (over: Partial<CreatureSecondaryCoefficients>): CreatureSecondaryCoefficients => ({
+    ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    ...over,
+  });
+
+  it('1. Vitalité 0 → maximum = baseHealth (no-op legacy)', () => {
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(makeTemplate({ baseHealth: 30, vitality: 0 }));
+    expect(r.finalValue).toBe(30);
+  });
+
+  it('2. Vitalité positive → contribution ajoutée (30 + 3 × 10 = 60)', () => {
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(
+      makeTemplate({ baseHealth: 30, vitality: 3 }),
+      withCoeffs({ maxHealthPerVitality: 10 }),
+    );
+    expect(r.finalValue).toBe(60);
+  });
+
+  it('3. coefficient fractionnaire → floor (30 + 3 × 2.5 = 37.5 → 37)', () => {
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(
+      makeTemplate({ baseHealth: 30, vitality: 3 }),
+      withCoeffs({ maxHealthPerVitality: 2.5 }),
+    );
+    expect(r.finalValue).toBe(37); // floor(37.5)
+    expect(r.roundingPolicy).toBe('floor');
+  });
+
+  it('4. maximum toujours au moins 1 (cap min)', () => {
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(makeTemplate({ baseHealth: 1, vitality: 0 }));
+    expect(r.finalValue).toBe(1);
+    expect(r.caps.min).toBe(1);
+  });
+
+  it('5. trace : base = baseHealth + contribution Vitalité (flat, tags derived/vitality/health)', () => {
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(
+      makeTemplate({ baseHealth: 30, vitality: 3 }),
+      withCoeffs({ maxHealthPerVitality: 10 }),
+    );
+    expect(r.baseValue).toBe(30); // baseHealth = base
+    const vit = r.applied.find((a) => a.sourceId === 'vitality');
+    expect(vit?.operation).toBe('flat');
+    expect(vit?.contribution).toBe(30); // 3 × 10
+    expect(vit?.tags).toEqual(['derived', 'vitality', 'health']);
+    expect(r.beforeCaps).toBe(60);
+  });
+
+  it('6. utilise le pipeline resolveStat (floor + cap 1), pas l\'ancien compute()', () => {
+    // Signature de resolveStat : trace enrichie présente (afterFlat/caps/rounding).
+    const r = CreatureRuntimeCalculator.resolveMaxHealth(makeTemplate({ baseHealth: 30, vitality: 2 }));
+    expect(r.afterFlat).toBeDefined();
+    expect(r.roundingPolicy).toBe('floor');
+    expect(r.caps).toEqual({ min: 1, max: null });
+  });
+
+  it('7. déterministe : mêmes entrées → même résultat', () => {
+    const t = makeTemplate({ baseHealth: 45, vitality: 7 });
+    const a = CreatureRuntimeCalculator.resolveMaxHealth(t, withCoeffs({ maxHealthPerVitality: 3 }));
+    const b = CreatureRuntimeCalculator.resolveMaxHealth(t, withCoeffs({ maxHealthPerVitality: 3 }));
+    expect(a.finalValue).toBe(b.finalValue);
+    expect(a.finalValue).toBe(45 + 7 * 3); // 66
   });
 });

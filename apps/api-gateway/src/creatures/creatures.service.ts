@@ -266,7 +266,7 @@ export class CreaturesService implements OnModuleInit {
         } else {
           // Timer expiré ou absent — respawn immédiat
           a.state = 'alive';
-          a.health = a.spawn.template.baseHealth;
+          a.health = this.resolveCreatureMaxHealth(a.spawn.template);
           a.respawnAt = null;
           if (a.spawn.worldX == null || a.spawn.worldY == null || a.spawn.mapId == null) continue;
           a.worldX = a.spawn.worldX;
@@ -276,6 +276,14 @@ export class CreaturesService implements OnModuleInit {
           this.liveCreatures.set(a.id, a);
         }
       } else {
+        // Lot 2 : au redémarrage, clamp des PV persistés si le PV max effectif a
+        // DIMINUÉ hors ligne (baseHealth/Vitalité/coefficient modifiés). Hausse →
+        // PV inchangés (pas de soin). Persisté uniquement si corrigé.
+        const maxHealth = this.resolveCreatureMaxHealth(a.spawn.template);
+        if (a.health > maxHealth) {
+          a.health = maxHealth;
+          await this.creatureRepository.save(a);
+        }
         this.liveCreatures.set(a.id, a);
       }
     }
@@ -294,6 +302,9 @@ export class CreaturesService implements OnModuleInit {
 
   private toDto(creature: Creature): CreatureDto {
     const t = creature.spawn.template;
+    // Lot 2 : PV max EFFECTIF autoritaire (base + Vitalité, cap 1, floor). Une
+    // seule valeur exposée : `maxHealth` DTO ET `runtimeStats.maxHp` la portent.
+    const maxHealthValue = this.resolveCreatureMaxHealth(t);
     let runtimeStats: CreatureRuntimeStats | undefined;
     if (t) {
       const base = CreatureRuntimeCalculator.calculateBaseStats(creature, t);
@@ -303,6 +314,9 @@ export class CreaturesService implements OnModuleInit {
         (stat) => CREATURE_DERIVED_BASE[stat as CreatureStatKey](base),
         debugMods,
       );
+      // `maxHp` runtime aligné sur le PV max effectif serveur (jamais recalculé
+      // par le client). attackPower/defenseTotal/etc. restent inchangés.
+      runtimeStats.maxHp = maxHealthValue;
     }
     return {
       id: creature.id,
@@ -314,7 +328,7 @@ export class CreaturesService implements OnModuleInit {
       worldY: creature.worldY ?? null,
       mapId: creature.mapId ?? null,
       health: creature.health,
-      maxHealth: t.baseHealth,
+      maxHealth: maxHealthValue,
       armor: t.baseArmor,
       attack: t.baseAttack,
       state: creature.state,
@@ -385,7 +399,8 @@ export class CreaturesService implements OnModuleInit {
       worldY: creature.worldY ?? null,
       mapId: creature.mapId ?? null,
       currentHealth: creature.health,
-      maxHealth: t.baseHealth,
+      // Lot 2 : PV max effectif (résolu), jamais `baseHealth` brut.
+      maxHealth: stats.maxHealth,
       defenseTotal: stats.defenseTotal,
       baseArmor: t.baseArmor,
       alive: creature.state !== 'dead',
@@ -423,8 +438,9 @@ export class CreaturesService implements OnModuleInit {
         charisma: t.charisma,
       },
       // V6-B2 : secondaires CALCULÉES depuis les primaires (informatif). Dérivées
-      // serveur mais NON actives en défense (canDodge/canBlock/canParry false) ;
-      // maxHealthDerived ne remplace pas maxHealth (PV max actif = baseHealth).
+      // serveur mais NON actives en défense (canDodge/canBlock/canParry false).
+      // Lot 2 : `maxHealthDerived` est désormais un ALIAS de `maxHealth` (même
+      // valeur autoritaire) — plus une seconde notion concurrente.
       derivedSecondaryStats: {
         dodgeChance: stats.dodgeChance,
         blockChance: stats.blockChance,
@@ -456,6 +472,22 @@ export class CreaturesService implements OnModuleInit {
       // suivent la config. dodge/block/parry restent calculés mais non actifs.
       this.creatureSecondaryCoefficients.getCoefficients(),
     );
+  }
+
+  /**
+   * Lot 2 (ADR-0021) : PV maximum EFFECTIF d'une créature, point d'accès unique
+   * du service. Délègue au point de résolution pur `resolveMaxHealth` avec les
+   * coefficients serveur effectifs. Résolution FRAÎCHE (pas de cache) : reflète
+   * toujours `template.baseHealth`, `template.vitality` et `maxHealthPerVitality`
+   * courants — aucune valeur périmée. Pas de debug modifier (une seule valeur
+   * autoritaire). Tous les chemins PV créature (spawn/respawn/soin/fuite/admin/DTO)
+   * lisent cette valeur au lieu de `template.baseHealth`.
+   */
+  private resolveCreatureMaxHealth(template: CreatureTemplate): number {
+    return CreatureRuntimeCalculator.resolveMaxHealth(
+      template,
+      this.creatureSecondaryCoefficients.getCoefficients(),
+    ).finalValue;
   }
 
   /**
@@ -694,7 +726,10 @@ export class CreaturesService implements OnModuleInit {
       if (!creature || !creature.spawn || creature.state === 'dead') continue;
 
       const { template } = creature.spawn;
-      const hpPct = (creature.health / template.baseHealth) * 100;
+      // Lot 2 : seuil de fuite sur le PV max effectif (cap min 1 garantit > 0 ;
+      // garde anti-division par zéro par sécurité).
+      const maxHealth = this.resolveCreatureMaxHealth(template);
+      const hpPct = maxHealth > 0 ? (creature.health / maxHealth) * 100 : 0;
 
       // Transition : fuite (prioritaire)
       if (template.fleeThresholdPct > 0 && hpPct < template.fleeThresholdPct && creature.state !== 'escaping') {
@@ -823,7 +858,7 @@ export class CreaturesService implements OnModuleInit {
       const abilities = await this.getCombatAbilities(template.id, template.key);
       // V5-D1-B : si blessée, une capacité HEAL (self) est prioritaire sur le damage.
       // Le heal consomme la fenêtre d'action : aucun damage dans le même tick.
-      if (creature.health < template.baseHealth) {
+      if (creature.health < this.resolveCreatureMaxHealth(template)) {
         const healChosen = this.pickCreatureHealAbility(creature.id, abilities, now);
         if (healChosen) {
           await this.castCreatureHeal(creature, template, healChosen, server, now);
@@ -1018,7 +1053,8 @@ export class CreaturesService implements OnModuleInit {
     }
     cd.set(ability.skillKey, now);
 
-    const maxHealth = template.baseHealth;
+    // Lot 2 : soin clampé au PV max EFFECTIF (base + Vitalité), jamais baseHealth brut.
+    const maxHealth = this.resolveCreatureMaxHealth(template);
     // Arrondi entier : le montant de soin (calculateSkillEffect) peut être
     // fractionnaire → PV créature fractionnaires → échec de persistance
     // (colonne health INTEGER). Invariant entier, pas de changement d'équilibrage.
@@ -1114,8 +1150,10 @@ export class CreaturesService implements OnModuleInit {
     if (!creature || !creature.spawn || creature.state !== 'dead') return;
 
     const { template } = creature.spawn;
+    // Lot 2 : respawn aux PV max effectifs (base + Vitalité, cap 1, floor).
+    const maxHealth = this.resolveCreatureMaxHealth(template);
     creature.state = 'alive';
-    creature.health = template.baseHealth;
+    creature.health = maxHealth;
     creature.respawnAt = null;
     if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) return;
     creature.worldX = creature.spawn.worldX;
@@ -1124,7 +1162,7 @@ export class CreaturesService implements OnModuleInit {
 
     await this.creatureRepository.update(id, {
       state: 'alive',
-      health: template.baseHealth,
+      health: maxHealth,
       respawnAt: null,
       worldX: creature.worldX,
       worldY: creature.worldY,
@@ -1669,7 +1707,8 @@ export class CreaturesService implements OnModuleInit {
       domain: 'combat' as MasteryDomain,
       action: 'attack_hit',
       success: true,
-      difficulty: Math.max(1, Math.round(template.baseHealth / 10)),
+      // Lot 2 : difficulté = puissance runtime réelle → PV max effectif (base + Vitalité).
+      difficulty: Math.max(1, Math.round(this.resolveCreatureMaxHealth(template) / 10)),
       quality: null,
       characterLevel: character.level ?? 1,
       masteryLevel: 1,
@@ -1782,7 +1821,8 @@ export class CreaturesService implements OnModuleInit {
         worldX: targetWorldX,
         worldY: targetWorldY,
         mapId: DEFAULT_MAP_ID,
-        health: template.baseHealth,
+        // Lot 2 : nouvelle créature créée aux PV max effectifs.
+        health: this.resolveCreatureMaxHealth(template),
         state: 'alive',
       }),
     );
@@ -1801,9 +1841,11 @@ export class CreaturesService implements OnModuleInit {
     for (const creature of this.liveCreatures.values()) {
       if (creature.spawn?.template?.key === key) {
         Object.assign(creature.spawn.template, fields);
-        // Recalibrer les HP si baseHealth diminue sous le HP actuel
-        const newMax = (creature.spawn.template as any).baseHealth;
-        if (newMax !== undefined && creature.health > newMax) {
+        // Lot 2 : recalibrer les PV si le PV max EFFECTIF diminue (baseHealth OU
+        // Vitalité modifiés). Baisse → clamp immédiat ; hausse → PV inchangés (pas
+        // de soin automatique). En mémoire : la persistance suivra au prochain save.
+        const newMax = this.resolveCreatureMaxHealth(creature.spawn.template);
+        if (creature.health > newMax) {
           creature.health = newMax;
         }
       }
@@ -1839,13 +1881,15 @@ export class CreaturesService implements OnModuleInit {
     const creature = this.liveCreatures.get(id);
     if (!creature) return null;
 
+    // Lot 2 : clamp SERVEUR de la valeur admin (non fiable) au PV max effectif.
+    const adminMaxHealth = this.resolveCreatureMaxHealth(creature.spawn.template);
     if (fields.health !== undefined) {
-      creature.health = Math.max(0, Math.min(fields.health, creature.spawn.template.baseHealth));
+      creature.health = Math.max(0, Math.min(fields.health, adminMaxHealth));
     }
     if (fields.state !== undefined) {
       creature.state = fields.state as Creature['state'];
       if (fields.state === 'alive') {
-        creature.health = creature.spawn.template.baseHealth;
+        creature.health = adminMaxHealth;
       }
     }
 
@@ -1891,8 +1935,10 @@ export class CreaturesService implements OnModuleInit {
       if (creature.spawn?.template?.key !== templateKey) continue;
 
       const { template } = creature.spawn;
+      // Lot 2 : force-respawn admin aux PV max effectifs (base + Vitalité).
+      const maxHealth = this.resolveCreatureMaxHealth(template);
       creature.state = 'alive';
-      creature.health = template.baseHealth;
+      creature.health = maxHealth;
       if (creature.spawn.worldX == null || creature.spawn.worldY == null || creature.spawn.mapId == null) continue;
       creature.worldX = creature.spawn.worldX;
       creature.worldY = creature.spawn.worldY;
@@ -1904,7 +1950,7 @@ export class CreaturesService implements OnModuleInit {
 
       await this.creatureRepository.update(creature.id, {
         state: 'alive',
-        health: template.baseHealth,
+        health: maxHealth,
         worldX: creature.worldX,
         worldY: creature.worldY,
         mapId: creature.mapId,
@@ -1957,7 +2003,8 @@ export class CreaturesService implements OnModuleInit {
           worldX: spawn.worldX,
           worldY: spawn.worldY,
           mapId: spawn.mapId,
-          health: spawn.template.baseHealth,
+          // Lot 2 : instance seedée aux PV max effectifs (base + Vitalité).
+          health: this.resolveCreatureMaxHealth(spawn.template),
           state: 'alive',
         }),
       );
