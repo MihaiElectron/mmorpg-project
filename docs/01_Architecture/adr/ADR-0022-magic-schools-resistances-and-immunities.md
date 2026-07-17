@@ -496,22 +496,24 @@ tant que `magicSchool`/mitigation magique ne sont pas branchés (défauts `physi
 ## Open questions
 
 Décisions **non encore validées** (à trancher par le responsable / lot ultérieur).
-Actés et retirés de cette liste (voir `combat-resolution.md` §12) : minimum de 1 sur
-le **total** hybride ; `healingDone × healingReceived` ; **sources d'immunité** +
-snapshot ; DoT vs minimum, `removeOnDeath`, redémarrage, déconnexion/reconnexion,
-`stackingGroup` ; cleanse/purge, bundles, dispel déterministe ; **tick pendant la
-bascule** (`applicationId+tickIndex`) et **timeout 3 s / 2 retries** du transfert ;
-**format conceptuel des batches** (`CombatEventsBatch`/`eventAt`) + **taille max 100**
-+ fragmentation ; **limite globale de DoT (100)** ; **dissipation de zone** ;
-**départage de bundles** ; **rétention butin personnel (30 j)** + lifecycle mailbox ;
-**suppression/sanctions**.
+Actés et retirés (voir `combat-resolution.md` §12) : minimum hybride, soins, sources
+d'immunité, DoT, lifecycle effets, cleanse/purge/bundles/dispel, transfert de zone +
+timeout/retries, batch réseau + `eventAt` + fragmentation, limites DoT (20/100),
+dissipation de zone ; **canal mailbox système réservé**, **notification** du loot,
+**granularité groupe/raid** (entitlement par personnage), **`PersonalLootEntitlement`**
+(source d'autorité, états/transitions, clé `killId+characterId+rewardRollId`),
+**garanties transactionnelles anti-dupe** (course ramassage/expiration), **panne
+définitive de zone** + coordinateur `stateVersion`/CAS, **pause de rétention** pendant
+suspension (§12.27/§12.28).
 
-- **Format persistant exact** de l'entitlement ; **emplacement précis** du droit au
-  butin dans le modèle mailbox existant ; comportement si la **mailbox atteint une
-  limite de stockage** ; **politique de notification** au joueur.
-- **Granularité exacte** des droits selon le **groupe / raid**.
-- Comportement d'un **transfert de zone lors d'une panne définitive** de la zone
-  source ; mécanisme de **pause d'expiration d'une suspension très longue**.
+- **Schéma TypeORM exact** de l'entitlement ; **relation précise** entre entitlement
+  et message mailbox existant ; **stratégie de restauration** depuis le dernier état
+  durable sûr ; **emplacement concret** du coordinateur de transfert.
+- **Politique de nettoyage** des historiques d'audit.
+- Comportement si une **récompense est retirée du catalogue** avant récupération, ou
+  si l'**objet référencé est désactivé** administrativement.
+- **Limites éventuelles** du canal mailbox système ; **présentation UX** des
+  notifications groupées.
 - Interaction future entre **immunité spécifique au bleed** et **dispel `bleed`**.
 - Réconciliation des 4 résistances élémentaires existantes avec les 6 écoles
   (renommage / mapping / sémantique points vs %).

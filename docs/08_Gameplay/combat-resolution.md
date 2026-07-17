@@ -4,7 +4,7 @@
 
 - Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9 ; effets périodiques/immunités/lifecycle cadrés Planned, §12 / ADR-0022)
 - Owner: Project
-- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.26 cleanse/purge, bundles, limites DoT globales, transfert de zone autoritaire + timeout/retries, batch réseau `combat:events` + `eventAt` + fragmentation, dissipation de zone, lifecycle butin personnel → mailbox, suppression/sanctions — cadrage Planned)
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.28 cleanse/purge, bundles, limites DoT globales, transfert de zone autoritaire + timeout/retries, batch réseau `combat:events` + `eventAt` + fragmentation, dissipation de zone, lifecycle butin personnel → mailbox, suppression/sanctions, `PersonalLootEntitlement` + canal mailbox système + anti-dupe transactionnel, coordinateur de transfert `stateVersion`/CAS — cadrage Planned)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -858,10 +858,12 @@ du kill, dégâts finaux, liste des effets dissipables, effet sélectionné par 
 dissipation, priorité de dispel, résultat cleanse/purge, limite d'instances, état
 transféré entre zones, ordre des ticks, récompense obtenue, menace, **`transferId`,
 `tickIndex`, `eventAt`, `batchSequence`, `batchCount`, entitlement, date d'expiration,
-destination mailbox, état de sanction, attribution finale**. Le serveur **produit et
-valide** : définitions persistées, source/cible autoritaires, snapshots runtime,
-timers autoritaires, rencontres, droits de récompense. Le frontend **affiche** les
-événements reçus. (ADR-0022.)
+destination mailbox, état de sanction, attribution finale, `status` d'entitlement,
+`rewardRollId` autoritaire, décision de transfert mailbox, `stateVersion` de
+transfert**. Le serveur **produit et valide** : définitions persistées, source/cible
+autoritaires, snapshots runtime, timers autoritaires, rencontres, droits de
+récompense, transitions d'entitlement, autorité de transfert. Le frontend **affiche**
+les événements reçus. (ADR-0022.)
 
 ### 12.17 Polarité des effets — cleanse & purge (Planned)
 
@@ -1163,6 +1165,134 @@ ou clé équivalente).
   **attribution historique conservée** pour audit. Ne jamais supprimer silencieusement
   les traces d'anti-fraude / support / audit / investigation de duplication.
 
+Modèle persistant, canal mailbox système, notification, transitions transactionnelles
+et pause de rétention : §12.27. Coordinateur de transfert & panne de zone : §12.28.
+
+### 12.27 `PersonalLootEntitlement` — modèle, mailbox système, notification, anti-dupe (Planned)
+
+Le droit au butin personnel est représenté par une **entité dédiée** (source
+autoritaire) ; le **world item au sol** et le **courrier mailbox** n'en sont que des
+**représentations**. Aucune entité TypeORM n'est créée par ce chantier.
+
+**Champs conceptuels** (noms à aligner sur les conventions du projet) :
+
+```text
+id ; killId ; characterId ; rewardDefinitionId ; rewardRollId
+itemId ; quantity
+status = ground | mailed | claimed | expired | cancelled
+groundExpiresAt ; mailExpiresAt ; claimedAt ; cancelledAt
+sourceCreatureId ; sourceEncounterId
+notifiedAt
+suspensionStartedAt ; remainingRetentionMs
+createdAt ; updatedAt
+```
+
+**États & transitions** — autorisées : `ground → claimed`, `ground → mailed`,
+`mailed → claimed`, `ground → cancelled`, `mailed → cancelled`, `mailed → expired`.
+**Terminaux** : `claimed`, `expired`, `cancelled`. **Interdites** : `claimed → mailed`,
+`claimed → ground`, `expired → claimed`, `cancelled → claimed`. Une opération reçue
+sur un entitlement **déjà dans l'état final attendu** est **idempotente** ; une
+transition incompatible est **rejetée sans créer d'objet**.
+
+**Clé d'unicité anti-duplication** : `killId + characterId + rewardRollId`
+(contrainte unique conceptuelle). `rewardRollId` est **stable et distinct** pour
+chaque ligne de récompense d'un même kill. **Ne pas** se limiter à
+`killId + characterId + itemId` (un même objet peut légalement apparaître plusieurs
+fois dans un résultat de loot).
+
+**Garanties transactionnelles anti-dupe** (serveur, PostgreSQL) : transaction +
+**verrou de la ligne** d'entitlement + contrôle de l'état courant + **mise à jour
+conditionnelle** + création/transfert de l'objet dans la **même unité
+transactionnelle** quand possible + retries avec la **même clé d'idempotence** +
+**historique d'audit** des transitions ; client non fiable. **Course principale**
+(ramassage au sol ⟂ expiration des 5 min simultanés) : la **première transaction
+verrouille** l'entitlement (`ground → claimed` **ou** `ground → mailed`) ; la seconde
+observe l'état final → **aucune seconde création**. Un même entitlement ne produit
+**jamais** : objet en inventaire **et** courrier ; deux courriers ; deux objets au
+sol ; deux récompenses après retry ; une nouvelle récompense après reconnexion.
+
+**Canal mailbox système** : les **courriers ordinaires** entre joueurs restent soumis
+à la **capacité normale** ; les **récompenses système / loot personnel** utilisent un
+**canal système réservé** qui **ne consomme pas** les emplacements ordinaires. Ainsi :
+un objet personnel ne disparaît **jamais** parce que la mailbox est pleine ; aucune
+attente indéfinie de retry liée à la seule capacité ordinaire ; **un joueur ne peut
+pas bloquer volontairement** sa mailbox pour prolonger son droit. Les règles
+anti-spam et de rétention restent applicables aux courriers système ; la mailbox est
+un **canal de récupération**, pas la source d'autorité. **Transition `ground → mailed`** :
+création **atomique** du courrier système + passage à `mailed` ; la rétention de
+**30 j** démarre à la **création effective** du courrier ; retries **idempotents** ;
+**jamais** deux courriers pour un entitlement ; **jamais** `ground` et `mailed`
+simultanés ; un échec de création **ne clôture pas** silencieusement l'entitlement.
+
+**Notification** : joueur connecté → notification **immédiate** ; hors ligne →
+notification **persistante à la prochaine connexion**. Contenu minimal : objet/récompense,
+origine (créature/rencontre), raison (butin personnel non récupéré au sol), date
+d'expiration, accès mailbox. **Une notification par entitlement** (`notifiedAt`) →
+**aucun spam** à chaque reconnexion ; un échec de notification **ne bloque jamais** le
+courrier ; la notification **n'est pas** la source d'autorité ; plusieurs entitlements
+d'un même kill peuvent être **regroupés visuellement**, mais leurs droits/transitions
+restent **distincts**.
+
+**Granularité groupe / raid** : chaque personnage éligible possède **son propre**
+entitlement (`killId + characterId + rewardRollId`). Récupérer son loot **ne modifie
+pas** les droits des autres ; la déconnexion n'annule **pas** un droit déjà gagné ;
+l'absence à l'instant exact de la mort n'annule pas le droit si les règles de
+**contribution** le rendent éligible ; le **chef de groupe ne choisit pas** le
+destinataire ; un entitlement personnel **n'est pas transférable** ; le **loot
+partagé** reste un système distinct.
+
+**Autorité serveur** : le client ne fournit jamais `status`, `rewardRollId`
+autoritaire, `claimed`/`mailed`, date d'expiration, décision de transfert mailbox,
+contenu/quantité finaux, éligibilité. Le client demande **uniquement** un ramassage /
+une récupération ; le serveur valide identité, entitlement, éligibilité, état,
+distance/présence du world item (si ramassage), inventaire, transition autorisée,
+idempotence.
+
+**Pause de rétention pendant suspension** (précise §12.26) : une suspension temporaire
+**ne consomme pas** la rétention restante — **ne pas** mettre à jour continuellement
+`expiresAt`. Début : `remainingRetentionMs = max(0, expiresAt − suspensionStartedAt)` ;
+pendant : entitlement **inaccessible**, aucune récupération, **aucune expiration**,
+aucun timer permanent en mémoire ; fin : `expiresAt = now + remainingRetentionMs`,
+`suspensionStartedAt = null`, `remainingRetentionMs = null`. **Suspensions
+successives** supportées ; **aucune** période suspendue ne consomme la rétention ;
+**aucune durée ajoutée** au-delà du restant réel ; calculs **serveur-autoritaires** ;
+chaque pause/reprise **auditée** ; une suspension déjà active ne peut être **réappliquée**
+pour gonfler artificiellement le temps restant. **Bannissement définitif** →
+entitlement `cancelled`/clôturé, **aucune récupération future**, **aucune reprise** de
+rétention, historique/attribution **conservés** pour audit.
+
+### 12.28 Coordinateur de transfert d'autorité & panne de zone (Planned)
+
+Prolonge §12.21. Une **panne définitive de la zone source** pendant une téléportation
+ne doit produire **ni doublon ni disparition** d'entité. Un **coordinateur de
+transfert autoritaire** arbitre la propriété. État conceptuel minimal :
+
+```text
+transferId ; entityId ; sourceZoneId ; targetZoneId
+status = preparing | accepted | committed | cancelled
+stateVersion ; expiresAt
+```
+
+Ce contrat **ne choisit pas** l'implémentation (solution persistante ou distribuée
+adaptée à l'architecture future ; **aucun Redis / microservice / Rust imposé**).
+
+- **Panne APRÈS `accepted`** (zone cible a confirmé, zone source tombe) → le
+  coordinateur **accorde l'autorité à la zone cible** ; celle-ci reprend l'entité et
+  ses effets ; **aucun retour** vers la source. Garanties : même `transferId`, état
+  transféré déjà validé, reprise des timers avec leurs identifiants, ticks protégés
+  par `applicationId + tickIndex`, **aucune seconde entité**, **aucun double
+  propriétaire**.
+- **Panne AVANT `accepted`** → transfert **annulé** ; **restauration depuis le dernier
+  état durable sûr** ; aucune zone cible ne s'auto-déclare propriétaire ; aucun état
+  partiellement accepté exposé comme actif ; **aucun doublon** ; **journal d'audit**
+  du transfert échoué ; reprise selon le lifecycle de connexion/chargement existant
+  (ne pas détailler une infra de sauvegarde inexistante).
+- **Unicité de l'autorité** : **compare-and-swap sur `stateVersion`** — une seule
+  transition de propriété réussit ; une confirmation tardive sur version obsolète est
+  **rejetée** ; une zone ne modifie l'état que si elle possède la **bonne version** ;
+  tous les retries gardent le **même `transferId`** ; `expiresAt` évite un transfert
+  bloqué indéfiniment ; chaque changement d'autorité est **audité**.
+
 ## État d'implémentation
 
 | Élément | État |
@@ -1209,6 +1339,12 @@ ou clé équivalente).
 | Dissipation de zone (budget par cible) + départage bundles (§12.25 / §12.19) | Planned |
 | Lifecycle butin personnel (sol 5 min → mailbox 30 j, entitlement idempotent, exclusivité) (§12.26) | Planned |
 | Suppression de personnage & sanctions (attente / définitive / suspension / bannissement) (§12.26) | Planned |
+| `PersonalLootEntitlement` (modèle, états/transitions, clé `killId+characterId+rewardRollId`) (§12.27) | Planned |
+| Canal mailbox système réservé + notification (`notifiedAt`) du loot transféré (§12.27) | Planned |
+| Garanties transactionnelles anti-dupe (verrou ligne, CAS d'état, course ramassage/expiration) (§12.27) | Planned |
+| Granularité loot personnel groupe/raid (entitlement par personnage) (§12.27) | Planned |
+| Pause de rétention pendant suspension (`remainingRetentionMs`) + bannissement (§12.27) | Planned |
+| Coordinateur de transfert (`stateVersion`, compare-and-swap) & panne de zone (§12.28) | Planned |
 
 ## Références
 
