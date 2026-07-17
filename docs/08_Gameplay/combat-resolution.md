@@ -4,7 +4,7 @@
 
 - Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9)
 - Owner: Project
-- Last updated: 2026-07-17
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités, cadrage Draft)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -542,7 +542,14 @@ l'inspector, sans effet runtime — activation non décidée). Le **PV max déri
 n'est plus informatif : il est **actif** (Lot 2, §11.9).
 
 **Encore Planned** : résistances magiques, boucliers magiques/divins/paladin,
-enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5).
+enchantements/procs (pipeline défensif magique distinct, §11.6.2/§11.6.5). Le
+**cadrage** des écoles magiques (`magicSchool`), des résistances par école +
+globale, de la mitigation magique (linéaire %, sans clamp), des immunités (école /
+magique / invulnérabilité totale) et de la non-pénétration magique est **figé en
+Draft/Proposed dans ADR-0022** (`docs/01_Architecture/adr/ADR-0022-magic-schools-resistances-and-immunities.md`) —
+aucune implémentation. Point non tranché : **minimum de 1 par composante ou sur le
+total** pour une attaque hybride (question ouverte ADR-0022, cohérente avec le
+statut Planned du modèle hybride §11.7).
 
 ### 11.9 PV max dérivé créature — Implemented (Lot 2, ADR-0021)
 
@@ -694,7 +701,7 @@ magiques, boucliers magiques/divins/paladin, équilibrage fin des valeurs.
 | Parade sur auto-attaque passive (`canParry` en défense passive) | Planned (hors périmètre) |
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
-| Résistances magiques / boucliers magiques-divins, dégâts magical/elemental/poison, enchantements/procs | Planned |
+| Résistances magiques / boucliers magiques-divins, dégâts magical/elemental/poison, enchantements/procs | Planned (cadrage figé : ADR-0022 écoles/résistances/immunités, Draft/Proposed) |
 
 ## Références
 
