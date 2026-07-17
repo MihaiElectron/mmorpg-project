@@ -496,25 +496,22 @@ tant que `magicSchool`/mitigation magique ne sont pas branchés (défauts `physi
 ## Open questions
 
 Décisions **non encore validées** (à trancher par le responsable / lot ultérieur).
-Actés et retirés de cette liste : minimum de 1 sur le **total** hybride (§7/§14) ;
-formule `healingDone × healingReceived` (§13) ; **sources d'immunité** + snapshot
-runtime (§9) ; DoT vs minimum de 1, `removeOnDeath`, redémarrage,
-déconnexion/reconnexion, stacking par `stackingGroup`, dispel complet V1
-(`combat-resolution.md` §12) ; **cleanse/purge par polarité**, **bundles buff+curse
-liés**, sélection déterministe de dissipation, **limite d'instances de DoT (défaut
-20 + override)**, transfert de zone autoritaire, **récompenses différées +
-idempotence**, **menace vs contribution**, **batch réseau des ticks + ordre
-déterministe** (`combat-resolution.md` §12.17–§12.24).
+Actés et retirés de cette liste (voir `combat-resolution.md` §12) : minimum de 1 sur
+le **total** hybride ; `healingDone × healingReceived` ; **sources d'immunité** +
+snapshot ; DoT vs minimum, `removeOnDeath`, redémarrage, déconnexion/reconnexion,
+`stackingGroup` ; cleanse/purge, bundles, dispel déterministe ; **tick pendant la
+bascule** (`applicationId+tickIndex`) et **timeout 3 s / 2 retries** du transfert ;
+**format conceptuel des batches** (`CombatEventsBatch`/`eventAt`) + **taille max 100**
++ fragmentation ; **limite globale de DoT (100)** ; **dissipation de zone** ;
+**départage de bundles** ; **rétention butin personnel (30 j)** + lifecycle mailbox ;
+**suppression/sanctions**.
 
-- Interaction entre un **transfert de zone** et un **tick arrivant exactement pendant
-  la bascule** ; **retry / timeout** du transfert.
-- **Format concret** des événements de tick batchés (`combat:events`).
-- **Rétention** d'un droit au butin **personnel** différé ; traitement d'un joueur
-  **supprimé/banni** avant une récompense différée.
-- **Limite globale** éventuelle de tous les DoT confondus sur une cible (au-delà de
-  la limite par définition).
-- **Dissipation de zone** (AoE dispel/cleanse/purge).
-- Ordre entre plusieurs **bundles de même `dispelPriority`**.
+- **Format persistant exact** de l'entitlement ; **emplacement précis** du droit au
+  butin dans le modèle mailbox existant ; comportement si la **mailbox atteint une
+  limite de stockage** ; **politique de notification** au joueur.
+- **Granularité exacte** des droits selon le **groupe / raid**.
+- Comportement d'un **transfert de zone lors d'une panne définitive** de la zone
+  source ; mécanisme de **pause d'expiration d'une suspension très longue**.
 - Interaction future entre **immunité spécifique au bleed** et **dispel `bleed`**.
 - Réconciliation des 4 résistances élémentaires existantes avec les 6 écoles
   (renommage / mapping / sémantique points vs %).

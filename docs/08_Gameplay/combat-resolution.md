@@ -4,7 +4,7 @@
 
 - Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9 ; effets périodiques/immunités/lifecycle cadrés Planned, §12 / ADR-0022)
 - Owner: Project
-- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.24 cleanse/purge, bundles, limites DoT, zones, récompenses différées, menace, réseau des ticks — cadrage Planned)
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned ; §12.17–12.26 cleanse/purge, bundles, limites DoT globales, transfert de zone autoritaire + timeout/retries, batch réseau `combat:events` + `eventAt` + fragmentation, dissipation de zone, lifecycle butin personnel → mailbox, suppression/sanctions — cadrage Planned)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -854,12 +854,14 @@ pas** les DoT actifs sur d'autres cibles.
 
 Le client **ne fournit jamais** : puissance snapshotée, résistance effective,
 immunité, résultats des ticks, cadence/prochain tick, état de stacking, attribution
-du kill, dégâts finaux, **liste des effets dissipables, effet sélectionné par la
+du kill, dégâts finaux, liste des effets dissipables, effet sélectionné par la
 dissipation, priorité de dispel, résultat cleanse/purge, limite d'instances, état
-transféré entre zones, ordre des ticks, récompense obtenue, menace**. Le serveur lit
-et résout : définition de l'effet, source/cible autoritaires, snapshots runtime,
-timers autoritaires, **rencontres, droits de récompense**. Le frontend **affiche**
-les événements reçus. (ADR-0022.)
+transféré entre zones, ordre des ticks, récompense obtenue, menace, **`transferId`,
+`tickIndex`, `eventAt`, `batchSequence`, `batchCount`, entitlement, date d'expiration,
+destination mailbox, état de sanction, attribution finale**. Le serveur **produit et
+valide** : définitions persistées, source/cible autoritaires, snapshots runtime,
+timers autoritaires, rencontres, droits de récompense. Le frontend **affiche** les
+événements reçus. (ADR-0022.)
 
 ### 12.17 Polarité des effets — cleanse & purge (Planned)
 
@@ -917,6 +919,13 @@ consommés**) — distinct d'un cast invalide (cible inexistante/morte/hors port
 refus du contrat normal), qui n'est **pas** `nothing_to_dispel`. Le serveur fournit
 un résultat **explicite**.
 
+**Départage entre bundles (§12.18)** : quand plusieurs bundles compatibles peuvent
+être sélectionnés, ordre : (1) `dispelPriority` la plus élevée, (2) à égalité →
+bundle **appliqué le plus ancien**, (3) à égalité complète → `effectBundleId`
+(départage stable). Le bundle est comparé **comme une unité** (ne jamais comparer
+séparément la priorité interne du buff et de la curse) ; sa suppression compte
+**toujours pour une seule sélection** de `maxEffectsRemoved`.
+
 ### 12.20 Limite d'instances de DoT (Planned)
 
 Chaque définition de DoT porte `maxConcurrentInstancesPerTarget`, **défaut 20**.
@@ -933,7 +942,15 @@ Un effet faible ne remplace **jamais** arbitrairement celui d'un autre joueur.
 **World Boss** : la limite **n'est pas** codée par un type `world_boss` en dur —
 `limite = défaut de la définition d'effet + override optionnel du template de
 créature / de la rencontre` (ex. normal 20, World Boss 50/100 selon config Studio).
-Moteur **générique**.
+Moteur **générique** (le futur Studio expose limites et overrides).
+
+**Limite GLOBALE (toutes définitions confondues)** : `maxTotalPeriodicEffectsPerTarget`,
+**défaut 100**, concerne l'ensemble des effets périodiques sur une même cible.
+Résolution des limites : le **rafraîchissement** d'un effet déjà présent est
+**toujours autorisé** ; une nouvelle instance au-delà de la **limite par définition**
+→ `result = effect_instance_limit_reached` ; au-delà de la **limite globale** →
+`result = target_periodic_effect_limit_reached`. Dans tous les cas : **aucune
+instance existante remplacée**. Limites **configurables** par template / rencontre.
 
 ### 12.21 Téléportation & transfert de zone (Planned)
 
@@ -953,10 +970,42 @@ confirmation** de prise en charge par la zone cible ; **transfert échoué →
 téléportation annulée/échouée** ; **aucune suppression silencieuse** ; **aucune
 persistance PostgreSQL** permanente requise en V1.
 
+**Bascule d'autorité déterministe** (flux validé) :
+
 ```text
-zone source prépare l'état → zone cible valide/accepte → autorité confirmée
-→ zone source arrête ses timers → zone cible poursuit les effets
+1. la zone source place l'entité en état de transfert (freeze)
+2. elle suspend les timers autoritaires de la cible
+3. elle résout les ticks dus jusqu'à transferCutoffAt
+4. elle transmet l'état runtime temporaire à la zone cible
+5. la zone cible accepte et confirme la prise d'autorité
+6. la zone source abandonne définitivement ses timers
+7. la zone cible reprend les effets SANS modifier leur cadence
 ```
+
+État minimal lié aux ticks transféré : `transferId`, `applicationId`, `tickIndex`,
+`nextTickAt`, `expiresAt`, snapshot offensif, source autoritaire. **Tick devenu dû
+pendant la bascule** : `nextTickAt` **conservé** → la zone cible le résout **une
+seule fois après confirmation** ; aucun tick perdu ni dupliqué ; les ticks en retard
+suivent l'**ordre déterministe** (§12.24). **Idempotence métier** : `applicationId +
+tickIndex` — une même occurrence de tick n'est **jamais** appliquée deux fois.
+
+**Timeout & retries** (validés) : **timeout par tentative = 3 s**, **retries
+automatiques = 2** (`tentative → timeout → retry 1 → timeout → retry 2 → échec final
+→ téléportation annulée`). Toutes les tentatives utilisent le **même `transferId`**
+(aucun nouvel état de transfert par retry) ; la zone cible traite les retries de
+façon **idempotente** ; une **confirmation tardive après abandon est rejetée** ; la
+zone source reste **propriétaire de secours** jusqu'à confirmation ; le **joueur reste
+gelé** (aucun mouvement ni nouvelle action de combat acceptés) ; la reprise après
+échec **ne duplique aucun tick**.
+
+**Échec du transfert** : téléportation **annulée** ; la zone source **reprend
+l'autorité** ; timers repris ; ticks devenus dus résolus **une seule fois** ; **aucun
+effet temporaire supprimé** ; **aucune cadence réinitialisée**. Une téléportation ne
+**réussit jamais partiellement** en abandonnant les effets de la cible.
+
+> Contrat **compatible** avec une future architecture distribuée (zones/serveurs
+> séparés) **sans la déclarer active** : aucun microservice / Redis / broker imposé
+> ici. Reste `Planned`.
 
 ### 12.22 Récompenses différées & idempotence (Planned)
 
@@ -989,19 +1038,59 @@ existant.
   leash/reset, mort de la créature, reset de rencontre). Un DoT ne maintient **jamais**
   une poursuite vers une entité inexistante.
 
-### 12.24 Réseau des ticks — sous-événements, batch, ordre (Planned)
+### 12.24 Réseau des ticks — enveloppe batch, sous-événements, ordre (Planned)
 
-**Sous-événements autoritaires** : chaque tick reste un événement logique distinct,
-portant au minimum `sourceId`, `targetId`, `effectDefinitionId`, `applicationId`,
-`damage`, `damageType`, `magicSchool`, `periodic = true`, `result`. Le serveur
-conserve attribution, mitigation, immunité et résultat **exacts** ; le client ne
-recalcule rien.
+**Enveloppe réseau** (format conceptuel ; nom d'événement conforme à l'existant, ex.
+`combat:events` — ne pas renommer un événement actif sans analyser le protocole) :
 
-**Batch WebSocket** : les ticks résolus dans un **même cycle** serveur peuvent être
-envoyés groupés (`combat:events = [sous-événement 1, 2, …]`) pour éviter un message
-par instance — **chaque source et chaque résultat préservés** ; le client **regroupe
-uniquement l'affichage, jamais le calcul**. **Ne jamais** envoyer un simple total
-global (perte de source/type/école/effet/attribution/cause d'annulation).
+```text
+CombatEventsBatch {
+  batchId: string
+  serverTick: number
+  emittedAt: number        // instant d'émission du batch sur le réseau
+  zoneId: string
+  batchSequence: number    // 0, 1, 2… pour un même serverTick fragmenté
+  batchCount: number       // nombre total de fragments
+  events: CombatEvent[]    // ordre autoritaire conservé
+}
+```
+
+**Sous-événement autoritaire** (structure conceptuelle ; ne modifie AUCUN type
+TypeScript existant) :
+
+```text
+CombatEvent {
+  eventId: string          // déduplication éventuelle côté client
+  eventAt: number          // instant AUTORITAIRE de résolution de CET événement
+  eventType: 'damage'
+  periodic: boolean
+  sourceEntityId: string ; sourceCharacterId?: string ; targetEntityId: string
+  effectDefinitionId?: string ; applicationId?: string ; tickIndex?: number
+  damageType: 'physical' | 'magic' | 'raw'
+  magicSchool?: 'fire' | 'water' | 'air' | 'earth' | 'sacred' | 'poison'
+  damage: number
+  result: 'hit' | 'immune' | 'invulnerable' | 'cancelled'
+}
+```
+
+**Timestamps distincts** : `eventAt` = instant de résolution du sous-événement ;
+`emittedAt` = instant d'émission du batch. Plusieurs événements peuvent partager le
+même `emittedAt` avec des `eventAt` différents. Pour un tick périodique, le serveur
+conserve aussi conceptuellement `scheduledAt`/`nextTickAt` (cadence, retards,
+transferts de zone, ordre déterministe) — **pas obligatoirement exposé au client en
+V1**. **Autorité/idempotence réseau** : `eventId` → déduplication éventuelle client ;
+`applicationId + tickIndex` → **idempotence métier serveur**. Le client n'invente,
+ne recalcule, ne réordonne, ne fusionne **jamais** pour l'autorité — il peut
+uniquement **regrouper l'affichage**. Le serveur conserve l'ordre autoritaire dans
+`events[]`. **Ne jamais** remplacer les sous-événements par un total global (perte de
+source/type/école/effet/attribution/cause d'annulation).
+
+**Taille maximale** : `maxEventsPerBatch = 100` (configurable serveur). Un cycle
+produisant > 100 événements → **découpage en plusieurs batches** : même `serverTick`,
+`batchSequence = 0,1,2…`, `batchCount` = total de fragments, **ordre global
+conservé**. Un batch ne mélange **jamais** plusieurs `serverTick` ; aucun événement
+dupliqué ni perdu ; batches consommés dans l'ordre de `batchSequence` ; diffusion
+limitée à la **zone d'intérêt**.
 
 **Ordre déterministe** quand plusieurs ticks sont dus dans un cycle :
 
@@ -1017,6 +1106,62 @@ d'un ordre non déterministe en mémoire. **Mort pendant un cycle** : ticks rés
 suivants du même cycle annulés** (aucun second kill, aucun dégât ni texte flottant
 supplémentaire ; les ticks annulés peuvent rester traçables en interne sans produire
 d'événement visible).
+
+### 12.25 Dissipation de zone (Planned)
+
+Pour un **cleanse/purge de zone**, `maxEffectsRemoved` s'applique **indépendamment à
+chaque cible valide** (budget **non partagé** entre cibles). Ex. `maxEffectsRemoved = 1`,
+8 alliés touchés → jusqu'à **1** effet `harmful` compatible retiré **sur chacun**. Le
+**nombre max de cibles** et la **zone** sont définis par le skill ; polarité et
+`dispelCategory` restent celles du skill ; une cible sans effet compatible produit
+`nothing_to_dispel` **pour cette cible** ; **aucun cleanse universel implicite**.
+
+### 12.26 Lifecycle du butin personnel différé & sanctions (Planned)
+
+Prolonge §12.22 (récompenses différées). **Contrat de récompenses** compatible avec
+le système de mailbox existant ; il pourra migrer vers un document « récompenses /
+loot » dédié si l'un est créé — ici, cadrage seulement.
+
+**Butin personnel important (ex. légendaire)** : à la mort de la cible → création
+d'un **loot entitlement idempotent**, état initial `ground`, **représentation au sol
+`groundLootDuration = 5 min`** (défaut, configurable). Pendant cette période : objet
+**visible/récupérable** par le joueur éligible ; **déconnexion ne supprime pas le
+droit** ; **inventaire plein ne détruit pas l'objet** ; une **récupération réussie
+clôture définitivement** le droit (aucun courrier créé alors).
+
+**Transfert mailbox** : après 5 min, entitlement non réclamé → **retrait du monde** →
+**transfert atomique** vers la mailbox existante → **rétention `personalLootRetention
+= 30 jours`** (défaut, configurable par rencontre / type de loot / définition de
+récompense ; ne pas coder un cas `legendary` en dur ; une ligne persistée avec
+`expiresAt` évite un timer permanent en mémoire). **Exclusivité** : un `entitlementId`
+est **soit réclamé au sol, soit en mailbox — jamais les deux**. Transition
+**transactionnelle, idempotente, résistante aux retries / redémarrage / reconnexion**
+(aucune duplication). La **mailbox** est le moyen de récupération ; l'**entitlement
+persistant** reste la **source autoritaire**.
+
+**Portée** : cette règle concerne le **butin personnel**. Le **butin partagé au sol**
+garde ses propres règles, n'est **pas** transformé en objet personnel, et n'est **pas**
+envoyé en mailbox d'un absent sans contrat spécifique.
+
+**XP / monnaie / objet** : XP/progression → attribution **transactionnelle** au
+personnage persistant ; **monnaie simple** → attribution immédiate si le contrat
+existant le permet ; **objet personnel** → entitlement → sol → mailbox si non réclamé.
+Toutes les distributions sont **idempotentes** (`killId + characterId + rewardType`
+ou clé équivalente).
+
+**Suppression de personnage & sanctions** :
+- **Suppression en attente** (délai de suppression/restauration) → droits au butin
+  **conservés**, mailbox **conservée**, aucune annulation définitive ; restauration →
+  droits accessibles selon leurs dates d'expiration.
+- **Suppression définitive** → droits non réclamés **annulés** ; messages/entitlements
+  liés **clôturés** selon le contrat de données ; **trace d'audit conservée** ; aucun
+  objet transféré à un autre personnage sans règle explicite.
+- **Suspension temporaire** → objets/droits **conservés**, **récupération bloquée**,
+  **expiration mise en pause** (durée restante reprend après la fin ; pause calculée
+  **de manière autoritaire**, sans timer permanent en mémoire).
+- **Bannissement définitif** → **aucune récupération** ; droits/entitlements clôturés ;
+  **attribution historique conservée** pour audit. Ne jamais supprimer silencieusement
+  les traces d'anti-fraude / support / audit / investigation de duplication.
 
 ## État d'implémentation
 
@@ -1057,6 +1202,13 @@ d'événement visible).
 | Récompenses différées + idempotence (§12.22) | Planned |
 | Menace historique vs contribution d'un DoT (§12.23) | Planned |
 | Batch réseau des ticks + ordre déterministe + mort en cours de cycle (§12.24) | Planned |
+| Bascule d'autorité de transfert de zone (freeze, `applicationId+tickIndex`, `transferCutoffAt`) (§12.21) | Planned |
+| Timeout transfert 3 s / 2 retries / même `transferId` / échec → téléport annulée (§12.21) | Planned |
+| Enveloppe `CombatEventsBatch` + `eventAt` + fragmentation `maxEventsPerBatch=100` (§12.24) | Planned |
+| Limite globale `maxTotalPeriodicEffectsPerTarget=100` + `target_periodic_effect_limit_reached` (§12.20) | Planned |
+| Dissipation de zone (budget par cible) + départage bundles (§12.25 / §12.19) | Planned |
+| Lifecycle butin personnel (sol 5 min → mailbox 30 j, entitlement idempotent, exclusivité) (§12.26) | Planned |
+| Suppression de personnage & sanctions (attente / définitive / suspension / bannissement) (§12.26) | Planned |
 
 ## Références
 
