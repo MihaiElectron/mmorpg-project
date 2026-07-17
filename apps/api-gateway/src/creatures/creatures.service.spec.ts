@@ -1696,6 +1696,130 @@ describe('CreaturesService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Lot 2 fix : snapshot mémoïsé des PV max (ADR-0021 — pas de recalcul par tick).
+  describe('Lot 2 fix — snapshot PV max (mémoïsation + invalidation)', () => {
+    let spy: jest.SpyInstance | undefined;
+    afterEach(() => {
+      spy?.mockRestore();
+      spy = undefined;
+    });
+
+    const setup = (vitality = 3, key = 'snap', health = 30) => {
+      const template = makeTemplate({ key, baseHealth: 30, vitality });
+      const creature = makeCreature({ id: `${key}-1`, state: 'alive', health, worldX: 6080, worldY: 12480, mapId: 1, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      return { template, creature };
+    };
+
+    it('1/2 : le max est résolu UNE fois puis mémoïsé (plusieurs lectures)', () => {
+      setup();
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      service.findAll();
+      service.findAll();
+      service.findAll();
+      expect(spy).toHaveBeenCalledTimes(1); // 1er accès uniquement
+    });
+
+    it('3/6 : lectures DTO répétées (par tick) ne recalculent pas', () => {
+      const { creature } = setup();
+      service.findAll(); // réchauffe le cache
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      for (let i = 0; i < 10; i++) (service as any).toDto(creature);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('4 : une attaque ne recalcule pas le max (cache chaud)', async () => {
+      const { creature } = setup();
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+      service.findAll(); // warm
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('5 : un soin ne recalcule pas le max (cache chaud)', () => {
+      const { template } = setup(3, 'heal', 40); // max 60
+      const first = (service as any).resolveCreatureMaxHealth(template); // warm → 60
+      expect(first).toBe(60);
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      const again = (service as any).resolveCreatureMaxHealth(template);
+      expect(again).toBe(60);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('7/8 : édition template (vitality) invalide et recalcule', () => {
+      setup(3, 'edit'); // max 60
+      service.findAll(); // warm → 60
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      service.refreshTemplateInMemory('edit', { vitality: 5 }); // → 80
+      expect(spy).toHaveBeenCalled();
+      const dto = service.findAll().find((d) => d.id === 'edit-1');
+      expect(dto!.maxHealth).toBe(80);
+    });
+
+    it('9 : invalidateMaxHealthCache force le recalcul (changement de coefficient)', () => {
+      const { template } = setup(3, 'coef');
+      expect((service as any).resolveCreatureMaxHealth(template)).toBe(60); // cached
+      coefficientsServiceMock.getCoefficients.mockReturnValue({
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        maxHealthPerVitality: 20,
+      });
+      // Sans invalidation : le snapshot renvoie encore l'ancienne valeur.
+      expect((service as any).resolveCreatureMaxHealth(template)).toBe(60);
+      service.invalidateMaxHealthCache('coef');
+      expect((service as any).resolveCreatureMaxHealth(template)).toBe(30 + 3 * 20); // 90
+    });
+
+    it('10 : une lecture combat sans changement de source ne recalcule pas', async () => {
+      const { creature } = setup();
+      characterRepository.findOne.mockResolvedValue(makeCharacter({ attack: 10, defense: 3 }));
+      service.findAll(); // warm
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      await service.attack(creature.id, 'char-1', { worldX: 6080, worldY: 12480, mapId: 1 });
+      service.findAll();
+      (service as any).toDto(creature);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('11 : invalidateMaxHealthCache() vide tout le snapshot', () => {
+      const { template } = setup(3, 'clr');
+      (service as any).resolveCreatureMaxHealth(template); // cache
+      spy = jest.spyOn(CreatureRuntimeCalculator, 'resolveMaxHealth');
+      service.invalidateMaxHealthCache(); // clear all
+      (service as any).resolveCreatureMaxHealth(template);
+      expect(spy).toHaveBeenCalledTimes(1); // recalculé après clear
+    });
+
+    it('12 : deux templates distincts → snapshots distincts', () => {
+      const a = makeTemplate({ key: 'ta', baseHealth: 30, vitality: 1 }); // 40
+      const b = makeTemplate({ key: 'tb', baseHealth: 30, vitality: 5 }); // 80
+      expect((service as any).resolveCreatureMaxHealth(a)).toBe(40);
+      expect((service as any).resolveCreatureMaxHealth(b)).toBe(80);
+    });
+
+    it('15 : refresh sans baisse du max → PV courants inchangés (aucune écriture inutile)', () => {
+      const template = makeTemplate({ key: 'noop', baseHealth: 30, vitality: 3 }); // max 60
+      const creature = makeCreature({ id: 'noop-1', state: 'alive', health: 45, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      service.refreshTemplateInMemory('noop', { vitality: 3 }); // même max 60 ≥ 45
+      expect(creature.health).toBe(45); // inchangé
+    });
+
+    it('17 : cap minimum 1 préservé via le snapshot', () => {
+      const template = makeTemplate({ key: 'cap1', baseHealth: 1, vitality: 0 });
+      expect((service as any).resolveCreatureMaxHealth(template)).toBe(1);
+    });
+
+    it('debug maxHp n\'affecte PAS le PV max autoritaire (artefact d\'inspection retiré ; DevTools = getRuntimeSnapshot)', () => {
+      const { creature } = setup(0, 'dbg'); // max 30
+      debugRegistry.addModifier('dbg-1', { targetStat: 'maxHp', operation: 'flat', value: 50, sourceLabel: 'Debug' });
+      const dto = service.findAll().find((d) => d.id === 'dbg-1');
+      expect(dto!.maxHealth).toBe(30); // debug ignoré pour le max autoritaire
+      expect(dto!.runtimeStats?.maxHp).toBe(30);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('double-écriture WU', () => {
     it('attack() conserve worldX/worldY/mapId lors du save', async () => {
       // creature WU(6080,12480) fourni dès le départ — plus besoin de conversion pixel→WU (A7)

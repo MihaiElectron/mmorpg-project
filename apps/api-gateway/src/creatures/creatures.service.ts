@@ -210,6 +210,16 @@ export class CreaturesService implements OnModuleInit {
   // templateKey (config, pas d'état live), invalidé après édition Studio
   // (admin PUT → invalidateAbilitiesCache). NE contient JAMAIS les cooldowns live.
   private readonly combatAbilityCache = new Map<string, ResolvedCreatureAbility[]>();
+  // Lot 2 fix : snapshot des PV max EFFECTIFS par templateKey (ADR-0021). Les
+  // sources du PV max (`baseHealth`, `vitality`, coefficient `maxHealthPerVitality`)
+  // sont STRICTEMENT communes à toutes les instances d'un template (les debug
+  // modifiers ne sont PAS branchés sur le PV max — voir `resolveMaxHealth`), et le
+  // coefficient est session-constant (aucun endpoint live). La granularité par
+  // template est donc correcte et étend le mécanisme existant `combatAbilityCache`.
+  // Évite de reconstruire le pipeline `resolveStat` à chaque tick IA / DTO / hit.
+  // Invalidé sur édition de template (`refreshTemplateInMemory` / `invalidateAbilitiesCache`)
+  // et via `invalidateMaxHealthCache` (futur endpoint coefficients, Lot 3).
+  private readonly maxHealthByTemplateKey = new Map<string, number>();
 
   constructor(
     @InjectRepository(Creature)
@@ -471,23 +481,48 @@ export class CreaturesService implements OnModuleInit {
       // code). Defaults → comportement inchangé ; attackPower/defenseTotal/accuracy
       // suivent la config. dodge/block/parry restent calculés mais non actifs.
       this.creatureSecondaryCoefficients.getCoefficients(),
+      // Lot 2 fix : PV max mémoïsé (par template) — le combat lit le snapshot au
+      // lieu de reconstruire `resolveStat` à chaque hit/tick.
+      this.resolveCreatureMaxHealth(template),
     );
   }
 
   /**
    * Lot 2 (ADR-0021) : PV maximum EFFECTIF d'une créature, point d'accès unique
-   * du service. Délègue au point de résolution pur `resolveMaxHealth` avec les
-   * coefficients serveur effectifs. Résolution FRAÎCHE (pas de cache) : reflète
-   * toujours `template.baseHealth`, `template.vitality` et `maxHealthPerVitality`
-   * courants — aucune valeur périmée. Pas de debug modifier (une seule valeur
-   * autoritaire). Tous les chemins PV créature (spawn/respawn/soin/fuite/admin/DTO)
-   * lisent cette valeur au lieu de `template.baseHealth`.
+   * du service. Délègue au point de résolution pur `resolveMaxHealth` (coefficients
+   * serveur effectifs) et **mémoïse le résultat par templateKey** (snapshot). Le
+   * pipeline `resolveStat` n'est reconstruit qu'au premier accès ou après
+   * invalidation (`invalidateMaxHealthCache` — édition template/coefficients), pas
+   * à chaque hit ni chaque tick. Pas de debug modifier sur le PV max (une seule
+   * valeur autoritaire ; l'inspection debug reste servie par
+   * `CreatureRuntimeService.getRuntimeSnapshot`). Tous les chemins PV créature
+   * (spawn/respawn/soin/fuite/admin/DTO/combat) lisent cette valeur.
    */
   private resolveCreatureMaxHealth(template: CreatureTemplate): number {
-    return CreatureRuntimeCalculator.resolveMaxHealth(
+    // Snapshot mémoïsé par templateKey : le resolver générique n'est appelé
+    // qu'au premier accès (ou après invalidation). Les lectures répétées (tick de
+    // fuite, DTO broadcast, hits combat, soins, inspection) lisent la valeur en
+    // cache — aucune reconstruction du pipeline par tick.
+    const cached = this.maxHealthByTemplateKey.get(template.key);
+    if (cached !== undefined) return cached;
+    const value = CreatureRuntimeCalculator.resolveMaxHealth(
       template,
       this.creatureSecondaryCoefficients.getCoefficients(),
     ).finalValue;
+    this.maxHealthByTemplateKey.set(template.key, value);
+    return value;
+  }
+
+  /**
+   * Invalide le snapshot de PV max d'un template (ou de tous). À appeler quand une
+   * SOURCE du PV max change : édition de template (baseHealth/vitality) ou, à
+   * terme, coefficient `maxHealthPerVitality` (endpoint Lot 3). La prochaine
+   * lecture recalcule et re-mémoïse. Ne clampe pas les PV : c'est la
+   * responsabilité de l'appelant (voir `refreshTemplateInMemory`).
+   */
+  invalidateMaxHealthCache(templateKey?: string): void {
+    if (templateKey) this.maxHealthByTemplateKey.delete(templateKey);
+    else this.maxHealthByTemplateKey.clear();
   }
 
   /**
@@ -581,6 +616,9 @@ export class CreaturesService implements OnModuleInit {
   invalidateAbilitiesCache(templateKey?: string): void {
     if (templateKey) this.combatAbilityCache.delete(templateKey);
     else this.combatAbilityCache.clear();
+    // L'édition Studio d'un template peut changer baseHealth/vitality → invalider
+    // aussi le snapshot de PV max (recalcul à la prochaine lecture).
+    this.invalidateMaxHealthCache(templateKey);
   }
 
   /**
@@ -1838,12 +1876,16 @@ export class CreaturesService implements OnModuleInit {
   }
 
   refreshTemplateInMemory(key: string, fields: Partial<Record<string, unknown>>): void {
+    // Une SOURCE du PV max (baseHealth/vitality) peut changer → invalider le
+    // snapshot AVANT de recalculer le nouveau max pour le clamp.
+    this.invalidateMaxHealthCache(key);
     for (const creature of this.liveCreatures.values()) {
       if (creature.spawn?.template?.key === key) {
         Object.assign(creature.spawn.template, fields);
         // Lot 2 : recalibrer les PV si le PV max EFFECTIF diminue (baseHealth OU
         // Vitalité modifiés). Baisse → clamp immédiat ; hausse → PV inchangés (pas
         // de soin automatique). En mémoire : la persistance suivra au prochain save.
+        // La 1re lecture ci-dessous recalcule et re-mémoïse le snapshot du template.
         const newMax = this.resolveCreatureMaxHealth(creature.spawn.template);
         if (creature.health > newMax) {
           creature.health = newMax;

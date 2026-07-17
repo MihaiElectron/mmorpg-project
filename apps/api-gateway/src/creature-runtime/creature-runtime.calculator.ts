@@ -209,6 +209,9 @@ export class CreatureRuntimeCalculator {
     template: CreatureTemplate,
     debugModifiers: RuntimeModifier[] = [],
     coefficients: CreatureSecondaryCoefficients = DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+    // Lot 2 fix : PV max déjà résolu/mémoïsé fourni par l'appelant (service) pour
+    // éviter un recalcul par hit/tick. Absent (appels standalone/tests) → résolu ici.
+    precomputedMaxHealth?: number,
   ): CreatureCombatStats {
     const c = coefficients;
     const base = this.calculateBaseStats(creature, template);
@@ -240,8 +243,9 @@ export class CreatureRuntimeCalculator {
     // `resolveStat` (base baseHealth + contribution Vitalité, cap min 1, floor).
     // `maxHealthDerived` devient un ALIAS de `maxHealth` (même valeur) : il n'y a
     // plus qu'UNE seule notion de PV max. Point UNIQUE de résolution.
-    const maxHealthResult = CreatureRuntimeCalculator.resolveMaxHealth(template, c);
-    const maxHealth = maxHealthResult.finalValue;
+    // Réutilise la valeur mémoïsée si l'appelant l'a fournie (pas de recalcul).
+    const maxHealth =
+      precomputedMaxHealth ?? CreatureRuntimeCalculator.resolveMaxHealth(template, c).finalValue;
 
     return {
       maxHealth,

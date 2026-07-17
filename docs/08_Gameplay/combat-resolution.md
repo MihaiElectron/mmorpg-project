@@ -571,10 +571,33 @@ arrondi       = floor (une seule fois, après cap)
 - **DTO/réseau** : `maxHealth`, `runtimeStats.maxHp` et `CreatureCombatStats.maxHealth`
   portent la **même** valeur finale. Le **client et le Studio ne recalculent
   jamais** les PV max — ils affichent la valeur serveur.
+- **Snapshot mémoïsé (pas de recalcul par tick)** : le résultat de `resolveStat`
+  est **mémoïsé par `templateKey`** dans `CreaturesService` (étend le mécanisme
+  per-template `combatAbilityCache`). Le pipeline n'est reconstruit **qu'au premier
+  accès ou après invalidation** — le tick IA de fuite, le DTO broadcast, les hits
+  combat et les soins lisent le snapshot. Le combat reçoit la valeur mémoïsée
+  (`resolveCombatStats(..., precomputedMaxHealth)`), il ne la recalcule pas.
+  **Granularité par template justifiée** : les sources (`baseHealth`, `vitality`,
+  coefficient `maxHealthPerVitality`) sont strictement communes à toutes les
+  instances (les debug modifiers ne sont pas branchés sur le PV max ; le
+  coefficient est session-constant, aucun endpoint live). Quand des effets
+  per-instance (buffs, Lot 5) impacteront le PV max, la granularité passera par
+  instance.
+- **Invalidation** : `invalidateMaxHealthCache(templateKey?)` — appelée sur édition
+  de template (`refreshTemplateInMemory`, `invalidateAbilitiesCache`, qui changent
+  `baseHealth`/`vitality`) et disponible pour un futur endpoint coefficients
+  (Lot 3). Baisse du max → clamp des PV courants ; hausse → PV inchangés. Au
+  redémarrage, le snapshot se reconstruit depuis les données persistées (aucune
+  colonne ajoutée) et les PV persistés supérieurs au max sont clampés.
 - **Non branché en V1** : filtres, buffs/debuffs, équipement créature (contributions
   futures qui s'ajouteront au même `resolveStat`). Le **pipeline joueur n'est PAS
-  migré** (reste `CharacterStatsCalculator`). Les **debug modifiers** n'affectent
-  pas le PV max (une seule valeur autoritaire).
+  migré** (reste `CharacterStatsCalculator`).
+- **Debug modifiers `maxHp`** : **n'affectent pas** le PV max autoritaire (une
+  seule valeur ; le respawn/soin/clamp/barre client sont désormais cohérents).
+  L'inspection DevTools d'un modifier `maxHp` reste servie par le snapshot dédié
+  **`CreatureRuntimeService.getRuntimeSnapshot`** (inchangé) — ce n'était donc pas
+  une régression mais la suppression d'un artefact d'inspection incohérent (la
+  barre bougeait alors que le max réel ne bougeait pas).
 - **Compatibilité** : Vitalité 0 (seeds turkey/goblin) → `maxHealth = baseHealth`
   (no-op). Aucune migration de schéma ni de contenu.
 
