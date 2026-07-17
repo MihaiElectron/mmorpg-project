@@ -39,6 +39,7 @@ import { GameConfigService } from '../game-config/game-config.service';
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
 import { CreatureSecondaryCoefficients } from '../creature-runtime/creature-runtime.calculator';
 import { UpdateCreatureSecondaryCoefficientsDto } from '../creature-config/dto/update-creature-secondary-coefficients.dto';
+import { CreaturesService } from '../creatures/creatures.service';
 import { GameConfig } from '../game-config/game-config.entity';
 import { UpdateGameConfigDto } from '../game-config/dto/update-game-config.dto';
 import { RecalculateCharacterProgressionDto } from '../game-config/dto/recalculate-character-progression.dto';
@@ -249,6 +250,7 @@ export class AdminService {
     private readonly creatureSecondaryCoefficientsService: CreatureSecondaryCoefficientsService,
     private readonly derivedStatsService: DerivedStatsService,
     private readonly dataSource: DataSource,
+    private readonly creaturesService: CreaturesService,
   ) {}
 
   // ── Règles globales de progression (GameConfig — ADR-0018, Étape 1A) ────────
@@ -281,7 +283,18 @@ export class AdminService {
   async updateCreatureSecondaryCoefficients(
     dto: UpdateCreatureSecondaryCoefficientsDto,
   ): Promise<CreatureSecondaryCoefficients> {
-    return this.creatureSecondaryCoefficientsService.updateCoefficients(dto);
+    // `maxHealthPerVitality` alimente le snapshot mémoïsé des PV max créature
+    // (`CreaturesService`). Comparer AVANT/APRÈS pour n'invalider/recalculer que
+    // si CE coefficient change réellement (les autres coefficients sont lus live,
+    // sans cache — aucune invalidation PV max nécessaire).
+    const before = this.creatureSecondaryCoefficientsService.getCoefficients().maxHealthPerVitality;
+    const result = await this.creatureSecondaryCoefficientsService.updateCoefficients(dto);
+    if (result.maxHealthPerVitality !== before) {
+      // Coefficient global → invalide le snapshot, recalcule, clampe les baisses,
+      // diffuse les DTO. Serveur autoritaire (le client n'envoie jamais le max).
+      await this.creaturesService.recalculateAllMaxHealthAfterCoefficientChange();
+    }
+    return result;
   }
 
   /**

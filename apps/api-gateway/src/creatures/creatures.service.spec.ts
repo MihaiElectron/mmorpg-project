@@ -1820,6 +1820,94 @@ describe('CreaturesService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Correctif coefficient : recalcul global des PV max après changement de
+  // maxHealthPerVitality (coefficient GLOBAL).
+  describe('recalculateAllMaxHealthAfterCoefficientChange', () => {
+    const setMaxPerVit = (v: number) =>
+      coefficientsServiceMock.getCoefficients.mockReturnValue({
+        ...DEFAULT_CREATURE_SECONDARY_COEFFICIENTS,
+        maxHealthPerVitality: v,
+      });
+
+    const liveCreature = (id: string, vitality: number, health: number, state: Creature['state'] = 'alive') => {
+      const template = makeTemplate({ key: id, baseHealth: 30, vitality });
+      const creature = makeCreature({ id: `${id}-c`, state, health, worldX: 6080, worldY: 12480, mapId: 1, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      return creature;
+    };
+
+    const withServer = () => {
+      const emit = jest.fn();
+      const server = { to: jest.fn().mockReturnValue({ emit }), emit };
+      (service as any).server = server;
+      return { server, emit };
+    };
+
+    it('6 : baisse du coefficient → PV courants clampés + persistés + diffusés', async () => {
+      setMaxPerVit(10);
+      const creature = liveCreature('shrink', 5, 80); // max 30 + 50 = 80
+      service.findAll(); // réchauffe le snapshot à 80
+      const { emit } = withServer();
+      setMaxPerVit(2); // nouveau max = 30 + 10 = 40 < 80
+      await service.recalculateAllMaxHealthAfterCoefficientChange();
+      expect(creature.health).toBe(40); // clampé
+      expect(creatureRepository.update).toHaveBeenCalledWith(creature.id, { health: 40 });
+      expect(emit).toHaveBeenCalledWith('creature_update', expect.objectContaining({ id: creature.id, maxHealth: 40 }));
+    });
+
+    it('7 : hausse du coefficient → PV inchangés (pas de soin) + max diffusé', async () => {
+      setMaxPerVit(10);
+      const creature = liveCreature('grow', 3, 20); // max 60
+      service.findAll();
+      const { emit } = withServer();
+      creatureRepository.update.mockClear();
+      setMaxPerVit(30); // nouveau max = 30 + 90 = 120
+      await service.recalculateAllMaxHealthAfterCoefficientChange();
+      expect(creature.health).toBe(20); // inchangé, jamais soigné
+      expect(creatureRepository.update).not.toHaveBeenCalled(); // pas d'écriture PV
+      expect(emit).toHaveBeenCalledWith('creature_update', expect.objectContaining({ id: creature.id, maxHealth: 120 }));
+    });
+
+    it('8 : max inchangé (Vitalité 0) → aucune écriture ni émission', async () => {
+      setMaxPerVit(10);
+      const creature = liveCreature('legacy', 0, 30); // max = baseHealth 30 (coef sans effet)
+      service.findAll(); // snapshot 30
+      const { emit } = withServer();
+      creatureRepository.update.mockClear();
+      setMaxPerVit(50); // vitality 0 → max reste 30
+      await service.recalculateAllMaxHealthAfterCoefficientChange();
+      expect(creature.health).toBe(30);
+      expect(creatureRepository.update).not.toHaveBeenCalled();
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('9 : créature morte non ressuscitée, respawnAt intact', async () => {
+      setMaxPerVit(10);
+      const respawnAt = new Date(Date.now() + 20000);
+      const creature = liveCreature('dead', 5, 0, 'dead');
+      creature.respawnAt = respawnAt;
+      service.findAll();
+      withServer();
+      setMaxPerVit(2);
+      await service.recalculateAllMaxHealthAfterCoefficientChange();
+      expect(creature.state).toBe('dead');
+      expect(creature.respawnAt).toBe(respawnAt);
+      expect(creature.health).toBe(0);
+    });
+
+    it('1/3 : le snapshot est invalidé et recalculé avec le nouveau coefficient', async () => {
+      setMaxPerVit(10);
+      const creature = liveCreature('inval', 4, 30); // max 70
+      expect((service as any).resolveCreatureMaxHealth(creature.spawn.template)).toBe(70);
+      withServer();
+      setMaxPerVit(20);
+      await service.recalculateAllMaxHealthAfterCoefficientChange();
+      // Lecture suivante → nouveau coefficient (30 + 4×20 = 110).
+      expect((service as any).resolveCreatureMaxHealth(creature.spawn.template)).toBe(110);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('double-écriture WU', () => {
     it('attack() conserve worldX/worldY/mapId lors du save', async () => {
       // creature WU(6080,12480) fourni dès le départ — plus besoin de conversion pixel→WU (A7)

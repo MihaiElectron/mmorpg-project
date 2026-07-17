@@ -579,16 +579,26 @@ arrondi       = floor (une seule fois, après cap)
   (`resolveCombatStats(..., precomputedMaxHealth)`), il ne la recalcule pas.
   **Granularité par template justifiée** : les sources (`baseHealth`, `vitality`,
   coefficient `maxHealthPerVitality`) sont strictement communes à toutes les
-  instances (les debug modifiers ne sont pas branchés sur le PV max ; le
-  coefficient est session-constant, aucun endpoint live). Quand des effets
-  per-instance (buffs, Lot 5) impacteront le PV max, la granularité passera par
-  instance.
+  instances (les debug modifiers ne sont pas branchés sur le PV max). Le
+  coefficient `maxHealthPerVitality` est **global** (une config pour tous les
+  templates). Quand des effets per-instance (buffs, Lot 5) impacteront le PV max,
+  la granularité passera par instance.
 - **Invalidation** : `invalidateMaxHealthCache(templateKey?)` — appelée sur édition
   de template (`refreshTemplateInMemory`, `invalidateAbilitiesCache`, qui changent
-  `baseHealth`/`vitality`) et disponible pour un futur endpoint coefficients
-  (Lot 3). Baisse du max → clamp des PV courants ; hausse → PV inchangés. Au
-  redémarrage, le snapshot se reconstruit depuis les données persistées (aucune
-  colonne ajoutée) et les PV persistés supérieurs au max sont clampés.
+  `baseHealth`/`vitality`). **Édition Studio du coefficient global
+  `maxHealthPerVitality`** (`PATCH /admin/creatures/secondary-coefficients`,
+  admin-guardé) → `AdminService` déclenche
+  `CreaturesService.recalculateAllMaxHealthAfterCoefficientChange()` **uniquement
+  si ce coefficient change** : invalidation globale du snapshot, recalcul de
+  toutes les créatures vivantes, **clamp des PV en cas de baisse** (persisté),
+  **PV inchangés en cas de hausse** (jamais de soin), **diffusion `creature_update`**
+  pour tout max modifié (DTO = nouveau max ; aucune émission si max inchangé,
+  ex. Vitalité 0). Les créatures **mortes** sont ignorées (jamais ressuscitées,
+  `respawnAt` intact ; prochain respawn au nouveau max). Serveur autoritaire : le
+  client n'envoie qu'une valeur de configuration validée (type/finitude/bornes
+  DTO), jamais le `maxHealth` calculé. Au redémarrage, le snapshot se reconstruit
+  depuis les données persistées (aucune colonne ajoutée) et les PV persistés
+  supérieurs au max sont clampés.
 - **Non branché en V1** : filtres, buffs/debuffs, équipement créature (contributions
   futures qui s'ajouteront au même `resolveStat`). Le **pipeline joueur n'est PAS
   migré** (reste `CharacterStatsCalculator`).

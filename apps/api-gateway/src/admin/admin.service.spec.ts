@@ -23,6 +23,7 @@ import { MasteriesService } from '../masteries/masteries.service';
 import { EconomyService } from '../economy/economy.service';
 import { GameConfigService } from '../game-config/game-config.service';
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
+import { CreaturesService } from '../creatures/creatures.service';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 
 const BASE_EMPTY_REPO = () => ({ count: jest.fn(), find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), save: jest.fn().mockImplementation((v: any) => Promise.resolve(v)), create: jest.fn().mockImplementation((v: any) => v), delete: jest.fn() });
@@ -113,6 +114,7 @@ describe('AdminService resources', () => {
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: creatureTemplateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -306,9 +308,10 @@ describe('AdminService resources', () => {
 
     it('updateCreatureSecondaryCoefficients délègue le patch et renvoie la config effective', async () => {
       const patch = { attackPowerPerStrength: 4, secondaryChanceCap: 30 };
-      const merged = { ...EFFECTIVE, ...patch };
+      const merged = { ...EFFECTIVE, ...patch }; // maxHealthPerVitality inchangé (10)
       const updateCoefficients = jest.fn().mockResolvedValue(merged);
-      (service as any).creatureSecondaryCoefficientsService = { updateCoefficients };
+      const getCoefficients = jest.fn().mockReturnValue(EFFECTIVE);
+      (service as any).creatureSecondaryCoefficientsService = { getCoefficients, updateCoefficients };
 
       const result = await service.updateCreatureSecondaryCoefficients(patch);
 
@@ -317,6 +320,34 @@ describe('AdminService resources', () => {
       expect(result.attackPowerPerStrength).toBe(4);
       expect(result.secondaryChanceCap).toBe(30);
       expect(result.defenseTotalPerEndurance).toBe(EFFECTIVE.defenseTotalPerEndurance);
+    });
+
+    it('changement de maxHealthPerVitality → recalcul des PV max déclenché', async () => {
+      const patch = { maxHealthPerVitality: 25 };
+      const merged = { ...EFFECTIVE, ...patch }; // 10 → 25
+      const getCoefficients = jest.fn().mockReturnValue(EFFECTIVE); // avant = 10
+      const updateCoefficients = jest.fn().mockResolvedValue(merged);
+      (service as any).creatureSecondaryCoefficientsService = { getCoefficients, updateCoefficients };
+      const recalc = jest.fn().mockResolvedValue(undefined);
+      (service as any).creaturesService = { recalculateAllMaxHealthAfterCoefficientChange: recalc };
+
+      await service.updateCreatureSecondaryCoefficients(patch);
+
+      expect(recalc).toHaveBeenCalledTimes(1);
+    });
+
+    it('autre coefficient (maxHealthPerVitality inchangé) → aucun recalcul PV max', async () => {
+      const patch = { attackPowerPerStrength: 4 };
+      const merged = { ...EFFECTIVE, ...patch }; // maxHealthPerVitality reste 10
+      const getCoefficients = jest.fn().mockReturnValue(EFFECTIVE);
+      const updateCoefficients = jest.fn().mockResolvedValue(merged);
+      (service as any).creatureSecondaryCoefficientsService = { getCoefficients, updateCoefficients };
+      const recalc = jest.fn().mockResolvedValue(undefined);
+      (service as any).creaturesService = { recalculateAllMaxHealthAfterCoefficientChange: recalc };
+
+      await service.updateCreatureSecondaryCoefficients(patch);
+
+      expect(recalc).not.toHaveBeenCalled();
     });
   });
 
@@ -719,6 +750,7 @@ describe('AdminService — createMasteryDefinition', () => {
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -845,6 +877,7 @@ describe('AdminService — updateMasteryDefinition', () => {
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -949,6 +982,7 @@ function makeCraftingTestModule(recipeRepo: any, ingredientRepo: any, resultRepo
       { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
       { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
       { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+      { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
       { provide: DataSource, useValue: makeFakeDataSource() },
       { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
       { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1301,6 +1335,7 @@ describe('createCreatureTemplate', () => {
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: templateRepo },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1453,6 +1488,7 @@ describe('createResourceTemplate', () => {
         { provide: EconomyService, useValue: { readBalanceBronze: jest.fn().mockResolvedValue(0n) } },
         { provide: GameConfigService, useValue: { getConfig: jest.fn(), updateConfig: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: makeFakeDataSource() },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },
@@ -1721,6 +1757,7 @@ describe('AdminService — recalculateCharacterProgression', () => {
         { provide: EconomyService, useValue: {} },
         { provide: GameConfigService, useValue: gameConfigService },
         { provide: CreatureSecondaryCoefficientsService, useValue: { getCoefficients: jest.fn(), updateCoefficients: jest.fn() } },
+        { provide: CreaturesService, useValue: { recalculateAllMaxHealthAfterCoefficientChange: jest.fn().mockResolvedValue(undefined) } },
         { provide: DataSource, useValue: fakeDataSource },
         { provide: getRepositoryToken(CreatureTemplate), useValue: BASE_EMPTY_REPO() },
         { provide: getRepositoryToken(CreatureSpawn), useValue: BASE_EMPTY_REPO() },

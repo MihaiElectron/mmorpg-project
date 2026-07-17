@@ -515,14 +515,60 @@ export class CreaturesService implements OnModuleInit {
 
   /**
    * Invalide le snapshot de PV max d'un template (ou de tous). À appeler quand une
-   * SOURCE du PV max change : édition de template (baseHealth/vitality) ou, à
-   * terme, coefficient `maxHealthPerVitality` (endpoint Lot 3). La prochaine
+   * SOURCE du PV max change : édition de template (baseHealth/vitality) ou
+   * coefficient `maxHealthPerVitality` (endpoint admin coefficients). La prochaine
    * lecture recalcule et re-mémoïse. Ne clampe pas les PV : c'est la
-   * responsabilité de l'appelant (voir `refreshTemplateInMemory`).
+   * responsabilité de l'appelant (voir `refreshTemplateInMemory` /
+   * `recalculateAllMaxHealthAfterCoefficientChange`).
    */
   invalidateMaxHealthCache(templateKey?: string): void {
     if (templateKey) this.maxHealthByTemplateKey.delete(templateKey);
     else this.maxHealthByTemplateKey.clear();
+  }
+
+  /**
+   * Recalcule les PV max de TOUTES les créatures vivantes après un changement du
+   * coefficient GLOBAL `maxHealthPerVitality` (une config pour tous les templates
+   * → invalidation globale du snapshot). Appelé par l'admin (Studio) APRÈS
+   * validation serveur du coefficient — jamais par un payload joueur.
+   *
+   * Par créature vivante :
+   * - max INCHANGÉ (ex. Vitalité 0 → toujours `baseHealth`) → rien (aucune écriture
+   *   DB, aucune émission réseau) ;
+   * - BAISSE du max → PV courants clampés `min(health, newMax)` + persistance ;
+   * - HAUSSE du max → PV courants inchangés (jamais de soin automatique) ;
+   * - tout changement de max → diffusion `creature_update` (le DTO porte le nouveau
+   *   max, la barre client se met à jour sans recalcul).
+   *
+   * Les créatures MORTES sont ignorées : jamais ressuscitées, `respawnAt` intact ;
+   * leur prochain respawn lira le nouveau max. Les créatures hors mémoire
+   * recalculeront au prochain chargement (coefficient persisté).
+   */
+  async recalculateAllMaxHealthAfterCoefficientChange(): Promise<void> {
+    // Snapshot des anciens max par template AVANT invalidation (pour distinguer
+    // un max réellement changé d'un max inchangé et éviter les émissions inutiles).
+    const oldByTemplate = new Map(this.maxHealthByTemplateKey);
+    this.invalidateMaxHealthCache();
+
+    for (const creature of this.liveCreatures.values()) {
+      if (creature.state === 'dead' || !creature.spawn?.template) continue;
+      const template = creature.spawn.template;
+      const oldMax = oldByTemplate.get(template.key);
+      const newMax = this.resolveCreatureMaxHealth(template); // recompute + re-mémoïse
+      if (oldMax !== undefined && oldMax === newMax) continue; // max inchangé → skip
+
+      if (creature.health > newMax) {
+        // Baisse effective : clamp + persistance des PV.
+        creature.health = newMax;
+        await this.creatureRepository.update(creature.id, { health: creature.health });
+      }
+      // Diffusion du nouveau max (baisse clampée OU hausse à PV inchangés).
+      if (this.server) {
+        this.server
+          .to(getMapRoomId(creature.mapId ?? DEFAULT_MAP_ID))
+          .emit('creature_update', this.toDto(creature));
+      }
+    }
   }
 
   /**
