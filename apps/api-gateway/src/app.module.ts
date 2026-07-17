@@ -38,6 +38,7 @@ import { MailModule } from './mail/mail.module';
 import { GuildModule } from './guild/guild.module';
 import { HousingModule } from './housing/housing.module';
 import { TradeModule } from './trade/trade.module';
+import { RewardsModule } from './rewards/rewards.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { TradeModule } from './trade/trade.module';
     GuildModule,
     HousingModule,
     TradeModule,
+    RewardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

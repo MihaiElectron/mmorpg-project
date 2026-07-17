@@ -41,6 +41,9 @@ Tables metier attendues selon l'etat actuel:
 - `resources`: ressources de recolte sur la map.
 - `creatures`: animaux chassables.
 - `world_item`: objets deposes au sol (state: spawned/picked/expired, ownerCharacterId nullable).
+- `personal_loot_entitlement`: fondation des droits de butin personnel (module `rewards`,
+  status ground/mailed/claimed/expired/cancelled, unicite killId+characterId+rewardRollId).
+  **Socle Lot 1 non branche** : aucun kill/WorldItem/inventaire/mailbox ne l'utilise encore.
 
 Toute evolution de schema doit rester explicite, prudente et justifiee. Pour une
 approche production, privilegier des migrations TypeORM plutot que
