@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9)
+- Status: Draft (contrat posé — V4-D0 ; maj V5-F / V5-G ; contrat V6-B ; défenses créature V6-B3→V6-B6, contre-attaque V6-B7 et flags défensifs par skill Implemented ; PV max dérivé créature Lot 2 / ADR-0021 Implemented, §11.9 ; effets périodiques/immunités/lifecycle cadrés Planned, §12 / ADR-0022)
 - Owner: Project
-- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités, cadrage Draft)
+- Last updated: 2026-07-17 (référence ADR-0022 — écoles magiques / résistances / immunités ; §12 effets périodiques, immunités multi-sources, lifecycle & attribution — cadrage Planned)
 - Depends on: docs/08_Gameplay/masteries.md, STATUS.md
 - Used by: Project owner, developers, gameplay designers, conversational assistants, repository-aware coding agents
 
@@ -675,6 +675,189 @@ defaults sûrs (dodge/block true, parry false) si appelé sans flags.
 **Encore Planned** : modèle hybride `physical` + `raw` parallèle (§11.7), résistances
 magiques, boucliers magiques/divins/paladin, équilibrage fin des valeurs.
 
+## 12. Effets périodiques (DoT), immunités multi-sources, lifecycle & attribution — Planned (ADR-0022)
+
+**Statut : `Planned` — cadrage opérationnel uniquement.** Aucun DoT runtime, poison,
+bleed, `stackingGroup`, immunité multi-sources, déconnexion différée, timer d'effet,
+`healingDone`/`healingReceived` ni attribution différée n'est implémenté. Les
+décisions **durables** (écoles, résistances, immunités, non-pénétration, soins) sont
+figées dans **ADR-0022** ; cette section porte les **règles opérationnelles** du
+moteur temporel. Serveur autoritaire : le client n'affiche que les événements reçus.
+
+### 12.1 Minimum de dégâts sur une attaque hybride (décidé)
+
+Chaque composante non annulée est mitigée séparément — `physical` → armure ;
+`magic` → résistance de la `magicSchool` + contributions `magicResistanceGlobal` ;
+`raw` → aucune mitigation — puis **additionnée**, le **total arrondi** (invariant
+entier §9), et le **minimum de 1 appliqué UNE seule fois au total** (jamais par
+composante). Exemple : `physical 0,3 + magic 0,2 + raw 0` = `0,5` → **1**. Résultat
+**0** si : esquive, parade, attaque annulée, invulnérabilité totale, **toutes** les
+composantes dommageables immunisées, ou aucune composante avec dégâts initiaux > 0.
+Le modèle multi-composantes reste `Planned` (§11.7).
+
+### 12.2 Modificateurs de soins `healingDone` / `healingReceived` (décidé)
+
+```text
+finalHeal = max(0, floor(
+  calculatedHeal × (1 + healingDone/100) × (1 + healingReceived/100)
+))
+```
+
+`healingDone` = modificateurs du **lanceur** (soins produits) ; `healingReceived` =
+modificateurs de la **cible** (soins reçus). `0` = neutre ×1 ; contributions d'une
+même famille **additionnées** avant leur multiplicateur ; les deux familles
+**multipliées entre elles** ; anti-heal total → **0** soin ; un soin négatif ne
+devient **jamais** un dégât ; **aucune résistance magique** n'intervient sur un soin ;
+la `magicSchool` d'un soin est une **classification**, pas une mitigation. Stacking :
+§12.7. (ADR-0022 §13.)
+
+### 12.3 Poison & bleed — catégories
+
+- **Poison** : `damageType = magic`, `magicSchool = poison`. Chaque tick utilise les
+  défenses **actuelles** de la cible : `magicResistancePoison + magicResistanceGlobal
+  + buffs/debuffs actuels`. Annulable par immunité **poison**, **magique** ou
+  **totale**.
+- **Bleed** : `damageType = raw`, `magicSchool = null`. Ignore armure, résistances
+  magiques et **immunité magique** ; annulable seulement par **invulnérabilité
+  totale** ; **minimum 1 par tick valide** ; une future immunité spécifique au bleed
+  reste possible (hors périmètre, §Open questions ADR-0022).
+
+### 12.4 Application initiale d'un DoT
+
+Le DoT n'est appliqué **que si l'impact initial est pleinement validé** :
+
+```text
+esquive / parade                → aucun dégât, aucun DoT
+blocage                         → dégâts directs réduits, AUCUN DoT
+invulnérabilité totale          → aucun dégât, aucun DoT
+immunité correspondant au DoT   → aucun DoT
+impact normal                   → dégâts directs éventuels + DoT appliqué
+```
+
+Une fois appliqué, le DoT **ne dépend plus** des jets défensifs de l'impact initial.
+
+### 12.5 Ticks d'un DoT actif
+
+Les ticks : **ne peuvent pas** être esquivés, parés ni bloqués ; **ne critiquent
+jamais** ; **relisent** les défenses/résistances/vulnérabilités/immunités **actuelles
+de la cible** ; **ne relisent pas** les stats offensives actuelles du lanceur
+(snapshot, §12.6). Chaque tick valide avec dégâts initiaux > 0 inflige **au minimum
+1**. Résultat **0** uniquement si : immunité correspondante, invulnérabilité totale,
+effet expiré, effet dissipé, ou tick configuré à `0`.
+
+### 12.6 Snapshot offensif du DoT
+
+À l'**application** : la puissance offensive, les coefficients offensifs et bonus
+pertinents du lanceur, et l'**identité de la source** sont **figés**. À chaque
+**tick** : on utilise ce snapshot offensif et on **relit uniquement l'état défensif
+courant de la cible**. Conséquences : un buff/debuff **ultérieur** du lanceur, un
+changement d'équipement, la **mort** ou la **déconnexion** du lanceur → **aucun
+effet** sur le DoT actif. Une **réapplication** produit un **nouveau** snapshot
+offensif.
+
+### 12.7 Cadence des ticks
+
+À l'application : **aucun tick immédiat** ; le 1er tick arrive après un **intervalle
+complet**. Ex. `durée 6 s, intervalle 2 s` → ticks à `t=2, 4, 6`. Nombre de ticks
+**déterministe** ; **aucun tick partiel** ; `duration < tickInterval` → aucun tick ;
+une dissipation avant le prochain intervalle **empêche** le tick. Les dégâts
+**immédiats** du skill sont une composante **différente** du DoT.
+
+### 12.8 Réapplication par le même lanceur
+
+Même effet + même lanceur → **durée renouvelée** à sa valeur complète, **snapshot
+offensif remplacé**, **cadence conservée**, **aucun tick immédiat supplémentaire**.
+Ex. un poison qui doit tick dans `0,5 s`, réappliqué → durée renouvelée, puissance
+remplacée, prochain tick toujours dans `0,5 s`, **aucun tick bonus**.
+
+### 12.9 Immunité acquise après application
+
+```text
+DoT actif + immunité acquise → effet conservé, ticks ANNULÉS, durée continue de s'écouler
+immunité expire avant le DoT → ticks reprennent à la cadence normale
+                               aucun tick manqué rattrapé, aucun dégât rétroactif
+```
+
+La **suppression complète** exige une action distincte : dispel, antidote, purge,
+soin de blessure, mort/disparition (§12.11/§12.14).
+
+### 12.10 Stacking (`stackingGroup`)
+
+Chaque effet statistique déclare `stackingGroup` et `priority`. Règles :
+même `effectDefinition` + même lanceur → **rafraîchissement** (contrat de l'effet) ;
+**même `stackingGroup`** → **une seule contribution active** ; `stackingGroup`
+différents → **cumul autorisé**. Sélection de l'actif d'un groupe : **priorité la
+plus élevée**, puis **application la plus ancienne**. Les effets **neutralisés**
+restent présents, poursuivent leur durée, restent traçables, et **redeviennent
+actifs** si l'effet prioritaire disparaît. Le stacking se base sur `stackingGroup`,
+**pas** uniquement sur la statistique modifiée. **DoT de lanceurs différents** →
+**instances indépendantes** (sources/snapshots/durées/ticks distincts).
+
+### 12.11 Dispel
+
+Chaque effet pourra déclarer `isDispellable: true|false` et
+`dispelCategory: magic|poison|bleed|curse|none`. En V1 : une dissipation réussie
+**retire l'effet complet** (dispel magique, antidote, soin de blessure, purification).
+Le Bouclier sacré pourra être dispellable ou non selon sa définition. Règles fines
+de dispel offensif/défensif : `Open questions` (ADR-0022).
+
+### 12.12 Redémarrage serveur
+
+En V1 : un redémarrage **supprime tous les effets temporaires en mémoire** (buffs,
+debuffs, poison, bleed, immunités temporaires). **Aucune persistance PostgreSQL** des
+effets temporaires en V1 (non présenté comme impossibilité future).
+
+### 12.13 Déconnexion / reconnexion
+
+- **Lanceur d'un DoT déconnecté** → le DoT déjà appliqué **continue** (snapshot
+  offensif et **attribution** conservés) ; la présence du lanceur n'est plus requise.
+- **Receveur déconnecté** → **personnage maintenu dans le monde 30 s** (même règle
+  en/hors combat, avec ou sans DoT) : reste **ciblable**, reçoit dégâts directs et
+  **ticks de DoT**, peut **mourir**, conserve buffs/debuffs/états, suit le lifecycle
+  normal de mort. Après 30 s vivant → **retiré du monde** + effets temporaires
+  mémoire **supprimés** (aucune restauration au chargement suivant).
+- **Reconnexion pendant les 30 s** → reprise de la **même entité** (mêmes PV,
+  position, état de combat, effets actifs), **aucun nouveau spawn, aucun doublon**.
+  Après disparition → **chargement normal**, aucun effet temporaire restauré. Une
+  **mort survenue pendant les 30 s n'est jamais annulée** par la reconnexion.
+
+> Le maintien d'entité 30 s après déconnexion n'existe **pas** aujourd'hui (l'état
+> joueur est retiré immédiatement, position persistée) → règle **entièrement
+> `Planned`**.
+
+### 12.14 Effets et mort (`removeOnDeath`)
+
+Propriété `removeOnDeath: true|false`, **défaut `true`**. À la mort de la cible :
+buffs/debuffs/poison/bleed/immunités temporaires **supprimés**, **aucun tick
+ultérieur**, respawn **sans effets temporaires**. Exceptions futures possibles
+(`removeOnDeath=false`, non implémentées) : malédiction persistante, pénalité de
+mort, blessure durable, effet de résurrection. La **mort du lanceur ne supprime
+pas** les DoT actifs sur d'autres cibles.
+
+### 12.15 Attribution & aggro
+
+- **Identité de source** (conceptuelle, noms à aligner) : `sourceCharacterId`,
+  `sourceEntityId`, `effectDefinitionId`, `applicationId`, `appliedAt`.
+- **Kill par DoT** → attribué au **lanceur initial** ; contribution, **XP** et
+  **éligibilité au butin** suivent les **règles normales existantes**, même si le
+  lanceur est mort/déconnecté/disparu. Récompenses produites **une seule fois** (pas
+  de nouveau système de récompenses différées ici — voir le contrat existant, à
+  préciser si besoin).
+- **Aggro** : chaque tick génère sa menace **au nom du lanceur initial**. Lanceur
+  présent et ciblable → peut devenir cible ; **lanceur mort/disparu** → menace
+  historique conservée si nécessaire mais **non sélectionnable** comme cible active.
+  Un DoT ne doit **jamais** maintenir une créature en poursuite vers une entité
+  inexistante : la créature choisit une autre cible valide ou quitte le combat selon
+  les règles existantes.
+
+### 12.16 Serveur autoritaire
+
+Le client **ne fournit jamais** : puissance snapshotée, résistance effective,
+immunité, résultats des ticks, cadence/prochain tick, état de stacking, attribution
+du kill, dégâts finaux. Le serveur lit : définition de l'effet, source/cible
+autoritaires, snapshots runtime, timers autoritaires. Le frontend **affiche** les
+événements reçus. (ADR-0022.)
+
 ## État d'implémentation
 
 | Élément | État |
@@ -702,6 +885,12 @@ magiques, boucliers magiques/divins/paladin, équilibrage fin des valeurs.
 | Bloc attaque : flat/percent damage modifiers | Planned |
 | Bloc défense : bonus/malus d'armure, curses | Planned |
 | Résistances magiques / boucliers magiques-divins, dégâts magical/elemental/poison, enchantements/procs | Planned (cadrage figé : ADR-0022 écoles/résistances/immunités, Draft/Proposed) |
+| Minimum de 1 sur le total hybride ; `healingDone`/`healingReceived` (§12.1/§12.2) | Planned (cadrage, ADR-0022 §7/§13) |
+| DoT (poison/bleed), ticks, snapshot offensif, cadence, réapplication (§12.3–12.9) | Planned (cadrage §12) |
+| Immunités multi-sources (`scope/school/sources[]`, snapshot runtime) (§9 ADR-0022 / §12.9) | Planned |
+| Stacking (`stackingGroup`/priorité), dispel complet V1 (§12.10/§12.11) | Planned |
+| Lifecycle effets : redémarrage wipe, déconnexion 30 s, reconnexion même entité, `removeOnDeath=true` (§12.12–12.14) | Planned |
+| Attribution kill/XP/butin & aggro d'un DoT (§12.15) | Planned |
 
 ## Références
 

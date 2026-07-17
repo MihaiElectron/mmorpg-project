@@ -253,10 +253,18 @@ S'applique à **physical, magic et raw**. Le résultat peut être **0 uniquement
 cas de : esquive, parade, attaque annulée, **immunité explicite**, **invulnérabilité
 totale**, ou effet **configuré à zéro dégât**.
 
-**Attaques à plusieurs composantes** : le point « minimum de 1 **par composante**
-ou **sur le total** » n'est **pas** encore acté dans la documentation existante
-(§11.7 ne le tranche pas) → **question ouverte** (voir Open questions). Ne pas
-décider seul ici.
+**Attaques à plusieurs composantes (décidé)** : le minimum de 1 s'applique **une
+seule fois sur le TOTAL**, **jamais par composante**. Chaque composante non annulée
+est mitigée séparément (physical → armure ; magic → résistance d'école + globale ;
+raw → rien), **additionnée**, le total est **arrondi**, puis le **minimum de 1**
+est appliqué au résultat total (si au moins une composante avait des dégâts
+initiaux > 0 et n'est pas annulée). Exemple : `physical 0,3 + magic 0,2 + raw 0`
+= total `0,5` → `1`. Cela empêche une attaque à nombreuses petites composantes de
+contourner artificiellement les défenses. Le résultat est **0** si l'attaque est
+esquivée/parée/annulée, sous **invulnérabilité totale**, si **toutes** les
+composantes dommageables sont explicitement immunisées, ou si aucune composante
+n'avait de dégâts initiaux positifs. **Détail opérationnel du modèle multi-composantes
+dans `combat-resolution.md` §12** (reste `Planned` — §14).
 
 ### 8. Raw et bleed
 
@@ -280,8 +288,20 @@ invulnérabilité totale → bloque physical, magic ET raw
 
 Une immunité produit **0 dégât** **avant** l'application du minimum de 1. Elle **ne
 doit PAS** être représentée par une résistance numérique très élevée : c'est une
-**annulation explicite** (candidate à un `override` du resolver ou à un flag
-runtime dédié — représentation runtime précise : question ouverte).
+**annulation explicite**.
+
+**Sources d'immunité (décidé)** : une immunité n'est **pas** un booléen global sans
+source. Chaque source conceptuelle porte : `scope = all | magic | school`,
+`school = fire|water|air|earth|sacred|poison|null`, `sourceType`, `sourceId`,
+`tags`. Exemples : Bouclier sacré → `scope=all` ; Immunité magique → `scope=magic` ;
+Immunité feu → `scope=school, school=fire`. **Snapshot runtime cible** :
+`isInvulnerable`, `isMagicImmune`, `immuneMagicSchools[]`, `sources[]`. Plusieurs
+sources coexistent ; retirer un buff retire **uniquement sa source** ; le Studio doit
+tracer la **source exacte** ; recalcul uniquement sur ajout / retrait / expiration /
+changement de source ; aucune immunité représentée par une résistance numérique ;
+**pas de persistance des sources temporaires au redémarrage en V1**. Le **cadre
+opérationnel** (suspension des ticks de DoT sous immunité, etc.) vit dans
+`combat-resolution.md` §12. Reste `Planned`.
 
 ### 10. Bouclier sacré
 
@@ -317,22 +337,31 @@ ni la puissance ou la durée d'un buff.
 Les résistances sont consommées **uniquement** par les effets **dommageables**
 magiques.
 
-### 13. Modificateurs de soins (cadre conceptuel)
+### 13. Modificateurs de soins (décidé)
+
+Deux familles **distinctes** de modificateurs, en **points de pourcentage** :
+`healingDone` (modificateurs du **lanceur** sur les soins **produits**) et
+`healingReceived` (modificateurs de la **cible** sur les soins **reçus**).
+
+Formule validée :
 
 ```text
-soin de base
-→ puissance de soin du lanceur
-→ modificateurs de soins SORTANTS du lanceur (healingDone)
-→ modificateurs de soins REÇUS par la cible (healingReceived)
-→ arrondi
-→ soin final
+finalHeal = max(0, floor(
+  calculatedHeal
+  × (1 + healingDone / 100)
+  × (1 + healingReceived / 100)
+))
 ```
 
-Deux familles distinctes prévues (**noms conformes aux conventions à confirmer**) :
-`healingDone` (ex. debuff réduisant tous les soins produits ; bonus de soins
-sortants) et `healingReceived` (ex. anti-heal réduisant les soins reçus ; bonus de
-soins reçus). Ces effets **réutiliseront probablement ADR-0021**. **Non figés ici** :
-stacking, formule, caps, persistance, ordre détaillé (questions ouvertes).
+Règles : `0` = multiplicateur neutre `×1` ; les contributions d'une **même famille
+s'additionnent** avant leur multiplicateur ; `healingDone` et `healingReceived` sont
+**ensuite multipliés entre eux** ; un debuff peut viser le lanceur **ou** le receveur ;
+un anti-heal total peut produire **0** soin ; un soin négatif **ne devient jamais un
+dégât** (`max(0, …)`) ; les **résistances magiques de la cible n'interviennent
+jamais** ; la `magicSchool` d'un soin sert à sa **classification** et à de futures
+interactions, **pas** à sa mitigation. Le **stacking détaillé** des contributions
+réutilise le pipeline ADR-0021 (`stackingGroup`/priorité — `combat-resolution.md`
+§12). Reste `Planned`.
 
 ### 14. Dégâts hybrides et composantes parallèles
 
@@ -357,9 +386,12 @@ composante raw      → aucune mitigation
 - Chaque composante **conserve sa propre trace**.
 - Exemple : `physical + magic:fire` qui touche → part physique réduite par l'armure ;
   part `fire` réduite par `magicResistanceFire + contributions globales`.
+- **Minimum de 1 (décidé, §7)** : composantes non annulées **additionnées → arrondi
+  final → minimum de 1 appliqué UNE seule fois au total** (jamais par composante).
 
 Ne pas transformer ce modèle en implémentation active tant que §11.7 le maintient
-`Planned`.
+`Planned`. Le **moteur opérationnel** (ticks, snapshots, cadence, application,
+lifecycle) est détaillé dans `combat-resolution.md` §12.
 
 ### 15. Serveur autoritaire
 
@@ -413,8 +445,9 @@ traçabilité et du dégât minimum.
 ### Risks
 
 - Sans clamp de résistance (§5), l'équilibrage repose entièrement sur le contenu.
-- Représentation runtime des immunités non figée (question ouverte).
 - Confusion `physical` multi-axes si la documentation/Studio n'est pas claire.
+- Volume d'effets temporaires (DoT, buffs, immunités multi-sources) à gérer en
+  mémoire runtime (aucune persistance V1).
 
 ## Security impact
 
@@ -462,21 +495,27 @@ tant que `magicSchool`/mitigation magique ne sont pas branchés (défauts `physi
 
 ## Open questions
 
-Décisions **non encore validées** (à trancher par le responsable / lot ultérieur) :
+Décisions **non encore validées** (à trancher par le responsable / lot ultérieur).
+Les points suivants ont été **actés** et retirés de cette liste : minimum de 1 sur
+le **total** hybride (§7/§14) ; formule `healingDone × healingReceived` (§13) ;
+modèle de **sources d'immunité** + snapshot runtime (§9) ; comportement DoT vs
+minimum de 1 (`combat-resolution.md` §12) ; `removeOnDeath` par défaut, redémarrage,
+déconnexion/reconnexion, stacking par `stackingGroup`, dispel complet V1 (§12).
 
-- **Minimum de 1 par composante OU sur le total** pour une attaque hybride
-  (non tranché dans la doc existante, §7/§14).
-- Formule exacte et **stacking** de `healingDone` / `healingReceived` (+ caps,
-  persistance, ordre).
-- **Représentation runtime précise des immunités** (override resolver vs flag
-  dédié vs propriété skill/cible).
-- **Persistance** des buffs et immunités ; règles de **dispel**.
-- Éventuelles **immunités spécifiques au bleed** ou à certains effets périodiques.
-- **Comportement des dégâts périodiques** (DoT) vis-à-vis du minimum de 1.
+- Règles exactes de **dispel offensif et défensif** (au-delà du retrait complet V1).
+- Limite éventuelle du **nombre d'instances de DoT** provenant de lanceurs différents.
+- Comportement des effets lors d'un **changement de zone / téléportation**.
+- Traitement des **récompenses si le lanceur reste déconnecté longtemps**
+  (au-delà des 30 s) — voir contrat de récompenses existant.
+- **Modèle exact de menace historique** (aggro d'un lanceur absent).
+- Structure de **persistance future** des effets si un jour nécessaire.
+- **Granularité des événements réseau** de tick.
+- Interaction future entre **immunité spécifique au bleed** et **dispel `bleed`**.
 - Réconciliation des 4 résistances élémentaires existantes avec les 6 écoles
   (renommage / mapping / sémantique points vs %).
+- **Caps éventuels** propres à `healingDone` / `healingReceived`.
 
-Les décisions déjà validées ci-dessus **ne sont pas rouvertes** par ces questions.
+Les décisions déjà validées **ne sont pas rouvertes** par ces questions.
 
 ## Non-goals
 
