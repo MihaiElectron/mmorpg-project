@@ -1,8 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreatureTemplateOverridesService } from './creature-template-overrides.service';
 import { CreatureTemplateDerivedStatOverride } from './entities/creature-template-derived-stat-override.entity';
 import { CreatureTemplateDerivedCoefficient } from './entities/creature-template-derived-coefficient.entity';
 import { CreatureTemplateScalarOverride } from './entities/creature-template-scalar-override.entity';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 
 /** Repo en mémoire minimal (find/findOne/save/delete/create) sur un tableau. */
 function makeRepo<T extends { id?: string }>() {
@@ -38,6 +39,18 @@ describe("CreatureTemplateOverridesService", () => {
   let scalarRepo: ReturnType<typeof makeRepo<any>>;
   let service: CreatureTemplateOverridesService;
 
+  // ── Instrumentation du verrou / de la transaction ─────────────────────────
+  /** Ordre des opérations transactionnelles (verrou, deletes, saves). */
+  let callOrder: string[];
+  /** Vrai pendant l'exécution du callback de transaction. */
+  let insideTransaction: boolean;
+  /** Contexte transactionnel capturé à CHAQUE écriture (delete/save). */
+  let writeContexts: boolean[];
+  /** Résultat du SELECT … FOR UPDATE sur le template (présent par défaut). */
+  let lockGetOne: jest.Mock;
+  /** Injecté dans un delete pour simuler une erreur APRÈS le verrou. */
+  let failNextHeaderDelete: boolean;
+
   const derivedStats = {
     getDefinitions: jest.fn().mockResolvedValue([
       { key: "physicalAttack" },
@@ -47,20 +60,73 @@ describe("CreatureTemplateOverridesService", () => {
     ]),
   };
 
+  /** Enrobe delete/save d'un repo pour tracer l'ordre et exiger le contexte transactionnel. */
+  function instrument(repo: ReturnType<typeof makeRepo<any>>, label: string) {
+    const origDelete = repo.delete;
+    const origSave = repo.save;
+    repo.delete = jest.fn(async (w: any) => {
+      callOrder.push(`${label}.delete`);
+      writeContexts.push(insideTransaction);
+      if (label === "override" && failNextHeaderDelete) {
+        throw new Error("boom (erreur après le verrou)");
+      }
+      return origDelete(w);
+    }) as any;
+    repo.save = jest.fn(async (v: any) => {
+      callOrder.push(`${label}.save`);
+      writeContexts.push(insideTransaction);
+      return origSave(v);
+    }) as any;
+  }
+
   beforeEach(() => {
+    callOrder = [];
+    writeContexts = [];
+    insideTransaction = false;
+    failNextHeaderDelete = false;
     overrideRepo = makeRepo();
     coefficientRepo = makeRepo();
     scalarRepo = makeRepo();
-    // DataSource.transaction : exécute fn avec un manager délégant aux repos.
+    instrument(overrideRepo, "override");
+    instrument(coefficientRepo, "coef");
+    instrument(scalarRepo, "scalar");
+
+    // Repo `creature_template` : verrou pessimiste (SELECT … FOR UPDATE) via QB.
+    lockGetOne = jest.fn().mockResolvedValue({ id: 1, key: "turkey" });
+    const templateRepo = {
+      createQueryBuilder: jest.fn(() => {
+        const qb: any = {
+          setLock: jest.fn(() => qb),
+          where: jest.fn(() => qb),
+          getOne: jest.fn(async () => {
+            callOrder.push("lock");
+            expect(insideTransaction).toBe(true);
+            return lockGetOne();
+          }),
+        };
+        return qb;
+      }),
+    };
+
     const manager = {
       getRepository: (entity: any) => {
+        if (entity === CreatureTemplate) return templateRepo;
         if (entity === CreatureTemplateDerivedStatOverride) return overrideRepo;
         if (entity === CreatureTemplateDerivedCoefficient) return coefficientRepo;
         if (entity === CreatureTemplateScalarOverride) return scalarRepo;
         throw new Error("unexpected entity");
       },
     };
-    const dataSource = { transaction: async (fn: any) => fn(manager) };
+    const dataSource = {
+      transaction: async (fn: any) => {
+        insideTransaction = true;
+        try {
+          return await fn(manager);
+        } finally {
+          insideTransaction = false;
+        }
+      },
+    };
     service = new CreatureTemplateOverridesService(
       overrideRepo as any,
       coefficientRepo as any,
@@ -309,6 +375,68 @@ describe("CreatureTemplateOverridesService", () => {
             scalarOverrides: [],
           }),
         ).rejects.toBeInstanceOf(BadRequestException);
+      });
+    });
+
+    // ── Verrou pessimiste du template (sérialisation des PUT concurrents) ──────
+    describe("verrouillage pessimiste", () => {
+      it("verrouille le template AVANT toute mutation ; écritures dans la transaction", async () => {
+        await service.replaceTemplateConfiguration(1, {
+          derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: 2 }] }],
+          scalarOverrides: [{ scalarParamKey: "secondaryChanceCap", value: 45 }],
+        });
+        // Le verrou (SELECT … FOR UPDATE) précède la 1re écriture.
+        expect(callOrder[0]).toBe("lock");
+        const firstWrite = callOrder.findIndex((e) => e.endsWith(".delete") || e.endsWith(".save"));
+        expect(callOrder.indexOf("lock")).toBeLessThan(firstWrite);
+        // Toutes les écritures ont eu lieu DANS la transaction (jamais hors-tx).
+        expect(writeContexts.length).toBeGreaterThan(0);
+        expect(writeContexts.every((inside) => inside === true)).toBe(true);
+      });
+
+      it("template inexistant (verrou → null) → 404, aucune suppression, aucune notification", async () => {
+        const listener = jest.fn();
+        service.onChange(listener);
+        await service.setDerivedStatOverride(1, "physicalAttack", [{ primaryStatKey: "strength", coefficient: 2 }]);
+        listener.mockClear();
+        callOrder.length = 0;
+        writeContexts.length = 0;
+        lockGetOne.mockResolvedValue(null); // template absent au verrou
+
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [{ derivedStatKey: "defense", coefficients: [] }],
+            scalarOverrides: [],
+          }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+
+        // Aucune écriture après le verrou nul, aucune notification, cache intact.
+        expect(callOrder).toEqual(["lock"]);
+        expect(writeContexts).toHaveLength(0);
+        expect(listener).not.toHaveBeenCalled();
+        expect(service.getOverrides(1).derivedCoefficients.physicalAttack).toEqual({ strength: 2 });
+      });
+
+      it("erreur APRÈS le verrou → rollback, aucun rafraîchissement de cache ni notification", async () => {
+        const listener = jest.fn();
+        service.onChange(listener);
+        await service.setScalarOverride(1, "secondaryChanceCap", 55);
+        listener.mockClear();
+        const reloadSpy = jest.spyOn(service, "reloadTemplate");
+        failNextHeaderDelete = true; // échec pendant la transaction (après le verrou)
+
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: 2 }] }],
+            scalarOverrides: [],
+          }),
+        ).rejects.toThrow(/boom/);
+
+        // Le verrou a bien été pris avant l'échec, puis rollback : pas de reload,
+        // pas de notification.
+        expect(callOrder).toContain("lock");
+        expect(reloadSpy).not.toHaveBeenCalled();
+        expect(listener).not.toHaveBeenCalled();
       });
     });
   });

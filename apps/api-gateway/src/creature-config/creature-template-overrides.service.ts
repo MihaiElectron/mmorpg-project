@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { CreatureTemplate } from '../creatures/entities/creature-template.entity';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { CreatureTemplateDerivedStatOverride } from './entities/creature-template-derived-stat-override.entity';
 import { CreatureTemplateDerivedCoefficient } from './entities/creature-template-derived-coefficient.entity';
@@ -228,8 +229,25 @@ export class CreatureTemplateOverridesService implements OnModuleInit {
       }
     }
 
-    // ── 2. Remplacement dans UNE transaction (delete total + réinsertion) ────
+    // ── 2. Remplacement dans UNE transaction (verrou + delete total + réinsertion)
     await this.dataSource.transaction(async (manager) => {
+      // Verrou pessimiste d'écriture sur la LIGNE du template (SELECT … FOR UPDATE)
+      // AVANT toute mutation : sérialise les PUT concurrents visant le même
+      // template (le second attend le commit du premier). Requête DÉDIÉE sur
+      // `creature_template` uniquement — AUCUN join (évite « FOR UPDATE cannot be
+      // applied to the nullable side of an outer join » déjà rencontré).
+      const lockedTemplate = await manager
+        .getRepository(CreatureTemplate)
+        .createQueryBuilder('template')
+        .setLock('pessimistic_write')
+        .where('template.id = :id', { id: templateId })
+        .getOne();
+      if (!lockedTemplate) {
+        // Template inexistant (ou supprimé entre-temps) : rollback, aucune
+        // suppression/insertion. L'appelant renvoie 404 ; pas d'invalidation.
+        throw new NotFoundException(`CreatureTemplate ${templateId} introuvable.`);
+      }
+
       const headerRepo = manager.getRepository(CreatureTemplateDerivedStatOverride);
       const scalarRepo = manager.getRepository(CreatureTemplateScalarOverride);
       // CASCADE supprime les coefficients enfants avec les marqueurs.
