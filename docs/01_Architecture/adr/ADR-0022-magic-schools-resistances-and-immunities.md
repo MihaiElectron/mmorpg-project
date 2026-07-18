@@ -59,9 +59,17 @@
     additives d'équipement/modifiers) et sommées par
     `resolveEffectiveMagicResistance` (`effective = global + école`, sans
     clamp/immunité/multiplicateur).
-  - **Planned** (inchangé) : **application des résistances aux dégâts (mitigation
-    magique)**, immunités, DoT poison, modificateurs de soin, modèle hybride,
-    Studio UI dédiée.
+  - **Implemented** : **application des résistances aux dégâts magiques**
+    (mitigation) — `damageType` étendu à `physical|magic|raw` ; un skill à dégâts
+    `magic` exige une `magicSchool` (validation serveur, aucun fallback).
+    `applyMagicResistance` (pur) : `× (1 − effectiveResistance/100)`, **sans
+    clamp** (≥ 100 ≠ immunité), minimum final 1 pour un hit valide. Branché dans
+    `calculateCombatDamage` (magic ignore armure/pénétration/blocage physique ;
+    critique/esquive conservés). Résistance de la cible **résolue au hit** via le
+    pipeline générique (créature à la demande, personnage via stats dérivées +
+    équipement). Aucune pénétration magique. Soins / physical / raw inchangés.
+  - **Planned** (inchangé) : immunités, DoT poison, buffs/debuffs temporaires,
+    modificateurs de soin, modèle hybride, Studio UI dédiée.
 
 ---
 

@@ -357,10 +357,15 @@ export class ActiveSkillsService {
       ...dto,
       ...this.normalizedWeaponTypePatch(dto.weaponType),
     } as Partial<SkillDefinition>);
-    // Cohérence école ↔ nature défensive : évaluée seulement si le patch touche
-    // l'un des deux axes concernés (n'impose pas la cohérence à un patch sans
-    // rapport sur une ligne legacy — le backfill migration régularise les seeds).
-    if (dto.attackDefenseKind !== undefined || dto.magicSchool !== undefined) {
+    // Cohérence magie : évaluée seulement si le patch touche un axe concerné
+    // (école, nature défensive, type de dégâts ou type d'effet) — n'impose pas la
+    // cohérence à un patch sans rapport sur une ligne legacy.
+    if (
+      dto.attackDefenseKind !== undefined ||
+      dto.magicSchool !== undefined ||
+      dto.damageType !== undefined ||
+      dto.effectType !== undefined
+    ) {
       this.validateMagicSchoolCoherence(merged);
     }
     const saved = await this.repo.save(merged);
@@ -426,6 +431,21 @@ export class ActiveSkillsService {
           'Le skill canonique "heal" doit avoir magicSchool = sacred.',
       };
       throw new BadRequestException(messages[canonicalCode]);
+    }
+
+    // ADR-0022 : un skill à DÉGÂTS magiques (`damageType: 'magic'`) doit
+    // représenter des dégâts et préciser une école (aucun fallback global-only).
+    if ((skill.damageType ?? 'physical') === 'magic') {
+      if ((skill.effectType ?? 'damage') !== 'damage') {
+        throw new BadRequestException(
+          'damageType = magic est réservé aux skills à dégâts (effectType = damage).',
+        );
+      }
+      if (magicSchool === null) {
+        throw new BadRequestException(
+          'Un skill à dégâts magiques (damageType = magic) doit préciser une magicSchool.',
+        );
+      }
     }
   }
 

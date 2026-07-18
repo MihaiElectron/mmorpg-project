@@ -559,6 +559,72 @@ describe("ActiveSkillsService", () => {
       });
       expect(created.magicSchool).toBe("fire");
     });
+
+    // ── damageType = magic (ADR-0022 mitigation) : école obligatoire ──────────
+    it("création damageType magic + école + effectType damage acceptée", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "fireball",
+        name: "Fireball",
+        effectType: "damage",
+        damageType: "magic",
+        attackDefenseKind: "magic",
+        magicSchool: "fire",
+      });
+      expect(created.damageType).toBe("magic");
+      expect(created.magicSchool).toBe("fire");
+    });
+
+    it("création damageType magic SANS école rejetée (aucun fallback)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "fireball",
+          name: "Fireball",
+          effectType: "damage",
+          damageType: "magic",
+          attackDefenseKind: "magic",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("création damageType magic sur un effet non-dégât (heal) rejetée", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "weird",
+          name: "Weird",
+          effectType: "heal",
+          targetMode: "self",
+          damageType: "magic",
+          attackDefenseKind: "magic",
+          magicSchool: "sacred",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update damageType → magic sans école rejeté", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "spell", effectType: "damage", attackDefenseKind: "magic", magicSchool: null, damageType: "physical" }),
+      );
+      await expect(
+        service.updateDefinition("spell", { damageType: "magic" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("Heal reste un soin non magique-dommageable (damageType physical par défaut)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "heal",
+        name: "Heal",
+        effectType: "heal",
+        targetMode: "self",
+        attackDefenseKind: "magic",
+        magicSchool: "sacred",
+      });
+      expect(created.effectType).toBe("heal");
+      expect(created.damageType).toBe("physical"); // jamais magic → aucune mitigation
+    });
   });
 
   describe("flags défensifs (Lot A)", () => {

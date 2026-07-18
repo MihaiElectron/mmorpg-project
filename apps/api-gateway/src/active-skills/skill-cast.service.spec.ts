@@ -314,6 +314,7 @@ describe("SkillCastService", () => {
       0, // V4-G : accuracy (0 par défaut)
       "physical", // V6-B6 : attackDefenseKind du skill (défaut)
       DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
+      null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
     );
     if (r.success) {
       expect(r.damage).toBe(17); // valeur retournée par la créature (défense appliquée)
@@ -345,6 +346,7 @@ describe("SkillCastService", () => {
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
       DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
+      null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
     );
   });
 
@@ -367,6 +369,7 @@ describe("SkillCastService", () => {
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
       DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
+      null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
     );
   });
 
@@ -455,6 +458,7 @@ describe("SkillCastService", () => {
       0, // accuracy
       "physical", // V6-B6 : attackDefenseKind
       DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
+      null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
     );
   });
 
@@ -522,6 +526,7 @@ describe("SkillCastService", () => {
         0, // accuracy
         "physical", // V6-B6 : attackDefenseKind
         DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
+        null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
       );
       // Le calcul passe par le calculateur V1-D-A avec le bon contexte,
       // les définitions du cache et les niveaux déjà chargés.
@@ -540,7 +545,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS, null,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -554,7 +559,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS, null,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -567,7 +572,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS, null,
       );
       expect(masteryEffects.computeCombatEffects).not.toHaveBeenCalled();
     });
@@ -581,7 +586,7 @@ describe("SkillCastService", () => {
 
       expect(r.success).toBe(true);
       expect(creatures.applySkillDamage).toHaveBeenCalledWith(
-        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS,
+        TARGET_ID, "c1", POSITION, 20, currentSkill.rangeWU, 0, "physical", 0, 150, 0, "physical", DEFAULT_FLAGS, null,
       );
     });
 

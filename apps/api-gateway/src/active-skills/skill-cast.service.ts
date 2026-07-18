@@ -322,6 +322,10 @@ export class SkillCastService {
         canBeBlocked: skill.canBeBlocked ?? true,
         canBeParried: skill.canBeParried ?? false,
       },
+      // ADR-0022 : école magique du skill (obligatoire si damageType === 'magic',
+      // validée à l'écriture de la définition) — sert à résoudre la résistance
+      // magique effective de la cible au moment du hit. null pour physical/raw.
+      skill.magicSchool ?? null,
     );
     if (isAttackFailure(result)) {
       return { success: false, error: result.error };

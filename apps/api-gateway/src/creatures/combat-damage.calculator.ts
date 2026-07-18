@@ -47,7 +47,59 @@
  * Un futur `armorReductionPercent` (debuff sur la CIBLE) est hors scope.
  */
 
-export type DamageType = 'physical' | 'raw';
+export type DamageType = 'physical' | 'magic' | 'raw';
+
+/** Détail pur de la mitigation magique (trace interne, testable). */
+export interface MagicResistanceMitigation {
+  /** Dégâts avant mitigation magique (sortie du bloc attaque, sans armure). */
+  damageBeforeResistance: number;
+  /** Résistance effective résolue (globale + école) — JAMAIS clampée. */
+  effectiveResistance: number;
+  /** `1 − effectiveResistance / 100` (peut être > 1 ou négatif). */
+  multiplier: number;
+  /** `damageBeforeResistance × multiplier`, avant arrondi. */
+  damageAfterResistanceBeforeRounding: number;
+  /** Valeur arrondie (convention `Math.round`, comme le chemin physique). */
+  damageAfterRounding: number;
+  /** Dégâts finaux : `max(minimumDamage, arrondi)` si initial > 0, sinon 0. */
+  finalDamage: number;
+}
+
+/**
+ * Mitigation magique PURE (ADR-0022) — reçoit une résistance DÉJÀ résolue.
+ * Ne connaît ni stats, ni objets, ni buffs, ni DB, ni SkillDefinition.
+ *
+ *   multiplier = 1 − effectiveResistance / 100      (AUCUN clamp)
+ *   damageAfter = round(damageBefore × multiplier)
+ *   final       = damageBefore > 0 ? max(minimumDamage, damageAfter) : 0
+ *
+ * Résistance négative → multiplier > 1 (vulnérabilité). Résistance ≥ 100 →
+ * multiplier ≤ 0 → dégâts mathématiques ≤ 0 → ramenés au minimum (jamais 0 tant
+ * que les dégâts initiaux sont > 0 : ≥ 100 n'est PAS une immunité). Dégâts
+ * initiaux 0 → 0 (une forte résistance seule ne crée jamais un 0).
+ */
+export function applyMagicResistance(params: {
+  damage: number;
+  effectiveResistance: number;
+  minimumDamage: number;
+}): MagicResistanceMitigation {
+  const damageBeforeResistance = Math.max(0, params.damage);
+  const multiplier = 1 - params.effectiveResistance / 100;
+  const damageAfterResistanceBeforeRounding = damageBeforeResistance * multiplier;
+  const damageAfterRounding = Math.round(damageAfterResistanceBeforeRounding);
+  const finalDamage =
+    damageBeforeResistance > 0
+      ? Math.max(params.minimumDamage, damageAfterRounding)
+      : Math.max(0, damageAfterRounding);
+  return {
+    damageBeforeResistance,
+    effectiveResistance: params.effectiveResistance,
+    multiplier,
+    damageAfterResistanceBeforeRounding,
+    damageAfterRounding,
+    finalDamage,
+  };
+}
 
 export interface CombatDamageInput {
   /** Valeur d'attaque brute (ex. physicalAttack joueur, attackPower créature). */
@@ -68,9 +120,17 @@ export interface CombatDamageInput {
   armorPenetrationPercent?: number;
   /**
    * Type de dégâts. `physical` (défaut) applique l'armure (et la pénétration) ;
-   * `raw` ignore totalement armure et pénétration.
+   * `magic` ignore l'armure et applique la résistance magique effective ;
+   * `raw` ignore totalement armure ET résistance.
    */
   damageType?: DamageType;
+  /**
+   * Résistance magique EFFECTIVE de la cible (globale + école), DÉJÀ résolue par
+   * l'appelant via le pipeline générique. En points de %. JAMAIS clampée ici.
+   * Utilisée uniquement si `damageType === 'magic'`. Défaut 0 (aucune mitigation).
+   * Aucune pénétration magique n'existe : cette valeur est consommée telle quelle.
+   */
+  effectiveMagicResistance?: number;
   /**
    * Chance de critique en POURCENTAGE (stat dérivée `criticalChance`, ex. 25 =
    * 25 %). Clampée 0–100, NaN → 0. Défaut 0 → jamais de critique. Bloc attaque.
@@ -140,6 +200,16 @@ export interface CombatDamageResult {
   armorPenetrationPercent: number;
   effectiveArmor: number;
   /**
+   * Résistance magique effective consommée (0 sauf `damageType === 'magic'`).
+   * JAMAIS clampée.
+   */
+  effectiveMagicResistance: number;
+  /**
+   * Multiplicateur de mitigation magique appliqué (`1 − résist/100`) ; `1` pour
+   * physical/raw (aucune mitigation magique).
+   */
+  magicMultiplier: number;
+  /**
    * V4-I : true si le défenseur a PARÉ (hit entrant annulé). Prime sur tout :
    * pas d'esquive, pas de critique, pas d'armure, pas de blocage, 0 dégât. La
    * contre-attaque associée est déclenchée par le service.
@@ -174,8 +244,15 @@ export interface CombatDamageResult {
 
 export function calculateCombatDamage(input: CombatDamageInput): CombatDamageResult {
   const { attackerValue, targetDefense, minimumAttack, minimumDamage, hpBefore } = input;
-  const damageType: DamageType = input.damageType === 'raw' ? 'raw' : 'physical';
+  const damageType: DamageType =
+    input.damageType === 'raw' ? 'raw' : input.damageType === 'magic' ? 'magic' : 'physical';
   const rng = input.rng ?? Math.random;
+
+  // Résistance magique effective (déjà résolue par l'appelant). NaN/Infinity → 0.
+  // JAMAIS clampée (négatifs et > 100 conservés). Consommée seulement si magic.
+  const rawMagicResist = input.effectiveMagicResistance;
+  const effectiveMagicResistanceInput =
+    typeof rawMagicResist === 'number' && Number.isFinite(rawMagicResist) ? rawMagicResist : 0;
 
   const effectiveAttack = Math.max(attackerValue, minimumAttack);
 
@@ -246,6 +323,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       damageType,
       armorPenetrationPercent: 0,
       effectiveArmor: 0,
+      effectiveMagicResistance: 0,
+      magicMultiplier: 1,
       isParried: true,
       defenderParryChancePercent,
       isDodged: false,
@@ -277,6 +356,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       damageType,
       armorPenetrationPercent: 0,
       effectiveArmor: 0,
+      effectiveMagicResistance: 0,
+      magicMultiplier: 1,
       isParried: false,
       defenderParryChancePercent,
       isDodged: true,
@@ -312,9 +393,10 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
       ? Math.min(100, Math.max(0, rawPct))
       : 0;
   const ratio = armorPenetrationPercent / 100;
-  // Dégâts bruts : ignorent totalement l'armure ET la pénétration.
+  // Armure appliquée UNIQUEMENT en physical. raw ET magic ignorent l'armure et
+  // la pénétration (magic est mitigé par la résistance, raw n'est pas mitigé).
   const effectiveArmor =
-    damageType === 'raw' ? 0 : Math.max(0, Math.round(targetDefense * (1 - ratio)));
+    damageType === 'physical' ? Math.max(0, Math.round(targetDefense * (1 - ratio))) : 0;
 
   // ── Résolution ─────────────────────────────────────────────────────────────
   // Les dégâts sont ARRONDIS à l'entier : les colonnes `health` (creature /
@@ -323,22 +405,41 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
   // fractionnaires → échec de persistance Postgres (22P02) et combat figé. Sub-
   // unité seulement : pas de changement d'équilibrage, invariant entier existant.
   const rawDamage = attackPowerFinal - effectiveArmor;
-  const damageAfterArmor = Math.max(Math.round(rawDamage), minimumDamage);
 
-  // ── Blocage (V4-H) : après esquive + critique + armure, sur les dégâts
-  // physiques restants (> 0). raw ignore le blocage. Le roll suit le critique.
   let isBlocked = false;
-  let finalDamage = damageAfterArmor;
+  let finalDamage: number;
   let blockedDamage = 0;
-  if (
-    damageType === 'physical' &&
-    damageAfterArmor > 0 &&
-    defenderBlockChancePercent > 0 &&
-    rng() < defenderBlockChancePercent / 100
-  ) {
-    isBlocked = true;
-    finalDamage = Math.round(damageAfterArmor * (1 - defenderBlockReductionPercent / 100));
-    blockedDamage = damageAfterArmor - finalDamage;
+  let effectiveMagicResistance = 0;
+  let magicMultiplier = 1;
+
+  if (damageType === 'magic') {
+    // ── Mitigation magique : remplace l'étape armure (pas de blocage physique).
+    // La résistance effective est reçue déjà résolue (globale + école). Aucun
+    // clamp, aucune pénétration. Minimum final garanti pour un hit valide.
+    effectiveMagicResistance = effectiveMagicResistanceInput;
+    const mitigation = applyMagicResistance({
+      damage: rawDamage, // = attackPowerFinal (armure 0)
+      effectiveResistance: effectiveMagicResistance,
+      minimumDamage,
+    });
+    magicMultiplier = mitigation.multiplier;
+    finalDamage = mitigation.finalDamage;
+  } else {
+    // ── Physical / raw : plancher entier, puis blocage physique éventuel.
+    const damageAfterArmor = Math.max(Math.round(rawDamage), minimumDamage);
+    finalDamage = damageAfterArmor;
+    // Blocage (V4-H) : après esquive + critique + armure, sur les dégâts
+    // physiques restants (> 0). raw ignore le blocage. Le roll suit le critique.
+    if (
+      damageType === 'physical' &&
+      damageAfterArmor > 0 &&
+      defenderBlockChancePercent > 0 &&
+      rng() < defenderBlockChancePercent / 100
+    ) {
+      isBlocked = true;
+      finalDamage = Math.round(damageAfterArmor * (1 - defenderBlockReductionPercent / 100));
+      blockedDamage = damageAfterArmor - finalDamage;
+    }
   }
 
   // `Math.round(hpBefore - …)` : garantit un PV entier même si `hpBefore` a été
@@ -352,6 +453,8 @@ export function calculateCombatDamage(input: CombatDamageInput): CombatDamageRes
     damageType,
     armorPenetrationPercent,
     effectiveArmor,
+    effectiveMagicResistance,
+    magicMultiplier,
     isParried: false,
     defenderParryChancePercent,
     isDodged: false,

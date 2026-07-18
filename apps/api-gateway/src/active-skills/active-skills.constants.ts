@@ -34,12 +34,14 @@ export const SKILL_EFFECT_TYPES = ['damage', 'heal'] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
 /**
- * Type de dégâts d'un skill (V4-B). Miroir de `DamageType`
- * (`combat-damage.calculator`) : `physical` applique armure +
- * `armorPenetrationPercent`, `raw` ignore les deux. Défaut `physical`.
- * Pertinent seulement pour `effectType: 'damage'`. Pas d'autre type en V4.
+ * Type de dégâts d'un skill. Miroir de `DamageType` (`combat-damage.calculator`) :
+ *  - `physical` (défaut) : applique l'armure + `armorPenetrationPercent` ;
+ *  - `magic`   : ignore l'armure, applique la **résistance magique** de l'école
+ *    (`magicSchool` obligatoire côté définition) — pas de pénétration magique ;
+ *  - `raw`     : ignore armure ET résistance.
+ * Pertinent seulement pour `effectType: 'damage'`.
  */
-export const SKILL_DAMAGE_TYPES = ['physical', 'raw'] as const;
+export const SKILL_DAMAGE_TYPES = ['physical', 'magic', 'raw'] as const;
 export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
 
 /**

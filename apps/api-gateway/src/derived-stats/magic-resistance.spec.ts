@@ -1,5 +1,9 @@
 import { SKILL_MAGIC_SCHOOLS } from '../active-skills/active-skills.constants';
-import { computeDerivedFromDefinitions } from '../characters/character-stats-calculator';
+import {
+  computeDerivedFromDefinitions,
+  PrimaryStats,
+} from '../characters/character-stats-calculator';
+import { applyMagicResistance } from '../creatures/combat-damage.calculator';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { RuntimeModifier, StatKey } from '../player-runtime/player-runtime.types';
 import { DEFAULT_DERIVED_STAT_DEFINITIONS } from './derived-stats.constants';
@@ -320,5 +324,112 @@ describe("Contribution générique via le vrai pipeline (RuntimeComputeEngine.re
       magicResistanceReaderFromStats(resolved),
     );
     expect(eff.effectiveResistance).toBe(27);
+  });
+});
+
+describe("Intégration résolution → mitigation (global + école)", () => {
+  const mitigated = (
+    damage: number,
+    school: Parameters<typeof resolveEffectiveMagicResistance>[0],
+    stats: Record<string, number>,
+  ) => {
+    const eff = resolveEffectiveMagicResistance(
+      school,
+      magicResistanceReaderFromStats(stats),
+    );
+    return applyMagicResistance({
+      damage,
+      effectiveResistance: eff.effectiveResistance,
+      minimumDamage: 1,
+    });
+  };
+
+  it("global 10 + fire 20 → effective 30 → 100 dégâts feu = 70", () => {
+    const r = mitigated(100, "fire", {
+      magicResistanceGlobal: 10,
+      magicResistanceFire: 20,
+    });
+    expect(r.effectiveResistance).toBe(30);
+    expect(r.finalDamage).toBe(70);
+  });
+
+  it("global -10 + poison -20 → effective -30 → 100 dégâts poison = 130", () => {
+    const r = mitigated(100, "poison", {
+      magicResistanceGlobal: -10,
+      magicResistancePoison: -20,
+    });
+    expect(r.effectiveResistance).toBe(-30);
+    expect(r.finalDamage).toBe(130);
+  });
+
+  it("global 70 + sacred 50 → effective 120 → minimum 1", () => {
+    const r = mitigated(100, "sacred", {
+      magicResistanceGlobal: 70,
+      magicResistanceSacred: 50,
+    });
+    expect(r.effectiveResistance).toBe(120);
+    expect(r.finalDamage).toBe(1);
+  });
+
+  it("isolation : fire 40 / water 5 / global 10 — chaque école n'utilise que la sienne", () => {
+    const stats = {
+      magicResistanceGlobal: 10,
+      magicResistanceFire: 40,
+      magicResistanceWater: 5,
+    };
+    expect(mitigated(100, "fire", stats).effectiveResistance).toBe(50);
+    expect(mitigated(100, "water", stats).effectiveResistance).toBe(15);
+    expect(mitigated(100, "poison", stats).effectiveResistance).toBe(10);
+  });
+});
+
+describe("Cible personnage — résistance depuis les stats dérivées + équipement", () => {
+  it("personnage avec équipement flat : global +5, fire +12 → effective fire 27 → 100 dégâts = 73", () => {
+    // Le pipeline générique a résolu la cible (base + équipement flat).
+    const characterDerived = { magicResistanceGlobal: 5, magicResistanceFire: 22 };
+    const eff = resolveEffectiveMagicResistance(
+      "fire",
+      magicResistanceReaderFromStats(characterDerived),
+    );
+    expect(eff.effectiveResistance).toBe(27);
+    const r = applyMagicResistance({
+      damage: 100,
+      effectiveResistance: eff.effectiveResistance,
+      minimumDamage: 1,
+    });
+    expect(r.finalDamage).toBe(73); // round(100 × 0.73)
+  });
+});
+
+describe("Cible créature — résistance résolue par le pipeline générique (comme le service)", () => {
+  const zeroRaw = { maxHealth: 0, attack: 0, defense: 0 };
+
+  it("primaires créature (Esprit) → coefficients feu résolus → mitigation identique à la formule pure", () => {
+    // Réplique resolveCreatureEffectiveMagicResistance : computeDerivedFromDefinitions
+    // sur les primaires du template + définitions, puis reader générique.
+    const creaturePrimaries = {
+      strength: 0, vitality: 0, endurance: 0, agility: 0, dexterity: 0,
+      intelligence: 0, wisdom: 10, spirit: 20, willpower: 0, charisma: 0,
+    } as unknown as PrimaryStats;
+    const derived = computeDerivedFromDefinitions(
+      creaturePrimaries,
+      zeroRaw,
+      DEFAULT_DERIVED_STAT_DEFINITIONS,
+    ) as unknown as Record<string, number>;
+    // magicResistanceFire = spirit×0.5 + wisdom×0.2 = 20×0.5 + 10×0.2 = 12.
+    const eff = resolveEffectiveMagicResistance(
+      "fire",
+      magicResistanceReaderFromStats(derived),
+    );
+    expect(eff.schoolResistance).toBe(12);
+    expect(eff.globalResistance).toBe(0); // pas de coefficient sur la globale
+    expect(eff.effectiveResistance).toBe(12);
+
+    const r = applyMagicResistance({
+      damage: 100,
+      effectiveResistance: eff.effectiveResistance,
+      minimumDamage: 1,
+    });
+    expect(r.finalDamage).toBe(88); // round(100 × 0.88)
   });
 });

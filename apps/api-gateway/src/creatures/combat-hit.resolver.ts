@@ -50,6 +50,12 @@ export interface CombatHitDefender {
   parryChancePercent?: number;
   /** Éligibilité parade décidée par l'appelant (arme de mêlée, portée). Défaut false. */
   canParry?: boolean;
+  /**
+   * Résistance magique EFFECTIVE de la cible (globale + école), déjà résolue par
+   * l'appelant via le pipeline générique (ADR-0022). Points de %, non clampée.
+   * Consommée uniquement si `damageType === 'magic'`. Défaut 0.
+   */
+  effectiveMagicResistance?: number;
 }
 
 export interface CombatHitInput {
@@ -84,6 +90,7 @@ export function resolveCombatHit(input: CombatHitInput): CombatDamageResult {
     defenderBlockReductionPercent: defender.blockReductionPercent,
     defenderParryChancePercent: defender.parryChancePercent,
     defenderCanParry: defender.canParry,
+    effectiveMagicResistance: defender.effectiveMagicResistance,
     damageType: input.damageType,
     minimumDamage: input.minimumDamage ?? 1,
     hpBefore: input.hpBefore,

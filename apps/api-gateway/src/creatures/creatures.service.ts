@@ -6,7 +6,12 @@ import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
-import { CharacterStatsCalculator, DerivedStats } from '../characters/character-stats-calculator';
+import { CharacterStatsCalculator, computeDerivedFromDefinitions, DerivedStats, PrimaryStats } from '../characters/character-stats-calculator';
+import {
+  magicResistanceReaderFromStats,
+  resolveEffectiveMagicResistance,
+} from '../derived-stats/magic-resistance';
+import { MagicSchool } from '../active-skills/active-skills.constants';
 import { aggregateEquipmentBonuses, aggregateEquipmentDerivedModifiers, mergeDerivedStatModifiers } from '../characters/equipment-stats.helper';
 import {
   resolveEffectiveAttackRangeWU,
@@ -480,6 +485,44 @@ export class CreaturesService implements OnModuleInit {
    * unique réutilisable par les consommateurs (branché ici uniquement sur
    * `getRuntimeCombatInfo` ; les chemins combat suivront en Lot 2B).
    */
+  /**
+   * Résistance magique EFFECTIVE d'une créature pour une école (ADR-0022 —
+   * mitigation magique). Résolue À LA DEMANDE via le pipeline générique
+   * (`computeDerivedFromDefinitions` sur les primaires du template + définitions
+   * dérivées serveur) — aucun champ runtime dupliqué, aucun cache dédié (les
+   * résistances ne sont pas encore lues à chaque tick). Réutilise l'unique
+   * resolver (`resolveEffectiveMagicResistance`) : `global + école`, sans clamp.
+   * Les futures sources (équipement/buffs créature) s'y intégreront sans changer
+   * ce chemin.
+   */
+  private async resolveCreatureEffectiveMagicResistance(
+    template: CreatureTemplate,
+    school: MagicSchool,
+  ): Promise<number> {
+    const definitions = await this.derivedStats.getDefinitions();
+    const primaries: PrimaryStats = {
+      strength: template.strength,
+      vitality: template.vitality,
+      endurance: template.endurance,
+      agility: template.agility,
+      dexterity: template.dexterity,
+      intelligence: template.intelligence,
+      wisdom: template.wisdom,
+      spirit: template.spirit,
+      willpower: template.willpower,
+      charisma: template.charisma,
+    };
+    const derived = computeDerivedFromDefinitions(
+      primaries,
+      { maxHealth: 0, attack: 0, defense: 0 },
+      definitions,
+    );
+    return resolveEffectiveMagicResistance(
+      school,
+      magicResistanceReaderFromStats(derived as unknown as Record<string, number>),
+    ).effectiveResistance;
+  }
+
   private creatureCombatStats(creature: Creature, template: CreatureTemplate): CreatureCombatStats {
     return CreatureRuntimeCalculator.resolveCombatStats(
       creature,
@@ -1705,6 +1748,10 @@ export class CreaturesService implements OnModuleInit {
       canBeBlocked?: boolean;
       canBeParried?: boolean;
     } = {},
+    // ADR-0022 : école magique du skill (`skill.magicSchool`) — obligatoire pour
+    // un skill `damageType: 'magic'` (aucun fallback). Sert à résoudre la
+    // résistance magique effective de la cible. null/absent pour physical/raw.
+    attackerMagicSchool: MagicSchool | null = null,
   ): Promise<AttackResult> {
     const creature = this.liveCreatures.get(creatureId);
     if (!creature) return { success: false, error: 'Creature not found' };
@@ -1733,6 +1780,20 @@ export class CreaturesService implements OnModuleInit {
     const canBeBlocked = defensiveFlags.canBeBlocked ?? true;
     const canBeParried = defensiveFlags.canBeParried ?? false;
 
+    // ── Résistance magique effective de la CIBLE (ADR-0022) : résolue AU MOMENT
+    // du hit via le pipeline générique (jamais snapshottée au cast). Un skill
+    // `magic` exige une école (aucun fallback global-only) — rejet explicite.
+    let defenderEffectiveMagicResistance = 0;
+    if (damageType === 'magic') {
+      if (!attackerMagicSchool) {
+        return { success: false, error: 'Magic skill requires a magic school' };
+      }
+      defenderEffectiveMagicResistance = await this.resolveCreatureEffectiveMagicResistance(
+        template,
+        attackerMagicSchool,
+      );
+    }
+
     const damageResult = resolveCombatHit({
       attacker: {
         attackPower: Math.max(0, rawAmount),
@@ -1758,6 +1819,8 @@ export class CreaturesService implements OnModuleInit {
           creatureStats.canParry &&
           isAttackParryable({ attackDefenseKind: attackerAttackDefenseKind, damageType }),
         parryChancePercent: canBeParried ? creatureStats.parryChance : 0,
+        // ADR-0022 : consommée uniquement si damageType === 'magic'.
+        effectiveMagicResistance: defenderEffectiveMagicResistance,
       },
       damageType,
       minimumDamage: 1,
