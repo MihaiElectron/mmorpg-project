@@ -39,6 +39,7 @@ import RuntimeStatsPanel from "../DevTools/modules/PlayerRuntime/RuntimeStatsPan
 import RuntimeInspectorPanel from "../DevTools/modules/PlayerRuntime/RuntimeInspectorPanel";
 import AssetPicker from "../DevTools/AssetPicker";
 import CreatureAbilitiesEditor from "../DevTools/CreatureAbilitiesEditor";
+import CreatureDerivedCoefficientsEditor from "../DevTools/CreatureDerivedCoefficientsEditor";
 import CreatureRuntimeInspector from "../DevTools/CreatureRuntimeInspector";
 
 const API = import.meta.env.VITE_API_URL as string;
@@ -1550,7 +1551,14 @@ export default function AdminPanelWOM() {
           highlightId={highlightIds[cfg.id] ?? null}
           // V5-A : capacités configurables au niveau TEMPLATE (config only, aucun
           // cast auto). Toujours visible, indépendant du runtime de l'instance.
-          renderGroupExtra={(group) => <CreatureAbilitiesEditor templateKey={group.key} />}
+          // ADR-0021 : + éditeur des coefficients de dérivation par template
+          // (ajouté À CÔTÉ des capacités — l'extra existant n'est pas remplacé).
+          renderGroupExtra={(group) => (
+            <>
+              <CreatureAbilitiesEditor templateKey={group.key} />
+              <CreatureDerivedCoefficientsEditor templateKey={group.key} />
+            </>
+          )}
           // Runtime combat : inspection persistante d'UNE seule instance à la fois,
           // ouvrable manuellement (bouton) ou par sélection map, indépendante de
           // selectedWO. Le polling s'arrête au démontage (changement/fermeture).

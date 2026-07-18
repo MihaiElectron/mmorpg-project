@@ -206,3 +206,187 @@
     &:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 }
+
+// ── Éditeur coefficients de dérivation par template (ADR-0021) ───────────────
+// Section repliable ajoutée au Creature Editor via renderGroupExtra. Réutilise
+// les tokens/mixins DevTools (aucun style inline côté composant).
+.creature-derived {
+  @include m.devtools-compact-stack(vars.$dt-gap-sm);
+  color: vars.$color-text-primary;
+  font-size: vars.$dt-compact-font;
+  margin-top: vars.$dt-gap-xs;
+  padding-top: vars.$dt-gap-xs;
+  border-top: 1px solid vars.$panel-border-subtle;
+
+  &__toggle {
+    @include m.btn-base;
+    @include m.devtools-compact-label;
+    background: transparent;
+    color: vars.$color-text-gold;
+    text-align: left;
+    padding: 2px 0;
+    cursor: pointer;
+  }
+
+  &__body { @include m.devtools-compact-stack(vars.$dt-gap-sm); }
+
+  &__note,
+  &__muted,
+  &__effective {
+    margin: 0;
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__error {
+    margin: 0;
+    color: vars.$btn-danger-hover;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__ok {
+    margin: 0;
+    color: vars.$btn-success-hover;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__subtitle {
+    @include m.devtools-compact-label;
+    margin: vars.$dt-gap-xs 0 0;
+    color: vars.$color-text-muted;
+  }
+
+  &__list {
+    @include m.devtools-compact-stack;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__item {
+    @include m.panel-slot;
+    @include m.devtools-compact-stack(vars.$dt-gap-xs);
+    padding: vars.$dt-compact-row-padding;
+
+    // Distinction visuelle des 3 états d'override.
+    &--override { border-color: vars.$color-text-gold; }
+    &--empty { border-color: vars.$btn-danger-bg; }
+    &--fallback { opacity: 0.92; }
+  }
+  &__item-head {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+    flex-wrap: wrap;
+  }
+  &__item-name { font-weight: bold; }
+  &__item-key {
+    color: vars.$color-magic-glow;
+    font-size: vars.$dt-compact-font-sm;
+  }
+
+  &__badge {
+    font-size: vars.$dt-compact-font-sm;
+    padding: 2px 6px;
+    border-radius: vars.$panel-radius-sm;
+    white-space: nowrap;
+    margin-left: auto;
+
+    &--override { background: rgba(vars.$btn-success-bg, 0.25); color: vars.$btn-success-hover; }
+    &--empty { background: rgba(vars.$btn-danger-bg, 0.25); color: vars.$btn-danger-hover; }
+    &--fallback { background: rgba(0, 0, 0, 0.3); color: vars.$color-text-disabled; }
+  }
+
+  &__coefs { @include m.devtools-compact-stack(vars.$dt-gap-xs); }
+  &__coef-row {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+  }
+  &__times { color: vars.$color-text-muted; }
+  &__select { @include m.devtools-compact-control; min-width: 0; }
+  &__coef-input {
+    @include m.devtools-compact-control;
+    width: 88px;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: vars.$dt-gap-sm;
+  }
+
+  &__btn {
+    @include m.btn-base;
+    padding: 4px 10px;
+    font-size: vars.$dt-compact-font;
+
+    &--confirm { @include m.devtools-save-button; }
+    &--neutral { background: vars.$btn-neutral-bg; &:hover { background: vars.$btn-neutral-hover; } }
+    &--danger { background: vars.$btn-danger-bg; &:hover { background: vars.$btn-danger-hover; } }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+// ── Extension : dérivées runtime + traces de l'instance (ADR-0021) ───────────
+.creature-runtime {
+  &__subtitle {
+    @include m.devtools-compact-label;
+    margin: vars.$dt-gap-xs 0 0;
+    color: vars.$color-text-muted;
+  }
+  &__derived {
+    @include m.devtools-compact-stack(vars.$dt-gap-xs);
+    margin-top: vars.$dt-gap-xs;
+    padding-top: vars.$dt-gap-xs;
+    border-top: 1px solid vars.$panel-border-subtle;
+  }
+  &__derived-list {
+    @include m.devtools-compact-stack;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  &__derived-item { @include m.devtools-compact-stack(2px); }
+  &__derived-row {
+    @include m.btn-base;
+    background: transparent;
+    color: vars.$color-text-primary;
+    display: flex;
+    align-items: baseline;
+    gap: vars.$dt-gap-sm;
+    width: 100%;
+    text-align: left;
+    padding: 2px 0;
+
+    &:disabled { cursor: default; opacity: 1; }
+  }
+  &__derived-name { flex: 1; min-width: 0; }
+  &__derived-val {
+    color: vars.$color-text-gold;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  &__derived-src {
+    color: vars.$color-text-muted;
+    font-size: vars.$dt-compact-font-sm;
+    white-space: nowrap;
+  }
+  &__trace {
+    @include m.devtools-compact-stack(2px);
+    padding: vars.$dt-gap-xs 0 vars.$dt-gap-xs vars.$dt-gap-sm;
+    border-left: 1px solid vars.$panel-border-subtle;
+    font-size: vars.$dt-compact-font-sm;
+  }
+  &__trace-row {
+    display: flex;
+    justify-content: space-between;
+    gap: vars.$dt-gap-sm;
+    color: vars.$color-text-muted;
+
+    &--total {
+      color: vars.$color-text-primary;
+      font-weight: 600;
+      border-top: 1px solid vars.$panel-border-subtle;
+      padding-top: 2px;
+    }
+  }
+}

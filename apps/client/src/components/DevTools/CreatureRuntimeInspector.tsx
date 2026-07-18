@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useDevToolsStore } from "../../store/devtools.store";
 import {
   buildMaxHealthRows,
@@ -6,6 +6,7 @@ import {
   formatFilteredContribution,
   MaxHealthTrace,
 } from "./creatureMaxHealthTrace";
+import type { CreatureRuntimeSnapshot } from "./creatureDerivedConfig.types";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -120,7 +121,12 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
   // Refetch quand la liste créatures est rafraîchie (bouton Rafraîchir).
   const refreshKey = useDevToolsStore((s) => s.creaturesRefreshKey);
   const [data, setData] = useState<CreatureRuntimeCombat | null>(null);
+  // ADR-0021 : snapshot des dérivées + traces (serveur autoritaire, aucun calcul
+  // client). Récupéré dans le MÊME cycle de polling que le combat (un seul
+  // AbortController par tick, un seul intervalle).
+  const [snapshot, setSnapshot] = useState<CreatureRuntimeSnapshot | null>(null);
   const [status, setStatus] = useState<Status>("loading");
+  const [openTraces, setOpenTraces] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Garde anti-stale : une sélection rapide d'une autre créature (ou un unmount)
@@ -134,13 +140,14 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
       if (initial) {
         setStatus("loading");
         setData(null);
+        setSnapshot(null);
       }
+      // UN SEUL AbortController pour les deux requêtes du tick (combat + snapshot).
       const controller = new AbortController();
       const token = localStorage.getItem("token") ?? "";
-      fetch(`${API}/admin/creatures/${creatureId}/runtime-combat`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      })
+      const headers = { Authorization: `Bearer ${token}` };
+
+      fetch(`${API}/admin/creatures/${creatureId}/runtime-combat`, { headers, signal: controller.signal })
         .then((r) => {
           if (!active) return null;
           if (r.status === 404) {
@@ -163,10 +170,23 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
           if (!active || e?.name === "AbortError") return;
           setStatus("error");
         });
+
+      // Snapshot dérivées + traces (même controller). N'altère pas `status` :
+      // 404/erreur → snapshot null (l'instance a pu disparaître entre-temps).
+      fetch(`${API}/admin/creatures/instances/${creatureId}/runtime-stats`, { headers, signal: controller.signal })
+        .then((r) => (r.ok ? (r.json() as Promise<CreatureRuntimeSnapshot>) : null))
+        .then((json) => {
+          if (!active) return;
+          setSnapshot(json);
+        })
+        .catch((e) => {
+          if (!active || e?.name === "AbortError") return;
+          setSnapshot(null);
+        });
     };
 
     load(true);
-    // Polling léger 1 s, uniquement pour l'instance sélectionnée.
+    // Polling léger 1 s, uniquement pour l'instance sélectionnée (un seul intervalle).
     const timer = window.setInterval(() => load(false), POLL_INTERVAL_MS);
 
     return () => {
@@ -174,6 +194,15 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
       window.clearInterval(timer);
     };
   }, [creatureId, refreshKey]);
+
+  function toggleTrace(key: string) {
+    setOpenTraces((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="creature-runtime" aria-label="Creature runtime combat">
@@ -393,6 +422,86 @@ export default function CreatureRuntimeInspector({ creatureId }: { creatureId: s
             </div>
           )}
         </>
+      )}
+
+      {/* ADR-0021 : dérivées résolues serveur + traces (aucun calcul client). */}
+      {snapshot && (
+        <div className="creature-runtime__derived">
+          <p className="creature-runtime__title">Statistiques dérivées (serveur)</p>
+          <dl className="creature-runtime__grid">
+            <dt className="creature-runtime__label">instance</dt>
+            <dd className="creature-runtime__value creature-runtime__hint">{snapshot.instanceId}</dd>
+            <dt className="creature-runtime__label">template</dt>
+            <dd className="creature-runtime__value">{snapshot.templateKey} (#{snapshot.templateId})</dd>
+            <dt className="creature-runtime__label">état</dt>
+            <dd className="creature-runtime__value">{snapshot.state}</dd>
+            <dt className="creature-runtime__label">PV</dt>
+            <dd className="creature-runtime__value creature-runtime__value--strong">
+              {snapshot.currentHealth} / {snapshot.maxHealth}
+            </dd>
+          </dl>
+
+          <p className="creature-runtime__subtitle">Primaires finales</p>
+          <dl className="creature-runtime__grid">
+            {Object.entries(snapshot.primaryStats).map(([k, v]) => (
+              <Fragment key={k}>
+                <dt className="creature-runtime__label">{k}</dt>
+                <dd className="creature-runtime__value">{v}</dd>
+              </Fragment>
+            ))}
+          </dl>
+
+          <p className="creature-runtime__subtitle">Dérivées finales</p>
+          <ul className="creature-runtime__derived-list">
+            {Object.entries(snapshot.derivedStats).map(([key, value]) => {
+              const trace = snapshot.traces.find((t) => t.derivedStatKey === key) ?? null;
+              const open = openTraces.has(key);
+              return (
+                <li key={key} className="creature-runtime__derived-item">
+                  <button
+                    type="button"
+                    className="creature-runtime__derived-row"
+                    onClick={trace ? () => toggleTrace(key) : undefined}
+                    disabled={!trace}
+                    aria-expanded={trace ? open : undefined}
+                  >
+                    <span className="creature-runtime__derived-name">
+                      {trace ? (open ? "▾ " : "▸ ") : ""}{key}
+                    </span>
+                    <span className="creature-runtime__derived-val">{value}</span>
+                    {trace && (
+                      <span className="creature-runtime__derived-src">
+                        {trace.source}{trace.overrideState !== "none" ? ` · ${trace.overrideState}` : ""}
+                      </span>
+                    )}
+                  </button>
+                  {trace && open && (
+                    <div className="creature-runtime__trace">
+                      <div className="creature-runtime__trace-row">
+                        <span>Base{trace.baseSource ? ` (${trace.baseSource})` : ""}</span>
+                        <span>{trace.baseValue}</span>
+                      </div>
+                      {trace.contributions.map((c, i) => (
+                        <div key={i} className="creature-runtime__trace-row">
+                          <span>{c.primaryStatKey} {c.primaryValue} × {c.coefficient}</span>
+                          <span>{c.contribution}</span>
+                        </div>
+                      ))}
+                      <div className="creature-runtime__trace-row">
+                        <span>Modificateurs</span>
+                        <span>{trace.modifiers}</span>
+                      </div>
+                      <div className="creature-runtime__trace-row creature-runtime__trace-row--total">
+                        <span>Total</span>
+                        <span>{trace.finalValue}</span>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );
