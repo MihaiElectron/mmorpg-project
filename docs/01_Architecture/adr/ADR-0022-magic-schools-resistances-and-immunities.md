@@ -34,7 +34,19 @@
   - apps/api-gateway/src/derived-stats/derived-stats.constants.ts
     (`magicalResistanceFire/Water/Air/Earth` — `calculatedOnly`, non consommées)
   - apps/api-gateway/src/characters/character-stats-calculator.ts
-- Commits: N/A (ADR de décision — aucune implémentation)
+- Commits: N/A (ADR de décision)
+- Implementation status (partiel — la décision reste `Proposed`) :
+  - **Implemented** : fondation des écoles magiques dans les définitions de skills
+    — `SKILL_MAGIC_SCHOOLS` (fire/water/air/earth/sacred/poison, aucune école
+    générique) + `skill_definition.magicSchool` (nullable, CHECK). Validation
+    serveur sur l'état final fusionné : générique (`physical` ⇒ `null`, `magic` ⇒
+    école requise) + **verrou canonique `heal` ⇒ `magic` + `sacred`** (par clé
+    stable, sans impact sur les autres skills magiques ni les futurs soins).
+    Backfill migration = `magicSchool` seul (`heal` → `sacred`) : **les axes
+    existants `damageType`/`attackDefenseKind` ne sont PAS réécrits** par la
+    migration (réversibilité stricte). Aucun effet combat.
+  - **Planned** (inchangé) : résistances par école, mitigation magique,
+    immunités, DoT poison, modificateurs de soin, modèle hybride, Studio UI.
 
 ---
 

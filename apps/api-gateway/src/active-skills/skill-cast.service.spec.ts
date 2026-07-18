@@ -39,6 +39,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     effectType: "damage",
     damageType: "physical",
     attackDefenseKind: "physical",
+    magicSchool: null,
     canBeDodged: true,
     canBeBlocked: true,
     canBeParried: false,

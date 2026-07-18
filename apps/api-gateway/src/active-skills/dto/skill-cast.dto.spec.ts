@@ -67,4 +67,27 @@ describe("parseSkillCastPayload", () => {
   it("rejette un creature sans targetId", () => {
     expect(parseSkillCastPayload({ skillKey: "k", targetType: "creature" })).toBeNull();
   });
+
+  // ── Autorité serveur (écoles magiques) ──────────────────────────────────────
+  // Le client ne fournit JAMAIS magicSchool/damageType/attackDefenseKind : ces
+  // propriétés sont lues depuis SkillDefinition en base. Tout champ de ce type
+  // dans le payload est rejeté (champ inconnu).
+
+  it("rejette un cast qui tente d'injecter magicSchool", () => {
+    expect(
+      parseSkillCastPayload({ skillKey: "heal", targetType: "self", magicSchool: "fire" }),
+    ).toBeNull();
+  });
+
+  it("rejette un cast qui tente d'injecter damageType/attackDefenseKind", () => {
+    expect(
+      parseSkillCastPayload({
+        skillKey: "k",
+        targetType: "creature",
+        targetId: UUID,
+        damageType: "raw",
+        attackDefenseKind: "magic",
+      }),
+    ).toBeNull();
+  });
 });

@@ -12,6 +12,8 @@ import { CreateSkillDefinitionDto } from './dto/create-skill-definition.dto';
 import { UpdateSkillDefinitionDto } from './dto/update-skill-definition.dto';
 import {
   ActionBarUnavailableReason,
+  checkCanonicalSkillCoherence,
+  checkMagicSchoolCoherence,
   isSupportedResourceType,
   SKILL_UNLOCK_SOURCES,
   SkillEffectType,
@@ -329,6 +331,7 @@ export class ActiveSkillsService {
       ...dto,
       ...this.normalizedWeaponTypePatch(dto.weaponType),
     } as Partial<SkillDefinition>);
+    this.validateMagicSchoolCoherence(entity);
     const saved = await this.repo.save(entity);
     this.invalidateCache();
     return saved;
@@ -354,6 +357,12 @@ export class ActiveSkillsService {
       ...dto,
       ...this.normalizedWeaponTypePatch(dto.weaponType),
     } as Partial<SkillDefinition>);
+    // Cohérence école ↔ nature défensive : évaluée seulement si le patch touche
+    // l'un des deux axes concernés (n'impose pas la cohérence à un patch sans
+    // rapport sur une ligne legacy — le backfill migration régularise les seeds).
+    if (dto.attackDefenseKind !== undefined || dto.magicSchool !== undefined) {
+      this.validateMagicSchoolCoherence(merged);
+    }
     const saved = await this.repo.save(merged);
     this.invalidateCache();
     return saved;
@@ -376,6 +385,48 @@ export class ActiveSkillsService {
       );
     }
     return { weaponType: trimmed };
+  }
+
+  /**
+   * Cohérence d'une définition sur l'état FINAL (défauts entité inclus),
+   * serveur-autoritaire (jamais délégué au frontend), en deux volets :
+   *  1. générique école ↔ nature défensive (`physical` ⇒ `magicSchool` null,
+   *     `magic` ⇒ école requise, école hors des six interdite) ;
+   *  2. verrou canonique par clé stable (`heal` ⇒ `magic` + `sacred`) — ciblé,
+   *     n'impacte ni les autres skills magiques ni les futurs soins d'une autre
+   *     école (autres clés). Aucun effet combat.
+   */
+  private validateMagicSchoolCoherence(skill: Partial<SkillDefinition>): void {
+    const attackDefenseKind = skill.attackDefenseKind ?? 'physical';
+    const magicSchool = skill.magicSchool ?? null;
+
+    const genericCode = checkMagicSchoolCoherence(attackDefenseKind, magicSchool);
+    if (genericCode !== null) {
+      const messages: Record<typeof genericCode, string> = {
+        magic_school_invalid:
+          'magicSchool doit être null ou une des écoles autorisées (fire, water, air, earth, sacred, poison).',
+        magic_school_forbidden_for_physical:
+          'Un skill physical ne peut pas avoir d’école magique : magicSchool doit être null.',
+        magic_school_required_for_magic:
+          'Un skill magic doit préciser une école magique (magicSchool requis).',
+      };
+      throw new BadRequestException(messages[genericCode]);
+    }
+
+    const canonicalCode = checkCanonicalSkillCoherence(
+      skill.key ?? '',
+      attackDefenseKind,
+      magicSchool,
+    );
+    if (canonicalCode !== null) {
+      const messages: Record<typeof canonicalCode, string> = {
+        canonical_skill_attack_defense_kind_mismatch:
+          'Le skill canonique "heal" doit avoir attackDefenseKind = magic.',
+        canonical_skill_magic_school_mismatch:
+          'Le skill canonique "heal" doit avoir magicSchool = sacred.',
+      };
+      throw new BadRequestException(messages[canonicalCode]);
+    }
   }
 
   /**

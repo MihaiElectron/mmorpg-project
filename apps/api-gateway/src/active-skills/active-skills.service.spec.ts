@@ -33,6 +33,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     effectType: "damage",
     damageType: "physical",
     attackDefenseKind: "physical",
+    magicSchool: null,
     canBeDodged: true,
     canBeBlocked: true,
     canBeParried: false,
@@ -242,6 +243,7 @@ describe("ActiveSkillsService", () => {
         key: "fireball",
         name: "Fireball",
         attackDefenseKind: "magic",
+        magicSchool: "fire", // un skill magic exige une école (cohérence serveur)
       });
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({ attackDefenseKind: "magic" }),
@@ -349,13 +351,17 @@ describe("ActiveSkillsService", () => {
         key: "k",
         name: "N",
         attackDefenseKind: "magic",
+        magicSchool: "sacred", // un skill magic exige une école (cohérence serveur)
       });
       expect(created.attackDefenseKind).toBe("magic");
     });
 
     it("update physical → magic", async () => {
       repo.findOne.mockResolvedValue(makeSkill({ attackDefenseKind: "physical" }));
-      const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "magic" });
+      const updated = await service.updateDefinition("power_strike", {
+        attackDefenseKind: "magic",
+        magicSchool: "sacred",
+      });
       expect(updated.attackDefenseKind).toBe("magic");
     });
 
@@ -373,9 +379,185 @@ describe("ActiveSkillsService", () => {
 
     it("attackDefenseKind est un axe distinct de damageType (aucun couplage)", async () => {
       repo.findOne.mockResolvedValue(makeSkill({ damageType: "raw", attackDefenseKind: "physical" }));
-      const updated = await service.updateDefinition("power_strike", { attackDefenseKind: "magic" });
+      const updated = await service.updateDefinition("power_strike", {
+        attackDefenseKind: "magic",
+        magicSchool: "sacred",
+      });
       expect(updated.attackDefenseKind).toBe("magic");
       expect(updated.damageType).toBe("raw"); // inchangé
+    });
+  });
+
+  describe("magicSchool (ADR-0022 — lot fondation)", () => {
+    it("création sans magicSchool → null par défaut (skill physique)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({ key: "strike", name: "Strike" });
+      expect(created.magicSchool).toBeNull();
+      expect(created.attackDefenseKind).toBe("physical");
+    });
+
+    it("Strike : physical sans école accepté", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "strike",
+        name: "Strike",
+        attackDefenseKind: "physical",
+        damageType: "physical",
+      });
+      expect(created.magicSchool).toBeNull();
+    });
+
+    it("Heal : magic + sacred accepté et persisté", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "heal",
+        name: "Heal",
+        effectType: "heal",
+        targetMode: "self",
+        attackDefenseKind: "magic",
+        magicSchool: "sacred",
+      });
+      expect(created.magicSchool).toBe("sacred");
+      expect(created.attackDefenseKind).toBe("magic");
+      expect(created.effectType).toBe("heal"); // reste un soin
+    });
+
+    it("refuse une école magique sur un skill physical", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "k",
+          name: "N",
+          attackDefenseKind: "physical",
+          magicSchool: "fire",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuse un skill magic sans école (ex : Heal sans sacred)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "heal",
+          name: "Heal",
+          effectType: "heal",
+          targetMode: "self",
+          attackDefenseKind: "magic",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update : remise explicite à null autorisée pour un skill physical", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ attackDefenseKind: "physical", magicSchool: null }),
+      );
+      const updated = await service.updateDefinition("power_strike", {
+        magicSchool: null,
+      });
+      expect(updated.magicSchool).toBeNull();
+    });
+
+    it("update : basculer une école sur un skill physical existant est refusé", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ attackDefenseKind: "physical", magicSchool: null }),
+      );
+      await expect(
+        service.updateDefinition("power_strike", { magicSchool: "fire" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update d'un champ sans rapport n'impose pas la cohérence à une ligne legacy", async () => {
+      // Ligne legacy incohérente (magic sans école) : un patch de nom ne doit
+      // pas échouer (la cohérence n'est vérifiée que si le patch touche les axes).
+      repo.findOne.mockResolvedValue(
+        makeSkill({ attackDefenseKind: "magic", magicSchool: null }),
+      );
+      const updated = await service.updateDefinition("power_strike", { name: "Renamed" });
+      expect(updated.name).toBe("Renamed");
+    });
+
+    // ── Verrou canonique heal = magic + sacred ────────────────────────────────
+    it("création heal + magic + sacred acceptée", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "heal",
+        name: "Heal",
+        attackDefenseKind: "magic",
+        magicSchool: "sacred",
+      });
+      expect(created.magicSchool).toBe("sacred");
+    });
+
+    it("création heal + magic + fire rejetée (verrou canonique)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "heal",
+          name: "Heal",
+          attackDefenseKind: "magic",
+          magicSchool: "fire",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("création heal + magic + null rejetée", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "heal",
+          name: "Heal",
+          attackDefenseKind: "magic",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("création heal + physical + null rejetée (attackDefenseKind canonique)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      await expect(
+        service.createDefinition({
+          key: "heal",
+          name: "Heal",
+          attackDefenseKind: "physical",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update heal sacred + patch magicSchool=fire rejeté", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "heal", attackDefenseKind: "magic", magicSchool: "sacred" }),
+      );
+      await expect(
+        service.updateDefinition("heal", { magicSchool: "fire" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update heal sacred + patch attackDefenseKind=physical rejeté", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "heal", attackDefenseKind: "magic", magicSchool: "sacred" }),
+      );
+      await expect(
+        service.updateDefinition("heal", { attackDefenseKind: "physical" }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("update heal sacred + patch sans rapport (cooldownMs) accepté", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "heal", attackDefenseKind: "magic", magicSchool: "sacred" }),
+      );
+      const updated = await service.updateDefinition("heal", { cooldownMs: 5000 });
+      expect(updated.cooldownMs).toBe(5000);
+      expect(updated.magicSchool).toBe("sacred");
+    });
+
+    it("le verrou sacred ne s'applique pas aux autres skills magiques (fireball + fire)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "fireball",
+        name: "Fireball",
+        attackDefenseKind: "magic",
+        magicSchool: "fire",
+      });
+      expect(created.magicSchool).toBe("fire");
     });
   });
 

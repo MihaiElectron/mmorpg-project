@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import {
+  MagicSchool,
   SkillAttackDefenseKind,
   SkillDamageType,
   SkillEffectType,
@@ -141,6 +142,18 @@ export class SkillDefinition {
    */
   @Column({ type: 'varchar', length: 16, default: 'physical' })
   attackDefenseKind: SkillAttackDefenseKind;
+
+  /**
+   * École magique (ADR-0022 — lot fondation). `null` = skill sans école
+   * (physique/raw) ; sinon l'une des six écoles fermées (fire/water/air/earth/
+   * sacred/poison). AXE DISTINCT de `damageType` et `attackDefenseKind`.
+   * Cohérence serveur : `physical` ⇒ `null`, `magic` ⇒ école requise
+   * (`checkMagicSchoolCoherence`). Aucun effet combat dans ce lot : donnée seule
+   * (résistances/mitigation/immunités = Planned). CHECK en base interdit toute
+   * valeur inconnue.
+   */
+  @Column({ type: 'varchar', length: 16, nullable: true, default: null })
+  magicSchool: MagicSchool | null;
 
   /**
    * Flags défensifs par skill (Lot A) — serveur-autoritaires, jamais fournis par

@@ -13,8 +13,10 @@ import {
   SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
+  SKILL_MAGIC_SCHOOLS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
+  MagicSchool,
   SkillAttackDefenseKind,
   SkillDamageType,
   SkillEffectType,
@@ -131,6 +133,15 @@ export class UpdateSkillDefinitionDto {
   @IsOptional()
   @IsIn(SKILL_ATTACK_DEFENSE_KINDS)
   attackDefenseKind?: SkillAttackDefenseKind;
+
+  /**
+   * École magique (ADR-0022 — lot fondation) : l'une des six écoles ou `null`
+   * (remise à `null` explicite autorisée via `@IsOptional`). Cohérence croisée
+   * avec `attackDefenseKind` vérifiée serveur. Aucun effet combat dans ce lot.
+   */
+  @IsOptional()
+  @IsIn(SKILL_MAGIC_SCHOOLS)
+  magicSchool?: MagicSchool | null;
 
   /**
    * Flags défensifs (Lot A) — serveur-autoritaires. Un skill n'est parable que si

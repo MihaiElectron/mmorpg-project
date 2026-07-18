@@ -54,6 +54,107 @@ export const SKILL_ATTACK_DEFENSE_KINDS = ['physical', 'magic'] as const;
 export type SkillAttackDefenseKind = (typeof SKILL_ATTACK_DEFENSE_KINDS)[number];
 
 /**
+ * Écoles magiques (ADR-0022 — lot fondation). Vocabulaire FERMÉ du moteur de
+ * combat : aucune école générique (`magic`/`arcane`/`generic`). `null` = skill
+ * sans école (physique ou raw). Persisté sur `skill_definition.magicSchool`.
+ *
+ * Axe DISTINCT de `damageType` (mitigation d'armure) et de `attackDefenseKind`
+ * (pipeline défensif). Dans ce lot : donnée persistée et validée seulement —
+ * AUCUN effet combat (résistances, mitigation par école, immunités = Planned).
+ */
+export const SKILL_MAGIC_SCHOOLS = [
+  'fire',
+  'water',
+  'air',
+  'earth',
+  'sacred',
+  'poison',
+] as const;
+export type MagicSchool = (typeof SKILL_MAGIC_SCHOOLS)[number];
+
+/** `true` si `value` est l'une des six écoles autorisées (jamais pour `null`). */
+export function isMagicSchoolValue(value: unknown): value is MagicSchool {
+  return (
+    typeof value === 'string' &&
+    (SKILL_MAGIC_SCHOOLS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Codes de cohérence école ↔ nature défensive (lot fondation écoles magiques).
+ * `null` = cohérent. Règles génériques adossées à l'axe `attackDefenseKind`
+ * existant (aucune structure multi-effets prématurée) :
+ *  - une valeur d'école hors des six autorisées est invalide ;
+ *  - un skill `physical` ne porte JAMAIS d'école (`magicSchool` doit être `null`) ;
+ *  - un skill `magic` DOIT porter une école (`magicSchool` requis).
+ *
+ * Ainsi Strike (`physical`) → `null`, et Heal (`magic`) → une école (seedée
+ * `sacred`). La spécificité « Heal = sacred » relève de la donnée (backfill /
+ * création), pas d'un verrou par-heal — pour ne pas interdire de futurs soins
+ * d'une autre école. Le modèle hybride (physique + composante magique) reste
+ * `Planned` : ces règles n'y font pas obstacle (un seul axe défensif aujourd'hui).
+ */
+export type MagicSchoolCoherenceCode =
+  | 'magic_school_invalid'
+  | 'magic_school_forbidden_for_physical'
+  | 'magic_school_required_for_magic';
+
+export function checkMagicSchoolCoherence(
+  attackDefenseKind: SkillAttackDefenseKind,
+  magicSchool: MagicSchool | null,
+): MagicSchoolCoherenceCode | null {
+  if (magicSchool !== null && !isMagicSchoolValue(magicSchool)) {
+    return 'magic_school_invalid';
+  }
+  if (attackDefenseKind === 'physical' && magicSchool !== null) {
+    return 'magic_school_forbidden_for_physical';
+  }
+  if (attackDefenseKind === 'magic' && magicSchool === null) {
+    return 'magic_school_required_for_magic';
+  }
+  return null;
+}
+
+/**
+ * Skills CANONIQUES verrouillés sur une configuration défensive/école précise
+ * (identifiés par leur clé stable, jamais par leur libellé). Verrou ciblé — il
+ * ne s'applique PAS à tous les soins ni à tous les skills magiques : de futurs
+ * soins d'une autre école utiliseront d'autres clés.
+ *
+ *  - `heal` : soin sacré canonique → `magic` + `sacred`.
+ */
+export const CANONICAL_SKILL_COHERENCE: Readonly<
+  Record<string, { attackDefenseKind: SkillAttackDefenseKind; magicSchool: MagicSchool }>
+> = {
+  heal: { attackDefenseKind: 'magic', magicSchool: 'sacred' },
+};
+
+export type CanonicalSkillCoherenceCode =
+  | 'canonical_skill_attack_defense_kind_mismatch'
+  | 'canonical_skill_magic_school_mismatch';
+
+/**
+ * Vérifie le verrou canonique d'un skill (par clé stable) sur l'état FINAL.
+ * `null` si la clé n'est pas canonique ou si la configuration correspond au
+ * contrat figé. Complète (ne remplace pas) `checkMagicSchoolCoherence`.
+ */
+export function checkCanonicalSkillCoherence(
+  key: string,
+  attackDefenseKind: SkillAttackDefenseKind,
+  magicSchool: MagicSchool | null,
+): CanonicalSkillCoherenceCode | null {
+  const canonical = CANONICAL_SKILL_COHERENCE[key];
+  if (!canonical) return null;
+  if (attackDefenseKind !== canonical.attackDefenseKind) {
+    return 'canonical_skill_attack_defense_kind_mismatch';
+  }
+  if (magicSchool !== canonical.magicSchool) {
+    return 'canonical_skill_magic_school_mismatch';
+  }
+  return null;
+}
+
+/**
  * Nature du skill (V1-H). Le modèle de déverrouillage est kind-agnostique, mais
  * seuls les `active` sont lançables (`skill:cast`, /active-skills) :
  *   - active  : déclenché volontairement par le joueur ;
