@@ -3,6 +3,7 @@ import { AdminService } from './admin.service';
 import { CreaturesService } from '../creatures/creatures.service';
 import { CreatureAbilitiesService } from '../creatures/creature-abilities.service';
 import { ReplaceCreatureAbilitiesDto } from '../creatures/dto/creature-ability.dto';
+import { ReplaceCreatureDerivedConfigurationDto } from '../creatures/dto/creature-derived-configuration.dto';
 import { ResourcesService } from '../resources/resources.service';
 import { BuildingsService } from '../buildings/buildings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -91,6 +92,48 @@ export class AdminController {
     const info = await this.creaturesService.getRuntimeCombatInfo(id);
     if (!info) throw new NotFoundException(`Créature vivante "${id}" introuvable.`);
     return info;
+  }
+
+  /**
+   * Configuration des coefficients de dérivation d'un CreatureTemplate (Studio,
+   * ADR-0021). Lecture : état d'override (none/coefficients/empty), coefficients
+   * explicites + effectifs, provenance, base, scalaires, catalogue. 404 si le
+   * template n'existe pas. Le serveur reste l'autorité — aucun calcul client.
+   */
+  @Get('creatures/templates/:key/derived-configuration')
+  async getTemplateDerivedConfiguration(@Param('key') key: string) {
+    const config = await this.creaturesService.getTemplateDerivedConfiguration(key);
+    if (!config) throw new NotFoundException(`Template créature "${key}" introuvable.`);
+    return config;
+  }
+
+  /**
+   * Sauvegarde ATOMIQUE des overrides d'un template (remplacement complet). Une
+   * seule transaction, cache/notification après commit, invalidation du seul
+   * template concerné. 404 si le template n'existe pas ; 400 si le DTO est
+   * invalide (aucune écriture partielle).
+   */
+  @Put('creatures/templates/:key/derived-configuration')
+  async saveTemplateDerivedConfiguration(
+    @Param('key') key: string,
+    @Body() dto: ReplaceCreatureDerivedConfigurationDto,
+  ) {
+    const config = await this.creaturesService.saveTemplateDerivedConfiguration(key, dto);
+    if (!config) throw new NotFoundException(`Template créature "${key}" introuvable.`);
+    return config;
+  }
+
+  /**
+   * Snapshot runtime d'une instance vivante (Studio) : primaires + dérivées
+   * finales (resolvers autoritaires) + traces génériques (base + contributions +
+   * provenance). Lecture seule, calculé serveur. 404 si l'id n'est pas une
+   * instance vivante connue.
+   */
+  @Get('creatures/instances/:id/runtime-stats')
+  async getInstanceRuntimeStats(@Param('id') id: string) {
+    const snapshot = await this.creaturesService.getInstanceRuntimeSnapshot(id);
+    if (!snapshot) throw new NotFoundException(`Instance créature "${id}" introuvable.`);
+    return snapshot;
   }
 
   /**

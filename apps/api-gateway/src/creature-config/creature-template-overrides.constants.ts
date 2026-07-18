@@ -1,4 +1,7 @@
 import { PRIMARY_STAT_KEYS } from '../derived-stats/derived-stats.constants';
+// Import de TYPE uniquement (effacé au build) → aucun cycle runtime avec le
+// calculateur.
+import type { CreatureSecondaryCoefficients } from '../creature-runtime/creature-runtime.calculator';
 
 /**
  * Overrides de dérivation par CreatureTemplate (ADR-0021, sous-lot backend).
@@ -66,6 +69,43 @@ export const EMPTY_TEMPLATE_OVERRIDES: CreatureTemplateOverrides = {
   derivedCoefficients: {},
   scalarParams: {},
 };
+
+/**
+ * Maps de fallback des dérivées combat, CONSTRUITES depuis le singleton global
+ * (aucune copie de valeurs — lit `c.*`). Reflète EXACTEMENT les formules de
+ * `resolveCombatStats` / `resolveMaxHealth`.
+ */
+export function buildGlobalCombatCoefficientMaps(
+  c: CreatureSecondaryCoefficients,
+): Record<string, CoefficientMap> {
+  return {
+    physicalAttack: { strength: c.attackPowerPerStrength },
+    defense: { endurance: c.defenseTotalPerEndurance },
+    accuracy: { dexterity: c.accuracyPerDexterity },
+    dodgeChance: { agility: c.dodgePerAgility },
+    blockChance: { endurance: c.blockPerEndurance, strength: c.blockPerStrength },
+    parryChance: { strength: c.parryPerStrength, dexterity: c.parryPerDexterity },
+    counterAttackPower: {
+      dexterity: c.counterPerDexterity,
+      agility: c.counterPerAgility,
+      intelligence: c.counterPerIntelligence,
+    },
+    maxHealth: { vitality: c.maxHealthPerVitality },
+  };
+}
+
+/** Valeur scalaire de fallback (singleton global) pour une clé scalaire. */
+export function globalScalarValue(
+  c: CreatureSecondaryCoefficients,
+  key: CreatureScalarParamKey,
+): number {
+  switch (key) {
+    case 'blockReductionPercent':
+      return c.blockReductionPercent;
+    case 'secondaryChanceCap':
+      return c.secondaryChanceCap;
+  }
+}
 
 /** Provenance d'une résolution (trace) : override template ou fallback. */
 export type CoefficientSource = 'template' | 'global' | 'catalog';

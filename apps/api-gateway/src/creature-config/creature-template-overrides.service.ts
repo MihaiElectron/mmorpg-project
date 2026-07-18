@@ -19,6 +19,24 @@ export interface DerivedCoefficientInput {
   coefficient: number;
 }
 
+/** Override d'une dérivée pour un remplacement complet (map, éventuellement vide). */
+export interface DerivedOverrideInput {
+  derivedStatKey: string;
+  coefficients: DerivedCoefficientInput[];
+}
+
+/** Override scalaire pour un remplacement complet. */
+export interface ScalarOverrideInput {
+  scalarParamKey: string;
+  value: number;
+}
+
+/** Configuration complète d'un template (remplacement intégral). */
+export interface TemplateConfigurationInput {
+  derivedOverrides: DerivedOverrideInput[];
+  scalarOverrides: ScalarOverrideInput[];
+}
+
 /**
  * CreatureTemplateOverridesService — overrides de dérivation PAR TEMPLATE.
  *
@@ -165,6 +183,80 @@ export class CreatureTemplateOverridesService implements OnModuleInit {
       }
     });
 
+    await this.reloadTemplate(templateId);
+    this.notifyChange(templateId);
+  }
+
+  /**
+   * REMPLACE INTÉGRALEMENT la configuration d'overrides d'un template (§4).
+   * Sémantique de remplacement complet (bouton « Sauvegarder ») :
+   *  - dérivée absente de `derivedOverrides` → override supprimé (fallback) ;
+   *  - présente avec coefficients → map remplacée ;
+   *  - présente avec `coefficients: []` → override VIDE volontaire conservé ;
+   *  - scalaire absent → override supprimé (fallback) ; présent → valeur remplacée.
+   *
+   * ATOMIQUE : tout le DTO est validé AVANT toute écriture ; une seule
+   * transaction PostgreSQL (delete total + réinsertion) ; le cache n'est
+   * rafraîchi et les listeners notifiés qu'APRÈS le commit (une seule fois).
+   * Aucune écriture partielle si une entrée est invalide.
+   */
+  async replaceTemplateConfiguration(
+    templateId: number,
+    input: TemplateConfigurationInput,
+  ): Promise<void> {
+    // ── 1. Validation COMPLÈTE avant toute modification ──────────────────────
+    const seenDerived = new Set<string>();
+    for (const d of input.derivedOverrides) {
+      await this.assertValidDerivedStatKey(d.derivedStatKey);
+      if (seenDerived.has(d.derivedStatKey)) {
+        throw new BadRequestException(`derivedStatKey dupliqué dans le DTO: ${d.derivedStatKey}`);
+      }
+      seenDerived.add(d.derivedStatKey);
+      this.assertValidCoefficients(d.coefficients);
+    }
+    const seenScalar = new Set<string>();
+    for (const s of input.scalarOverrides) {
+      if (!isCreatureScalarParamKey(s.scalarParamKey)) {
+        throw new BadRequestException(`scalarParamKey inconnu: ${s.scalarParamKey}`);
+      }
+      if (seenScalar.has(s.scalarParamKey)) {
+        throw new BadRequestException(`scalarParamKey dupliqué dans le DTO: ${s.scalarParamKey}`);
+      }
+      seenScalar.add(s.scalarParamKey);
+      if (typeof s.value !== 'number' || !Number.isFinite(s.value)) {
+        throw new BadRequestException(`value scalaire non finie pour ${s.scalarParamKey}.`);
+      }
+    }
+
+    // ── 2. Remplacement dans UNE transaction (delete total + réinsertion) ────
+    await this.dataSource.transaction(async (manager) => {
+      const headerRepo = manager.getRepository(CreatureTemplateDerivedStatOverride);
+      const scalarRepo = manager.getRepository(CreatureTemplateScalarOverride);
+      // CASCADE supprime les coefficients enfants avec les marqueurs.
+      await headerRepo.delete({ creatureTemplateId: templateId });
+      await scalarRepo.delete({ creatureTemplateId: templateId });
+
+      const coefRepo = manager.getRepository(CreatureTemplateDerivedCoefficient);
+      for (const d of input.derivedOverrides) {
+        const header = await headerRepo.save(
+          headerRepo.create({ creatureTemplateId: templateId, derivedStatKey: d.derivedStatKey }),
+        );
+        if (d.coefficients.length > 0) {
+          await coefRepo.save(
+            d.coefficients.map((c) =>
+              coefRepo.create({ overrideId: header.id, primaryStatKey: c.primaryStatKey, coefficient: c.coefficient }),
+            ),
+          );
+        }
+      }
+      for (const s of input.scalarOverrides) {
+        await scalarRepo.save(
+          scalarRepo.create({ creatureTemplateId: templateId, scalarParamKey: s.scalarParamKey, value: s.value }),
+        );
+      }
+    });
+
+    // ── 3. Après COMMIT seulement : cache rafraîchi + une notification ───────
     await this.reloadTemplate(templateId);
     this.notifyChange(templateId);
   }

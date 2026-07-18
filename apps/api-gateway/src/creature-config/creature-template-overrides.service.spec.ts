@@ -181,4 +181,135 @@ describe("CreatureTemplateOverridesService", () => {
       expect(service.getOverrides(1).derivedCoefficients.physicalAttack).toEqual({ dexterity: 4 });
     });
   });
+
+  // ── replaceTemplateConfiguration (PUT atomique) ─────────────────────────────
+  describe("replaceTemplateConfiguration", () => {
+    it("crée des overrides (dérivés + scalaires)", async () => {
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: 3.5 }] }],
+        scalarOverrides: [{ scalarParamKey: "secondaryChanceCap", value: 45 }],
+      });
+      const ov = service.getOverrides(1);
+      expect(ov.derivedCoefficients.physicalAttack).toEqual({ strength: 3.5 });
+      expect(ov.scalarParams.secondaryChanceCap).toBe(45);
+    });
+
+    it("remplacement complet : dérivée OMISE → supprimée (fallback)", async () => {
+      await service.setDerivedStatOverride(1, "physicalAttack", [{ primaryStatKey: "strength", coefficient: 2 }]);
+      await service.setDerivedStatOverride(1, "defense", [{ primaryStatKey: "endurance", coefficient: 1 }]);
+      // Sauvegarde ne contenant QUE defense → physicalAttack supprimé.
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [{ derivedStatKey: "defense", coefficients: [{ primaryStatKey: "endurance", coefficient: 5 }] }],
+        scalarOverrides: [],
+      });
+      const ov = service.getOverrides(1);
+      expect("physicalAttack" in ov.derivedCoefficients).toBe(false);
+      expect(ov.derivedCoefficients.defense).toEqual({ endurance: 5 });
+    });
+
+    it("map vide volontaire conservée dans un remplacement complet", async () => {
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [] }],
+        scalarOverrides: [],
+      });
+      const ov = service.getOverrides(1);
+      expect("physicalAttack" in ov.derivedCoefficients).toBe(true);
+      expect(ov.derivedCoefficients.physicalAttack).toEqual({});
+    });
+
+    it("suppression de TOUS les overrides (listes vides)", async () => {
+      await service.setDerivedStatOverride(1, "physicalAttack", [{ primaryStatKey: "strength", coefficient: 2 }]);
+      await service.setScalarOverride(1, "secondaryChanceCap", 75);
+      await service.replaceTemplateConfiguration(1, { derivedOverrides: [], scalarOverrides: [] });
+      const ov = service.getOverrides(1);
+      expect(Object.keys(ov.derivedCoefficients)).toHaveLength(0);
+      expect(Object.keys(ov.scalarParams)).toHaveLength(0);
+    });
+
+    it("scalaire omis → supprimé, présent → remplacé", async () => {
+      await service.setScalarOverride(1, "blockReductionPercent", 30);
+      await service.setScalarOverride(1, "secondaryChanceCap", 50);
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [],
+        scalarOverrides: [{ scalarParamKey: "secondaryChanceCap", value: 90 }],
+      });
+      const ov = service.getOverrides(1);
+      expect("blockReductionPercent" in ov.scalarParams).toBe(false);
+      expect(ov.scalarParams.secondaryChanceCap).toBe(90);
+    });
+
+    it("une seule notification par sauvegarde complète", async () => {
+      const listener = jest.fn();
+      service.onChange(listener);
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [
+          { derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: 2 }] },
+          { derivedStatKey: "defense", coefficients: [{ primaryStatKey: "endurance", coefficient: 1 }] },
+        ],
+        scalarOverrides: [{ scalarParamKey: "secondaryChanceCap", value: 45 }],
+      });
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(1);
+    });
+
+    it("isolation : sauvegarde du template 1 n'affecte pas le template 2", async () => {
+      await service.setDerivedStatOverride(2, "physicalAttack", [{ primaryStatKey: "strength", coefficient: 9 }]);
+      await service.replaceTemplateConfiguration(1, {
+        derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: 2 }] }],
+        scalarOverrides: [],
+      });
+      expect(service.getOverrides(2).derivedCoefficients.physicalAttack).toEqual({ strength: 9 });
+    });
+
+    describe("validation AVANT écriture (rollback / aucune écriture partielle)", () => {
+      it("clé dérivée inconnue → rejet, repos et cache intacts, aucune notification", async () => {
+        const listener = jest.fn();
+        service.onChange(listener);
+        await service.setDerivedStatOverride(1, "physicalAttack", [{ primaryStatKey: "strength", coefficient: 2 }]);
+        listener.mockClear();
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [{ derivedStatKey: "notAStat", coefficients: [] }],
+            scalarOverrides: [],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        // Aucune écriture partielle : l'override initial reste, pas de notification.
+        expect(service.getOverrides(1).derivedCoefficients.physicalAttack).toEqual({ strength: 2 });
+        expect(listener).not.toHaveBeenCalled();
+      });
+
+      it("doublon de derivedStatKey dans le DTO → rejet", async () => {
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [
+              { derivedStatKey: "physicalAttack", coefficients: [] },
+              { derivedStatKey: "physicalAttack", coefficients: [] },
+            ],
+            scalarOverrides: [],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it("doublon de scalarParamKey → rejet", async () => {
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [],
+            scalarOverrides: [
+              { scalarParamKey: "secondaryChanceCap", value: 1 },
+              { scalarParamKey: "secondaryChanceCap", value: 2 },
+            ],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it.each([NaN, Infinity])("coefficient non fini (%p) → rejet", async (bad) => {
+        await expect(
+          service.replaceTemplateConfiguration(1, {
+            derivedOverrides: [{ derivedStatKey: "physicalAttack", coefficients: [{ primaryStatKey: "strength", coefficient: bad }] }],
+            scalarOverrides: [],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+    });
+  });
 });

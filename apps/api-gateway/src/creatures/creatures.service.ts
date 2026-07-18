@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Server } from 'socket.io';
@@ -46,9 +46,27 @@ import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, C
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
 import { CreatureTemplateOverridesService } from '../creature-config/creature-template-overrides.service';
 import {
+  buildGlobalCombatCoefficientMaps,
+  CREATURE_COMBAT_DERIVED_KEYS,
+  CREATURE_SCALAR_PARAM_KEYS,
+  CoefficientMap,
+  CoefficientSource,
   effectiveCoefficientMap,
+  effectiveScalar,
+  globalScalarValue,
   sumPrimaryContributions,
 } from '../creature-config/creature-template-overrides.constants';
+import { TemplateConfigurationInput } from '../creature-config/creature-template-overrides.service';
+import { MAGIC_RESISTANCE_STAT_KEYS } from '../derived-stats/magic-resistance';
+import { PRIMARY_STAT_KEYS } from '../derived-stats/derived-stats.constants';
+import {
+  CoefficientEntryDto,
+  CreatureDerivedConfigurationDto,
+  CreatureRuntimeSnapshotDto,
+  DerivedStatConfigEntryDto,
+  DerivedStatTraceDto,
+  ScalarParamConfigEntryDto,
+} from './dto/creature-derived-configuration.dto';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { StatResolutionResult } from '../player-runtime/player-runtime.types';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
@@ -540,6 +558,258 @@ export class CreaturesService implements OnModuleInit {
       school,
       magicResistanceReaderFromStats(resistanceStats),
     ).effectiveResistance;
+  }
+
+  // ── Studio : configuration des coefficients dérivés par template ────────────
+
+  /** Clés dérivées configurables par template (combat + PV max + résistances). */
+  private configurableDerivedKeys(): string[] {
+    return [...CREATURE_COMBAT_DERIVED_KEYS, 'maxHealth', ...MAGIC_RESISTANCE_STAT_KEYS];
+  }
+
+  /** Valeurs des 10 primaires du template (défaut 0), indexables par clé. */
+  private templatePrimaryRecord(template: CreatureTemplate): Record<string, number> {
+    const t = template as unknown as Record<string, number>;
+    const out: Record<string, number> = {};
+    for (const k of PRIMARY_STAT_KEYS) out[k] = t[k] ?? 0;
+    return out;
+  }
+
+  /** Base + fallback + métadonnées catalogue d'une dérivée (pour config/trace). */
+  private derivedStatBaseInfo(
+    template: CreatureTemplate,
+    key: string,
+    globalMaps: Record<string, CoefficientMap>,
+    defByKey: Map<string, { baseValue?: number; primaryCoefficients?: Record<string, number>; label?: string; category?: string }>,
+  ): {
+    baseValue: number;
+    baseSource: string | null;
+    fallbackMap: CoefficientMap;
+    fallbackSource: CoefficientSource;
+    label: string | null;
+    category: string | null;
+  } {
+    const def = defByKey.get(key);
+    const label = def?.label ?? null;
+    const category = def?.category ?? null;
+    // Résistances (et toute clé hors combat/maxHealth) → catalogue.
+    if (!(key in globalMaps)) {
+      return {
+        baseValue: def?.baseValue ?? 0,
+        baseSource: 'catalog',
+        fallbackMap: (def?.primaryCoefficients ?? {}) as CoefficientMap,
+        fallbackSource: 'catalog',
+        label,
+        category,
+      };
+    }
+    // Combat + maxHealth → fallback singleton global.
+    let baseValue = 0;
+    let baseSource: string | null = null;
+    switch (key) {
+      case 'physicalAttack': baseValue = template.baseAttack; baseSource = 'baseAttack'; break;
+      case 'defense': baseValue = template.baseArmor; baseSource = 'baseArmor'; break;
+      case 'accuracy': baseValue = template.accuracy ?? 0; baseSource = 'accuracy'; break;
+      case 'maxHealth': baseValue = template.baseHealth; baseSource = 'baseHealth'; break;
+      default: baseValue = 0; baseSource = null; break; // dodge/block/parry/counter
+    }
+    return { baseValue, baseSource, fallbackMap: globalMaps[key], fallbackSource: 'global', label, category };
+  }
+
+  private mapToEntries(map: CoefficientMap): CoefficientEntryDto[] {
+    return Object.entries(map).map(([primaryStatKey, coefficient]) => ({ primaryStatKey, coefficient }));
+  }
+
+  /**
+   * Lecture de la configuration dérivée d'un template (GET Studio). Renvoie pour
+   * chaque dérivée : état d'override (none/coefficients/empty), coefficients
+   * explicites, coefficients effectifs, provenance, base ; + scalaires + catalogue.
+   * Aucun calcul client requis. `null` si le template est inconnu.
+   */
+  async getTemplateDerivedConfiguration(
+    templateKey: string,
+  ): Promise<CreatureDerivedConfigurationDto | null> {
+    const template = await this.templateRepository.findOne({ where: { key: templateKey } });
+    if (!template) return null;
+
+    const overrides = this.templateOverrides.getOverrides(template.id);
+    const globalCoeffs = this.creatureSecondaryCoefficients.getCoefficients();
+    const globalMaps = buildGlobalCombatCoefficientMaps(globalCoeffs);
+    const definitions = await this.derivedStats.getDefinitions();
+    const defByKey = new Map(definitions.map((d) => [d.key, d as unknown as { baseValue?: number; primaryCoefficients?: Record<string, number>; label?: string; category?: string }]));
+
+    const derivedStats: DerivedStatConfigEntryDto[] = this.configurableDerivedKeys().map((key) => {
+      const info = this.derivedStatBaseInfo(template, key, globalMaps, defByKey);
+      const hasOverride = Object.prototype.hasOwnProperty.call(overrides.derivedCoefficients, key);
+      const explicitMap = hasOverride ? overrides.derivedCoefficients[key] : null;
+      const overrideState = !hasOverride
+        ? 'none'
+        : Object.keys(explicitMap as CoefficientMap).length === 0
+          ? 'empty'
+          : 'coefficients';
+      const { map, source } = effectiveCoefficientMap(overrides, key, info.fallbackMap, info.fallbackSource);
+      return {
+        derivedStatKey: key,
+        overrideState,
+        explicitCoefficients: explicitMap ? this.mapToEntries(explicitMap) : null,
+        effectiveCoefficients: this.mapToEntries(map),
+        source,
+        baseSource: info.baseSource,
+        label: info.label,
+        category: info.category,
+      };
+    });
+
+    const scalarParams: ScalarParamConfigEntryDto[] = CREATURE_SCALAR_PARAM_KEYS.map((key) => {
+      const hasOverride = Object.prototype.hasOwnProperty.call(overrides.scalarParams, key);
+      const explicitValue = hasOverride ? overrides.scalarParams[key] : null;
+      const { value, source } = effectiveScalar(overrides, key, globalScalarValue(globalCoeffs, key));
+      // effectiveScalar ne renvoie que 'template' | 'global' (jamais 'catalog').
+      return { scalarParamKey: key, explicitValue, effectiveValue: value, source: source as 'template' | 'global' };
+    });
+
+    return {
+      templateId: template.id,
+      templateKey: template.key,
+      derivedStats,
+      scalarParams,
+      catalog: {
+        primaryStatKeys: [...PRIMARY_STAT_KEYS],
+        scalarParamKeys: [...CREATURE_SCALAR_PARAM_KEYS],
+        derivedStatKeys: this.configurableDerivedKeys(),
+      },
+    };
+  }
+
+  /**
+   * Sauvegarde ATOMIQUE (PUT Studio) : remplacement complet des overrides du
+   * template. Valide l'existence du template + restreint aux clés configurables
+   * créature, puis délègue à `replaceTemplateConfiguration` (transaction unique,
+   * cache/notification après commit). `null` si le template est inconnu.
+   */
+  async saveTemplateDerivedConfiguration(
+    templateKey: string,
+    input: TemplateConfigurationInput,
+  ): Promise<CreatureDerivedConfigurationDto | null> {
+    const template = await this.templateRepository.findOne({ where: { key: templateKey } });
+    if (!template) return null;
+
+    const configurable = new Set(this.configurableDerivedKeys());
+    for (const d of input.derivedOverrides) {
+      if (!configurable.has(d.derivedStatKey)) {
+        throw new BadRequestException(
+          `derivedStatKey non configurable pour une créature: ${d.derivedStatKey}`,
+        );
+      }
+    }
+    await this.templateOverrides.replaceTemplateConfiguration(template.id, input);
+    return this.getTemplateDerivedConfiguration(templateKey);
+  }
+
+  /**
+   * Snapshot runtime d'une instance vivante (GET Studio) : primaires + dérivées
+   * finales (resolvers autoritaires, override-aware) + traces génériques
+   * (base + contributions primaires + modificateurs + provenance). Aucun calcul
+   * client. `null` si l'instance est inconnue.
+   */
+  async getInstanceRuntimeSnapshot(instanceId: string): Promise<CreatureRuntimeSnapshotDto | null> {
+    const creature = this.liveCreatures.get(instanceId);
+    if (!creature) return null;
+    const t = creature.spawn?.template;
+    if (!t) return null;
+
+    const stats = this.creatureCombatStats(creature, t); // override-aware (combat + maxHealth)
+    const overrides = this.templateOverrides.getOverrides(t.id);
+    const globalCoeffs = this.creatureSecondaryCoefficients.getCoefficients();
+    const globalMaps = buildGlobalCombatCoefficientMaps(globalCoeffs);
+    const definitions = await this.derivedStats.getDefinitions();
+    const defByKey = new Map(definitions.map((d) => [d.key, d as unknown as { baseValue?: number; primaryCoefficients?: Record<string, number>; label?: string; category?: string }]));
+    const primaries = this.templatePrimaryRecord(t);
+
+    // Valeurs finales AUTORITAIRES par dérivée.
+    const finalValues: Record<string, number> = {
+      physicalAttack: stats.attackPower,
+      defense: stats.defenseTotal,
+      accuracy: stats.accuracy,
+      dodgeChance: stats.dodgeChance,
+      blockChance: stats.blockChance,
+      parryChance: stats.parryChance,
+      counterAttackPower: stats.counterAttackPower,
+      maxHealth: stats.maxHealth,
+    };
+    // Résistances : base catalogue + Σ coef effectif (aucun cap/plancher).
+    for (const key of MAGIC_RESISTANCE_STAT_KEYS) {
+      const info = this.derivedStatBaseInfo(t, key, globalMaps, defByKey);
+      const { map } = effectiveCoefficientMap(overrides, key, info.fallbackMap, info.fallbackSource);
+      finalValues[key] = info.baseValue + sumPrimaryContributions(map, primaries);
+    }
+
+    const traces: DerivedStatTraceDto[] = this.configurableDerivedKeys().map((key) =>
+      this.buildDerivedStatTrace(t, key, overrides, globalMaps, defByKey, primaries, finalValues[key]),
+    );
+
+    const scalarValues: Record<string, number> = {
+      blockReductionPercent: stats.blockReductionPercent,
+      secondaryChanceCap: effectiveScalar(
+        overrides,
+        'secondaryChanceCap',
+        globalScalarValue(globalCoeffs, 'secondaryChanceCap'),
+      ).value,
+    };
+
+    return {
+      instanceId: creature.id,
+      templateId: t.id,
+      templateKey: t.key,
+      state: creature.state,
+      currentHealth: creature.health,
+      maxHealth: stats.maxHealth,
+      primaryStats: primaries,
+      derivedStats: { ...finalValues, ...scalarValues },
+      traces,
+    };
+  }
+
+  /** Construit la trace GÉNÉRIQUE d'une dérivée (identique pour combat/PV max/résistances). */
+  private buildDerivedStatTrace(
+    template: CreatureTemplate,
+    key: string,
+    overrides: ReturnType<CreatureTemplateOverridesService['getOverrides']>,
+    globalMaps: Record<string, CoefficientMap>,
+    defByKey: Map<string, { baseValue?: number; primaryCoefficients?: Record<string, number>; label?: string; category?: string }>,
+    primaries: Record<string, number>,
+    finalValue: number,
+  ): DerivedStatTraceDto {
+    const info = this.derivedStatBaseInfo(template, key, globalMaps, defByKey);
+    const hasOverride = Object.prototype.hasOwnProperty.call(overrides.derivedCoefficients, key);
+    const explicitMap = hasOverride ? overrides.derivedCoefficients[key] : null;
+    const overrideState = !hasOverride
+      ? 'none'
+      : Object.keys(explicitMap as CoefficientMap).length === 0
+        ? 'empty'
+        : 'coefficients';
+    const { map, source } = effectiveCoefficientMap(overrides, key, info.fallbackMap, info.fallbackSource);
+    const contributions = Object.entries(map).map(([primaryStatKey, coefficient]) => ({
+      primaryStatKey,
+      primaryValue: primaries[primaryStatKey] ?? 0,
+      coefficient,
+      contribution: (primaries[primaryStatKey] ?? 0) * coefficient,
+    }));
+    const computedFromCoefficients =
+      info.baseValue + contributions.reduce((s, c) => s + c.contribution, 0);
+    return {
+      derivedStatKey: key,
+      baseValue: info.baseValue,
+      baseSource: info.baseSource,
+      contributions,
+      computedFromCoefficients,
+      // Écart final − calcul primaire : modificateurs génériques (debug) et
+      // effets de cap/plancher déjà appliqués par le resolver autoritaire.
+      modifiers: finalValue - computedFromCoefficients,
+      finalValue,
+      source,
+      overrideState,
+    };
   }
 
   private creatureCombatStats(creature: Creature, template: CreatureTemplate): CreatureCombatStats {
