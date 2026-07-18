@@ -6,9 +6,11 @@ import { Creature } from './entities/creature.entity';
 import { CreatureTemplate } from './entities/creature-template.entity';
 import { CreatureSpawn } from './entities/creature-spawn.entity';
 import { Character } from '../characters/entities/character.entity';
-import { CharacterStatsCalculator, computeDerivedFromDefinitions, DerivedStats, PrimaryStats } from '../characters/character-stats-calculator';
+import { CharacterStatsCalculator, DerivedStats } from '../characters/character-stats-calculator';
 import {
+  MAGIC_RESISTANCE_GLOBAL_STAT,
   magicResistanceReaderFromStats,
+  magicResistanceStatForSchool,
   resolveEffectiveMagicResistance,
 } from '../derived-stats/magic-resistance';
 import { MagicSchool } from '../active-skills/active-skills.constants';
@@ -42,6 +44,11 @@ import { legacyRadiusToWU } from '../common/legacy-pixel-position.adapter';
 import { LootService, LootEntry } from '../world/loot.service';
 import { CreatureRuntimeCalculator, CREATURE_DERIVED_BASE, CREATURE_STAT_KEYS, CreatureStatKey } from '../creature-runtime/creature-runtime.calculator';
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
+import { CreatureTemplateOverridesService } from '../creature-config/creature-template-overrides.service';
+import {
+  effectiveCoefficientMap,
+  sumPrimaryContributions,
+} from '../creature-config/creature-template-overrides.constants';
 import { RuntimeComputeEngine } from '../player-runtime/runtime-compute';
 import { StatResolutionResult } from '../player-runtime/player-runtime.types';
 import { RuntimeDebugRegistry } from '../player-runtime/debug-modifier.registry';
@@ -253,9 +260,15 @@ export class CreaturesService implements OnModuleInit {
     private readonly loot: LootService,
     private readonly derivedStats: DerivedStatsService,
     private readonly creatureSecondaryCoefficients: CreatureSecondaryCoefficientsService,
+    private readonly templateOverrides: CreatureTemplateOverridesService,
   ) {}
 
   async onModuleInit() {
+    // ADR-0021 sous-lot backend : invalider le memo PV max du SEUL template
+    // concerné quand ses overrides changent (les autres templates intacts).
+    this.templateOverrides.onChange((templateId) => {
+      void this.invalidateMaxHealthForTemplateId(templateId);
+    });
     await this.seedTemplates();
     await this.seedSpawns();
     await this.seedInstances();
@@ -500,26 +513,32 @@ export class CreaturesService implements OnModuleInit {
     school: MagicSchool,
   ): Promise<number> {
     const definitions = await this.derivedStats.getDefinitions();
-    const primaries: PrimaryStats = {
-      strength: template.strength,
-      vitality: template.vitality,
-      endurance: template.endurance,
-      agility: template.agility,
-      dexterity: template.dexterity,
-      intelligence: template.intelligence,
-      wisdom: template.wisdom,
-      spirit: template.spirit,
-      willpower: template.willpower,
-      charisma: template.charisma,
+    const overrides = this.templateOverrides.getOverrides(template.id);
+    const primaries: Record<string, number> = {
+      strength: template.strength ?? 0,
+      vitality: template.vitality ?? 0,
+      endurance: template.endurance ?? 0,
+      agility: template.agility ?? 0,
+      dexterity: template.dexterity ?? 0,
+      intelligence: template.intelligence ?? 0,
+      wisdom: template.wisdom ?? 0,
+      spirit: template.spirit ?? 0,
+      willpower: template.willpower ?? 0,
+      charisma: template.charisma ?? 0,
     };
-    const derived = computeDerivedFromDefinitions(
-      primaries,
-      { maxHealth: 0, attack: 0, defense: 0 },
-      definitions,
-    );
+    // Résout global + école avec la map EFFECTIVE (override template si présent,
+    // sinon coefficients du catalogue). Sans override → identique à l'historique
+    // (`computeDerivedFromDefinitions` : base + Σ coef×primaire, sans clamp).
+    const resistanceStats: Record<string, number> = {};
+    for (const key of [MAGIC_RESISTANCE_GLOBAL_STAT, magicResistanceStatForSchool(school)]) {
+      const def = definitions.find((d) => d.key === key);
+      const fallbackMap = (def?.primaryCoefficients ?? {}) as Record<string, number>;
+      const { map } = effectiveCoefficientMap(overrides, key, fallbackMap, 'catalog');
+      resistanceStats[key] = (def?.baseValue ?? 0) + sumPrimaryContributions(map, primaries);
+    }
     return resolveEffectiveMagicResistance(
       school,
-      magicResistanceReaderFromStats(derived as unknown as Record<string, number>),
+      magicResistanceReaderFromStats(resistanceStats),
     ).effectiveResistance;
   }
 
@@ -528,13 +547,14 @@ export class CreaturesService implements OnModuleInit {
       creature,
       template,
       this.debugRegistry.getModifiers(creature.id),
-      // V6-B2.5 : coefficients effectifs (config serveur, cache mémoire, fallback
-      // code). Defaults → comportement inchangé ; attackPower/defenseTotal/accuracy
-      // suivent la config. dodge/block/parry restent calculés mais non actifs.
+      // V6-B2.5 : coefficients GLOBAUX (singleton, fallback). Defaults →
+      // comportement inchangé.
       this.creatureSecondaryCoefficients.getCoefficients(),
-      // Lot 2 fix : PV max mémoïsé (par template) — le combat lit le snapshot au
-      // lieu de reconstruire `resolveStat` à chaque hit/tick.
+      // Lot 2 fix : PV max mémoïsé (par template) — inclut déjà l'override.
       this.resolveCreatureMaxHealth(template),
+      // ADR-0021 sous-lot backend : overrides de dérivation PAR TEMPLATE (lecture
+      // synchrone, cache). Absent → fallback global (identique historique).
+      this.templateOverrides.getOverrides(template.id),
     );
   }
 
@@ -559,9 +579,20 @@ export class CreaturesService implements OnModuleInit {
   private resolveCreatureMaxHealthResult(template: CreatureTemplate): StatResolutionResult {
     const cached = this.maxHealthByTemplateKey.get(template.key);
     if (cached !== undefined) return cached;
+    // ADR-0021 sous-lot backend : override maxHealth du template (si présent) —
+    // sinon null → fallback Vitalité historique EXACT. Le memo par templateKey
+    // est invalidé sur changement d'override (listener enregistré).
+    const overrides = this.templateOverrides.getOverrides(template.id);
+    const maxHealthOverrideMap = Object.prototype.hasOwnProperty.call(
+      overrides.derivedCoefficients,
+      'maxHealth',
+    )
+      ? overrides.derivedCoefficients['maxHealth']
+      : null;
     const result = CreatureRuntimeCalculator.resolveMaxHealth(
       template,
       this.creatureSecondaryCoefficients.getCoefficients(),
+      maxHealthOverrideMap,
     );
     this.maxHealthByTemplateKey.set(template.key, result);
     return result;
@@ -625,6 +656,15 @@ export class CreaturesService implements OnModuleInit {
    * responsabilité de l'appelant (voir `refreshTemplateInMemory` /
    * `recalculateAllMaxHealthAfterCoefficientChange`).
    */
+  /**
+   * Invalide le memo PV max du template identifié par son `id` (int), sans
+   * toucher les autres templates. Résout la `key` (clé du memo) puis délègue.
+   */
+  private async invalidateMaxHealthForTemplateId(templateId: number): Promise<void> {
+    const template = await this.templateRepository.findOne({ where: { id: templateId } });
+    if (template) this.invalidateMaxHealthCache(template.key);
+  }
+
   invalidateMaxHealthCache(templateKey?: string): void {
     if (templateKey) this.maxHealthByTemplateKey.delete(templateKey);
     else this.maxHealthByTemplateKey.clear();

@@ -20,10 +20,20 @@ import { EquipmentSlot } from '../characters/dto/equip-item.dto';
 import { DerivedStatsService } from '../derived-stats/derived-stats.service';
 import { CreatureRuntimeCalculator, DEFAULT_CREATURE_SECONDARY_COEFFICIENTS, CreatureSecondaryCoefficients } from '../creature-runtime/creature-runtime.calculator';
 import { CreatureSecondaryCoefficientsService } from '../creature-config/creature-secondary-coefficients.service';
+import { CreatureTemplateOverridesService } from '../creature-config/creature-template-overrides.service';
+import { EMPTY_TEMPLATE_OVERRIDES } from '../creature-config/creature-template-overrides.constants';
 
 /** Mock du service de coefficients renvoyant une config effective donnée (défauts par défaut). */
 function makeCoefficientsServiceMock(coeffs: CreatureSecondaryCoefficients = DEFAULT_CREATURE_SECONDARY_COEFFICIENTS) {
   return { getCoefficients: jest.fn().mockReturnValue({ ...coeffs }) };
+}
+
+/** Mock du service d'overrides par template — aucun override (fallback global). */
+function makeOverridesServiceMock() {
+  return {
+    getOverrides: jest.fn().mockReturnValue(EMPTY_TEMPLATE_OVERRIDES),
+    onChange: jest.fn(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +179,7 @@ describe('CreaturesService', () => {
         { provide: MasteryEffectsService, useValue: masteryEffectsService },
         { provide: DataSource, useValue: mockDataSource },
         { provide: CreatureSecondaryCoefficientsService, useValue: coefficientsServiceMock },
+        { provide: CreatureTemplateOverridesService, useValue: makeOverridesServiceMock() },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -2964,6 +2975,7 @@ describe('CreaturesService — P7-A : création sécurisée (WU comme source de 
         { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: makeCoefficientsServiceMock() },
+        { provide: CreatureTemplateOverridesService, useValue: makeOverridesServiceMock() },
         RuntimeDebugRegistry,
         LootService,
       ],
@@ -3118,6 +3130,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         { provide: MasteryEffectsService, useValue: { getMasteryBonuses: jest.fn().mockResolvedValue({ statModifiers: { percent: {}, flat: {} }, combat: { damagePercent: 0, damageFlat: 0 } }), getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
         { provide: CreatureSecondaryCoefficientsService, useValue: makeCoefficientsServiceMock() },
+        { provide: CreatureTemplateOverridesService, useValue: makeOverridesServiceMock() },
         RuntimeDebugRegistry,
         LootService,
       ],
