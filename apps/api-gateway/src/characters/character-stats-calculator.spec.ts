@@ -132,14 +132,16 @@ describe('CharacterStatsCalculator', () => {
       expect(stats.derived.maxMana).toBe(40);
     });
 
-    it("magicalResistanceFire/Water/Air/Earth utilisent chacune Esprit + une primaire dediee", () => {
+    it("magicResistanceFire/Water/Air/Earth utilisent chacune Esprit + une primaire dediee", () => {
       const stats = CharacterStatsCalculator.compute(makeCharacter({
         baseSpirit: 10, baseWisdom: 5, baseIntelligence: 5, baseAgility: 5, baseEndurance: 5,
       }));
-      expect(stats.derived.magicalResistanceFire).toBe(6);
-      expect(stats.derived.magicalResistanceWater).toBe(6);
-      expect(stats.derived.magicalResistanceAir).toBe(6);
-      expect(stats.derived.magicalResistanceEarth).toBe(6);
+      // Coefficients Esprit hérités des anciennes magicalResistance* (préservés
+      // par le renommage canonique — aucune valeur perdue).
+      expect(stats.derived.magicResistanceFire).toBe(6);
+      expect(stats.derived.magicResistanceWater).toBe(6);
+      expect(stats.derived.magicResistanceAir).toBe(6);
+      expect(stats.derived.magicResistanceEarth).toBe(6);
     });
 
     it("controlResistance = willpower * 0.4 avec cap a 50", () => {

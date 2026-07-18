@@ -32,7 +32,10 @@
     (`damageType`, `attackDefenseKind`)
   - apps/api-gateway/src/active-skills/skill-cast.service.ts
   - apps/api-gateway/src/derived-stats/derived-stats.constants.ts
-    (`magicalResistanceFire/Water/Air/Earth` — `calculatedOnly`, non consommées)
+    (famille canonique `magicResistance*` — `calculatedOnly`, non consommées ;
+    les anciennes `magicalResistance*` y ont été renommées)
+  - apps/api-gateway/src/derived-stats/magic-resistance.ts
+    (mapping école→stat + `resolveEffectiveMagicResistance`)
   - apps/api-gateway/src/characters/character-stats-calculator.ts
 - Commits: N/A (ADR de décision)
 - Implementation status (partiel — la décision reste `Proposed`) :
@@ -45,8 +48,20 @@
     Backfill migration = `magicSchool` seul (`heal` → `sacred`) : **les axes
     existants `damageType`/`attackDefenseKind` ne sont PAS réécrits** par la
     migration (réversibilité stricte). Aucun effet combat.
-  - **Planned** (inchangé) : résistances par école, mitigation magique,
-    immunités, DoT poison, modificateurs de soin, modèle hybride, Studio UI.
+  - **Implemented** : fondation des **résistances magiques** — famille canonique
+    UNIQUE `magicResistance*` (7 dérivées : globale + une par école) dans
+    `DEFAULT_DERIVED_STAT_DEFINITIONS` (points de %, baseValue 0, **aucun clamp**,
+    `calculatedOnly`). Les anciennes `magicalResistance*` ont été **renommées**
+    vers cette famille (plus aucune famille concurrente) : `fire/water/air/earth`
+    conservent leurs coefficients Esprit hérités, `global/sacred/poison` sont
+    nouvelles. Résolues par le pipeline générique (ADR-0021 — les métadonnées
+    `calculatedOnly`/`allowedModifierModes:[]` n'empêchent pas les contributions
+    additives d'équipement/modifiers) et sommées par
+    `resolveEffectiveMagicResistance` (`effective = global + école`, sans
+    clamp/immunité/multiplicateur).
+  - **Planned** (inchangé) : **application des résistances aux dégâts (mitigation
+    magique)**, immunités, DoT poison, modificateurs de soin, modèle hybride,
+    Studio UI dédiée.
 
 ---
 
@@ -448,8 +463,9 @@ traçabilité et du dégât minimum.
 
 - Nouvelles stats (6 résistances + globale) côté joueur ET créature → volume
   Studio / équipement / doc.
-- Réconciliation nécessaire des 4 résistances existantes
-  (`magicalResistanceFire/Water/Air/Earth`, `calculatedOnly`) avec les 6 écoles.
+- Réconciliation des 4 résistances existantes **réalisée** (fondation) : les
+  `magicalResistanceFire/Water/Air/Earth` ont été **renommées** en
+  `magicResistance*` (coefficients Esprit préservés), famille canonique unique.
 - Migration de contenu (`Strike`, `Heal`) et validation « magie ⇒ école ».
 - Coexistence temporaire : `magic` déjà sur `attackDefenseKind`, à ajouter sur
   `damageType` lors de l'implémentation.

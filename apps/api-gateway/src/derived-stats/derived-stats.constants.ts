@@ -193,18 +193,38 @@ export const DEFAULT_DERIVED_STAT_DEFINITIONS: DerivedStatDefinition[] = [
       'Pourcentage des dégâts restants absorbés lorsqu\'un blocage réussit (physique).',
   }),
 
-  // ── Résistances élémentaires ────────────────────────────────────────────
-  def('magicalResistanceFire', 'Résistance feu', 'elemental_resistance', 17, {
+  // ── Résistances magiques par école + globale (ADR-0022 — fondation) ───────
+  // Famille canonique UNIQUE `magicResistance*` (les anciennes `magicalResistance*`
+  // ont été renommées ici — plus aucune famille concurrente). Points de
+  // POURCENTAGE, baseValue 0, AUCUN clamp (min/max null — négatifs et > 100
+  // autorisés ; une résistance ≥ 100 n'est PAS une immunité). `calculatedOnly` :
+  // résolues et traçables, contribuables par le pipeline générique (coefficients
+  // + équipement/modifiers), mais NON consommées par le combat (mitigation =
+  // Planned). `fire/water/air/earth` CONSERVENT les coefficients Esprit hérités
+  // des anciennes définitions (aucune valeur perdue) ; `global/sacred/poison`
+  // sont nouvelles (baseValue 0, sans coefficient).
+  def('magicResistanceGlobal', 'Résistance magique globale', 'elemental_resistance', 28, {
+    primaryCoefficients: {},
+    description:
+      "Contribution commune ajoutée à la résistance effective de CHAQUE école (pas une seconde mitigation).",
+  }),
+  def('magicResistanceFire', 'Résistance feu', 'elemental_resistance', 29, {
     primaryCoefficients: { spirit: 0.5, wisdom: 0.2 },
   }),
-  def('magicalResistanceWater', 'Résistance eau', 'elemental_resistance', 18, {
+  def('magicResistanceWater', 'Résistance eau', 'elemental_resistance', 30, {
     primaryCoefficients: { spirit: 0.5, intelligence: 0.2 },
   }),
-  def('magicalResistanceAir', 'Résistance air', 'elemental_resistance', 19, {
+  def('magicResistanceAir', 'Résistance air', 'elemental_resistance', 31, {
     primaryCoefficients: { spirit: 0.5, agility: 0.2 },
   }),
-  def('magicalResistanceEarth', 'Résistance terre', 'elemental_resistance', 20, {
+  def('magicResistanceEarth', 'Résistance terre', 'elemental_resistance', 32, {
     primaryCoefficients: { spirit: 0.5, endurance: 0.2 },
+  }),
+  def('magicResistanceSacred', 'Résistance sacrée', 'elemental_resistance', 33, {
+    primaryCoefficients: {},
+  }),
+  def('magicResistancePoison', 'Résistance poison', 'elemental_resistance', 34, {
+    primaryCoefficients: {},
   }),
 
   // ── Mobilité / contrôle ─────────────────────────────────────────────────

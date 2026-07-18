@@ -80,10 +80,13 @@ export interface DerivedStats {
   armorPenetrationPercent: number;
   counterAttackPower: number;
   defense: number;
-  magicalResistanceFire: number;
-  magicalResistanceWater: number;
-  magicalResistanceAir: number;
-  magicalResistanceEarth: number;
+  magicResistanceGlobal: number;
+  magicResistanceFire: number;
+  magicResistanceWater: number;
+  magicResistanceAir: number;
+  magicResistanceEarth: number;
+  magicResistanceSacred: number;
+  magicResistancePoison: number;
   accuracy: number;
   criticalChance: number;
   criticalDamage: number;

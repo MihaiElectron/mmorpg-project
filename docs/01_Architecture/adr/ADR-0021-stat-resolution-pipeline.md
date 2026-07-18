@@ -28,6 +28,11 @@
   - apps/api-gateway/src/derived-stats/entities/derived-stat-definition.entity.ts (catalogue + caps `minValue`/`maxValue`)
   - apps/api-gateway/src/creature-runtime/creature-runtime.calculator.ts (`resolveCombatStats`, secondaires inline, `maxHealthDerived`)
   - apps/api-gateway/src/creature-runtime/creature-runtime.types.ts
+- Consommateurs additionnels (hors décision de cet ADR) :
+  - apps/api-gateway/src/derived-stats/magic-resistance.ts — les 7 résistances
+    magiques canoniques `magicResistance*` sont des dérivées résolues par ce
+    pipeline générique (ADR-0022, fondation) ; l'agrégation effective par école
+    est une simple somme `global + école` (aucune mitigation branchée).
 - Commits: N/A (ADR de décision — aucune implémentation)
 
 ---
