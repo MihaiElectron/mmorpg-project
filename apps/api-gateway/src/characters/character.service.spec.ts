@@ -503,3 +503,121 @@ describe('resourceAfterMaxChange (helper V1-J-A)', () => {
     expect(resourceAfterMaxChange(5, 0, NaN)).toBe(0);
   });
 });
+
+describe('CharacterService.equipItem — ownership du personnage (B1, chemin legacy)', () => {
+  let service: CharacterService;
+  let characterRepo: ReturnType<typeof makeRepo>;
+  let itemRepo: ReturnType<typeof makeRepo>;
+  let transaction: jest.Mock;
+  let managerSave: jest.Mock;
+  let managerDelete: jest.Mock;
+  let worldService: { emitCharacterReload: jest.Mock; emitAdminCharacterDirty: jest.Mock };
+
+  const OWNER = 'user-owner';
+  const OTHER = 'user-attacker';
+  const CHAR_ID = 'char-owned';
+
+  // Objet legacy NORMAL (non-INSTANCE), présent dans l'inventaire du propriétaire,
+  // NON listé à l'hôtel des ventes, non vendu, sans escrow ni container auction.
+  const legacyItem = { id: 'item-1', objectMode: 'STACKABLE', slot: null };
+
+  const ownedCharacter = () => ({ id: CHAR_ID, userId: OWNER, equipment: [], inventory: [] });
+  const equipDto = () => ({ itemId: 'item-1', slot: 'right-hand' }) as any;
+
+  beforeEach(async () => {
+    characterRepo = makeRepo();
+    itemRepo = makeRepo();
+    managerSave = jest.fn().mockImplementation((_e: unknown, d: unknown) => Promise.resolve(d));
+    managerDelete = jest.fn().mockResolvedValue({});
+    worldService = { emitCharacterReload: jest.fn(), emitAdminCharacterDirty: jest.fn() };
+
+    // Modélise fidèlement les 3 requêtes possibles sur characterRepo.findOne :
+    //  - findOne(id, userId)  → where { id, userId } : OWNERSHIP strict ;
+    //  - findFirstByUser(userId) → where { userId } SEUL : renvoie UN personnage
+    //    quelconque de l'utilisateur (l'attaquant possède le SIEN — c'est ce qui
+    //    rendait la faille exploitable) ;
+    //  - projection finale transactionnelle → where { id } (userId absent).
+    characterRepo.findOne.mockImplementation(async (opts: any) => {
+      const w = opts?.where ?? {};
+      if (w.id !== undefined && w.userId !== undefined) {
+        return w.id === CHAR_ID && w.userId === OWNER ? ownedCharacter() : null;
+      }
+      if (w.id === undefined && w.userId !== undefined) {
+        // findFirstByUser : l'utilisateur possède AU MOINS un personnage.
+        return w.userId === OWNER
+          ? ownedCharacter()
+          : { id: 'char-attacker', userId: w.userId, equipment: [], inventory: [] };
+      }
+      if (w.id === CHAR_ID) return ownedCharacter();
+      return null;
+    });
+    itemRepo.findOne.mockResolvedValue(legacyItem);
+
+    transaction = jest.fn().mockImplementation(async (cb: any) => {
+      const manager = {
+        createQueryBuilder: jest.fn().mockReturnValue({
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue(null),
+        }),
+        delete: managerDelete,
+        findOne: jest.fn().mockImplementation(async (entity: any) => (entity === Character ? ownedCharacter() : null)),
+        create: jest.fn().mockImplementation((_e: unknown, d: unknown) => d),
+        save: managerSave,
+      };
+      return cb(manager);
+    });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CharacterService,
+        { provide: DerivedStatsService, useValue: { getDefinitions: jest.fn().mockResolvedValue([]) } },
+        { provide: MasteryEffectsService, useValue: { getPermanentStatModifiers: jest.fn().mockResolvedValue({ percent: {}, flat: {} }) } },
+        { provide: getRepositoryToken(Character), useValue: characterRepo },
+        { provide: getRepositoryToken(CharacterEquipment), useValue: makeRepo() },
+        { provide: getRepositoryToken(Inventory), useValue: makeRepo() },
+        { provide: getRepositoryToken(Item), useValue: itemRepo },
+        { provide: DataSource, useValue: { transaction } },
+        { provide: InventoryProjectionService, useValue: { project: jest.fn().mockResolvedValue([]) } },
+        { provide: ItemTransferService, useValue: { transfer: jest.fn() } },
+        { provide: ProgressionService, useValue: { getNextLevelXp: jest.fn().mockResolvedValue(100) } },
+        { provide: WorldService, useValue: worldService },
+      ],
+    }).compile();
+    service = module.get<CharacterService>(CharacterService);
+    // recalculateStats est privé et hors périmètre : on l'isole pour ce test.
+    jest.spyOn(service as unknown as { recalculateStats: () => Promise<void> }, 'recalculateStats').mockResolvedValue(undefined);
+  });
+
+  it('propriétaire : équipe et renvoie le personnage (comportement legacy inchangé)', async () => {
+    const result = await service.equipItem(CHAR_ID, OWNER, equipDto());
+    expect(result).toBeTruthy();
+    // Ownership vérifié via le filtre { id, userId }.
+    expect(characterRepo.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: CHAR_ID, userId: OWNER } }),
+    );
+    expect(transaction).toHaveBeenCalled();
+    expect(managerSave).toHaveBeenCalled();
+    expect(worldService.emitAdminCharacterDirty).toHaveBeenCalledWith(CHAR_ID, 'equipment');
+  });
+
+  it('non-propriétaire : rejet NotFoundException, AUCUNE mutation', async () => {
+    await expect(service.equipItem(CHAR_ID, OTHER, equipDto())).rejects.toBeInstanceOf(NotFoundException);
+    // Refus AVANT toute mutation : pas de transaction, pas de save, pas de recalcul,
+    // et l'item n'est même pas résolu (findOne ownership lève en premier).
+    expect(transaction).not.toHaveBeenCalled();
+    expect(managerSave).not.toHaveBeenCalled();
+    expect(managerDelete).not.toHaveBeenCalled();
+    expect((service as unknown as { recalculateStats: jest.Mock }).recalculateStats).not.toHaveBeenCalled();
+    expect(itemRepo.findOne).not.toHaveBeenCalled();
+    expect(worldService.emitAdminCharacterDirty).not.toHaveBeenCalled();
+  });
+
+  it('characterId inexistant : rejet NotFoundException, AUCUNE mutation', async () => {
+    await expect(service.equipItem('char-ghost', OWNER, equipDto())).rejects.toBeInstanceOf(NotFoundException);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(managerSave).not.toHaveBeenCalled();
+    expect(itemRepo.findOne).not.toHaveBeenCalled();
+  });
+});

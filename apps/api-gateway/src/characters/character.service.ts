@@ -357,9 +357,11 @@ export class CharacterService {
     userId: string,
     dto: EquipItemDto,
   ): Promise<Character> {
-    // Valide que l'utilisateur a bien un personnage avant d'equiper l'item.
-    const character = await this.findFirstByUser(userId);
-    void character;
+    // Ownership : le personnage ciblé (characterId) DOIT appartenir à
+    // l'utilisateur authentifié. Même convention que unequipItem — findOne filtre
+    // sur { id, userId } et lève NotFoundException si absent/non possédé. Vérifié
+    // AVANT toute mutation (inventaire/équipement/stats/DB).
+    await this.findOne(characterId, userId);
 
     const item = await this.itemRepository.findOne({
       where: { id: dto.itemId },
