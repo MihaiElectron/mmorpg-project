@@ -112,6 +112,16 @@
     margin: 0;
     color: vars.$color-text-gold;
   }
+  &__toggle {
+    @include m.btn-base;
+    @include m.devtools-compact-label;
+    background: transparent;
+    color: vars.$color-text-gold;
+    text-align: left;
+    padding: 2px 0;
+    cursor: pointer;
+  }
+  &__body { @include m.devtools-compact-stack(vars.$dt-gap-sm); }
   &__note,
   &__muted {
     margin: 0;
@@ -230,7 +240,6 @@
 
   &__body { @include m.devtools-compact-stack(vars.$dt-gap-sm); }
 
-  &__note,
   &__muted,
   &__effective {
     margin: 0;
@@ -264,11 +273,6 @@
     @include m.panel-slot;
     @include m.devtools-compact-stack(vars.$dt-gap-xs);
     padding: vars.$dt-compact-row-padding;
-
-    // Distinction visuelle des 3 états d'override.
-    &--override { border-color: vars.$color-text-gold; }
-    &--empty { border-color: vars.$btn-danger-bg; }
-    &--fallback { opacity: 0.92; }
   }
   &__item-head {
     display: flex;
@@ -277,22 +281,6 @@
     flex-wrap: wrap;
   }
   &__item-name { font-weight: bold; }
-  &__item-key {
-    color: vars.$color-magic-glow;
-    font-size: vars.$dt-compact-font-sm;
-  }
-
-  &__badge {
-    font-size: vars.$dt-compact-font-sm;
-    padding: 2px 6px;
-    border-radius: vars.$panel-radius-sm;
-    white-space: nowrap;
-    margin-left: auto;
-
-    &--override { background: rgba(vars.$btn-success-bg, 0.25); color: vars.$btn-success-hover; }
-    &--empty { background: rgba(vars.$btn-danger-bg, 0.25); color: vars.$btn-danger-hover; }
-    &--fallback { background: rgba(0, 0, 0, 0.3); color: vars.$color-text-disabled; }
-  }
 
   &__coefs { @include m.devtools-compact-stack(vars.$dt-gap-xs); }
   &__coef-row {

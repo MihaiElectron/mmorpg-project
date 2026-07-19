@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API = import.meta.env.VITE_API_URL as string;
 
@@ -24,7 +24,7 @@ interface SkillCatalogEntry {
   skillKind?: string;
 }
 
-type Status = "loading" | "loaded" | "error";
+type Status = "idle" | "loading" | "loaded" | "error";
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem("token") ?? "";
@@ -65,43 +65,57 @@ function stateLine(a: Ability): string {
  * instances du template.
  */
 export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: string }) {
+  const [expanded, setExpanded] = useState(false);
   const [abilities, setAbilities] = useState<Ability[]>([]);
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<Status>("idle");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [pick, setPick] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
+  function load() {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setStatus("loading");
     setDirty(false);
     Promise.all([
       fetch(`${API}/admin/templates/${templateKey}/abilities`, {
         headers: authHeaders(),
-        signal: controller.signal,
+        signal: ctrl.signal,
       }).then((r) => (r.ok ? (r.json() as Promise<Ability[]>) : Promise.reject(new Error(`HTTP ${r.status}`)))),
       fetch(`${API}/admin/skill-definitions`, {
         headers: authHeaders(),
-        signal: controller.signal,
+        signal: ctrl.signal,
       }).then((r) => (r.ok ? (r.json() as Promise<SkillCatalogEntry[]>) : Promise.reject(new Error(`HTTP ${r.status}`)))),
     ])
       .then(([abi, cat]) => {
-        if (!active) return;
+        if (ctrl.signal.aborted) return;
         setAbilities(abi);
         setCatalog(cat);
         setStatus("loaded");
       })
       .catch((e) => {
-        if (!active || e?.name === "AbortError") return;
+        if (ctrl.signal.aborted || e?.name === "AbortError") return;
         setStatus("error");
       });
-    return () => {
-      active = false;
-      controller.abort();
-    };
+  }
+
+  // Recharge quand le template change (si la section est déjà ouverte).
+  useEffect(() => {
+    if (expanded) load();
+    return () => abortRef.current?.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateKey]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  function onToggleExpand() {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && status === "idle") load(); // fetch PARESSEUX à la 1re ouverture
+  }
 
   function addSkill() {
     if (!pick) return;
@@ -170,19 +184,29 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
 
   return (
     <div className="creature-abilities" aria-label="Creature abilities editor">
-      <p className="creature-abilities__title">Capacités — {templateKey}</p>
-      <p className="creature-abilities__note">
-        Config uniquement — non déclenchées en combat (V5-A). Affecte toutes les instances.
-      </p>
+      <button
+        type="button"
+        className="creature-abilities__toggle"
+        onClick={onToggleExpand}
+        aria-expanded={expanded}
+      >
+        {expanded ? "▾" : "▸"} CAPACITÉS
+      </button>
 
-      {status === "loading" && <p className="creature-abilities__muted">Chargement…</p>}
-      {status === "error" && (
-        <p className="creature-abilities__error">Erreur (chargement ou sauvegarde).</p>
-      )}
+      {expanded && (
+        <div className="creature-abilities__body">
+          <p className="creature-abilities__note">
+            Config uniquement — non déclenchées en combat (V5-A). Affecte toutes les instances.
+          </p>
 
-      {status === "loaded" && (
-        <>
-          {abilities.length === 0 ? (
+          {status === "loading" && <p className="creature-abilities__muted">Chargement…</p>}
+          {status === "error" && (
+            <p className="creature-abilities__error">Erreur (chargement ou sauvegarde).</p>
+          )}
+
+          {status === "loaded" && (
+            <>
+              {abilities.length === 0 ? (
             <p className="creature-abilities__muted">Aucune capacité configurée.</p>
           ) : (
             <ul className="creature-abilities__list">
@@ -258,7 +282,9 @@ export default function CreatureAbilitiesEditor({ templateKey }: { templateKey: 
               {saving ? "Enregistrement…" : "Enregistrer"}
             </button>
           </div>
-        </>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

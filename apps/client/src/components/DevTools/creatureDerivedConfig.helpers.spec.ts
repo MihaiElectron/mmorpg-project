@@ -3,7 +3,6 @@ import {
   buildEditorState,
   buildPutPayload,
   cloneEffectiveCoefficients,
-  derivedDisplayState,
   derivedLabel,
   EMPTY_CONTRIBUTIONS_MESSAGE,
   formatEffectiveCoefficients,
@@ -73,14 +72,6 @@ describe("buildEditorState", () => {
     expect(st.derived[2]).toEqual({ derivedStatKey: "defense", overridden: true, coefficients: [] });
     expect(st.scalars[0]).toEqual({ scalarParamKey: "blockReductionPercent", overridden: false, value: "25" });
     expect(st.scalars[1]).toEqual({ scalarParamKey: "secondaryChanceCap", overridden: true, value: "75" });
-  });
-});
-
-describe("derivedDisplayState", () => {
-  it("distingue fallback / override / override vide", () => {
-    expect(derivedDisplayState({ derivedStatKey: "a", overridden: false, coefficients: [] })).toBe("fallback");
-    expect(derivedDisplayState({ derivedStatKey: "a", overridden: true, coefficients: [{ primaryStatKey: "x", coefficient: "1" }] })).toBe("override");
-    expect(derivedDisplayState({ derivedStatKey: "a", overridden: true, coefficients: [] })).toBe("empty");
   });
 });
 

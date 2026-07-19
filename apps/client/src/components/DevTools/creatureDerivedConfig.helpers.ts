@@ -89,12 +89,6 @@ export function cloneEffectiveCoefficients(
   }));
 }
 
-/** État d'affichage d'une dérivée éditée : fallback / override / override vide. */
-export function derivedDisplayState(edit: DerivedStatEdit): "fallback" | "override" | "empty" {
-  if (!edit.overridden) return "fallback";
-  return edit.coefficients.length === 0 ? "empty" : "override";
-}
-
 /** Construit l'état d'édition initial depuis la config serveur. */
 export function buildEditorState(config: CreatureDerivedConfiguration): DerivedEditorState {
   return {
