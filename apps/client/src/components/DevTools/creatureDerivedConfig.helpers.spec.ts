@@ -2,8 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   buildEditorState,
   buildPutPayload,
+  cloneEffectiveCoefficients,
   derivedDisplayState,
   derivedLabel,
+  EMPTY_CONTRIBUTIONS_MESSAGE,
+  formatEffectiveCoefficients,
   scalarLabel,
   validateEditorState,
   type DerivedEditorState,
@@ -78,6 +81,50 @@ describe("derivedDisplayState", () => {
     expect(derivedDisplayState({ derivedStatKey: "a", overridden: false, coefficients: [] })).toBe("fallback");
     expect(derivedDisplayState({ derivedStatKey: "a", overridden: true, coefficients: [{ primaryStatKey: "x", coefficient: "1" }] })).toBe("override");
     expect(derivedDisplayState({ derivedStatKey: "a", overridden: true, coefficients: [] })).toBe("empty");
+  });
+});
+
+describe("formatEffectiveCoefficients (lecture)", () => {
+  it("liste vide → message dédié (aucune contribution)", () => {
+    expect(formatEffectiveCoefficients([])).toBe(EMPTY_CONTRIBUTIONS_MESSAGE);
+    expect(EMPTY_CONTRIBUTIONS_MESSAGE).toBe("Aucune contribution de statistique primaire.");
+  });
+
+  it("formate prim × coef (négatif et zéro inclus), sans provenance", () => {
+    expect(formatEffectiveCoefficients([{ primaryStatKey: "dexterity", coefficient: 0.5 }])).toBe("dexterity × 0.5");
+    expect(
+      formatEffectiveCoefficients([
+        { primaryStatKey: "strength", coefficient: -1.5 },
+        { primaryStatKey: "agility", coefficient: 0 },
+      ]),
+    ).toBe("strength × -1.5  +  agility × 0");
+  });
+});
+
+describe("cloneEffectiveCoefficients (clic Edit)", () => {
+  it("clone profond en chaînes, sans muter l'entrée du GET", () => {
+    const entry = {
+      effectiveCoefficients: [
+        { primaryStatKey: "dexterity", coefficient: 0.5 },
+        { primaryStatKey: "strength", coefficient: -2 },
+        { primaryStatKey: "agility", coefficient: 0 },
+      ],
+    };
+    const snapshot = JSON.stringify(entry);
+    const cloned = cloneEffectiveCoefficients(entry);
+    expect(cloned).toEqual([
+      { primaryStatKey: "dexterity", coefficient: "0.5" },
+      { primaryStatKey: "strength", coefficient: "-2" },
+      { primaryStatKey: "agility", coefficient: "0" },
+    ]);
+    // Mutation de la copie → l'entrée d'origine reste intacte (aucune référence partagée).
+    cloned[0].coefficient = "999";
+    cloned[0].primaryStatKey = "muted";
+    expect(JSON.stringify(entry)).toBe(snapshot);
+  });
+
+  it("effectifs vides → clone vide", () => {
+    expect(cloneEffectiveCoefficients({ effectiveCoefficients: [] })).toEqual([]);
   });
 });
 

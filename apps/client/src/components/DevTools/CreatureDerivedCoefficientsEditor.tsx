@@ -7,12 +7,15 @@ import {
 import type {
   CreatureDerivedConfiguration,
   DerivedStatConfigEntry,
+  ScalarParamConfigEntry,
 } from "./creatureDerivedConfig.types";
 import {
   buildEditorState,
   buildPutPayload,
-  derivedDisplayState,
+  cloneEffectiveCoefficients,
   derivedLabel,
+  EMPTY_CONTRIBUTIONS_MESSAGE,
+  formatEffectiveCoefficients,
   scalarHelp,
   scalarLabel,
   validateEditorState,
@@ -21,16 +24,10 @@ import {
 
 type Status = "idle" | "loading" | "loaded" | "error";
 
-/** Provenance lisible (FR) — associée dynamiquement à la valeur serveur. */
-const SOURCE_LABEL: Record<string, string> = {
-  template: "template",
-  global: "global",
-  catalog: "catalogue",
-};
-
-function fmtCoefs(coefs: { primaryStatKey: string; coefficient: number }[]): string {
-  if (coefs.length === 0) return "aucune contribution";
-  return coefs.map((c) => `${c.primaryStatKey} × ${c.coefficient}`).join("  +  ");
+/** Clés en cours d'édition (mode formulaire ouvert) — état d'UI, hors dirty. */
+interface EditingKeys {
+  derived: Set<string>;
+  scalars: Set<string>;
 }
 
 /**
@@ -39,6 +36,11 @@ function fmtCoefs(coefs: { primaryStatKey: string; coefficient: number }[]): str
  * capacités). Alimentée EXCLUSIVEMENT par le serveur (aucune liste en dur).
  * Sauvegarde REST dédiée (Option B) — indépendante de la sauvegarde socket du
  * template. Aucun style inline (SCSS `.creature-derived`).
+ *
+ * UX : lecture directe des coefficients utilisés + bouton « Edit » ; en édition,
+ * actions « Save » / « Cancel ». La terminologie technique interne (override /
+ * fallback / provenance) n'est jamais exposée à l'utilisateur ; le mécanisme
+ * interne (activation d'override, payload PUT) reste strictement inchangé.
  */
 export default function CreatureDerivedCoefficientsEditor({ templateKey }: { templateKey: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -46,10 +48,15 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
   const [config, setConfig] = useState<CreatureDerivedConfiguration | null>(null);
   const [state, setState] = useState<DerivedEditorState>({ derived: [], scalars: [] });
   const [initial, setInitial] = useState<DerivedEditorState>({ derived: [], scalars: [] });
+  const [editing, setEditing] = useState<EditingKeys>({ derived: new Set(), scalars: new Set() });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  function resetEditing() {
+    setEditing({ derived: new Set(), scalars: new Set() });
+  }
 
   function load() {
     abortRef.current?.abort();
@@ -58,6 +65,7 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
     setStatus("loading");
     setSaveError(null);
     setSaveOk(false);
+    resetEditing();
     fetchDerivedConfiguration(templateKey, ctrl.signal)
       .then((cfg) => {
         if (ctrl.signal.aborted) return;
@@ -65,6 +73,7 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
         setConfig(cfg);
         setState(st);
         setInitial(st);
+        resetEditing();
         setStatus("loaded");
       })
       .catch((e) => {
@@ -90,6 +99,7 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
 
   const dirty = hasFormChanges(initial, state);
   const validationError = validateEditorState(state);
+  const anyEditing = editing.derived.size > 0 || editing.scalars.size > 0;
 
   // ── Mutations d'état (immuables) ────────────────────────────────────────────
   function updateDerived(key: string, fn: (d: DerivedEditorState["derived"][number]) => DerivedEditorState["derived"][number]) {
@@ -101,19 +111,41 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
     setState((s) => ({ ...s, scalars: s.scalars.map((x) => (x.scalarParamKey === key ? fn(x) : x)) }));
   }
 
-  function toggleOverride(entry: DerivedStatConfigEntry) {
-    updateDerived(entry.derivedStatKey, (d) => {
-      if (d.overridden) return { ...d, overridden: false }; // retour au fallback
-      // Active : pré-remplit avec les coefficients EFFECTIFS actuels (éditables).
-      return {
-        ...d,
-        overridden: true,
-        coefficients: entry.effectiveCoefficients.map((c) => ({
-          primaryStatKey: c.primaryStatKey,
-          coefficient: String(c.coefficient),
-        })),
-      };
-    });
+  /**
+   * Clic « Edit » sur une dérivée : ouvre les champs éditables. Réutilise le
+   * mécanisme interne d'activation d'override (overridden = true) et CLONE
+   * PROFONDÉMENT les coefficients actuellement utilisés (jamais de mutation de la
+   * réponse GET). Ne sauvegarde rien.
+   */
+  function beginEditDerived(entry: DerivedStatConfigEntry) {
+    updateDerived(entry.derivedStatKey, (d) => ({
+      ...d,
+      overridden: true,
+      coefficients: cloneEffectiveCoefficients(entry),
+    }));
+    setEditing((e) => ({ ...e, derived: new Set(e.derived).add(entry.derivedStatKey) }));
+  }
+
+  /** Clic « Edit » sur un scalaire : ouvre le champ, clone la valeur utilisée. */
+  function beginEditScalar(entry: ScalarParamConfigEntry) {
+    updateScalar(entry.scalarParamKey, (x) => ({
+      ...x,
+      overridden: true,
+      value: String(entry.effectiveValue),
+    }));
+    setEditing((e) => ({ ...e, scalars: new Set(e.scalars).add(entry.scalarParamKey) }));
+  }
+
+  /**
+   * « Cancel » : restaure EXACTEMENT le dernier état chargé ou sauvegardé et
+   * referme tous les champs d'édition. Aucune requête, aucune perte d'un état
+   * persisté.
+   */
+  function cancel() {
+    setState(initial);
+    resetEditing();
+    setSaveError(null);
+    setSaveOk(false);
   }
   function addPrimary(key: string, availablePrimaries: string[]) {
     updateDerived(key, (d) => {
@@ -149,6 +181,7 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
       setConfig(cfg);
       setState(st);
       setInitial(st);
+      resetEditing();
       setSaveOk(true);
     } catch (e) {
       setSaveError((e as Error).message);
@@ -170,39 +203,33 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
 
           {status === "loaded" && config && (
             <>
-              <p className="creature-derived__note">
-                Coefficients propres à ce template. Sans override, la valeur globale/catalogue est utilisée (fallback).
-              </p>
-
               <ul className="creature-derived__list">
                 {config.derivedStats.map((entry) => {
                   const edit = state.derived.find((d) => d.derivedStatKey === entry.derivedStatKey)!;
-                  const display = derivedDisplayState(edit);
+                  const isEditing = editing.derived.has(entry.derivedStatKey);
                   return (
-                    <li key={entry.derivedStatKey} className={`creature-derived__item creature-derived__item--${display}`}>
+                    <li key={entry.derivedStatKey} className="creature-derived__item">
                       <div className="creature-derived__item-head">
                         <span className="creature-derived__item-name">{derivedLabel(entry)}</span>
-                        <span className="creature-derived__item-key">{entry.derivedStatKey}</span>
-                        <span className={`creature-derived__badge creature-derived__badge--${display}`}>
-                          {display === "fallback" ? `fallback (${SOURCE_LABEL[entry.source] ?? entry.source})` : display === "empty" ? "override vide" : "override"}
-                        </span>
-                        <button
-                          type="button"
-                          className="creature-derived__btn creature-derived__btn--neutral"
-                          onClick={() => toggleOverride(entry)}
-                        >
-                          {edit.overridden ? "Revenir au fallback" : "Activer l'override"}
-                        </button>
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            className="creature-derived__btn creature-derived__btn--neutral"
+                            onClick={() => beginEditDerived(entry)}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
 
-                      {!edit.overridden && (
-                        <p className="creature-derived__effective">Effectif : {fmtCoefs(entry.effectiveCoefficients)}</p>
+                      {!isEditing && (
+                        <p className="creature-derived__effective">{formatEffectiveCoefficients(entry.effectiveCoefficients)}</p>
                       )}
 
-                      {edit.overridden && (
+                      {isEditing && (
                         <div className="creature-derived__coefs">
                           {edit.coefficients.length === 0 && (
-                            <p className="creature-derived__muted">Aucune contribution primaire (override vide).</p>
+                            <p className="creature-derived__muted">{EMPTY_CONTRIBUTIONS_MESSAGE}</p>
                           )}
                           {edit.coefficients.map((c, i) => (
                             <div key={i} className="creature-derived__coef-row">
@@ -250,25 +277,24 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
               <ul className="creature-derived__list">
                 {config.scalarParams.map((s) => {
                   const edit = state.scalars.find((x) => x.scalarParamKey === s.scalarParamKey)!;
+                  const isEditing = editing.scalars.has(s.scalarParamKey);
                   const help = scalarHelp(s.scalarParamKey);
                   return (
                     <li key={s.scalarParamKey} className="creature-derived__item">
                       <div className="creature-derived__item-head">
                         <span className="creature-derived__item-name" title={help ?? undefined}>{scalarLabel(s.scalarParamKey)}</span>
-                        <span className="creature-derived__item-key">{s.scalarParamKey}</span>
-                        <span className={`creature-derived__badge creature-derived__badge--${edit.overridden ? "override" : "fallback"}`}>
-                          {edit.overridden ? "override" : `fallback (${SOURCE_LABEL[s.source] ?? s.source})`}
-                        </span>
-                        <button
-                          type="button"
-                          className="creature-derived__btn creature-derived__btn--neutral"
-                          onClick={() => updateScalar(s.scalarParamKey, (x) => ({ ...x, overridden: !x.overridden, value: x.overridden ? String(s.effectiveValue) : x.value }))}
-                        >
-                          {edit.overridden ? "Revenir au fallback" : "Activer l'override"}
-                        </button>
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            className="creature-derived__btn creature-derived__btn--neutral"
+                            onClick={() => beginEditScalar(s)}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
-                      {!edit.overridden && <p className="creature-derived__effective">Effectif : {s.effectiveValue}</p>}
-                      {edit.overridden && (
+                      {!isEditing && <p className="creature-derived__effective">{s.effectiveValue}</p>}
+                      {isEditing && (
                         <input
                           type="number"
                           step="any"
@@ -286,16 +312,26 @@ export default function CreatureDerivedCoefficientsEditor({ templateKey }: { tem
               {saveError && <p className="creature-derived__error">Sauvegarde : {saveError}</p>}
               {saveOk && !dirty && <p className="creature-derived__ok">Configuration enregistrée.</p>}
 
-              <div className="creature-derived__actions">
-                <button
-                  type="button"
-                  className="creature-derived__btn creature-derived__btn--confirm"
-                  disabled={!dirty || saving || validationError !== null}
-                  onClick={() => void save()}
-                >
-                  {saving ? "Sauvegarde…" : "Sauvegarder les coefficients"}
-                </button>
-              </div>
+              {(anyEditing || dirty) && (
+                <div className="creature-derived__actions">
+                  <button
+                    type="button"
+                    className="creature-derived__btn creature-derived__btn--confirm"
+                    disabled={!dirty || saving || validationError !== null}
+                    onClick={() => void save()}
+                  >
+                    {saving ? "Sauvegarde…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    className="creature-derived__btn creature-derived__btn--neutral"
+                    disabled={saving}
+                    onClick={cancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

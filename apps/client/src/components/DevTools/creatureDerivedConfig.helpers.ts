@@ -1,4 +1,5 @@
 import type {
+  CoefficientEntry,
   CreatureDerivedConfiguration,
   DerivedStatConfigEntry,
   ReplaceDerivedConfigurationPayload,
@@ -60,6 +61,32 @@ export function scalarHelp(scalarParamKey: string): string | null {
 /** Libellé d'une dérivée : label serveur (catalogue) sinon la clé canonique. */
 export function derivedLabel(entry: Pick<DerivedStatConfigEntry, "derivedStatKey" | "label">): string {
   return entry.label ?? entry.derivedStatKey;
+}
+
+/** Message affiché quand une dérivée n'a aucune contribution de primaire. */
+export const EMPTY_CONTRIBUTIONS_MESSAGE = "Aucune contribution de statistique primaire.";
+
+/**
+ * Texte de LECTURE des coefficients actuellement utilisés (`prim × coef  +  …`).
+ * Sans contribution → message dédié. Ne révèle aucune provenance technique.
+ */
+export function formatEffectiveCoefficients(coefs: readonly CoefficientEntry[]): string {
+  if (coefs.length === 0) return EMPTY_CONTRIBUTIONS_MESSAGE;
+  return coefs.map((c) => `${c.primaryStatKey} × ${c.coefficient}`).join("  +  ");
+}
+
+/**
+ * Clone PROFOND des coefficients actuellement utilisés vers un état éditable
+ * (valeurs en chaînes). Ne mute JAMAIS l'entrée reçue du GET (nouveaux objets).
+ * Utilisé au clic « Edit » — réutilise le mécanisme d'activation d'override.
+ */
+export function cloneEffectiveCoefficients(
+  entry: Pick<DerivedStatConfigEntry, "effectiveCoefficients">,
+): DerivedCoefficientEdit[] {
+  return entry.effectiveCoefficients.map((c) => ({
+    primaryStatKey: c.primaryStatKey,
+    coefficient: String(c.coefficient),
+  }));
 }
 
 /** État d'affichage d'une dérivée éditée : fallback / override / override vide. */
