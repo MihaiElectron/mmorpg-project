@@ -157,6 +157,65 @@ export function checkCanonicalSkillCoherence(
 }
 
 /**
+ * Règle canonique du critique (serveur-autoritaire). Un critique n'est possible
+ * QUE pour des DÉGÂTS PHYSIQUES explicitement marqués `canCrit`. `magic`, `raw`
+ * et tout `effectType` non-`damage` (soin) ne critiquent JAMAIS — même à
+ * `criticalChance` 100 %. Point UNIQUE réutilisé sur les deux directions
+ * (joueur → créature et créature → joueur) et par le Studio (affichage).
+ */
+export function resolveEffectiveCanCrit(input: {
+  effectType: string | null | undefined;
+  damageType: string | null | undefined;
+  canCrit: boolean | null | undefined;
+}): boolean {
+  return (
+    (input.effectType ?? 'damage') === 'damage' &&
+    (input.damageType ?? 'physical') === 'physical' &&
+    input.canCrit === true
+  );
+}
+
+/** Flags combat normalisés par skill (serveur-autoritaire). */
+export interface NormalizedSkillCombatFlags {
+  canCrit: boolean;
+  attackDefenseKind: SkillAttackDefenseKind;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
+}
+
+/**
+ * NORMALISE les flags combat d'un skill (serveur-autoritaire, jamais délégué au
+ * client) pour GARANTIR les invariants gameplay, quelle que soit l'entrée :
+ *  1. `canCrit` n'est conservé que pour des DÉGÂTS PHYSIQUES ; magic, raw et tout
+ *     effet non-`damage` (soin) → `canCrit = false` (jamais critique) ;
+ *  2. des DÉGÂTS `magic` imposent les DÉFENSES MAGIQUES : `attackDefenseKind =
+ *     magic`, `canBeBlocked = false`, `canBeParried = false` (non blocable, non
+ *     parable). `canBeDodged` reste configurable (non touché ici).
+ * Pour tout autre cas, les valeurs fournies (ou défauts entité) sont conservées.
+ * Idempotent : re-normaliser un skill déjà cohérent ne le change pas.
+ */
+export function normalizeSkillCombatFlags(input: {
+  effectType: string | null | undefined;
+  damageType: string | null | undefined;
+  attackDefenseKind: SkillAttackDefenseKind | null | undefined;
+  canCrit: boolean | null | undefined;
+  canBeBlocked: boolean | null | undefined;
+  canBeParried: boolean | null | undefined;
+}): NormalizedSkillCombatFlags {
+  const effectType = input.effectType ?? 'damage';
+  const damageType = input.damageType ?? 'physical';
+  const isPhysicalDamage = effectType === 'damage' && damageType === 'physical';
+  const isMagicDamage = effectType === 'damage' && damageType === 'magic';
+
+  return {
+    canCrit: isPhysicalDamage ? input.canCrit === true : false,
+    attackDefenseKind: isMagicDamage ? 'magic' : (input.attackDefenseKind ?? 'physical'),
+    canBeBlocked: isMagicDamage ? false : (input.canBeBlocked ?? true),
+    canBeParried: isMagicDamage ? false : (input.canBeParried ?? false),
+  };
+}
+
+/**
  * Nature du skill (V1-H). Le modèle de déverrouillage est kind-agnostique, mais
  * seuls les `active` sont lançables (`skill:cast`, /active-skills) :
  *   - active  : déclenché volontairement par le joueur ;

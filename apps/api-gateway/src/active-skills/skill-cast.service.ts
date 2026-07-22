@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ActiveSkillsService } from './active-skills.service';
+import { resolveEffectiveCanCrit } from './active-skills.constants';
 import { SkillDefinition } from './entities/skill-definition.entity';
 import { calculateSkillEffect } from './calculators/skill-effect.calculator';
 import { Character } from '../characters/entities/character.entity';
@@ -307,8 +308,10 @@ export class SkillCastService {
       stats.derived.armorPenetrationPercent ?? 0,
       // V4-B : type de dégâts configuré sur le skill (physical par défaut).
       skill.damageType ?? 'physical',
-      // V4-D : critique (bloc attaque) — stats dérivées serveur du lanceur.
-      stats.derived.criticalChance ?? 0,
+      // V4-D + règle critique canonique : le critique n'est possible QUE pour des
+      // dégâts physiques `canCrit`. effectiveCanCrit false (magic/raw/soin ou
+      // canCrit false) → chance 0 (aucun jet critique). Serveur-autoritaire.
+      resolveEffectiveCanCrit(skill) ? (stats.derived.criticalChance ?? 0) : 0,
       stats.derived.criticalDamage ?? 100,
       // V4-G : précision du lanceur (réduit l'esquive du défenseur).
       stats.derived.accuracy ?? 0,

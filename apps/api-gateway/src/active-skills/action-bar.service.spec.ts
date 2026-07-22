@@ -36,6 +36,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     canBeDodged: true,
     canBeBlocked: true,
     canBeParried: false,
+    canCrit: false,
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -173,6 +173,17 @@ export class SkillDefinition {
   canBeParried: boolean;
 
   /**
+   * Critiquable (règle canonique combat) : un critique n'est possible QUE pour un
+   * skill à DÉGÂTS PHYSIQUES avec `canCrit: true`. Serveur-autoritaire : magic,
+   * raw et effets non dommageants (soin) ne critiquent JAMAIS, même à
+   * `criticalChance` 100 %. Le pipeline combat lit `effectiveCanCrit =
+   * effectType === 'damage' && damageType === 'physical' && canCrit`. Défaut DB
+   * `false` (conservateur) ; backfill migration : dégâts physiques → true.
+   */
+  @Column({ type: 'boolean', default: false })
+  canCrit: boolean;
+
+  /**
    * Coefficients de scaling serveur, ex :
    * { primaryCoefficients: { strength: 1.2 }, derivedCoefficients: { physicalAttack: 0.5 },
    *   masteryCoefficients: { two_handed: 0.1 } }.

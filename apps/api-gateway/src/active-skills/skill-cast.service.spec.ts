@@ -43,6 +43,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     canBeDodged: true,
     canBeBlocked: true,
     canBeParried: false,
+    canCrit: true,
     scaling: { primaryCoefficients: { strength: 2 } },
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -460,6 +461,32 @@ describe("SkillCastService", () => {
       DEFAULT_FLAGS, // Lot A/B : flags défensifs serveur (12e arg)
       null, // ADR-0022 : magicSchool (13e arg — null, skill non magique)
     );
+  });
+
+  it("physical + canCrit false + chance 100 % → critique NON transmis (chance 0)", async () => {
+    currentSkill = makeSkill({ canCrit: false }); // physical mais non critiquable
+    masteryEffects.aggregatePermanentModifiers.mockResolvedValue({
+      percent: {},
+      flat: { criticalChance: 100 },
+    });
+    await cast();
+    const args = (creatures.applySkillDamage as jest.Mock).mock.calls[0];
+    expect(args[7]).toBe(0); // criticalChance gaté à 0 malgré 100 % dérivé
+  });
+
+  it("skill magic (canCrit impossible) + chance 100 % → critique NON transmis (chance 0)", async () => {
+    currentSkill = makeSkill({
+      damageType: "magic", attackDefenseKind: "magic", magicSchool: "air",
+      canBeBlocked: false, canBeParried: false, canCrit: false,
+    });
+    masteryEffects.aggregatePermanentModifiers.mockResolvedValue({
+      percent: {},
+      flat: { criticalChance: 100 },
+    });
+    await cast();
+    const args = (creatures.applySkillDamage as jest.Mock).mock.calls[0];
+    expect(args[6]).toBe("magic"); // damageType
+    expect(args[7]).toBe(0); // magic ne critique jamais
   });
 
   it("applique le coût de vie et resync sans tuer le lanceur", async () => {

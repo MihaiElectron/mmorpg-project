@@ -3989,6 +3989,7 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         rangeWU: 5000,
         cooldownMs: 3000,
         damageType: "physical" as const,
+        canCrit: true, // dégâts physiques : critiquable (règle canonique)
         scaling: { derivedCoefficients: { physicalAttack: 2 } },
       };
 
@@ -4236,6 +4237,24 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
         const ev = await castAbility(PHYS, { criticalChance: 100, criticalDamage: 200 });
         expect(ev.isCritical).toBe(true);
         expect(ev.amount).toBe(20); // 10 × 200 %
+      });
+
+      // D-bis. canCrit false (skill physique non critiquable) → jamais de critique.
+      it("D-bis. skill physique canCrit false + chance 100 → AUCUN critique", async () => {
+        const noCrit = { ...PHYS, canCrit: false };
+        const ev = await castAbility(noCrit, { criticalChance: 100, criticalDamage: 200 });
+        expect(ev.isCritical).toBe(false);
+        expect(ev.amount).toBe(10); // montant normal, aucun multiplicateur critique
+      });
+
+      // D-ter. Un skill magic ne critique JAMAIS, même à criticalChance 100.
+      it("D-ter. skill magic + chance 100 → AUCUN critique (règle canonique)", async () => {
+        const magic = {
+          ...PHYS, skillKey: "gust", damageType: "magic" as const, magicSchool: "air" as const, canCrit: true,
+        };
+        const ev = await castAbility(magic, { criticalChance: 100, criticalDamage: 200 }, { defense: 0, magicResistanceGlobal: 0, magicResistanceAir: 0 });
+        expect(ev.isCritical).toBe(false);
+        expect(ev.amount).toBe(10); // magic non critique, aucune résistance ici
       });
 
       // E. Pénétration d'armure : ignore un % de l'armure du défenseur (dégâts physiques).

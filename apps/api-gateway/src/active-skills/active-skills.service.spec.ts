@@ -37,6 +37,7 @@ function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
     canBeDodged: true,
     canBeBlocked: true,
     canBeParried: false,
+    canCrit: false,
     scaling: {},
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -917,6 +918,68 @@ describe("ActiveSkillsService", () => {
       // passive visible + débloquable (visibilité admin)
       expect(byKey["a_passive"]).toMatchObject({ skillKind: "passive", explicitlyUnlocked: true, unlocked: true, source: "quest" });
       expect(rows).toHaveLength(4);
+    });
+  });
+
+  // ── canCrit + normalisation des flags combat (règle critique canonique) ─────
+  describe("canCrit & normalisation des flags combat", () => {
+    it("création physical + canCrit true → conservé true", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "phys_crit", name: "Phys", effectType: "damage", damageType: "physical", canCrit: true,
+      } as any);
+      expect(created.canCrit).toBe(true);
+    });
+
+    it("création magic + canCrit true → normalisé à false", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "gust", name: "Gust", effectType: "damage", damageType: "magic",
+        attackDefenseKind: "magic", magicSchool: "air", canCrit: true,
+      } as any);
+      expect(created.canCrit).toBe(false);
+    });
+
+    it("création raw + canCrit true → normalisé à false (défenses conservées)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "bleed", name: "Bleed", effectType: "damage", damageType: "raw", canCrit: true,
+      } as any);
+      expect(created.canCrit).toBe(false);
+    });
+
+    it("création heal + canCrit true → normalisé à false", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "soin2", name: "Soin", effectType: "heal", targetMode: "self",
+        attackDefenseKind: "magic", magicSchool: "sacred", canCrit: true,
+      } as any);
+      expect(created.canCrit).toBe(false);
+    });
+
+    it("création magic → défenses magiques garanties (attackDefenseKind magic, non blocable, non parable, esquive libre)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "gust2", name: "Gust", effectType: "damage", damageType: "magic",
+        magicSchool: "air", canBeBlocked: true, canBeParried: true, canBeDodged: true,
+      } as any);
+      expect(created.attackDefenseKind).toBe("magic");
+      expect(created.canBeBlocked).toBe(false);
+      expect(created.canBeParried).toBe(false);
+      expect(created.canBeDodged).toBe(true); // esquive reste configurable
+    });
+
+    it("update physical → magic : aucune configuration incohérente conservée", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "swap", damageType: "physical", attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true }),
+      );
+      const updated = await service.updateDefinition("swap", {
+        damageType: "magic", magicSchool: "fire",
+      } as any);
+      expect(updated.canCrit).toBe(false);
+      expect(updated.attackDefenseKind).toBe("magic");
+      expect(updated.canBeBlocked).toBe(false);
+      expect(updated.canBeParried).toBe(false);
     });
   });
 });

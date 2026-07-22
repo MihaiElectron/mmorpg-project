@@ -14,6 +14,7 @@ import {
   ActionBarUnavailableReason,
   checkCanonicalSkillCoherence,
   checkMagicSchoolCoherence,
+  normalizeSkillCombatFlags,
   isSupportedResourceType,
   SKILL_UNLOCK_SOURCES,
   SkillEffectType,
@@ -331,6 +332,7 @@ export class ActiveSkillsService {
       ...dto,
       ...this.normalizedWeaponTypePatch(dto.weaponType),
     } as Partial<SkillDefinition>);
+    this.normalizeCombatFlags(entity);
     this.validateMagicSchoolCoherence(entity);
     const saved = await this.repo.save(entity);
     this.invalidateCache();
@@ -364,8 +366,12 @@ export class ActiveSkillsService {
       dto.attackDefenseKind !== undefined ||
       dto.magicSchool !== undefined ||
       dto.damageType !== undefined ||
-      dto.effectType !== undefined
+      dto.effectType !== undefined ||
+      dto.canCrit !== undefined ||
+      dto.canBeBlocked !== undefined ||
+      dto.canBeParried !== undefined
     ) {
+      this.normalizeCombatFlags(merged);
       this.validateMagicSchoolCoherence(merged);
     }
     const saved = await this.repo.save(merged);
@@ -447,6 +453,29 @@ export class ActiveSkillsService {
         );
       }
     }
+
+  }
+
+  /**
+   * NORMALISE (serveur-autoritaire) les flags combat de `skill` EN PLACE pour
+   * garantir les invariants gameplay avant validation/persistance :
+   *  - `canCrit` conservé UNIQUEMENT pour des dégâts physiques (sinon false) ;
+   *  - dégâts `magic` ⇒ `attackDefenseKind = magic`, non blocable, non parable.
+   * Idempotent. Appelé à la création et sur mise à jour touchant un axe concerné.
+   */
+  private normalizeCombatFlags(skill: Partial<SkillDefinition>): void {
+    const normalized = normalizeSkillCombatFlags({
+      effectType: skill.effectType,
+      damageType: skill.damageType,
+      attackDefenseKind: skill.attackDefenseKind,
+      canCrit: skill.canCrit,
+      canBeBlocked: skill.canBeBlocked,
+      canBeParried: skill.canBeParried,
+    });
+    skill.canCrit = normalized.canCrit;
+    skill.attackDefenseKind = normalized.attackDefenseKind;
+    skill.canBeBlocked = normalized.canBeBlocked;
+    skill.canBeParried = normalized.canBeParried;
   }
 
   /**

@@ -171,6 +171,15 @@ export class CreateSkillDefinitionDto {
   @IsBoolean()
   canBeParried?: boolean;
 
+  /**
+   * Critiquable — critique autorisé UNIQUEMENT pour des dégâts physiques
+   * (`effectType = damage` + `damageType = physical`). Refusé serveur pour
+   * magic/raw/soin. Défaut entité `false`.
+   */
+  @IsOptional()
+  @IsBoolean()
+  canCrit?: boolean;
+
   @IsOptional()
   @IsObject()
   scaling?: Record<string, unknown>;

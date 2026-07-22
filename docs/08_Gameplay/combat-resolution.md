@@ -75,6 +75,16 @@ Règles :
   `[0, 1)`, critique si `roll < criticalChance / 100` (ex. `25` = 25 %).
 - `criticalDamage` (stat dérivée, multiplicateur total en %) détermine le
   multiplicateur (ex. `150` → dégâts × 1.5).
+- **Seuls les dégâts PHYSIQUES peuvent critiquer.** Règle serveur canonique :
+  `effectiveCanCrit = effectType === 'damage' && damageType === 'physical' && skill.canCrit`.
+  Un skill à dégâts **`magic`** ou **`raw`**, ou tout **effet non dommageant** (soin),
+  ne critique **jamais** — même à `criticalChance` 100 %. `canCrit` est un flag
+  serveur-autoritaire de `SkillDefinition` (jamais fourni par `skill:cast`), imposé
+  sur les deux directions (joueur → créature et créature → joueur) ; l'auto-attaque
+  et la contre-attaque (physiques, hors `SkillDefinition`) conservent leur critique
+  historique. Un skill à dégâts **`magic`** utilise les **défenses magiques** :
+  `attackDefenseKind = magic`, **non blocable**, **non parable**, esquivable selon
+  `canBeDodged` (flags normalisés serveur à l'écriture).
 - Tout bonus de dégâts futur (flat/percent) s'appliquera **ici**, pas dans la défense.
 
 Formule (Implemented) :

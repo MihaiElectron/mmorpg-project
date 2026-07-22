@@ -27,7 +27,7 @@ import { isAttackParryable } from './combat-parryability.helper';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
-import { SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active-skills.constants';
+import { resolveEffectiveCanCrit, SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active-skills.constants';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -120,6 +120,8 @@ type ResolvedCreatureAbility = {
   damageType: DamageType;
   /** École magique (ADR-0022) — non nulle seulement pour un skill `magic`. */
   magicSchool: MagicSchool | null;
+  /** Critiquable (règle canonique) — pertinent seulement pour dégâts physiques. */
+  canCrit: boolean;
   scaling: Record<string, unknown>;
 };
 
@@ -1133,6 +1135,7 @@ export class CreaturesService implements OnModuleInit {
               damageType === 'magic'
                 ? ((skill.magicSchool as MagicSchool | null) ?? null)
                 : null,
+            canCrit: skill.canCrit === true,
             scaling: (skill.scaling ?? {}) as Record<string, unknown>,
           } as ResolvedCreatureAbility;
         })
@@ -1442,12 +1445,16 @@ export class CreaturesService implements OnModuleInit {
     // côté calculateur (inchangé).
     const rawAmount = this.computeCreatureSkillAmount(creature, template, ability);
     const stats = this.creatureCombatStats(creature, template);
+    // Règle critique canonique : un skill créature ne critique que s'il inflige
+    // des DÉGÂTS PHYSIQUES avec `canCrit`. Sinon chance 0 (aucun jet critique) —
+    // même helper que le chemin joueur → créature.
+    const skillCanCrit = resolveEffectiveCanCrit(ability);
     await this.applyCreatureHitToPlayer(creature, target, server, state, {
       attacker: {
         attackPower: rawAmount,
         minimumAttack: 0,
         armorPenetrationPercent: stats.armorPenetrationPercent,
-        criticalChancePercent: stats.criticalChance,
+        criticalChancePercent: skillCanCrit ? stats.criticalChance : 0,
         criticalDamagePercent: stats.criticalDamage,
         accuracyPercent: stats.accuracy,
       },

@@ -159,6 +159,11 @@ export class UpdateSkillDefinitionDto {
   @IsBoolean()
   canBeParried?: boolean;
 
+  /** Critiquable — autorisé uniquement pour des dégâts physiques (serveur-autoritaire). */
+  @IsOptional()
+  @IsBoolean()
+  canCrit?: boolean;
+
   @IsOptional()
   @IsObject()
   scaling?: Record<string, unknown>;

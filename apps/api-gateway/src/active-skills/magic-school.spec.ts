@@ -4,6 +4,8 @@ import {
   checkCanonicalSkillCoherence,
   checkMagicSchoolCoherence,
   isMagicSchoolValue,
+  normalizeSkillCombatFlags,
+  resolveEffectiveCanCrit,
   SKILL_MAGIC_SCHOOLS,
 } from './active-skills.constants';
 
@@ -136,5 +138,65 @@ describe("Migration AddMagicSchoolToSkillDefinition — réversibilité", () => 
     expect(source).toMatch(
       /UPDATE "skill_definition" SET "magicSchool" = 'sacred' WHERE "key" = 'heal'/,
     );
+  });
+});
+
+describe("resolveEffectiveCanCrit — critique réservé aux dégâts physiques", () => {
+  it("physical + damage + canCrit true → true", () => {
+    expect(resolveEffectiveCanCrit({ effectType: "damage", damageType: "physical", canCrit: true })).toBe(true);
+  });
+  it("physical + damage + canCrit false → false", () => {
+    expect(resolveEffectiveCanCrit({ effectType: "damage", damageType: "physical", canCrit: false })).toBe(false);
+  });
+  it("magic → toujours false, même canCrit true", () => {
+    expect(resolveEffectiveCanCrit({ effectType: "damage", damageType: "magic", canCrit: true })).toBe(false);
+  });
+  it("raw → toujours false, même canCrit true", () => {
+    expect(resolveEffectiveCanCrit({ effectType: "damage", damageType: "raw", canCrit: true })).toBe(false);
+  });
+  it("heal (non damage) → toujours false", () => {
+    expect(resolveEffectiveCanCrit({ effectType: "heal", damageType: "physical", canCrit: true })).toBe(false);
+  });
+  it("défauts (effectType/damageType absents) → damage + physical", () => {
+    expect(resolveEffectiveCanCrit({ effectType: undefined, damageType: undefined, canCrit: true })).toBe(true);
+    expect(resolveEffectiveCanCrit({ effectType: undefined, damageType: undefined, canCrit: false })).toBe(false);
+  });
+});
+
+describe("normalizeSkillCombatFlags — invariants serveur-autoritaires", () => {
+  const base = { attackDefenseKind: "physical" as const, canBeBlocked: true, canBeParried: false };
+
+  it("physical + damage : canCrit conservé, défenses inchangées", () => {
+    expect(normalizeSkillCombatFlags({ ...base, effectType: "damage", damageType: "physical", canCrit: true }))
+      .toEqual({ canCrit: true, attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false });
+  });
+
+  it("magic + damage : canCrit false, attackDefenseKind magic, non blocable, non parable", () => {
+    expect(normalizeSkillCombatFlags({
+      effectType: "damage", damageType: "magic",
+      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true,
+    })).toEqual({ canCrit: false, attackDefenseKind: "magic", canBeBlocked: false, canBeParried: false });
+  });
+
+  it("raw + damage : canCrit false, défenses conservées (pas de forçage magique)", () => {
+    expect(normalizeSkillCombatFlags({
+      effectType: "damage", damageType: "raw",
+      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true,
+    })).toEqual({ canCrit: false, attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true });
+  });
+
+  it("heal : canCrit toujours false", () => {
+    expect(normalizeSkillCombatFlags({
+      effectType: "heal", damageType: "physical",
+      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: false,
+    }).canCrit).toBe(false);
+  });
+
+  it("idempotent : re-normaliser un magic déjà cohérent ne change rien", () => {
+    const once = normalizeSkillCombatFlags({
+      effectType: "damage", damageType: "magic",
+      attackDefenseKind: "magic", canCrit: false, canBeBlocked: false, canBeParried: false,
+    });
+    expect(normalizeSkillCombatFlags({ effectType: "damage", damageType: "magic", ...once })).toEqual(once);
   });
 });
