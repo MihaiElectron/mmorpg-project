@@ -179,6 +179,7 @@ export function resolveEffectiveCanCrit(input: {
 export interface NormalizedSkillCombatFlags {
   canCrit: boolean;
   attackDefenseKind: SkillAttackDefenseKind;
+  canBeDodged: boolean;
   canBeBlocked: boolean;
   canBeParried: boolean;
 }
@@ -189,8 +190,10 @@ export interface NormalizedSkillCombatFlags {
  *  1. `canCrit` n'est conservé que pour des DÉGÂTS PHYSIQUES ; magic, raw et tout
  *     effet non-`damage` (soin) → `canCrit = false` (jamais critique) ;
  *  2. des DÉGÂTS `magic` imposent les DÉFENSES MAGIQUES : `attackDefenseKind =
- *     magic`, `canBeBlocked = false`, `canBeParried = false` (non blocable, non
- *     parable). `canBeDodged` reste configurable (non touché ici).
+ *     magic`, et **aucune défense d'évitement** — `canBeDodged = false`,
+ *     `canBeBlocked = false`, `canBeParried = false` (jamais esquivé, bloqué ni
+ *     paré). Les dégâts magiques ne peuvent ni être esquivés/bloqués/parés ni
+ *     critiques.
  * Pour tout autre cas, les valeurs fournies (ou défauts entité) sont conservées.
  * Idempotent : re-normaliser un skill déjà cohérent ne le change pas.
  */
@@ -199,6 +202,7 @@ export function normalizeSkillCombatFlags(input: {
   damageType: string | null | undefined;
   attackDefenseKind: SkillAttackDefenseKind | null | undefined;
   canCrit: boolean | null | undefined;
+  canBeDodged: boolean | null | undefined;
   canBeBlocked: boolean | null | undefined;
   canBeParried: boolean | null | undefined;
 }): NormalizedSkillCombatFlags {
@@ -214,9 +218,26 @@ export function normalizeSkillCombatFlags(input: {
     // Hors dégâts physiques (magic/raw/soin) → toujours false.
     canCrit: isPhysicalDamage ? (input.canCrit ?? true) : false,
     attackDefenseKind: isMagicDamage ? 'magic' : (input.attackDefenseKind ?? 'physical'),
+    // Dégâts magiques : jamais esquivés/bloqués/parés (défenses forcées à false).
+    canBeDodged: isMagicDamage ? false : (input.canBeDodged ?? true),
     canBeBlocked: isMagicDamage ? false : (input.canBeBlocked ?? true),
     canBeParried: isMagicDamage ? false : (input.canBeParried ?? false),
   };
+}
+
+/**
+ * Résolution RUNTIME de l'esquivabilité EFFECTIVE d'un skill, serveur-autoritaire
+ * dans LES DEUX directions (joueur → créature et créature → joueur). Protège même
+ * une définition héritée INCOHÉRENTE (`damageType: 'magic'` + `canBeDodged: true`)
+ * jamais re-normalisée : les DÉGÂTS MAGIQUES ne peuvent JAMAIS être esquivés.
+ * Physical/raw : conservent le flag configuré (défaut true).
+ */
+export function resolveEffectiveCanBeDodged(
+  damageType: string | null | undefined,
+  canBeDodged: boolean | null | undefined,
+): boolean {
+  if ((damageType ?? 'physical') === 'magic') return false;
+  return canBeDodged ?? true;
 }
 
 /**

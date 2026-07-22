@@ -1000,29 +1000,38 @@ describe("ActiveSkillsService", () => {
       expect(created.canCrit).toBe(false);
     });
 
-    it("création magic → défenses magiques garanties (attackDefenseKind magic, non blocable, non parable, esquive libre)", async () => {
+    it("création magic avec canBeDodged=true → NORMALISÉ à false (jamais esquivable)", async () => {
       repo.findOne.mockResolvedValue(null);
       const created = await service.createDefinition({
         key: "gust2", name: "Gust", effectType: "damage", damageType: "magic",
-        magicSchool: "air", canBeBlocked: true, canBeParried: true, canBeDodged: true,
+        magicSchool: "air", canBeDodged: true, canBeBlocked: true, canBeParried: true,
       } as any);
       expect(created.attackDefenseKind).toBe("magic");
+      expect(created.canBeDodged).toBe(false);
       expect(created.canBeBlocked).toBe(false);
       expect(created.canBeParried).toBe(false);
-      expect(created.canBeDodged).toBe(true); // esquive reste configurable
     });
 
-    it("update physical → magic : aucune configuration incohérente conservée", async () => {
+    it("update physical → magic : dodge/block/parry/crit → false, attackDefenseKind magic", async () => {
       repo.findOne.mockResolvedValue(
-        makeSkill({ key: "swap", damageType: "physical", attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true }),
+        makeSkill({ key: "swap", damageType: "physical", attackDefenseKind: "physical", canCrit: true, canBeDodged: true, canBeBlocked: true, canBeParried: true }),
       );
       const updated = await service.updateDefinition("swap", {
         damageType: "magic", magicSchool: "fire",
       } as any);
       expect(updated.canCrit).toBe(false);
       expect(updated.attackDefenseKind).toBe("magic");
+      expect(updated.canBeDodged).toBe(false);
       expect(updated.canBeBlocked).toBe(false);
       expect(updated.canBeParried).toBe(false);
+    });
+
+    it("PATCH d'un skill magic tentant de remettre canBeDodged=true → reste false", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "gust", damageType: "magic", attackDefenseKind: "magic", magicSchool: "air", canBeDodged: false, canBeBlocked: false, canBeParried: false, canCrit: false }),
+      );
+      const updated = await service.updateDefinition("gust", { canBeDodged: true } as any);
+      expect(updated.canBeDodged).toBe(false); // magic → normalisé à false, jamais esquivable
     });
   });
 });

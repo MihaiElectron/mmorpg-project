@@ -27,7 +27,7 @@ import { isAttackParryable } from './combat-parryability.helper';
 import { CreatureTemplateSkill } from './entities/creature-template-skill.entity';
 import { SkillDefinition } from '../active-skills/entities/skill-definition.entity';
 import { calculateSkillEffect } from '../active-skills/calculators/skill-effect.calculator';
-import { resolveEffectiveCanCrit, SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active-skills.constants';
+import { resolveEffectiveCanBeDodged, resolveEffectiveCanCrit, SkillAttackDefenseKind, SkillEffectType } from '../active-skills/active-skills.constants';
 import { makeCombatEvent, COMBAT_EVENT } from './combat-event';
 import { CharacterEquipment } from '../characters/entities/character-equipment.entity';
 import { EquipmentSlot } from '../characters/dto/equip-item.dto';
@@ -1563,7 +1563,9 @@ export class CreaturesService implements OnModuleInit {
     // damageType. Idem blocage. Parade JAMAIS déclenchée par le joueur sur un hit
     // créature (anti-récursion contre-attaque) : `canParry: false` conservé — le
     // flag `canBeParried` gouverne la parade côté créature défenseur, pas ici.
-    const canBeDodged = hit.canBeDodged ?? true;
+    // PROTECTION RUNTIME : un hit `magic` n'est JAMAIS esquivé (helper centralisé),
+    // même si une ligne héritée incohérente a `canBeDodged: true`.
+    const canBeDodged = resolveEffectiveCanBeDodged(hit.damageType, hit.canBeDodged);
     const canBeBlocked = hit.canBeBlocked ?? true;
     const result = resolveCombatHit({
       attacker: hit.attacker,
@@ -2171,7 +2173,9 @@ export class CreaturesService implements OnModuleInit {
     const creatureStats = this.creatureCombatStats(creature, template);
 
     // Lot A/B : flags défensifs SERVEUR du skill (defaults sûrs si non fournis).
-    const canBeDodged = defensiveFlags.canBeDodged ?? true;
+    // PROTECTION RUNTIME : un skill à dégâts `magic` n'est JAMAIS esquivé, même si
+    // une ligne héritée incohérente a `canBeDodged: true` (helper centralisé).
+    const canBeDodged = resolveEffectiveCanBeDodged(damageType, defensiveFlags.canBeDodged);
     const canBeBlocked = defensiveFlags.canBeBlocked ?? true;
     const canBeParried = defensiveFlags.canBeParried ?? false;
 

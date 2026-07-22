@@ -117,25 +117,25 @@ describe("Critiquable & normalisation des flags combat (miroir serveur)", () => 
     expect(normalizeCanCritForPayload("heal", "physical", true)).toBe(false);
   });
 
-  it("normalizeCombatFlagsForPayload : magic → défenses magiques verrouillées + canCrit false", () => {
+  it("normalizeCombatFlagsForPayload : magic → NON esquivable/blocable/parable + canCrit false", () => {
     expect(normalizeCombatFlagsForPayload({
       effectType: "damage", damageType: "magic",
-      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: true,
-    })).toEqual({ attackDefenseKind: "magic", canBeBlocked: false, canBeParried: false, canCrit: false });
+      attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: true, canCrit: true,
+    })).toEqual({ attackDefenseKind: "magic", canBeDodged: false, canBeBlocked: false, canBeParried: false, canCrit: false });
   });
 
-  it("normalizeCombatFlagsForPayload : physical conserve tout (canCrit inclus)", () => {
+  it("normalizeCombatFlagsForPayload : physical conserve tout (dodge + canCrit inclus)", () => {
     expect(normalizeCombatFlagsForPayload({
       effectType: "damage", damageType: "physical",
-      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false, canCrit: true,
-    })).toEqual({ attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false, canCrit: true });
+      attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: false, canCrit: true,
+    })).toEqual({ attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: false, canCrit: true });
   });
 
-  it("normalizeCombatFlagsForPayload : raw → canCrit false, défenses conservées", () => {
+  it("normalizeCombatFlagsForPayload : raw → canCrit false, esquive/défenses conservées", () => {
     expect(normalizeCombatFlagsForPayload({
       effectType: "damage", damageType: "raw",
-      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: true,
-    })).toEqual({ attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: false });
+      attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: true, canCrit: true,
+    })).toEqual({ attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: true, canCrit: false });
   });
 
   it("resolveInitialCanCrit : nouveau skill (null) → true ; skill chargé → sa valeur serveur", () => {

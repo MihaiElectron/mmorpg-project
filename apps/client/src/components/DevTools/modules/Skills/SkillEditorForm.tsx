@@ -210,6 +210,7 @@ export default function SkillEditorForm({
         effectType: prev.effectType,
         damageType: next,
         attackDefenseKind: prev.attackDefenseKind,
+        canBeDodged: prev.canBeDodged,
         canBeBlocked: prev.canBeBlocked,
         canBeParried: prev.canBeParried,
         canCrit: prev.canCrit,
@@ -225,6 +226,7 @@ export default function SkillEditorForm({
         effectType: next,
         damageType: prev.damageType,
         attackDefenseKind: prev.attackDefenseKind,
+        canBeDodged: prev.canBeDodged,
         canBeBlocked: prev.canBeBlocked,
         canBeParried: prev.canBeParried,
         canCrit: prev.canCrit,
@@ -304,25 +306,26 @@ export default function SkillEditorForm({
           ? normalizeMagicSchoolForPayload(draft.damageType, draft.magicSchool)
           : null,
       // Flags combat NORMALISÉS (miroir serveur) : jamais de résidu incohérent
-      // (dégâts magic → défenses magiques ; canCrit réservé aux dégâts physiques).
-      // canBeDodged reste libre.
+      // (dégâts magic → défenses magiques : non esquivable/blocable/parable/critique ;
+      // canCrit réservé aux dégâts physiques).
       ...(() => {
         const flags = normalizeCombatFlagsForPayload({
           effectType: draft.effectType,
           damageType: draft.damageType,
           attackDefenseKind: draft.attackDefenseKind,
+          canBeDodged: draft.canBeDodged,
           canBeBlocked: draft.canBeBlocked,
           canBeParried: draft.canBeParried,
           canCrit: draft.canCrit,
         });
         return {
           attackDefenseKind: flags.attackDefenseKind,
+          canBeDodged: flags.canBeDodged,
           canBeBlocked: flags.canBeBlocked,
           canBeParried: flags.canBeParried,
           canCrit: flags.canCrit,
         };
       })(),
-      canBeDodged: draft.canBeDodged,
       scaling: buildScaling(),
     };
     const key = mode === "create" ? payload.key : (skill?.key ?? "");
@@ -583,14 +586,14 @@ export default function SkillEditorForm({
           </label>
           {/* Flags défensifs (Lot A/B) — appliqués côté serveur depuis la
               définition du skill. Défauts : esquivable/bloquable, non parable.
-              Dégâts magiques : blocage/parade VERROUILLÉS à false (serveur
-              autoritaire) ; l'esquive reste configurable. */}
+              Dégâts magiques : esquive/blocage/parade VERROUILLÉS à false
+              (serveur autoritaire) — jamais esquivés, bloqués ni parés. */}
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
               type="checkbox"
-              checked={draft.canBeDodged}
+              checked={magicLocked ? false : draft.canBeDodged}
               onChange={(e) => setField("canBeDodged", e.target.checked)}
-              disabled={draft.effectType !== "damage"}
+              disabled={draft.effectType !== "damage" || magicLocked}
             />
             <span className="skills-editor__label">Esquivable</span>
           </label>
@@ -634,7 +637,7 @@ export default function SkillEditorForm({
             Défenses applicables : détermine les défenses utilisables par la cible
             (distinct du type de dégâts). Ces règles sont appliquées côté serveur.
             {magicLocked &&
-              " Dégâts magiques : non bloquable et non parable. L'esquive dépend du réglage Esquivable. Non critiquable."}
+              " Les dégâts magiques ne peuvent pas être esquivés, bloqués, parés ou critiques."}
             {draft.effectType === "damage" && draft.damageType === "raw" &&
               " Dégâts raw : non critiquable."}
             {draft.effectType !== "damage" && " Ignoré ici : soins non concernés."}

@@ -82,9 +82,14 @@ Règles :
   serveur-autoritaire de `SkillDefinition` (jamais fourni par `skill:cast`), imposé
   sur les deux directions (joueur → créature et créature → joueur) ; l'auto-attaque
   et la contre-attaque (physiques, hors `SkillDefinition`) conservent leur critique
-  historique. Un skill à dégâts **`magic`** utilise les **défenses magiques** :
-  `attackDefenseKind = magic`, **non blocable**, **non parable**, esquivable selon
-  `canBeDodged` (flags normalisés serveur à l'écriture).
+  historique. **Les dégâts `magic` ne peuvent JAMAIS être esquivés, bloqués, parés
+  ni critiques** : `attackDefenseKind = magic`, `canBeDodged = false`,
+  `canBeBlocked = false`, `canBeParried = false`, `canCrit = false`. Les dégâts
+  **`physical`** sont les seuls pouvant produire un critique. Ces invariants sont
+  **normalisés serveur à l'écriture** (`normalizeSkillCombatFlags`) ET **imposés au
+  runtime** dans les deux directions (`resolveEffectiveCanBeDodged` : un hit `magic`
+  ne déclenche aucun jet d'esquive, même sur une ligne héritée incohérente ou une
+  cible à 100 % d'esquive — le hit poursuit vers la mitigation magique).
 - Tout bonus de dégâts futur (flat/percent) s'appliquera **ici**, pas dans la défense.
 
 Formule (Implemented) :

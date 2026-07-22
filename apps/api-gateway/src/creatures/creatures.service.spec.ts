@@ -2536,6 +2536,26 @@ describe('CreaturesService', () => {
       }
     });
 
+    it("MAGIE : joueur → créature (dodge 100 + canBeDodged true incohérent) → JAMAIS esquivé", async () => {
+      // Créature défenseur avec 100 % d'esquive ; skill MAGIC + flag incohérent
+      // canBeDodged=true → la protection runtime interdit tout jet d'esquive.
+      setCoeffs({ dodgePerAgility: 100, parryPerStrength: 0, parryPerDexterity: 0, blockPerStrength: 0, blockPerEndurance: 0, secondaryChanceCap: 100 });
+      const template = makeTemplate({ agility: 1, endurance: 0, strength: 0, dexterity: 0, baseArmor: 0 });
+      const creature = makeCreature({ id: "cc-mdg", worldX: 6080, worldY: 12480, mapId: 1, health: 100, spawn: makeSpawn(template) as any });
+      (service as any).liveCreatures.set(creature.id, creature);
+      (service as any).characterRepository = { update: jest.fn().mockResolvedValue({}) };
+
+      const res = await service.applySkillDamage(
+        "cc-mdg", "char-1", { worldX: 6080, worldY: 12480, mapId: DEFAULT_MAP_ID },
+        50, 9999, 0, "magic", 0, 100, 0, "magic", { canBeDodged: true }, "air",
+      );
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.isDodged).toBe(false); // magic → aucun jet d'esquive
+        expect(res.damage).toBeGreaterThan(0); // le hit poursuit vers la mitigation magique
+      }
+    });
+
     it("V6-B7 : skill bloqué (pas de parade) → aucune contre-attaque", async () => {
       setCoeffs({ blockPerStrength: 100, blockReductionPercent: 50, parryPerStrength: 0, parryPerDexterity: 0, dodgePerAgility: 0, counterPerDexterity: 1, secondaryChanceCap: 100 });
       const template = makeTemplate({ agility: 0, endurance: 0, strength: 1, dexterity: 10, baseArmor: 0 });
@@ -3691,14 +3711,23 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(ev.amount).toBe(10); // raw : ni armure ni résistance magique
     });
 
-    it("D1 : esquive réussie sur un hit magique → 0 dégât (le plancher 1 n'est PAS forcé)", async () => {
+    it("MAGIE : créature → joueur — hit magique JAMAIS esquivé (dodge 100), le hit poursuit vers la mitigation", async () => {
+      // Règle : les dégâts magic ne peuvent jamais être esquivés. Même à 100 %
+      // d'esquive joueur, isDodged=false et la mitigation magique s'applique.
       const { ev } = await castSkillAndCapture(MAGIC_AIR, {
         dodgeChance: 100,
         magicResistanceGlobal: 10,
         magicResistanceAir: 40,
       });
-      expect(ev.isDodged).toBe(true);
-      expect(ev.amount).toBe(0); // esquive → 0, pas de plancher
+      expect(ev.isDodged).toBe(false); // magic → aucun jet d'esquive
+      expect(ev.amount).toBe(5); // raw 10 × (1 − 50/100) → mitigation D1 appliquée
+    });
+
+    it("MAGIE : ligne héritée incohérente (canBeDodged true) → toujours pas d'esquive", async () => {
+      const incoherent = { ...MAGIC_AIR, canBeDodged: true }; // flag incohérent
+      const { ev } = await castSkillAndCapture(incoherent, { dodgeChance: 100, magicResistanceGlobal: 0, magicResistanceAir: 0 });
+      expect(ev.isDodged).toBe(false); // protection runtime : magic jamais esquivé
+      expect(ev.amount).toBe(10);
     });
 
     it("D1 : hit magique NON bloqué (magic ignore le blocage physique)", async () => {

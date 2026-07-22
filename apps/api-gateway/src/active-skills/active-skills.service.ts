@@ -368,6 +368,7 @@ export class ActiveSkillsService {
       dto.damageType !== undefined ||
       dto.effectType !== undefined ||
       dto.canCrit !== undefined ||
+      dto.canBeDodged !== undefined ||
       dto.canBeBlocked !== undefined ||
       dto.canBeParried !== undefined
     ) {
@@ -469,11 +470,13 @@ export class ActiveSkillsService {
       damageType: skill.damageType,
       attackDefenseKind: skill.attackDefenseKind,
       canCrit: skill.canCrit,
+      canBeDodged: skill.canBeDodged,
       canBeBlocked: skill.canBeBlocked,
       canBeParried: skill.canBeParried,
     });
     skill.canCrit = normalized.canCrit;
     skill.attackDefenseKind = normalized.attackDefenseKind;
+    skill.canBeDodged = normalized.canBeDodged;
     skill.canBeBlocked = normalized.canBeBlocked;
     skill.canBeParried = normalized.canBeParried;
   }

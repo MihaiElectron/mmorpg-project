@@ -98,6 +98,7 @@ export function normalizeCanCritForPayload(
 /** Flags combat normalisés côté client (miroir du serveur `normalizeSkillCombatFlags`). */
 export interface NormalizedCombatFlagsDraft {
   attackDefenseKind: SkillAttackDefenseKind;
+  canBeDodged: boolean;
   canBeBlocked: boolean;
   canBeParried: boolean;
   canCrit: boolean;
@@ -105,8 +106,8 @@ export interface NormalizedCombatFlagsDraft {
 
 /**
  * Normalise les flags combat pour un draft (jamais de résidu incohérent) :
- *  - dégâts `magic` ⇒ `attackDefenseKind = magic`, non blocable, non parable,
- *    `canCrit` false (esquive laissée telle quelle) ;
+ *  - dégâts `magic` ⇒ `attackDefenseKind = magic`, **non esquivable, non blocable,
+ *    non parable**, `canCrit` false ;
  *  - hors dégâts physiques ⇒ `canCrit` false.
  * Le serveur reste l'autorité ; ceci évite tout envoi incohérent.
  */
@@ -114,6 +115,7 @@ export function normalizeCombatFlagsForPayload(input: {
   effectType: SkillEffectType;
   damageType: SkillDamageType;
   attackDefenseKind: SkillAttackDefenseKind;
+  canBeDodged: boolean;
   canBeBlocked: boolean;
   canBeParried: boolean;
   canCrit: boolean;
@@ -121,6 +123,7 @@ export function normalizeCombatFlagsForPayload(input: {
   const magic = isMagicDamage(input.effectType, input.damageType);
   return {
     attackDefenseKind: magic ? "magic" : input.attackDefenseKind,
+    canBeDodged: magic ? false : input.canBeDodged,
     canBeBlocked: magic ? false : input.canBeBlocked,
     canBeParried: magic ? false : input.canBeParried,
     canCrit: normalizeCanCritForPayload(input.effectType, input.damageType, input.canCrit),

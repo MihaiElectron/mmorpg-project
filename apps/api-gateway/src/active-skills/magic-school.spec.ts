@@ -5,6 +5,7 @@ import {
   checkMagicSchoolCoherence,
   isMagicSchoolValue,
   normalizeSkillCombatFlags,
+  resolveEffectiveCanBeDodged,
   resolveEffectiveCanCrit,
   SKILL_MAGIC_SCHOOLS,
 } from './active-skills.constants';
@@ -164,11 +165,11 @@ describe("resolveEffectiveCanCrit — critique réservé aux dégâts physiques"
 });
 
 describe("normalizeSkillCombatFlags — invariants serveur-autoritaires", () => {
-  const base = { attackDefenseKind: "physical" as const, canBeBlocked: true, canBeParried: false };
+  const base = { attackDefenseKind: "physical" as const, canBeDodged: true, canBeBlocked: true, canBeParried: false };
 
   it("physical + damage : canCrit conservé, défenses inchangées", () => {
     expect(normalizeSkillCombatFlags({ ...base, effectType: "damage", damageType: "physical", canCrit: true }))
-      .toEqual({ canCrit: true, attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false });
+      .toEqual({ canCrit: true, attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: false });
   });
 
   it("physical + damage + canCrit OMIS (undefined) → défaut true (nouveau skill physique)", () => {
@@ -181,32 +182,48 @@ describe("normalizeSkillCombatFlags — invariants serveur-autoritaires", () => 
       .toBe(false);
   });
 
-  it("magic + damage : canCrit false, attackDefenseKind magic, non blocable, non parable", () => {
+  it("magic + damage : canCrit false, attackDefenseKind magic, NON esquivable/blocable/parable", () => {
     expect(normalizeSkillCombatFlags({
       effectType: "damage", damageType: "magic",
-      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true,
-    })).toEqual({ canCrit: false, attackDefenseKind: "magic", canBeBlocked: false, canBeParried: false });
+      attackDefenseKind: "physical", canCrit: true, canBeDodged: true, canBeBlocked: true, canBeParried: true,
+    })).toEqual({ canCrit: false, attackDefenseKind: "magic", canBeDodged: false, canBeBlocked: false, canBeParried: false });
   });
 
   it("raw + damage : canCrit false, défenses conservées (pas de forçage magique)", () => {
     expect(normalizeSkillCombatFlags({
       effectType: "damage", damageType: "raw",
-      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: true,
-    })).toEqual({ canCrit: false, attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true });
+      attackDefenseKind: "physical", canCrit: true, canBeDodged: true, canBeBlocked: true, canBeParried: true,
+    })).toEqual({ canCrit: false, attackDefenseKind: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: true });
   });
 
   it("heal : canCrit toujours false", () => {
     expect(normalizeSkillCombatFlags({
       effectType: "heal", damageType: "physical",
-      attackDefenseKind: "physical", canCrit: true, canBeBlocked: true, canBeParried: false,
+      attackDefenseKind: "physical", canCrit: true, canBeDodged: true, canBeBlocked: true, canBeParried: false,
     }).canCrit).toBe(false);
   });
 
   it("idempotent : re-normaliser un magic déjà cohérent ne change rien", () => {
     const once = normalizeSkillCombatFlags({
       effectType: "damage", damageType: "magic",
-      attackDefenseKind: "magic", canCrit: false, canBeBlocked: false, canBeParried: false,
+      attackDefenseKind: "magic", canCrit: false, canBeDodged: false, canBeBlocked: false, canBeParried: false,
     });
     expect(normalizeSkillCombatFlags({ effectType: "damage", damageType: "magic", ...once })).toEqual(once);
+  });
+});
+
+describe("resolveEffectiveCanBeDodged — protection runtime (magie jamais esquivée)", () => {
+  it("magic → toujours false, même canBeDodged true (ligne héritée incohérente)", () => {
+    expect(resolveEffectiveCanBeDodged("magic", true)).toBe(false);
+    expect(resolveEffectiveCanBeDodged("magic", false)).toBe(false);
+  });
+  it("physical → conserve le flag (défaut true)", () => {
+    expect(resolveEffectiveCanBeDodged("physical", true)).toBe(true);
+    expect(resolveEffectiveCanBeDodged("physical", false)).toBe(false);
+    expect(resolveEffectiveCanBeDodged("physical", undefined)).toBe(true);
+  });
+  it("raw → conserve le flag (comportement d'esquive inchangé)", () => {
+    expect(resolveEffectiveCanBeDodged("raw", true)).toBe(true);
+    expect(resolveEffectiveCanBeDodged("raw", false)).toBe(false);
   });
 });
