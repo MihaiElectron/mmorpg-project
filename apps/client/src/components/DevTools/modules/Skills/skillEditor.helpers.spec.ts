@@ -14,6 +14,7 @@ import {
   normalizeCombatFlagsForPayload,
   normalizeMagicSchoolForPayload,
   requiresMagicSchool,
+  resolveInitialCanCrit,
 } from "./skillEditor.helpers";
 
 describe("constantes canoniques (miroir backend)", () => {
@@ -135,5 +136,12 @@ describe("Critiquable & normalisation des flags combat (miroir serveur)", () => 
       effectType: "damage", damageType: "raw",
       attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: true,
     })).toEqual({ attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: false });
+  });
+
+  it("resolveInitialCanCrit : nouveau skill (null) → true ; skill chargé → sa valeur serveur", () => {
+    expect(resolveInitialCanCrit(null)).toBe(true); // nouveau skill physique par défaut
+    expect(resolveInitialCanCrit(undefined)).toBe(true);
+    expect(resolveInitialCanCrit({ canCrit: false })).toBe(false); // valeur serveur conservée
+    expect(resolveInitialCanCrit({ canCrit: true })).toBe(true);
   });
 });

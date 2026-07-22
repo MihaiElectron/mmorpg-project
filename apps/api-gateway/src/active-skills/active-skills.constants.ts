@@ -208,7 +208,11 @@ export function normalizeSkillCombatFlags(input: {
   const isMagicDamage = effectType === 'damage' && damageType === 'magic';
 
   return {
-    canCrit: isPhysicalDamage ? input.canCrit === true : false,
+    // Dégâts physiques : `canCrit` OMIS (undefined) → défaut TRUE (nouveaux skills
+    // physiques critiquables par défaut) ; explicite `false` conservé ; sur mise à
+    // jour, `input.canCrit` est la valeur EXISTANTE (jamais undefined) → préservée.
+    // Hors dégâts physiques (magic/raw/soin) → toujours false.
+    canCrit: isPhysicalDamage ? (input.canCrit ?? true) : false,
     attackDefenseKind: isMagicDamage ? 'magic' : (input.attackDefenseKind ?? 'physical'),
     canBeBlocked: isMagicDamage ? false : (input.canBeBlocked ?? true),
     canBeParried: isMagicDamage ? false : (input.canBeParried ?? false),

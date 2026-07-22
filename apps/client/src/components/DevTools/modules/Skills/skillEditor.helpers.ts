@@ -75,6 +75,17 @@ export function isMagicDamage(
   return effectType === "damage" && damageType === "magic";
 }
 
+/**
+ * Valeur INITIALE de `canCrit` du brouillon : un NOUVEAU skill (aucun skill
+ * chargé) est un dégât physique par défaut → `true` (critiquable, aligné sur le
+ * défaut serveur) ; un skill chargé conserve sa valeur serveur.
+ */
+export function resolveInitialCanCrit(
+  skill: { canCrit?: boolean | null } | null | undefined,
+): boolean {
+  return skill ? skill.canCrit ?? false : true;
+}
+
 /** Valeur `canCrit` à envoyer : conservée seulement pour des dégâts physiques. */
 export function normalizeCanCritForPayload(
   effectType: SkillEffectType,

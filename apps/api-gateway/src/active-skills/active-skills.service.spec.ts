@@ -49,7 +49,10 @@ function makeRepo() {
   return {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn().mockImplementation((d) => makeSkill(d)),
+    // Mime TypeORM.create : les champs OMIS du DTO restent undefined dans l'entité
+    // (les DEFAULT colonne ne s'appliquent qu'à l'INSERT). canCrit non fourni →
+    // undefined (pas le défaut false du fixture) pour tester le défaut serveur.
+    create: jest.fn().mockImplementation((d) => ({ ...makeSkill(d), canCrit: d.canCrit })),
     save: jest.fn().mockImplementation((d) => Promise.resolve(d)),
     merge: jest.fn().mockImplementation((existing, patch) => ({ ...existing, ...patch })),
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -929,6 +932,46 @@ describe("ActiveSkillsService", () => {
         key: "phys_crit", name: "Phys", effectType: "damage", damageType: "physical", canCrit: true,
       } as any);
       expect(created.canCrit).toBe(true);
+    });
+
+    it("création physical + canCrit OMIS → défaut true (nouveau skill physique critiquable)", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "phys_default", name: "Phys", effectType: "damage", damageType: "physical",
+      } as any);
+      expect(created.canCrit).toBe(true);
+    });
+
+    it("création physical + canCrit false explicite → conservé false", async () => {
+      repo.findOne.mockResolvedValue(null);
+      const created = await service.createDefinition({
+        key: "phys_nocrit", name: "Phys", effectType: "damage", damageType: "physical", canCrit: false,
+      } as any);
+      expect(created.canCrit).toBe(false);
+    });
+
+    it("update physical SANS canCrit → valeur existante conservée (false)", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ key: "keep", damageType: "physical", canCrit: false }));
+      const updated = await service.updateDefinition("keep", { name: "Renommé" } as any);
+      expect(updated.canCrit).toBe(false); // PATCH sans canCrit ne réactive jamais
+    });
+
+    it("update physical SANS canCrit sur un skill critiquable → true conservé", async () => {
+      repo.findOne.mockResolvedValue(makeSkill({ key: "keep2", damageType: "physical", canCrit: true }));
+      const updated = await service.updateDefinition("keep2", { requiredLevel: 3 } as any);
+      expect(updated.canCrit).toBe(true);
+    });
+
+    it("retour magic → physical (sans canCrit) → reste false (réactivation explicite requise)", async () => {
+      repo.findOne.mockResolvedValue(
+        makeSkill({ key: "back", damageType: "magic", attackDefenseKind: "magic", magicSchool: "air", canCrit: false, canBeBlocked: false, canBeParried: false }),
+      );
+      // Passage cohérent vers physical (nature défensive physique + école retirée) ;
+      // canCrit N'EST PAS fourni → doit rester false (jamais réactivé implicitement).
+      const updated = await service.updateDefinition("back", {
+        damageType: "physical", attackDefenseKind: "physical", magicSchool: null,
+      } as any);
+      expect(updated.canCrit).toBe(false);
     });
 
     it("création magic + canCrit true → normalisé à false", async () => {

@@ -32,6 +32,7 @@ import {
   normalizeCombatFlagsForPayload,
   normalizeMagicSchoolForPayload,
   requiresMagicSchool,
+  resolveInitialCanCrit,
   type MagicSchoolDraftValue,
 } from "./skillEditor.helpers";
 
@@ -101,7 +102,9 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     canBeDodged: skill?.canBeDodged ?? true,
     canBeBlocked: skill?.canBeBlocked ?? true,
     canBeParried: skill?.canBeParried ?? false,
-    canCrit: skill?.canCrit ?? false,
+    // Nouveau skill (skill null) = dégâts physiques par défaut → Critiquable coché
+    // (aligné sur le défaut serveur). Skill chargé → valeur serveur telle quelle.
+    canCrit: resolveInitialCanCrit(skill),
     requiredLevel: String(skill?.requiredLevel ?? 1),
     resourceCost: String(skill?.resourceCost ?? 0),
     cooldownMs: String(skill?.cooldownMs ?? 1000),

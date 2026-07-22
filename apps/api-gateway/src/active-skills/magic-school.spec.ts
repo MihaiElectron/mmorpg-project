@@ -171,6 +171,16 @@ describe("normalizeSkillCombatFlags — invariants serveur-autoritaires", () => 
       .toEqual({ canCrit: true, attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false });
   });
 
+  it("physical + damage + canCrit OMIS (undefined) → défaut true (nouveau skill physique)", () => {
+    expect(normalizeSkillCombatFlags({ ...base, effectType: "damage", damageType: "physical", canCrit: undefined }).canCrit)
+      .toBe(true);
+  });
+
+  it("physical + damage + canCrit false explicite → conservé false", () => {
+    expect(normalizeSkillCombatFlags({ ...base, effectType: "damage", damageType: "physical", canCrit: false }).canCrit)
+      .toBe(false);
+  });
+
   it("magic + damage : canCrit false, attackDefenseKind magic, non blocable, non parable", () => {
     expect(normalizeSkillCombatFlags({
       effectType: "damage", damageType: "magic",
