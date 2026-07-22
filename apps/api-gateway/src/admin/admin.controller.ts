@@ -338,16 +338,24 @@ export class AdminController {
   }
 
   @Post('skill-definitions')
-  createSkillDefinition(@Body() dto: CreateSkillDefinitionDto) {
-    return this.activeSkillsService.createDefinition(dto);
+  async createSkillDefinition(@Body() dto: CreateSkillDefinitionDto) {
+    const saved = await this.activeSkillsService.createDefinition(dto);
+    // Une définition de skill peut être utilisée par n'importe quel template
+    // créature : invalider le cache runtime des capacités pour que les créatures
+    // DÉJÀ actives repartent de la définition à jour (cooldown + flags + coeffs).
+    // Ciblé (à la sauvegarde Studio), pas de requête par tick.
+    this.creaturesService.invalidateAbilitiesCache();
+    return saved;
   }
 
   @Patch('skill-definitions/:key')
-  updateSkillDefinition(
+  async updateSkillDefinition(
     @Param('key') key: string,
     @Body() dto: UpdateSkillDefinitionDto,
   ) {
-    return this.activeSkillsService.updateDefinition(key, dto);
+    const saved = await this.activeSkillsService.updateDefinition(key, dto);
+    this.creaturesService.invalidateAbilitiesCache();
+    return saved;
   }
 
   /**
@@ -355,8 +363,10 @@ export class AdminController {
    * skill du jeu en préservant sa `key`, préférer PATCH `{ enabled: false }`.
    */
   @Delete('skill-definitions/:key')
-  deleteSkillDefinition(@Param('key') key: string) {
-    return this.activeSkillsService.deleteDefinition(key);
+  async deleteSkillDefinition(@Param('key') key: string) {
+    const result = await this.activeSkillsService.deleteDefinition(key);
+    this.creaturesService.invalidateAbilitiesCache();
+    return result;
   }
 
   // ── Ressources ────────────────────────────────────────────────────────────

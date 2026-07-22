@@ -122,6 +122,11 @@ type ResolvedCreatureAbility = {
   magicSchool: MagicSchool | null;
   /** Critiquable (règle canonique) — pertinent seulement pour dégâts physiques. */
   canCrit: boolean;
+  /** Flags défensifs SERVEUR du skill — décident si le joueur défenseur peut
+   * esquiver/bloquer/parer ce skill créature. Défauts : dodge/block true, parade false. */
+  canBeDodged: boolean;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
   scaling: Record<string, unknown>;
 };
 
@@ -1136,6 +1141,11 @@ export class CreaturesService implements OnModuleInit {
                 ? ((skill.magicSchool as MagicSchool | null) ?? null)
                 : null,
             canCrit: skill.canCrit === true,
+            // Flags défensifs SERVEUR (défauts sûrs si colonnes absentes) — lus
+            // depuis la définition à jour (cache invalidé sur sauvegarde Studio).
+            canBeDodged: skill.canBeDodged ?? true,
+            canBeBlocked: skill.canBeBlocked ?? true,
+            canBeParried: skill.canBeParried ?? false,
             scaling: (skill.scaling ?? {}) as Record<string, unknown>,
           } as ResolvedCreatureAbility;
         })
@@ -1461,6 +1471,11 @@ export class CreaturesService implements OnModuleInit {
       damageType: ability.damageType,
       // D1 : école transmise pour la mitigation magique du joueur défenseur.
       magicSchool: ability.magicSchool,
+      // Flags défensifs SERVEUR du skill : le joueur défenseur ne peut esquiver/
+      // bloquer que si le skill l'autorise (lus depuis la définition à jour).
+      canBeDodged: ability.canBeDodged,
+      canBeBlocked: ability.canBeBlocked,
+      canBeParried: ability.canBeParried,
       skillName: ability.skillName,
     });
   }
@@ -1488,6 +1503,11 @@ export class CreaturesService implements OnModuleInit {
       damageType: DamageType;
       /** École du hit (ADR-0022) — non nulle seulement pour `damageType: 'magic'`. */
       magicSchool?: MagicSchool | null;
+      /** Flags défensifs SERVEUR du skill (défauts : dodge/block true, parade false).
+       * Auto-attaque : omis → défauts (le joueur peut esquiver/bloquer, historique). */
+      canBeDodged?: boolean;
+      canBeBlocked?: boolean;
+      canBeParried?: boolean;
       skillName?: string;
       /** Plancher des dégâts finaux. Défaut 1 (préserve le plancher legacy). */
       minimumDamage?: number;
@@ -1537,13 +1557,21 @@ export class CreaturesService implements OnModuleInit {
           ).effectiveResistance
         : 0;
 
+    // Flags défensifs SERVEUR du skill (défauts sûrs pour l'auto-attaque, qui ne
+    // les fournit pas : le joueur peut esquiver/bloquer, comportement historique).
+    // `canBeDodged: false` ⇒ AUCUN jet d'esquive (dodge 0), indépendamment de
+    // damageType. Idem blocage. Parade JAMAIS déclenchée par le joueur sur un hit
+    // créature (anti-récursion contre-attaque) : `canParry: false` conservé — le
+    // flag `canBeParried` gouverne la parade côté créature défenseur, pas ici.
+    const canBeDodged = hit.canBeDodged ?? true;
+    const canBeBlocked = hit.canBeBlocked ?? true;
     const result = resolveCombatHit({
       attacker: hit.attacker,
       defender: {
         defense: charDerived.defense,
-        dodgeChancePercent: charDerived.dodgeChance ?? 0,
-        blockChancePercent: charDerived.blockChance ?? 0,
-        blockReductionPercent: charDerived.blockReductionPercent ?? 0,
+        dodgeChancePercent: canBeDodged ? (charDerived.dodgeChance ?? 0) : 0,
+        blockChancePercent: canBeBlocked ? (charDerived.blockChance ?? 0) : 0,
+        blockReductionPercent: canBeBlocked ? (charDerived.blockReductionPercent ?? 0) : 0,
         canParry: false,
         parryChancePercent: 0,
         // Consommée uniquement si damageType === 'magic' (calculateur).

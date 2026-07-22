@@ -3450,6 +3450,68 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(abilityRepo.find).toHaveBeenCalledTimes(2); // reload
     });
 
+    // ── Fraîcheur runtime : le cache relit la définition à jour après invalidation
+    it("FRAÎCHEUR : après invalidateAbilitiesCache, getCombatAbilities relit le cooldown ET les flags à jour", async () => {
+      (service as any).creatureTemplateSkillRepository = {
+        find: jest.fn().mockResolvedValue([{ skillKey: "strike", enabled: true, displayOrder: 0 }]),
+      };
+      // 1re version : cooldown 10 000, esquivable.
+      (service as any).skillDefinitionRepository = {
+        find: jest.fn().mockResolvedValue([
+          { key: "strike", name: "strike", enabled: true, effectType: "damage", rangeWU: 100, cooldownMs: 10000, damageType: "physical", canBeDodged: true, canBeBlocked: true, canBeParried: false, scaling: {} },
+        ]),
+      };
+      service.invalidateAbilitiesCache("turkey");
+      const before = await (service as any).getCombatAbilities(1, "turkey");
+      expect(before[0]).toMatchObject({ skillKey: "strike", cooldownMs: 10000, canBeDodged: true });
+
+      // Édition Studio → nouvelle définition (cooldown 5000, non esquivable) + invalidation.
+      (service as any).skillDefinitionRepository = {
+        find: jest.fn().mockResolvedValue([
+          { key: "strike", name: "strike", enabled: true, effectType: "damage", rangeWU: 100, cooldownMs: 5000, damageType: "physical", canBeDodged: false, canBeBlocked: false, canBeParried: false, scaling: {} },
+        ]),
+      };
+      service.invalidateAbilitiesCache("turkey");
+      const after = await (service as any).getCombatAbilities(1, "turkey");
+      expect(after[0]).toMatchObject({ skillKey: "strike", cooldownMs: 5000, canBeDodged: false, canBeBlocked: false });
+    });
+
+    // ── Cooldown précis : éligible seulement après expiration (5 000 ms) ────────
+    it("COOLDOWN : cast à T0 → refusé avant T0+5000, éligible à T0+5000", () => {
+      const strike = { skillKey: "strike", skillName: "strike", effectType: "damage" as const, displayOrder: 0, rangeWU: 5000, cooldownMs: 5000, damageType: "physical" as const, magicSchool: null, canCrit: false, canBeDodged: false, canBeBlocked: false, canBeParried: false, scaling: {} };
+      const T0 = 1_000_000;
+      // Aucun cast précédent → éligible.
+      expect((service as any).pickCreatureDamageAbility("cd1", [strike], 100, T0)?.skillKey).toBe("strike");
+      // Cast enregistré à T0.
+      (service as any).creatureSkillCooldowns.set("cd1", new Map([["strike", T0]]));
+      // T0 + 4999 → encore en cooldown.
+      expect((service as any).pickCreatureDamageAbility("cd1", [strike], 100, T0 + 4999)).toBeNull();
+      // T0 + 5000 → éligible.
+      expect((service as any).pickCreatureDamageAbility("cd1", [strike], 100, T0 + 5000)?.skillKey).toBe("strike");
+    });
+
+    // ── Flags défensifs respectés côté joueur défenseur (créature → joueur) ─────
+    it("FLAGS : canBeDodged false → joueur NE peut PAS esquiver (dodge 100 ignoré)", async () => {
+      const noDodge = { ...ABILITY, skillKey: "strike", canBeDodged: false };
+      const { ev } = await castSkillAndCapture(noDodge, { defense: 0, dodgeChance: 100 });
+      expect(ev.isDodged).toBe(false); // canBeDodged false → aucun jet d'esquive
+      expect(ev.amount).toBe(10); // hit appliqué
+    });
+
+    it("FLAGS : canBeBlocked false → joueur NE peut PAS bloquer (block 100 ignoré)", async () => {
+      const noBlock = { ...ABILITY, skillKey: "strike", canBeBlocked: false };
+      const { ev } = await castSkillAndCapture(noBlock, { defense: 0, blockChance: 100, blockReductionPercent: 50 });
+      expect(ev.isBlocked).toBe(false);
+      expect(ev.amount).toBe(10);
+    });
+
+    it("FLAGS : canBeDodged true → esquive possible (non-régression auto-attaque/skills historiques)", async () => {
+      const dodgeable = { ...ABILITY, skillKey: "strike", canBeDodged: true };
+      const { ev } = await castSkillAndCapture(dodgeable, { defense: 0, dodgeChance: 100 });
+      expect(ev.isDodged).toBe(true);
+      expect(ev.amount).toBe(0);
+    });
+
     it("V5-D1-A : une capacité heal n'est PAS castée en combat (fallback auto-attaque)", async () => {
       const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
       // Seule capacité = heal, en portée → ne doit pas être castée ; auto-attaque prend le relais.

@@ -125,3 +125,47 @@ describe('AdminController — movement metrics', () => {
     expect(roles).toContain(UserRole.ADMIN);
   });
 });
+
+describe('AdminController — invalidation runtime des skills créature (fraîcheur)', () => {
+  function makeController() {
+    const creaturesService = { invalidateAbilitiesCache: jest.fn() };
+    const activeSkillsService = {
+      createDefinition: jest.fn().mockResolvedValue({ key: 'strike' }),
+      updateDefinition: jest.fn().mockResolvedValue({ key: 'strike' }),
+      deleteDefinition: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const controller = new AdminController(
+      {} as any, // adminService
+      creaturesService as any,
+      {} as any, // creatureAbilitiesService
+      {} as any, // resourcesService
+      {} as any, // buildingsService
+      {} as any, // derivedStatsService
+      activeSkillsService as any,
+      {} as any, // masteriesService
+    );
+    return { controller, creaturesService, activeSkillsService };
+  }
+
+  it('POST skill-definitions → sauvegarde puis invalide le cache des capacités', async () => {
+    const { controller, creaturesService, activeSkillsService } = makeController();
+    await controller.createSkillDefinition({ key: 'strike', name: 'strike' } as any);
+    expect(activeSkillsService.createDefinition).toHaveBeenCalled();
+    expect(creaturesService.invalidateAbilitiesCache).toHaveBeenCalledTimes(1);
+    expect(creaturesService.invalidateAbilitiesCache).toHaveBeenCalledWith();
+  });
+
+  it('PATCH skill-definitions/:key → sauvegarde puis invalide le cache des capacités', async () => {
+    const { controller, creaturesService, activeSkillsService } = makeController();
+    await controller.updateSkillDefinition('strike', { cooldownMs: 5000 } as any);
+    expect(activeSkillsService.updateDefinition).toHaveBeenCalledWith('strike', { cooldownMs: 5000 });
+    expect(creaturesService.invalidateAbilitiesCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('DELETE skill-definitions/:key → suppression puis invalide le cache des capacités', async () => {
+    const { controller, creaturesService, activeSkillsService } = makeController();
+    await controller.deleteSkillDefinition('strike');
+    expect(activeSkillsService.deleteDefinition).toHaveBeenCalledWith('strike');
+    expect(creaturesService.invalidateAbilitiesCache).toHaveBeenCalledTimes(1);
+  });
+});
