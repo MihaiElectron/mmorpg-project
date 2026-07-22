@@ -3527,6 +3527,210 @@ describe('CreaturesService — P7-B : guards spawn WU dans l\'IA', () => {
       expect(ev.skillKey).toBeUndefined();
     });
 
+    // ══ D1 : mitigation magique du joueur DÉFENSEUR (créature → joueur) ════════
+    // ABILITY : attackPower 5 × coef 2 = 10 dégâts BRUTS avant mitigation.
+    // Formule (inchangée) : finalDamage = round(raw × (1 − effectiveResistance/100)),
+    // plancher 1 si raw > 0. effectiveResistance = magicResistanceGlobal + école.
+    const MAGIC_AIR = {
+      ...ABILITY,
+      skillKey: "gust",
+      skillName: "Rafale",
+      damageType: "magic" as const,
+      magicSchool: "air" as const,
+    };
+
+    // ── Résolution de la résistance ───────────────────────────────────────────
+    it("D1 : résistance GLOBALE seule (global 20, air 0 → effective 20 → 8)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, {
+        magicResistanceGlobal: 20,
+        magicResistanceAir: 0,
+      });
+      expect(ev.skillName).toBe("Rafale");
+      expect(ev.amount).toBe(8); // round(10 × 0.8)
+    });
+
+    it("D1 : GLOBALE + ÉCOLE additionnées (global 10 + air 40 = 50 → 5)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, {
+        magicResistanceGlobal: 10,
+        magicResistanceAir: 40,
+      });
+      expect(ev.amount).toBe(5); // round(10 × 0.5)
+    });
+
+    it("D1 : ÉCOLE seule (air 40 → 6)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, { magicResistanceAir: 40 });
+      expect(ev.amount).toBe(6); // round(10 × 0.6)
+    });
+
+    it("D1 : isolation des écoles — air élevé n'atténue PAS un skill FIRE", async () => {
+      const magicFire = { ...MAGIC_AIR, magicSchool: "fire" as const };
+      const { ev } = await castSkillAndCapture(magicFire, {
+        magicResistanceAir: 80, // école air, ignorée pour un hit fire
+        magicResistanceGlobal: 0,
+      });
+      expect(ev.amount).toBe(10); // résistance fire 0 + globale 0 → aucune mitigation
+    });
+
+    // ── Valeurs limites (aucun clamp, plancher 1) ─────────────────────────────
+    it("D1 : résistance NÉGATIVE = vulnérabilité, aucun clamp (−50 → 15)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, { magicResistanceAir: -50 });
+      expect(ev.amount).toBe(15); // round(10 × 1.5)
+    });
+
+    it("D1 : résistance ≥ 100 → plancher 1 (aucune immunité) : global 20 + air 100 = 120", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, {
+        magicResistanceGlobal: 20,
+        magicResistanceAir: 100,
+      });
+      expect(ev.amount).toBe(1); // round(10 × −0.2) = −2 → max(1, …) = 1
+    });
+
+    it("D1 : résistance = 100 exacte → plancher 1 (hit valide positif)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, { magicResistanceAir: 100 });
+      expect(ev.amount).toBe(1); // round(10 × 0) = 0 → max(1, 0) = 1
+    });
+
+    // ── Validation : magic sans école → REJET explicite (aucun dégât) ─────────
+    it("D1 : skill magic SANS école → hit rejeté, PV joueur inchangés, aucun event dégât", async () => {
+      const noSchool = { ...MAGIC_AIR, magicSchool: null as any };
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).combatAbilityCache.set("turkey", [noSchool]);
+      const player = makePlayer(6080 + 1000, 12480);
+      const update = jest.fn().mockResolvedValue({});
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update,
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ magicResistanceGlobal: 10, magicResistanceAir: 40 });
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      // Rejet : aucun dégât appliqué, PV non écrits, aucun character_damaged.
+      expect(update).not.toHaveBeenCalled();
+      expect(emits.some((e) => e.event === "character_damaged")).toBe(false);
+      expect(combatOf(emits)).toBeUndefined();
+    });
+
+    // ── Non-régression : physical / raw / esquive / blocage / auto-attaque ────
+    it("D1 : skill PHYSICAL ignore les résistances magiques (→ 10)", async () => {
+      const { ev } = await castSkillAndCapture(ABILITY, {
+        magicResistanceGlobal: 10,
+        magicResistanceAir: 40,
+      });
+      expect(ev.amount).toBe(10); // physical : armure seule (0), résistances ignorées
+    });
+
+    it("D1 : dégâts RAW ignorent les résistances magiques (→ 10)", async () => {
+      const rawAbility = { ...ABILITY, damageType: "raw" as const };
+      const { ev } = await castSkillAndCapture(rawAbility, {
+        magicResistanceGlobal: 50,
+        magicResistanceAir: 50,
+      });
+      expect(ev.amount).toBe(10); // raw : ni armure ni résistance magique
+    });
+
+    it("D1 : esquive réussie sur un hit magique → 0 dégât (le plancher 1 n'est PAS forcé)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, {
+        dodgeChance: 100,
+        magicResistanceGlobal: 10,
+        magicResistanceAir: 40,
+      });
+      expect(ev.isDodged).toBe(true);
+      expect(ev.amount).toBe(0); // esquive → 0, pas de plancher
+    });
+
+    it("D1 : hit magique NON bloqué (magic ignore le blocage physique)", async () => {
+      const { ev } = await castSkillAndCapture(MAGIC_AIR, {
+        blockChance: 100,
+        blockReductionPercent: 100,
+        magicResistanceAir: 40,
+      });
+      expect(ev.isBlocked).toBe(false); // magic ignore le blocage physique
+      expect(ev.amount).toBe(6); // seule la résistance magique s'applique (air 40)
+    });
+
+    it("D1 : auto-attaque créature (physical) inchangée malgré des résistances magiques élevées", async () => {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      // Aucune capacité → fallback auto-attaque physical (baseAttack 5 − défense 0).
+      (service as any).combatAbilityCache.set("turkey", []);
+      const player = makePlayer(6080 + 800, 12480); // <= MELEE
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue({ id: "char-1", health: 100, defense: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue([]) };
+      mockDefenderDerived({ magicResistanceGlobal: 90, magicResistanceAir: 90 });
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      const ev = combatOf(emits).payload;
+      expect(ev.skillName).toBeUndefined(); // auto-attaque
+      expect(ev.amount).toBe(5); // physical inchangé, résistances magiques ignorées
+    });
+
+    // ── getCombatAbilities : préservation du type magic + école ───────────────
+    it("D1 : getCombatAbilities préserve magic + magicSchool (jamais collapse), physical → école null", async () => {
+      (service as any).creatureTemplateSkillRepository = {
+        find: jest.fn().mockResolvedValue([
+          { skillKey: "gust", enabled: true, displayOrder: 0 },
+          { skillKey: "poke", enabled: true, displayOrder: 1 },
+        ]),
+      };
+      (service as any).skillDefinitionRepository = {
+        find: jest.fn().mockResolvedValue([
+          { key: "gust", name: "Rafale", enabled: true, effectType: "damage", rangeWU: 100, cooldownMs: 1000, damageType: "magic", magicSchool: "air", scaling: {} },
+          { key: "poke", name: "Coup", enabled: true, effectType: "damage", rangeWU: 100, cooldownMs: 1000, damageType: "physical", magicSchool: null, scaling: {} },
+        ]),
+      };
+      service.invalidateAbilitiesCache("wind");
+      const out = await (service as any).getCombatAbilities(1, "wind");
+      expect(out.find((a: any) => a.skillKey === "gust")).toMatchObject({ damageType: "magic", magicSchool: "air" });
+      expect(out.find((a: any) => a.skillKey === "poke")).toMatchObject({ damageType: "physical", magicSchool: null });
+    });
+
+    // ── Équipement : PIPELINE RÉEL (CharacterStatsCalculator non mocké) ────────
+    // Un objet équipé donnant de l'Esprit augmente magicResistanceAir via le
+    // coefficient primaire (0.5), et la mitigation s'applique réellement.
+    // Définitions minimales : les autres dérivées sont complétées à 0.
+    const RESIST_DEFS = [
+      { key: "magicResistanceGlobal", enabled: true, baseValue: 0, primaryCoefficients: {}, minValue: null, maxValue: null, rawStatSource: null },
+      { key: "magicResistanceAir", enabled: true, baseValue: 0, primaryCoefficients: { spirit: 0.5 }, minValue: null, maxValue: null, rawStatSource: null },
+    ];
+
+    async function castMagicRealPipeline(char: any) {
+      const creature = makeCreature({ worldX: 6080, worldY: 12480, mapId: 1, state: "fighting" });
+      (service as any).combatAbilityCache.set("turkey", [MAGIC_AIR]);
+      const player = makePlayer(6080 + 1000, 12480);
+      (service as any).characterRepository = {
+        findOne: jest.fn().mockResolvedValue(char),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      (service as any).derivedStats = { getDefinitions: jest.fn().mockResolvedValue(RESIST_DEFS) };
+      // Pas de mockDefenderDerived : CharacterStatsCalculator.compute est RÉEL.
+      const emits: { event: string; payload: any }[] = [];
+      await (service as any).doFighting(creature, fightingState(), makeTemplate(), [player], Date.now(), captureServer(emits));
+      return combatOf(emits)?.payload;
+    }
+
+    it("D1 : équipement (Esprit) augmente magicResistanceAir → mitigation réelle (pipeline complet)", async () => {
+      // Objet ÉQUIPÉ : spirit 20 → final.spirit 20 → magicResistanceAir 0.5×20 = 10.
+      const char = {
+        id: "char-1", health: 100, attack: 0, defense: 0, maxHealth: 100, baseSpirit: 0,
+        equipment: [{ item: { statBonuses: { spirit: 20 }, attack: 0, defense: 0 } }],
+      };
+      const ev = await castMagicRealPipeline(char);
+      expect(ev.amount).toBe(9); // résistance air 10 → round(10 × 0.9)
+    });
+
+    it("D1 : le MÊME objet uniquement dans l'INVENTAIRE (non équipé) → aucune contribution", async () => {
+      // equipment vide : l'objet spirit n'est pas porté → magicResistanceAir 0.
+      const char = {
+        id: "char-1", health: 100, attack: 0, defense: 0, maxHealth: 100, baseSpirit: 0,
+        equipment: [],
+      };
+      const ev = await castMagicRealPipeline(char);
+      expect(ev.amount).toBe(10); // aucune résistance → dégâts pleins
+    });
+
     // 4/5/6. Fallback : capacité inutilisable → AUTO-ATTAQUE existante (V1, legacy).
     // NOTE : l'auto-attaque créature n'applique PAS esquive/blocage/parade
     // (chemin legacy `max(baseAttack−défense,1)`, inchangé V5-B) — seuls la

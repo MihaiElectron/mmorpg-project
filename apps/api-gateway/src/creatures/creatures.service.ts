@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Server } from 'socket.io';
@@ -118,6 +118,8 @@ type ResolvedCreatureAbility = {
   rangeWU: number;
   cooldownMs: number;
   damageType: DamageType;
+  /** École magique (ADR-0022) — non nulle seulement pour un skill `magic`. */
+  magicSchool: MagicSchool | null;
   scaling: Record<string, unknown>;
 };
 
@@ -229,6 +231,7 @@ const COMBAT_WEAPON_MASTERY_MAP: Record<string, string> = {
 
 @Injectable()
 export class CreaturesService implements OnModuleInit {
+  private readonly logger = new Logger(CreaturesService.name);
   private readonly lastAttackAt = new Map<string, number>();
   private readonly lastCreatureAutoAttackAt = new Map<string, number>();
   private readonly liveCreatures = new Map<string, Creature>();
@@ -1108,6 +1111,16 @@ export class CreaturesService implements OnModuleInit {
         .map((link) => {
           const skill = byKey.get(link.skillKey);
           if (!skill || !skill.enabled) return null;
+          // ADR-0022 / D1 : le type de dégâts est préservé tel quel (physical,
+          // magic ou raw). Un skill `magic` conserve son école (validée non nulle
+          // à l'écriture) pour que la mitigation magique du joueur défenseur
+          // s'applique (`applyCreatureHitToPlayer`). physical/raw → école nulle.
+          const damageType: DamageType =
+            skill.damageType === 'raw'
+              ? 'raw'
+              : skill.damageType === 'magic'
+                ? 'magic'
+                : 'physical';
           return {
             skillKey: skill.key,
             skillName: skill.name,
@@ -1115,7 +1128,11 @@ export class CreaturesService implements OnModuleInit {
             displayOrder: link.displayOrder,
             rangeWU: skill.rangeWU > 0 ? skill.rangeWU : MELEE_RANGE_WU,
             cooldownMs: skill.cooldownMs,
-            damageType: skill.damageType === 'raw' ? 'raw' : 'physical',
+            damageType,
+            magicSchool:
+              damageType === 'magic'
+                ? ((skill.magicSchool as MagicSchool | null) ?? null)
+                : null,
             scaling: (skill.scaling ?? {}) as Record<string, unknown>,
           } as ResolvedCreatureAbility;
         })
@@ -1435,6 +1452,8 @@ export class CreaturesService implements OnModuleInit {
         accuracyPercent: stats.accuracy,
       },
       damageType: ability.damageType,
+      // D1 : école transmise pour la mitigation magique du joueur défenseur.
+      magicSchool: ability.magicSchool,
       skillName: ability.skillName,
     });
   }
@@ -1460,6 +1479,8 @@ export class CreaturesService implements OnModuleInit {
     hit: {
       attacker: CombatHitAttacker;
       damageType: DamageType;
+      /** École du hit (ADR-0022) — non nulle seulement pour `damageType: 'magic'`. */
+      magicSchool?: MagicSchool | null;
       skillName?: string;
       /** Plancher des dégâts finaux. Défaut 1 (préserve le plancher legacy). */
       minimumDamage?: number;
@@ -1482,6 +1503,33 @@ export class CreaturesService implements OnModuleInit {
       ),
     ).derived;
 
+    // D1 (ADR-0022) : REJET EXPLICITE d'un hit `magic` sans école. La validation
+    // serveur interdit un skill `magic` sans `magicSchool` (aucun fallback : ni
+    // globale seule, ni école générique, ni sacré par défaut). Un hit magique
+    // sans école est donc une anomalie : on l'ABANDONNE (aucun dégât, PV
+    // inchangés) plutôt que d'inventer une école — même exigence que le chemin
+    // joueur → créature (« Magic skill requires a magic school »).
+    if (hit.damageType === 'magic' && !hit.magicSchool) {
+      this.logger.warn(
+        `Hit magique créature ${creature.id} sans magicSchool — hit ignoré (aucun dégât appliqué).`,
+      );
+      return;
+    }
+
+    // D1 (ADR-0022) : mitigation magique du joueur DÉFENSEUR. Résolue au moment
+    // du hit depuis les stats dérivées serveur DÉJÀ calculées (base + coefficients
+    // primaires + équipement + modificateurs), via le MÊME resolver générique que
+    // la cible créature : effectiveResistance = magicResistanceGlobal +
+    // magicResistance<École>. Aucun clamp (négatif = vulnérabilité, ≥ 100 ≠
+    // immunité). physical/raw → 0 (aucune mitigation).
+    const effectiveMagicResistance =
+      hit.damageType === 'magic'
+        ? resolveEffectiveMagicResistance(
+            hit.magicSchool,
+            magicResistanceReaderFromStats(charDerived as unknown as Record<string, number>),
+          ).effectiveResistance
+        : 0;
+
     const result = resolveCombatHit({
       attacker: hit.attacker,
       defender: {
@@ -1491,6 +1539,8 @@ export class CreaturesService implements OnModuleInit {
         blockReductionPercent: charDerived.blockReductionPercent ?? 0,
         canParry: false,
         parryChancePercent: 0,
+        // Consommée uniquement si damageType === 'magic' (calculateur).
+        effectiveMagicResistance,
       },
       damageType: hit.damageType,
       minimumDamage: hit.minimumDamage ?? 1,
