@@ -25,8 +25,11 @@ import {
   type SkillScaling,
 } from "./skills.types";
 import {
+  isMagicDamage,
+  isPhysicalDamage,
   magicSchoolDraftFromSkill,
   magicSchoolValidationError,
+  normalizeCombatFlagsForPayload,
   normalizeMagicSchoolForPayload,
   requiresMagicSchool,
   type MagicSchoolDraftValue,
@@ -65,6 +68,7 @@ interface Draft {
   canBeDodged: boolean;
   canBeBlocked: boolean;
   canBeParried: boolean;
+  canCrit: boolean;
   requiredLevel: string;
   resourceCost: string;
   cooldownMs: string;
@@ -97,6 +101,7 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     canBeDodged: skill?.canBeDodged ?? true,
     canBeBlocked: skill?.canBeBlocked ?? true,
     canBeParried: skill?.canBeParried ?? false,
+    canCrit: skill?.canCrit ?? false,
     requiredLevel: String(skill?.requiredLevel ?? 1),
     resourceCost: String(skill?.resourceCost ?? 0),
     cooldownMs: String(skill?.cooldownMs ?? 1000),
@@ -190,6 +195,47 @@ export default function SkillEditorForm({
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
+  /**
+   * Change `damageType` en NORMALISANT les flags dépendants (miroir serveur) :
+   * dégâts `magic` ⇒ défenses magiques (attackDefenseKind magic, non blocable,
+   * non parable) et `canCrit` false ; hors dégâts physiques ⇒ `canCrit` false.
+   * Évite tout résidu incohérent dans le draft/payload.
+   */
+  function changeDamageType(next: SkillDamageType) {
+    setDraft((prev) => {
+      const flags = normalizeCombatFlagsForPayload({
+        effectType: prev.effectType,
+        damageType: next,
+        attackDefenseKind: prev.attackDefenseKind,
+        canBeBlocked: prev.canBeBlocked,
+        canBeParried: prev.canBeParried,
+        canCrit: prev.canCrit,
+      });
+      return { ...prev, damageType: next, ...flags };
+    });
+  }
+
+  /** Change `effectType` en forçant `canCrit` false si ce n'est plus un dégât physique. */
+  function changeEffectType(next: SkillEffectType) {
+    setDraft((prev) => {
+      const flags = normalizeCombatFlagsForPayload({
+        effectType: next,
+        damageType: prev.damageType,
+        attackDefenseKind: prev.attackDefenseKind,
+        canBeBlocked: prev.canBeBlocked,
+        canBeParried: prev.canBeParried,
+        canCrit: prev.canCrit,
+      });
+      return { ...prev, effectType: next, ...flags };
+    });
+  }
+
+  // Dégâts magiques → défenses verrouillées (miroir du serveur autoritaire).
+  const magicLocked = isMagicDamage(draft.effectType, draft.damageType);
+  const canCritVisible = isPhysicalDamage(draft.effectType, draft.damageType);
+  // Validation LIVE : pilote l'activation d'« Enregistrer » (désactivé si invalide).
+  const validationError = validate();
+
   function validate(): string | null {
     if (mode === "create") {
       if (!keyInput.trim()) return "La clé est requise.";
@@ -254,10 +300,26 @@ export default function SkillEditorForm({
         draft.effectType === "damage"
           ? normalizeMagicSchoolForPayload(draft.damageType, draft.magicSchool)
           : null,
-      attackDefenseKind: draft.attackDefenseKind,
+      // Flags combat NORMALISÉS (miroir serveur) : jamais de résidu incohérent
+      // (dégâts magic → défenses magiques ; canCrit réservé aux dégâts physiques).
+      // canBeDodged reste libre.
+      ...(() => {
+        const flags = normalizeCombatFlagsForPayload({
+          effectType: draft.effectType,
+          damageType: draft.damageType,
+          attackDefenseKind: draft.attackDefenseKind,
+          canBeBlocked: draft.canBeBlocked,
+          canBeParried: draft.canBeParried,
+          canCrit: draft.canCrit,
+        });
+        return {
+          attackDefenseKind: flags.attackDefenseKind,
+          canBeBlocked: flags.canBeBlocked,
+          canBeParried: flags.canBeParried,
+          canCrit: flags.canCrit,
+        };
+      })(),
       canBeDodged: draft.canBeDodged,
-      canBeBlocked: draft.canBeBlocked,
-      canBeParried: draft.canBeParried,
       scaling: buildScaling(),
     };
     const key = mode === "create" ? payload.key : (skill?.key ?? "");
@@ -452,7 +514,7 @@ export default function SkillEditorForm({
             <select
               className="skills-editor__input"
               value={draft.effectType}
-              onChange={(e) => setField("effectType", e.target.value as SkillEffectType)}
+              onChange={(e) => changeEffectType(e.target.value as SkillEffectType)}
             >
               {SKILL_EFFECT_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -466,9 +528,9 @@ export default function SkillEditorForm({
             <select
               className="skills-editor__input"
               value={draft.damageType}
-              onChange={(e) => setField("damageType", e.target.value as SkillDamageType)}
+              onChange={(e) => changeDamageType(e.target.value as SkillDamageType)}
               disabled={draft.effectType !== "damage"}
-              title="physical : armure + pénétration appliquées. raw : ignore les deux. Ignoré pour un soin."
+              title="physical : armure + pénétration appliquées. magic : résistance de l'école (défenses magiques). raw : ignore les deux. Ignoré pour un soin."
             >
               {SKILL_DAMAGE_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -499,25 +561,27 @@ export default function SkillEditorForm({
             </label>
           )}
           <label className="skills-editor__field">
-            <span className="skills-editor__label">Nature défensive</span>
+            <span className="skills-editor__label">Défenses applicables</span>
             <select
               className="skills-editor__input"
               value={draft.attackDefenseKind}
               onChange={(e) =>
                 setField("attackDefenseKind", e.target.value as SkillAttackDefenseKind)
               }
-              disabled={draft.effectType !== "damage"}
-              title="Détermine si l'attaque peut être parée ou suivra un futur pipeline magique. Ne remplace pas le type de dégâts."
+              disabled={draft.effectType !== "damage" || magicLocked}
+              title="Détermine les défenses utilisables par la cible. Ce champ est distinct du type de dégâts."
             >
               {SKILL_ATTACK_DEFENSE_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {k === "physical" ? "Physique" : "Magique"}
+                  {k === "physical" ? "Physiques" : "Magiques"}
                 </option>
               ))}
             </select>
           </label>
           {/* Flags défensifs (Lot A/B) — appliqués côté serveur depuis la
-              définition du skill. Défauts : esquivable/bloquable, non parable. */}
+              définition du skill. Défauts : esquivable/bloquable, non parable.
+              Dégâts magiques : blocage/parade VERROUILLÉS à false (serveur
+              autoritaire) ; l'esquive reste configurable. */}
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
               type="checkbox"
@@ -530,9 +594,9 @@ export default function SkillEditorForm({
           <label className="skills-editor__field skills-editor__field--checkbox">
             <input
               type="checkbox"
-              checked={draft.canBeBlocked}
+              checked={magicLocked ? false : draft.canBeBlocked}
               onChange={(e) => setField("canBeBlocked", e.target.checked)}
-              disabled={draft.effectType !== "damage"}
+              disabled={draft.effectType !== "damage" || magicLocked}
             />
             <span className="skills-editor__label">Bloquable</span>
           </label>
@@ -542,18 +606,34 @@ export default function SkillEditorForm({
           >
             <input
               type="checkbox"
-              checked={draft.canBeParried}
+              checked={magicLocked ? false : draft.canBeParried}
               onChange={(e) => setField("canBeParried", e.target.checked)}
-              disabled={draft.effectType !== "damage"}
+              disabled={draft.effectType !== "damage" || magicLocked}
             />
             <span className="skills-editor__label">Parable</span>
           </label>
+          {/* Critiquable — visible UNIQUEMENT pour des dégâts physiques. magic,
+              raw et soins ne critiquent jamais (verrouillé false côté serveur). */}
+          {canCritVisible && (
+            <label
+              className="skills-editor__field skills-editor__field--checkbox"
+              title="Autorise les coups critiques. Réservé aux dégâts physiques (magic/raw/soins ne critiquent jamais)."
+            >
+              <input
+                type="checkbox"
+                checked={draft.canCrit}
+                onChange={(e) => setField("canCrit", e.target.checked)}
+              />
+              <span className="skills-editor__label">Critiquable</span>
+            </label>
+          )}
           <p className="skills-editor__hint">
-            Ces règles défensives sont appliquées côté serveur depuis la définition
-            du skill. Parable : une parade annule le skill et peut déclencher une
-            contre-attaque (désactivé par défaut).
-            {draft.effectType === "damage" && draft.attackDefenseKind === "magic" &&
-              " Nature magique : non parable ; non blocable ; esquivable selon « Esquivable »."}
+            Défenses applicables : détermine les défenses utilisables par la cible
+            (distinct du type de dégâts). Ces règles sont appliquées côté serveur.
+            {magicLocked &&
+              " Dégâts magiques : non bloquable et non parable. L'esquive dépend du réglage Esquivable. Non critiquable."}
+            {draft.effectType === "damage" && draft.damageType === "raw" &&
+              " Dégâts raw : non critiquable."}
             {draft.effectType !== "damage" && " Ignoré ici : soins non concernés."}
           </p>
           <label className="skills-editor__field">
@@ -663,7 +743,11 @@ export default function SkillEditorForm({
         </div>
       </fieldset>
 
-      {localError && <p className="skills-editor__error">{localError}</p>}
+      {/* Erreur : soit remontée serveur (localError), soit validation live (si
+          modifié) — explique pourquoi « Enregistrer » est désactivé. */}
+      {(localError || (isDirty && validationError)) && (
+        <p className="skills-editor__error">{localError ?? validationError}</p>
+      )}
 
       <div className="skills-editor__actions">
         <button
@@ -680,8 +764,14 @@ export default function SkillEditorForm({
           type="button"
           className="skills-editor__btn skills-editor__btn--confirm"
           onClick={handleSubmit}
-          disabled={busy || !isDirty}
-          title={!isDirty ? "Aucune modification à enregistrer" : undefined}
+          disabled={busy || !isDirty || validationError !== null}
+          title={
+            !isDirty
+              ? "Aucune modification à enregistrer"
+              : validationError !== null
+                ? validationError
+                : undefined
+          }
         >
           {busy ? "…" : mode === "create" ? "Créer" : "Enregistrer"}
         </button>

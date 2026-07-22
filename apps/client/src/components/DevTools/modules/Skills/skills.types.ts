@@ -118,6 +118,12 @@ export interface SkillDefinitionDto {
   canBeDodged: boolean;
   canBeBlocked: boolean;
   canBeParried: boolean;
+  /**
+   * Critiquable — critique autorisé UNIQUEMENT pour des dégâts physiques
+   * (effectType damage + damageType physical). Serveur-autoritaire : magic, raw
+   * et soins ne critiquent jamais.
+   */
+  canCrit: boolean;
   scaling: SkillScaling;
   createdAt: string;
   updatedAt: string;
@@ -150,6 +156,7 @@ export interface CreateSkillDefinitionPayload {
   canBeDodged?: boolean;
   canBeBlocked?: boolean;
   canBeParried?: boolean;
+  canCrit?: boolean;
   scaling?: SkillScaling;
 }
 

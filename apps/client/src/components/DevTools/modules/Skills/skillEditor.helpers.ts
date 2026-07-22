@@ -4,7 +4,9 @@
 
 import {
   SKILL_MAGIC_SCHOOLS,
+  type SkillAttackDefenseKind,
   type SkillDamageType,
+  type SkillEffectType,
   type SkillMagicSchool,
 } from "./skills.types";
 
@@ -53,4 +55,63 @@ export function magicSchoolDraftFromSkill(
 /** Garde de type : `value` est une école canonique. */
 export function isMagicSchool(value: string): value is SkillMagicSchool {
   return (SKILL_MAGIC_SCHOOLS as readonly string[]).includes(value);
+}
+
+// ── Règle canonique du critique + normalisation des flags combat (miroir serveur) ──
+
+/** true si les dégâts sont physiques (seul cas où « Critiquable » est pertinent). */
+export function isPhysicalDamage(
+  effectType: SkillEffectType,
+  damageType: SkillDamageType,
+): boolean {
+  return effectType === "damage" && damageType === "physical";
+}
+
+/** true si les dégâts sont magiques (défenses magiques verrouillées). */
+export function isMagicDamage(
+  effectType: SkillEffectType,
+  damageType: SkillDamageType,
+): boolean {
+  return effectType === "damage" && damageType === "magic";
+}
+
+/** Valeur `canCrit` à envoyer : conservée seulement pour des dégâts physiques. */
+export function normalizeCanCritForPayload(
+  effectType: SkillEffectType,
+  damageType: SkillDamageType,
+  canCrit: boolean,
+): boolean {
+  return isPhysicalDamage(effectType, damageType) ? canCrit === true : false;
+}
+
+/** Flags combat normalisés côté client (miroir du serveur `normalizeSkillCombatFlags`). */
+export interface NormalizedCombatFlagsDraft {
+  attackDefenseKind: SkillAttackDefenseKind;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
+  canCrit: boolean;
+}
+
+/**
+ * Normalise les flags combat pour un draft (jamais de résidu incohérent) :
+ *  - dégâts `magic` ⇒ `attackDefenseKind = magic`, non blocable, non parable,
+ *    `canCrit` false (esquive laissée telle quelle) ;
+ *  - hors dégâts physiques ⇒ `canCrit` false.
+ * Le serveur reste l'autorité ; ceci évite tout envoi incohérent.
+ */
+export function normalizeCombatFlagsForPayload(input: {
+  effectType: SkillEffectType;
+  damageType: SkillDamageType;
+  attackDefenseKind: SkillAttackDefenseKind;
+  canBeBlocked: boolean;
+  canBeParried: boolean;
+  canCrit: boolean;
+}): NormalizedCombatFlagsDraft {
+  const magic = isMagicDamage(input.effectType, input.damageType);
+  return {
+    attackDefenseKind: magic ? "magic" : input.attackDefenseKind,
+    canBeBlocked: magic ? false : input.canBeBlocked,
+    canBeParried: magic ? false : input.canBeParried,
+    canCrit: normalizeCanCritForPayload(input.effectType, input.damageType, input.canCrit),
+  };
 }

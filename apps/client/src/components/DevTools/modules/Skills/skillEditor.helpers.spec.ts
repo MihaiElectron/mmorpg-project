@@ -5,9 +5,13 @@ import {
   MAGIC_SCHOOL_LABELS,
 } from "./skills.types";
 import {
+  isMagicDamage,
   isMagicSchool,
+  isPhysicalDamage,
   magicSchoolDraftFromSkill,
   magicSchoolValidationError,
+  normalizeCanCritForPayload,
+  normalizeCombatFlagsForPayload,
   normalizeMagicSchoolForPayload,
   requiresMagicSchool,
 } from "./skillEditor.helpers";
@@ -91,5 +95,45 @@ describe("isMagicSchool (garde de type)", () => {
     for (const s of SKILL_MAGIC_SCHOOLS) expect(isMagicSchool(s)).toBe(true);
     expect(isMagicSchool("lightning")).toBe(false);
     expect(isMagicSchool("")).toBe(false);
+  });
+});
+
+describe("Critiquable & normalisation des flags combat (miroir serveur)", () => {
+  it("isPhysicalDamage / isMagicDamage", () => {
+    expect(isPhysicalDamage("damage", "physical")).toBe(true);
+    expect(isPhysicalDamage("damage", "magic")).toBe(false);
+    expect(isPhysicalDamage("heal", "physical")).toBe(false);
+    expect(isMagicDamage("damage", "magic")).toBe(true);
+    expect(isMagicDamage("damage", "physical")).toBe(false);
+    expect(isMagicDamage("heal", "magic")).toBe(false);
+  });
+
+  it("normalizeCanCritForPayload : conservé pour dégâts physiques, false sinon", () => {
+    expect(normalizeCanCritForPayload("damage", "physical", true)).toBe(true);
+    expect(normalizeCanCritForPayload("damage", "physical", false)).toBe(false);
+    expect(normalizeCanCritForPayload("damage", "magic", true)).toBe(false);
+    expect(normalizeCanCritForPayload("damage", "raw", true)).toBe(false);
+    expect(normalizeCanCritForPayload("heal", "physical", true)).toBe(false);
+  });
+
+  it("normalizeCombatFlagsForPayload : magic → défenses magiques verrouillées + canCrit false", () => {
+    expect(normalizeCombatFlagsForPayload({
+      effectType: "damage", damageType: "magic",
+      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: true,
+    })).toEqual({ attackDefenseKind: "magic", canBeBlocked: false, canBeParried: false, canCrit: false });
+  });
+
+  it("normalizeCombatFlagsForPayload : physical conserve tout (canCrit inclus)", () => {
+    expect(normalizeCombatFlagsForPayload({
+      effectType: "damage", damageType: "physical",
+      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false, canCrit: true,
+    })).toEqual({ attackDefenseKind: "physical", canBeBlocked: true, canBeParried: false, canCrit: true });
+  });
+
+  it("normalizeCombatFlagsForPayload : raw → canCrit false, défenses conservées", () => {
+    expect(normalizeCombatFlagsForPayload({
+      effectType: "damage", damageType: "raw",
+      attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: true,
+    })).toEqual({ attackDefenseKind: "physical", canBeBlocked: true, canBeParried: true, canCrit: false });
   });
 });
