@@ -7,8 +7,10 @@ import {
   SKILL_DAMAGE_TYPES,
   SKILL_EFFECT_TYPES,
   SKILL_KINDS,
+  SKILL_MAGIC_SCHOOLS,
   SKILL_RESOURCE_TYPES,
   SKILL_TARGET_MODES,
+  MAGIC_SCHOOL_LABELS,
   PRIMARY_STAT_KEYS,
   WEAPON_TYPE_SUGGESTIONS,
   type SkillAttackDefenseKind,
@@ -22,6 +24,13 @@ import {
   type CreateSkillDefinitionPayload,
   type SkillScaling,
 } from "./skills.types";
+import {
+  magicSchoolDraftFromSkill,
+  magicSchoolValidationError,
+  normalizeMagicSchoolForPayload,
+  requiresMagicSchool,
+  type MagicSchoolDraftValue,
+} from "./skillEditor.helpers";
 
 const KEY_PATTERN = /^[a-z0-9_]+$/;
 
@@ -50,6 +59,8 @@ interface Draft {
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
   damageType: SkillDamageType;
+  /** École magique locale : canonique ou "" (non choisie). */
+  magicSchool: MagicSchoolDraftValue;
   attackDefenseKind: SkillAttackDefenseKind;
   canBeDodged: boolean;
   canBeBlocked: boolean;
@@ -81,6 +92,7 @@ function draftFrom(skill: SkillDefinitionDto | null): Draft {
     targetMode: skill?.targetMode ?? "creature",
     effectType: skill?.effectType ?? "damage",
     damageType: skill?.damageType ?? "physical",
+    magicSchool: magicSchoolDraftFromSkill(skill?.magicSchool),
     attackDefenseKind: skill?.attackDefenseKind ?? "physical",
     canBeDodged: skill?.canBeDodged ?? true,
     canBeBlocked: skill?.canBeBlocked ?? true,
@@ -190,6 +202,12 @@ export default function SkillEditorForm({
       if (raw.trim() === "" || !Number.isInteger(n)) return `${f.label} doit être un entier.`;
       if (n < f.min) return `${f.label} doit être >= ${f.min}.`;
     }
+    // Un skill à dégâts magiques exige une école (ADR-0022). Ignoré pour un soin
+    // (damageType non pertinent) — l'école n'est demandée que si damage + magic.
+    if (draft.effectType === "damage") {
+      const schoolError = magicSchoolValidationError(draft.damageType, draft.magicSchool);
+      if (schoolError) return schoolError;
+    }
     return null;
   }
 
@@ -230,6 +248,12 @@ export default function SkillEditorForm({
       targetMode: draft.targetMode,
       effectType: draft.effectType,
       damageType: draft.damageType,
+      // École envoyée UNIQUEMENT si damage + magic ; null sinon (jamais de résidu
+      // d'une ancienne école sur un skill redevenu physical/raw ou un soin).
+      magicSchool:
+        draft.effectType === "damage"
+          ? normalizeMagicSchoolForPayload(draft.damageType, draft.magicSchool)
+          : null,
       attackDefenseKind: draft.attackDefenseKind,
       canBeDodged: draft.canBeDodged,
       canBeBlocked: draft.canBeBlocked,
@@ -453,6 +477,27 @@ export default function SkillEditorForm({
               ))}
             </select>
           </label>
+          {/* École magique (ADR-0022) — affichée UNIQUEMENT pour un skill à
+              dégâts magiques. Obligatoire avant sauvegarde ; masquée sinon (le
+              payload envoie alors null via normalizeMagicSchoolForPayload). */}
+          {draft.effectType === "damage" && requiresMagicSchool(draft.damageType) && (
+            <label className="skills-editor__field">
+              <span className="skills-editor__label">École magique</span>
+              <select
+                className="skills-editor__input"
+                value={draft.magicSchool}
+                onChange={(e) => setField("magicSchool", e.target.value as Draft["magicSchool"])}
+                title="Obligatoire pour un skill à dégâts magiques (résistance de l'école appliquée)."
+              >
+                <option value="">(choisir une école)</option>
+                {SKILL_MAGIC_SCHOOLS.map((s) => (
+                  <option key={s} value={s}>
+                    {MAGIC_SCHOOL_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="skills-editor__field">
             <span className="skills-editor__label">Nature défensive</span>
             <select
@@ -507,6 +552,8 @@ export default function SkillEditorForm({
             Ces règles défensives sont appliquées côté serveur depuis la définition
             du skill. Parable : une parade annule le skill et peut déclencher une
             contre-attaque (désactivé par défaut).
+            {draft.effectType === "damage" && draft.attackDefenseKind === "magic" &&
+              " Nature magique : non parable ; non blocable ; esquivable selon « Esquivable »."}
             {draft.effectType !== "damage" && " Ignoré ici : soins non concernés."}
           </p>
           <label className="skills-editor__field">

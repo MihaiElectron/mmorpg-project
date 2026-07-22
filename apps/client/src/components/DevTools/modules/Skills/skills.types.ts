@@ -11,10 +11,36 @@ export type SkillTargetMode = (typeof SKILL_TARGET_MODES)[number];
 export const SKILL_EFFECT_TYPES = ["damage", "heal"] as const;
 export type SkillEffectType = (typeof SKILL_EFFECT_TYPES)[number];
 
-// Type de dégâts (V4-B) : physical applique armure + armorPenetrationPercent ;
+// Type de dégâts (V4-B / ADR-0022) : physical applique armure +
+// armorPenetrationPercent ; magic applique la résistance magique de l'école ;
 // raw ignore les deux. Pertinent seulement pour effectType "damage".
-export const SKILL_DAMAGE_TYPES = ["physical", "raw"] as const;
+// Miroir EXACT du backend `SKILL_DAMAGE_TYPES` (active-skills.constants.ts).
+export const SKILL_DAMAGE_TYPES = ["physical", "magic", "raw"] as const;
 export type SkillDamageType = (typeof SKILL_DAMAGE_TYPES)[number];
+
+// Écoles magiques (ADR-0022). Vocabulaire fermé — miroir EXACT du backend
+// `SKILL_MAGIC_SCHOOLS` (active-skills.constants.ts). Obligatoire pour un skill à
+// dégâts `magic` ; `null` sinon. Aucune route dédiée : constante canonique locale
+// (verrouillée par un test contre toute divergence).
+export const SKILL_MAGIC_SCHOOLS = [
+  "fire",
+  "water",
+  "air",
+  "earth",
+  "sacred",
+  "poison",
+] as const;
+export type SkillMagicSchool = (typeof SKILL_MAGIC_SCHOOLS)[number];
+
+// Libellés FR des écoles pour l'affichage (les VALEURS restent canoniques).
+export const MAGIC_SCHOOL_LABELS: Record<SkillMagicSchool, string> = {
+  fire: "Feu",
+  water: "Eau",
+  air: "Air",
+  earth: "Terre",
+  sacred: "Sacré",
+  poison: "Poison",
+};
 
 // Nature défensive (V6-B5) — AXE DISTINCT de damageType. physical = parable ;
 // magic = sort pur non parable (futur pipeline résistances magiques, non actif).
@@ -78,8 +104,11 @@ export interface SkillDefinitionDto {
   radiusWU: number;
   targetMode: SkillTargetMode;
   effectType: SkillEffectType;
-  /** Type de dégâts (V4-B). physical par défaut ; raw ignore armure + pénétration. */
+  /** Type de dégâts (V4-B / ADR-0022). physical par défaut ; magic applique la
+   * résistance de l'école ; raw ignore armure + pénétration. */
   damageType: SkillDamageType;
+  /** École magique (ADR-0022). Obligatoire si damageType `magic` ; null sinon. */
+  magicSchool: SkillMagicSchool | null;
   /** Nature défensive (V6-B5). physical par défaut ; magic = sort pur non parable. */
   attackDefenseKind: SkillAttackDefenseKind;
   /**
@@ -116,6 +145,7 @@ export interface CreateSkillDefinitionPayload {
   targetMode?: SkillTargetMode;
   effectType?: SkillEffectType;
   damageType?: SkillDamageType;
+  magicSchool?: SkillMagicSchool | null;
   attackDefenseKind?: SkillAttackDefenseKind;
   canBeDodged?: boolean;
   canBeBlocked?: boolean;
