@@ -6,10 +6,18 @@
  * - Événements : préparé (placeholder), futurs events système/loot/progression.
  * - Chat / Guilde : préparés visuellement, AUCUN réseau (input désactivé).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCombatLogStore } from "../../store/combatLog.store";
 import { useDraggableResizable } from "./useDraggableResizable";
 import { formatClock } from "../../phaser/combat/timeFormat";
+import {
+  BOTTOM_THRESHOLD_PX,
+  computeHistoryScrollTop,
+  computeTrimDelta,
+  isAtBottom,
+  lastEntryId,
+  resolveScrollAction,
+} from "./chatLogScroll";
 
 const TABS = [
   { id: "combat", label: "Combat" },
@@ -38,19 +46,70 @@ function LogList({ categories, emptyText }) {
     [entries, categories],
   );
   const listRef = useRef(null);
+  // `stick` : l'utilisateur suit-il le bas du journal (mise à jour au scroll) ?
+  const stickRef = useRef(true);
+  // Métriques du conteneur au rendu précédent (base de comparaison pour le trim
+  // et la compensation) — rafraîchies au scroll ET après chaque application.
+  const prevRef = useRef({ scrollTop: 0, scrollHeight: 0, len: 0, lastId: null });
 
-  // Auto-scroll vers la dernière entrée.
-  useEffect(() => {
+  const currentLastId = lastEntryId(filtered);
+
+  // Met à jour l'état "en bas" pendant le défilement manuel. Un retour manuel
+  // jusqu'en bas réactive automatiquement le suivi.
+  const handleScroll = () => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [filtered.length]);
+    if (!el) return;
+    stickRef.current = isAtBottom(el, BOTTOM_THRESHOLD_PX);
+    prevRef.current = {
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      len: filtered.length,
+      lastId: currentLastId,
+    };
+  };
+
+  // Défilement piloté par le VRAI changement de la collection (dernier id), et
+  // non par un simple rerender parent : au trim la longueur reste constante mais
+  // le dernier id change. Exécuté avant peinture (useLayoutEffect) pour éviter
+  // tout scintillement, sans temporisation arbitraire.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) {
+      prevRef.current = { scrollTop: 0, scrollHeight: 0, len: 0, lastId: currentLastId };
+      return;
+    }
+    const prev = prevRef.current;
+    const { removedCount } = computeTrimDelta({
+      prevLen: prev.len,
+      prevLastId: prev.lastId,
+      entries: filtered,
+    });
+    const action = resolveScrollAction({ stick: stickRef.current, removedCount });
+    if (action === "follow") {
+      el.scrollTop = el.scrollHeight;
+    } else if (action === "compensate") {
+      el.scrollTop = computeHistoryScrollTop({
+        prevScrollTop: prev.scrollTop,
+        prevScrollHeight: prev.scrollHeight,
+        prevLen: prev.len,
+        removedCount,
+      });
+    }
+    // "none" : position historique laissée intacte.
+    prevRef.current = {
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      len: filtered.length,
+      lastId: currentLastId,
+    };
+  }, [currentLastId, filtered]);
 
   if (filtered.length === 0) {
     return <p className="chat-log__empty">{emptyText}</p>;
   }
 
   return (
-    <ul className="chat-log__list" ref={listRef}>
+    <ul className="chat-log__list" ref={listRef} onScroll={handleScroll}>
       {filtered.map((entry) => (
         <li
           key={entry.id}
